@@ -33,25 +33,35 @@ propiedad del Módulo 1): `AVAILABLE`, `OCCUPIED`, `CLEANING`, `OUT_OF_SERVICE`.
 ### Historia de Usuario 1 - Registro de Check-In de un Huésped (Prioridad: P1)
 
 Un recepcionista recibe a un huésped cuya reserva está en estado `ACTIVE` y cuyas fechas de
-estadía incluyen el día de hoy. El recepcionista busca la reserva, confirma la identidad y los
-datos del huésped, y registra el check-in. Si el huésped es extranjero, el sistema procesa
-adicionalmente sus datos migratorios antes de confirmar. Al finalizar, el sistema marca la reserva
-como `CHECKED_IN` y solicita al Módulo 1 poner la habitación en estado `OCCUPIED`.
+estadía incluyen el día de hoy. El recepcionista ubica la reserva, confirma la identidad y los
+datos del huésped, y registra el check-in; si el huésped es extranjero, el sistema procesa
+adicionalmente sus datos migratorios antes de confirmar. Esta historia es el flujo maestro de la
+funcionalidad: en una sola pantalla cubre tanto el camino exitoso (huésped nacional o extranjero)
+como los pasos operativos de apoyo (búsqueda de la reserva, resumen de confirmación) y los caminos
+de error que impiden una admisión inválida o duplicada (reserva no encontrada, cancelada, fuera de
+la ventana de estadía, o ya realizada). Al finalizar con éxito, el sistema marca la reserva como
+`CHECKED_IN` y solicita al Módulo 1 poner la habitación en estado `OCCUPIED`.
 
-**Por qué esta prioridad**: Es el flujo principal y de mayor frecuencia de la funcionalidad. Sin
-él no es posible admitir huéspedes, y todos los demás escenarios son variaciones sobre este
-camino. Por sí solo entrega un MVP utilizable: el hotel puede operar su recepción de llegadas de
-extremo a extremo.
+**Por qué esta prioridad**: Es el flujo principal y único de la funcionalidad de check-in. Sus
+escenarios de éxito, operativos y de error ocurren todos en la misma pantalla y sobre la misma
+operación de negocio, por lo que no se modelan como historias adicionales: separarlos
+fragmentaría de forma artificial una única unidad de valor, incurriendo en la sobre-separación que
+debe evitarse. Por sí sola esta historia entrega un MVP utilizable: el hotel puede operar su
+recepción de llegadas de extremo a extremo, incluyendo el rechazo controlado de intentos
+inválidos o repetidos.
 
 **Prueba Independiente**: Se puede probar de forma completa tomando una reserva `ACTIVE` cuya
-estadía incluya la fecha de hoy, ejecutando el check-in de un huésped nacional con datos completos
-y confirmando que la reserva pasa a `CHECKED_IN`, que se crea un registro de check-in con el
-momento real de llegada, y que se emite una solicitud para ocupar la habitación. Repitiendo la
-prueba con un huésped extranjero con datos migratorios completos se valida además el
-procesamiento y almacenamiento local de los datos migratorios. Entrega el valor de una admisión
-completa y auditable.
+estadía incluya la fecha de hoy, ejecutando el check-in de un huésped nacional y de un huésped
+extranjero con datos migratorios completos, y confirmando en ambos casos que la reserva pasa a
+`CHECKED_IN` y que se emite una solicitud de ocupación de la habitación. La misma prueba se
+completa intentando el check-in sobre una reserva inexistente, una `CANCELLED`, una fuera de la
+ventana de estadía, y una ya `CHECKED_IN`, confirmando que los cuatro intentos se bloquean con una
+razón clara y sin crear ningún registro ni efecto colateral. Entrega el valor de una admisión
+completa, auditable y protegida contra datos inválidos o duplicados.
 
 **Escenarios de Aceptación**:
+
+*Escenarios de Éxito (Happy Path)*
 
 1. **Escenario**: Huésped nacional con reserva activa válida es admitido
    - **Dado** que existe una reserva en estado `ACTIVE` para un huésped nacional cuya estadía
@@ -62,20 +72,7 @@ completa y auditable.
      guarda el momento real de llegada y el recepcionista responsable, y solicita al Módulo 1
      cambiar el estado de la habitación a `OCCUPIED`
 
-2. **Escenario**: La reserva se ubica antes de la admisión
-   - **Dado** que el recepcionista solo cuenta con el nombre del huésped y la referencia de la
-     reserva
-   - **Cuando** el recepcionista busca la reserva mediante "Check/View Reservation"
-   - **Entonces** el sistema devuelve la reserva coincidente con sus fechas de estadía, habitación,
-     lista de huéspedes y estado actual, para que el recepcionista continúe con el check-in
-
-3. **Escenario**: Se muestra un resumen de confirmación antes de finalizar
-   - **Dado** que el recepcionista ingresó toda la información requerida para el check-in
-   - **Cuando** el recepcionista solicita finalizar
-   - **Entonces** el sistema presenta un resumen con huésped, habitación, fechas de estadía y
-     referencia de la reserva, y solo completa el check-in tras la confirmación explícita
-
-4. **Escenario**: Huésped extranjero con datos migratorios completos es admitido
+2. **Escenario**: Huésped extranjero con datos migratorios completos es admitido
    - **Dado** que una reserva `ACTIVE` para un huésped extranjero incluye documento de identidad,
      nacionalidad, tipo de visa y fechas de estadía, todos válidos
    - **Cuando** el recepcionista envía el check-in
@@ -83,71 +80,48 @@ completa y auditable.
      finaliza el check-in con éxito y guarda los datos migratorios validados localmente en la
      base de datos, sin enviarlos ni exportarlos a Migración de forma inmediata
 
-### Historia de Usuario 2 - Bloqueo de Check-In sin Reserva Activa Válida (Prioridad: P2)
+*Escenarios de Flujo Operativo*
 
-El sistema no debe permitir el check-in de un huésped que no tenga una reserva en estado `ACTIVE`
-cuyas fechas de estadía cubran la fecha de llegada. El recepcionista debe ubicar y validar la
-reserva mediante "Check/View Reservation"; si ninguna aplica, la admisión se rechaza.
+3. **Escenario**: La reserva se ubica antes de la admisión
+   - **Dado** que el recepcionista solo cuenta con el nombre del huésped y la referencia de la
+     reserva
+   - **Cuando** el recepcionista busca la reserva mediante "Check/View Reservation"
+   - **Entonces** el sistema devuelve la reserva coincidente con sus fechas de estadía, habitación,
+     lista de huéspedes y estado actual, para que el recepcionista continúe con el check-in
 
-**Por qué esta prioridad**: Es un flujo de error sobre el camino principal: protege la integridad
-de los datos de ocupación, facturación y reportes ante intentos de check-in inválidos, pero el
-negocio ya funciona sin él si se opera con disciplina manual.
+4. **Escenario**: Se muestra un resumen de confirmación antes de finalizar
+   - **Dado** que el recepcionista ingresó toda la información requerida para el check-in
+   - **Cuando** el recepcionista solicita finalizar
+   - **Entonces** el sistema presenta un resumen con huésped, habitación, fechas de estadía y
+     referencia de la reserva, y solo completa el check-in tras la confirmación explícita
 
-**Prueba Independiente**: Se puede probar de forma completa intentando un check-in sin reserva
-coincidente, con una reserva en estado `CANCELLED`, y con una reserva cuyas fechas no cubren hoy,
-confirmando que cada intento se bloquea con una razón clara y que no se crea ningún registro de
-check-in.
+*Escenarios de Error / Casos Espejo (Caminos Tristes)*
 
-**Escenarios de Aceptación**:
-
-1. **Escenario**: No se encuentra reserva para el huésped
+5. **Escenario**: No se encuentra reserva para el huésped
    - **Dado** un huésped que llega a recepción sin ninguna reserva registrada
    - **Cuando** el recepcionista busca una reserva para iniciar el check-in
    - **Entonces** el sistema informa que no se encontró ninguna reserva activa y no permite
      iniciar el check-in
 
-2. **Escenario**: La reserva existe pero ya fue cancelada
+6. **Escenario**: La reserva existe pero ya fue cancelada
    - **Dado** una reserva en estado `CANCELLED`
    - **Cuando** el recepcionista la selecciona para hacer el check-in del huésped
    - **Entonces** el sistema bloquea la admisión, indica que la reserva está cancelada, y no
      modifica el estado de la reserva ni de la habitación
 
-3. **Escenario**: La fecha de llegada no está dentro de la estadía reservada
+7. **Escenario**: La fecha de llegada no está dentro de la estadía reservada
    - **Dado** una reserva cuya estadía inicia dentro de tres días
    - **Cuando** el recepcionista intenta hacer el check-in hoy
    - **Entonces** el sistema rechaza el check-in y explica que la fecha de hoy está fuera de la
      ventana de estadía reservada
 
-### Historia de Usuario 3 - Prevención de Check-In Duplicado (Prioridad: P2)
-
-Una vez que una reserva fue admitida (estado `CHECKED_IN`), el sistema no debe permitir que se
-registre un nuevo check-in sobre la misma reserva. Al recepcionista se le debe mostrar que el
-huésped ya está hospedado.
-
-**Por qué esta prioridad**: Un segundo check-in sobre la misma reserva generaría registros de
-llegada duplicados, podría disparar una segunda solicitud de ocupación de habitación, y
-distorsionaría los conteos de ocupación y los reportes migratorios.
-
-**Prueba Independiente**: Se puede probar de forma completa haciendo el check-in de una reserva
-con éxito y luego intentando el mismo check-in de nuevo, confirmando que el segundo intento es
-rechazado, que no se crea un nuevo registro, y que no se envía una solicitud adicional de cambio
-de estado de habitación.
-
-**Escenarios de Aceptación**:
-
-1. **Escenario**: Segundo intento de check-in sobre una reserva ya admitida
-   - **Dado** una reserva en estado `CHECKED_IN` con el huésped hospedado
+8. **Escenario**: Check-in ya realizado sobre la misma reserva
+   - **Dado** una reserva en estado `CHECKED_IN` con el huésped ya hospedado
    - **Cuando** el recepcionista intenta registrar el check-in nuevamente
    - **Entonces** el sistema rechaza el intento, muestra los datos del check-in existente, y no
      crea un nuevo registro ni envía otra solicitud de cambio de estado de habitación
 
-2. **Escenario**: El recepcionista reabre una reserva hospedada solo para consultarla
-   - **Dado** una reserva en estado `CHECKED_IN`
-   - **Cuando** el recepcionista la abre mediante "Check/View Reservation"
-   - **Entonces** el sistema la muestra como `CHECKED_IN` con el momento de llegada y la
-     habitación asignada, y solo ofrece acciones de consulta, no una nueva admisión
-
-### Historia de Usuario 4 - Check-In Parcial en Reservas Grupales (Prioridad: P3)
+### Historia de Usuario 2 - Check-In Parcial en Reservas Grupales (Prioridad: P3)
 
 Cuando una reserva grupal incluye varios huéspedes y solo algunos llegan el día previsto, el
 recepcionista puede admitir únicamente a los huéspedes presentes, dejando a los demás en estado
