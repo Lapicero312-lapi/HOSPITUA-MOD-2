@@ -14,10 +14,11 @@ como historias de usuario independientes sino como pasos o escenarios de la mism
 - Cuando el huésped que llega es extranjero, el sistema debe completar adicionalmente el
   procesamiento de sus datos migratorios mediante el caso de uso interno **"Process Foreign Guest
   Data"** (Procesar Datos de Huéspedes Extranjeros) antes de poder confirmar el check-in. Este
-  procesamiento solo valida y almacena localmente los datos migratorios del huésped; el check-in
-  **no** dispara ni envía automáticamente ningún reporte al actor externo **Migración**. El envío
-  del reporte hacia Migración mediante el caso de uso **"Export SIRE File"** (Exportar Archivo
-  SIRE) es una acción manual y separada, fuera del alcance de esta funcionalidad de check-in.
+  procesamiento únicamente valida y almacena localmente los datos migratorios del huésped en la
+  base de datos; el check-in **no** dispara, programa ni depende en ninguna forma del envío de
+  reportes al actor externo **Migración**. El caso de uso **"Export SIRE File"** (Exportar Archivo
+  SIRE) es una funcionalidad completamente independiente y desacoplada, exclusiva del actor
+  **Migración**, y está totalmente fuera del alcance de esta funcionalidad de check-in.
 - Antes de finalizar, el sistema presenta un resumen de la reserva para confirmación explícita del
   recepcionista; esto es un paso dentro del mismo flujo, no una historia aparte.
 - Una vez registrado el check-in, el sistema solicita al **Módulo 1** cambiar el estado físico de
@@ -36,11 +37,12 @@ Un recepcionista recibe a un huésped cuya reserva está en estado `ACTIVE` y cu
 estadía incluyen el día de hoy. El recepcionista ubica la reserva, confirma la identidad y los
 datos del huésped, y registra el check-in; si el huésped es extranjero, el sistema procesa
 adicionalmente sus datos migratorios antes de confirmar. Esta historia es el flujo maestro de la
-funcionalidad: en una sola pantalla cubre tanto el camino exitoso (huésped nacional o extranjero)
-como los pasos operativos de apoyo (búsqueda de la reserva, resumen de confirmación) y los caminos
-de error que impiden una admisión inválida o duplicada (reserva no encontrada, cancelada, fuera de
-la ventana de estadía, o ya realizada). Al finalizar con éxito, el sistema marca la reserva como
-`CHECKED_IN` y solicita al Módulo 1 poner la habitación en estado `OCCUPIED`.
+funcionalidad: en una sola pantalla cubre tanto el camino exitoso (huésped nacional o extranjero,
+cada uno con su resumen de confirmación en pantalla antes de persistir el check-in) como el paso
+operativo de apoyo (búsqueda de la reserva) y los caminos de error que impiden una admisión
+inválida o duplicada (reserva no encontrada, cancelada, fuera de la ventana de estadía, o ya
+realizada). Al finalizar con éxito, el sistema marca la reserva como `CHECKED_IN` y solicita al
+Módulo 1 poner la habitación en estado `OCCUPIED`.
 
 **Por qué esta prioridad**: Es el flujo principal y único de la funcionalidad de check-in. Sus
 escenarios de éxito, operativos y de error ocurren todos en la misma pantalla y sobre la misma
@@ -54,10 +56,11 @@ inválidos o repetidos.
 estadía incluya la fecha de hoy, ejecutando el check-in de un huésped nacional y de un huésped
 extranjero con datos migratorios completos, y confirmando en ambos casos que la reserva pasa a
 `CHECKED_IN` y que se emite una solicitud de ocupación de la habitación. La misma prueba se
-completa intentando el check-in sobre una reserva inexistente, una `CANCELLED`, una fuera de la
-ventana de estadía, y una ya `CHECKED_IN`, confirmando que los cuatro intentos se bloquean con una
-razón clara y sin crear ningún registro ni efecto colateral. Entrega el valor de una admisión
-completa, auditable y protegida contra datos inválidos o duplicados.
+completa intentando el check-in sobre una reserva inexistente, una `CANCELLED`, una cuya estadía
+aún no inicia (llegada anticipada, bloqueada con **HTTP 400** e indicación de actualizar la
+reserva), una cuya estadía ya finalizó, y una ya `CHECKED_IN`, confirmando que los cinco intentos
+se bloquean con una razón clara y sin crear ningún registro ni efecto colateral. Entrega el valor
+de una admisión completa, auditable y protegida contra datos inválidos o duplicados.
 
 **Escenarios de Aceptación**:
 
@@ -68,17 +71,24 @@ completa, auditable y protegida contra datos inválidos o duplicados.
      incluye la fecha de hoy y tiene una habitación asignada
    - **Cuando** el recepcionista confirma la identidad y los datos personales del huésped y envía
      el check-in
-   - **Entonces** el sistema registra el check-in, cambia el estado de la reserva a `CHECKED_IN`,
-     guarda el momento real de llegada y el recepcionista responsable, y solicita al Módulo 1
-     cambiar el estado de la habitación a `OCCUPIED`
+   - **Entonces** el sistema presenta primero un resumen en pantalla con el huésped, la habitación
+     asignada, las fechas de estadía y la referencia de la reserva; solo al recibir la confirmación
+     explícita del recepcionista el check-in se completa y persiste, cambiando el estado de la
+     reserva a `CHECKED_IN`, guardando el momento real de llegada y el recepcionista responsable, y
+     solicitando al Módulo 1 cambiar el estado de la habitación a `OCCUPIED`
 
 2. **Escenario**: Huésped extranjero con datos migratorios completos es admitido
    - **Dado** que una reserva `ACTIVE` para un huésped extranjero incluye documento de identidad,
      nacionalidad, tipo de visa y fechas de estadía, todos válidos
    - **Cuando** el recepcionista envía el check-in
-   - **Entonces** el sistema ejecuta "Process Foreign Guest Data", y si resulta `PASSED`,
-     finaliza el check-in con éxito y guarda los datos migratorios validados localmente en la
-     base de datos, sin enviarlos ni exportarlos a Migración de forma inmediata
+   - **Entonces** el sistema ejecuta "Process Foreign Guest Data", y si resulta `PASSED`, presenta
+     un resumen en pantalla con el huésped, la habitación asignada, las fechas de estadía y la
+     referencia de la reserva; solo al recibir la confirmación explícita del recepcionista el
+     check-in se completa y persiste, cambiando el estado de la reserva a `CHECKED_IN`, guardando
+     los datos migratorios validados localmente en la base de datos, y solicitando al Módulo 1
+     cambiar el estado de la habitación a `OCCUPIED` — la exportación de estos datos hacia
+     Migración es un caso de uso independiente y exclusivo del actor Migración, completamente
+     fuera del alcance de esta historia
 
 *Escenarios de Flujo Operativo*
 
@@ -89,31 +99,36 @@ completa, auditable y protegida contra datos inválidos o duplicados.
    - **Entonces** el sistema devuelve la reserva coincidente con sus fechas de estadía, habitación,
      lista de huéspedes y estado actual, para que el recepcionista continúe con el check-in
 
-4. **Escenario**: Se muestra un resumen de confirmación antes de finalizar
-   - **Dado** que el recepcionista ingresó toda la información requerida para el check-in
-   - **Cuando** el recepcionista solicita finalizar
-   - **Entonces** el sistema presenta un resumen con huésped, habitación, fechas de estadía y
-     referencia de la reserva, y solo completa el check-in tras la confirmación explícita
-
 *Escenarios de Error / Casos Espejo (Caminos Tristes)*
 
-5. **Escenario**: No se encuentra reserva para el huésped
+4. **Escenario**: No se encuentra reserva para el huésped
    - **Dado** un huésped que llega a recepción sin ninguna reserva registrada
    - **Cuando** el recepcionista busca una reserva para iniciar el check-in
    - **Entonces** el sistema informa que no se encontró ninguna reserva activa y no permite
      iniciar el check-in
 
-6. **Escenario**: La reserva existe pero ya fue cancelada
+5. **Escenario**: La reserva existe pero ya fue cancelada
    - **Dado** una reserva en estado `CANCELLED`
    - **Cuando** el recepcionista la selecciona para hacer el check-in del huésped
    - **Entonces** el sistema bloquea la admisión, indica que la reserva está cancelada, y no
      modifica el estado de la reserva ni de la habitación
 
-7. **Escenario**: La fecha de llegada no está dentro de la estadía reservada
-   - **Dado** una reserva cuya estadía inicia dentro de tres días
+6. **Escenario**: Llegada anticipada — la reserva aún no alcanza su fecha de inicio de estadía
+   - **Dado** una reserva en estado `ACTIVE` o `PENDING` cuya fecha de inicio de estadía es
+     posterior a la de hoy (por ejemplo, comienza mañana)
+   - **Cuando** el solicitante intenta registrar el check-in hoy, antes de la fecha de llegada
+     permitida por la reserva
+   - **Entonces** el sistema bloquea la transacción con un error controlado **HTTP 400**, le indica
+     al solicitante que primero debe actualizar la fecha de la reserva mediante la pantalla de
+     "Actualizar Reservación" antes de poder hospedar al huésped, y no crea ningún registro de
+     check-in ni modifica el estado de la reserva o de la habitación; esta restricción aplica sin
+     importar si existe disponibilidad de habitación
+
+7. **Escenario**: Llegada tardía — la estadía reservada ya finalizó
+   - **Dado** una reserva cuya fecha de fin de estadía ya pasó
    - **Cuando** el recepcionista intenta hacer el check-in hoy
-   - **Entonces** el sistema rechaza el check-in y explica que la fecha de hoy está fuera de la
-     ventana de estadía reservada
+   - **Entonces** el sistema rechaza el check-in con **HTTP 400** y explica que la fecha de hoy
+     está fuera de la ventana de estadía reservada
 
 8. **Escenario**: Check-in ya realizado sobre la misma reserva
    - **Dado** una reserva en estado `CHECKED_IN` con el huésped ya hospedado
@@ -167,9 +182,13 @@ tienen un huésped hospedado.
   patrones típicos de inyección, el sistema debe interceptar y rechazar la entrada con **HTTP
   400** y un mensaje amigable, en lugar de procesarla o dejar que provoque un fallo interno.
 - **Check-in intentado fuera de la ventana de la reserva**: el sistema compara la fecha de hoy
-  contra las fechas de estadía reservadas. Si hoy es anterior al inicio o posterior al fin, la
-  admisión se rechaza con una explicación, sin crear registro de check-in ni cambiar el estado de
-  la reserva o la habitación.
+  contra las fechas de estadía reservadas. Si hoy es **anterior** al inicio de la estadía (llegada
+  anticipada), el sistema bloquea la operación con **HTTP 400** e indica que la reserva debe
+  actualizarse primero desde la pantalla de "Actualizar Reservación"; el sistema nunca permite
+  continuar con un check-in normal en este caso, sin importar si existe disponibilidad de
+  habitación. Si hoy es posterior al fin de la estadía, la admisión se rechaza con una explicación.
+  En ambos casos no se crea registro de check-in ni se cambia el estado de la reserva o la
+  habitación.
 - **Habitación asignada no está lista físicamente**: si la habitación asignada no está en un
   estado que permita ocupación (por ejemplo `CLEANING`), el sistema no marca el check-in como
   completado contra esa habitación; informa la condición bloqueante para que el recepcionista
@@ -202,9 +221,10 @@ tienen un huésped hospedado.
 - **FR-007**: El sistema NO DEBE ejecutar el procesamiento de datos migratorios para huéspedes
   `NATIONAL`.
 - **FR-008**: El sistema DEBE, cuando el procesamiento migratorio de un huésped `FOREIGN` resulte
-  `PASSED`, almacenar localmente los datos migratorios validados, dejándolos disponibles para su
-  exportación manual posterior mediante el caso de uso "Export SIRE File"; el check-in NO DEBE
-  disparar ni enviar automáticamente ese reporte a Migración.
+  `PASSED`, almacenar localmente en la base de datos los datos migratorios validados. El check-in
+  NO DEBE disparar, programar ni depender en ninguna forma del envío de esos datos a Migración: la
+  exportación mediante el caso de uso "Export SIRE File" es una funcionalidad independiente,
+  exclusiva del actor Migración, y completamente desacoplada de esta funcionalidad.
 - **FR-009**: El sistema DEBE registrar el check-in solo después de que el recepcionista confirme
   explícitamente un resumen con huésped, habitación, fechas de estadía y referencia de la reserva.
 - **FR-010**: El sistema DEBE, al completar un check-in con éxito, registrar el momento real de
@@ -234,23 +254,29 @@ tienen un huésped hospedado.
   incluyendo los intentos bloqueados o fallidos y la razón del bloqueo.
 - **FR-019**: El sistema DEBE comunicar con claridad, en cada caso de rechazo, exactamente qué
   dato falta o es inválido para que el recepcionista pueda corregirlo.
+- **FR-020**: El sistema DEBE rechazar con **HTTP 400** cualquier intento de check-in cuya fecha de
+  hoy sea anterior a la fecha de inicio de la estadía reservada (llegada anticipada), indicando que
+  la reserva debe actualizarse primero mediante el caso de uso "Actualizar Reservación"; el sistema
+  NO DEBE permitir continuar con un check-in normal en este caso, sin importar si existe
+  disponibilidad de habitación.
 
 ### Entidades Clave *(incluir si la funcionalidad involucra datos)*
 
-- **CheckIn**: Representa la admisión formal de un huésped en el hotel para una reserva
-  específica. Atributos clave: `reservationRef` (referencia a la `Reservation`), `guests`
-  (referencia al/los `Guest` admitido(s)), `assignedRoom` (habitación asignada), `arrivalTime`
-  (momento real de llegada), `receptionist` (recepcionista responsable), `status` (`IN_HOUSE`,
-  único valor que esta funcionalidad asigna), y `roomStateRequestStatus` (`PENDING` |
-  `COMPLETED`). Para huéspedes `FOREIGN` también referencia el resultado de su
+- **CheckIn**: Representa la admisión formal de uno o más huéspedes en el hotel para una reserva
+  específica. Atributos clave: `reservationRef` (referencia a la `Reservation`), `guests` (lista de
+  uno o más `Guest` admitidos), `assignedRooms` (lista de una o más `Room` ocupadas por este
+  check-in), `arrivalTime` (momento real de llegada), `receptionist` (recepcionista responsable),
+  `status` (`IN_HOUSE`, único valor que esta funcionalidad asigna), y `roomStateRequestStatus`
+  (`PENDING` | `COMPLETED`). Para huéspedes `FOREIGN` también referencia el resultado de su
   `MigratoryValidation`. Un `CheckIn` pertenece a exactamente una `Reservation` y cubre uno o más
   `Guest` de esa reserva.
 - **Reservation**: Representa la estadía reservada sobre la que opera el check-in. Atributos
-  clave: `reservationRef` (referencia de reserva), `guestList` (lista de huéspedes),
-  `assignedRoom` (habitación o tipo de habitación asignada), `startDate` y `endDate` (fecha de
-  inicio y fin de estadía), `source` (origen: directa u OTA), y `status` con valores posibles:
-  `PENDING`, `ACTIVE`, `CHECKED_IN`, `CHECKED_OUT`, `CANCELLED`. Se valida mediante "Check/View
-  Reservation" y puede tener como máximo un `CheckIn` activo.
+  clave: `reservationRef` (referencia de reserva), `guests` (lista de `Guest` de la reserva),
+  `assignedRooms` (lista de una o más `Room` o tipos de habitación asignados, para soportar
+  reservas grupales), `startDate` y `endDate` (fecha de inicio y fin de estadía), `source` (origen:
+  directa u OTA), y `status` con valores posibles: `PENDING`, `ACTIVE`, `CHECKED_IN`,
+  `CHECKED_OUT`, `CANCELLED`. Se valida mediante "Check/View Reservation" y puede tener como máximo
+  un `CheckIn` activo.
 - **Guest**: Representa a una persona que llega al hotel. Atributos clave: `fullName` (nombre
   completo), `documentId` (documento de identidad), `nationality` (nacionalidad), y `type`
   (clasificación: `NATIONAL` | `FOREIGN`). Para huéspedes `FOREIGN`, los atributos adicionales
@@ -267,9 +293,10 @@ tienen un huésped hospedado.
   (referencia al `Guest`), `submittedData` (datos obligatorios enviados: documento de identidad,
   nacionalidad, tipo de visa, fechas de estadía), `result` (`PASSED` | `FAILED`), y
   `missingFields` (lista de campos faltantes o inválidos). Los datos validados quedan almacenados
-  localmente, disponibles para una exportación manual y posterior a Migración mediante "Export
-  SIRE File", la cual está fuera del alcance de esta funcionalidad. Es obligatoria para cada
-  `Guest` `FOREIGN` antes de que su `CheckIn` pueda completarse.
+  localmente en la base de datos; su exportación hacia Migración mediante "Export SIRE File" es un
+  caso de uso independiente y exclusivo del actor Migración, completamente desacoplado de esta
+  funcionalidad. Es obligatoria para cada `Guest` `FOREIGN` antes de que su `CheckIn` pueda
+  completarse.
 
 ## Criterios de Éxito *(obligatorio)*
 
@@ -296,3 +323,6 @@ tienen un huésped hospedado.
 - **SC-008**: Los tickets de soporte y correcciones manuales relacionados con habitaciones
   mostradas como disponibles estando ocupadas se reducen en al menos un 80% tras el uso de esta
   funcionalidad.
+- **SC-009**: Cero check-ins se completan sobre reservas cuya fecha de inicio de estadía aún no ha
+  llegado; el 100% de esos intentos se bloquea con **HTTP 400** e indica que la reserva debe
+  actualizarse primero mediante "Actualizar Reservación".
