@@ -271,6 +271,7 @@ un huésped hospedado.
   los intentos bloqueados o fallidos y la razón del bloqueo.
 - **FR-020**: El sistema debe comunicar con claridad, en cada caso de rechazo, exactamente qué dato
   falta o es inválido para que el Recepcionista pueda corregirlo.
+- **FR-21**: El sistema debe consultar de forma síncrona el inventario del Módulo 1 mediante Consultar inventario de habitaciones para obtener los números de habitación física disponibles de la categoría reservada antes de confirmar la admisión
 
 ### Non-Functional Requirements
 
