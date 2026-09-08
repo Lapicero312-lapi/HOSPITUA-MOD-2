@@ -31,8 +31,7 @@ sistema): `PENDING`, `ACTIVE`, `CHECKED_IN`, `CHECKED_OUT`, `CANCELLED`.
 **Estados de la entidad `Room`** relevantes para esta funcionalidad (el estado físico completo es
 propiedad del Módulo 1): `AVAILABLE`, `OCCUPIED`, `CLEANING`, `OUT_OF_SERVICE`.
 
-### Historia de Usuario 1 - Registro de Check-In de un Huésped (Prioridad: P1)
-
+### Historia de Usuario 1 - Registro de Check-In de un Huésped (Prioridad: P)
 Un recepcionista recibe a un huésped cuya reserva está en estado `ACTIVE` y cuyas fechas de
 estadía incluyen el día de hoy. El recepcionista ubica la reserva, confirma la identidad y los
 datos del huésped, y registra el check-in; si el huésped es extranjero, el sistema procesa

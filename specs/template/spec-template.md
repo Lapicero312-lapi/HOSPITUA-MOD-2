@@ -13,7 +13,7 @@
   Think of each story as a standalone slice of functionality that can be:
   - Developed independently
   - Tested independently
-  - Deployed independently
+  - Deployed independent
   - Demonstrated to users independently
 -->
 
