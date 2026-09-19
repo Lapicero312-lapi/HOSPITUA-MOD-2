@@ -1,158 +1,183 @@
-# Especificación de Funcionalidad: Procesar Datos de Huéspedes Extranjeros
+# Feature Specification: Procesar Datos de Huésped Extranjero
 
-**Creado**: 2026-09-07
+**Created**: 2026-09-08
 
-## Escenarios de Usuario y Pruebas *(obligatorio)*
+## Use Case (Caso de Uso)
 
-La funcionalidad de Procesar Datos de Huéspedes Extranjeros (`Process Foreign Guest Data`) permite a la **Recepcionista** (o al **Huésped** en auto-registro) capturar, verificar y almacenar localmente la información migratoria requerida para los huéspedes cuya nacionalidad no sea local (`Guest.type` igual a `FOREIGN`). Toda la interacción ocurre dentro de la misma interfaz de check-in (o portal de pre-check-in), por lo que las distintas actividades de captura, validación de reglas de permanencia y corrección de inconsistencias no se modelan como historias de usuario independientes sino como pasos y escenarios dentro del mismo flujo funcional:
+### Descripción del problema
 
-- Cuando el huésped admitido o registrado es clasificado como extranjero (`Guest.type` igual a `FOREIGN`), el sistema exige la captura de sus datos migratorios obligatorios: número de documento o pasaporte (`documentId`), nacionalidad (`nationality`), tipo de visa (`visaType`), y fechas de vigencia de permanencia (`stayDates`).
-- El sistema evalúa localmente que todos los campos obligatorios estén presentes, que el tipo de visa sea válido según la tabla oficial, y que la vigencia del permiso de estadía cubra la totalidad de las fechas reservadas (`endDate` de `Reservation`).
-- Al resultar exitosa la validación, el sistema registra el resultado como `PASSED` en la entidad `MigratoryValidation` y establece su estado de exportación en `PENDING` (`sireExportStatus`), almacenando los datos localmente en la base de datos. Este procesamiento únicamente valida y guarda la información en el sistema local; el proceso de check-in **no** realiza, programa ni depende del envío de reportes al organismo externo **Migración Colombia**. La funcionalidad de **"Export SIRE File"** (Exportar Archivo SIRE) es un proceso desacoplado e independiente, exclusivo del actor **Migración**, y no forma parte del alcance de esta especificación.
-- Si algún dato es inválido, incompleto o incoherente, el sistema registra el resultado como `FAILED`, detalla los campos faltantes en `missingFields` y responde con una alerta controlada **HTTP 400 (Bad Request)**, permitiendo a la Recepcionista corregir la información en la misma pantalla sin perder los datos ya ingresados.
-- Para los huéspedes nacionales (`Guest.type` igual a `NATIONAL`), este procesamiento es omitido automáticamente por el sistema.
+Cuando un huésped extranjero llega al hotel, la ley exige verificar y conservar ciertos datos
+migratorios (pasaporte, nacionalidad, tipo de visa y fechas de estadía) antes de admitirlo, para
+poder reportarlos después a Migración mediante "Exportar archivo SIRE". Si el Check-In avanza sin
+validar estos datos, el hotel queda expuesto a sanciones legales y a un reporte SIRE incompleto o
+inexacto. Al mismo tiempo, la verificación no puede convertirse en un trámite lento que retrase el
+ingreso del huésped en el mostrador, ni en un dato que quede congelado sin poder corregirse cuando
+el recepcionista comete un error de tipeo. El negocio necesita un procesamiento local, obligatorio
+solo para huéspedes `FOREIGN`, que valide los campos mínimos exigidos y deje los datos disponibles
+para corrección posterior mientras la estadía siga vigente.
 
-**Estados de la entidad `Reservation`** (deben mantenerse en concordancia estricta en todo el sistema): `PENDING`, `ACTIVE`, `CHECKED_IN`, `CHECKED_OUT`, `CANCELLED`. Esta funcionalidad procesa datos migratorios para reservas en estado `ACTIVE` durante el check-in.
+Este procesamiento es puramente local y lógico dentro del Módulo 2: no interactúa bajo ninguna
+circunstancia con el Módulo 1. Es el propio caso de uso de Check-In quien, una vez que verifica que
+el `MigratoryValidation.result` resultante es `PASSED`, invoca de forma síncrona "Establecer el
+estado de la habitación" para solicitar el cambio de la `Habitation` física a `Occupied`; esa
+interacción física con el Módulo 1 no forma parte del alcance de esta funcionalidad.
 
-**Estados de la entidad `Room`** relevantes (propiedad del Módulo 1): `AVAILABLE`, `OCCUPIED`, `CLEANING`, `OUT_OF_SERVICE`.
+### Flujo de Usuario de Alto Nivel
 
-**Estados y atributos de la entidad `MigratoryValidation`**:
-- `result`: `PASSED`, `FAILED`.
-- `sireExportStatus`: `PENDING`, `EXPORTED`.
+1. Durante el registro de Check-In, cuando el `Guest` a admitir tiene `type` igual a `FOREIGN`, el
+   sistema exige y presenta el formulario de datos migratorios (`MigratoryValidation`).
+2. El **Recepcionista** ingresa el pasaporte, la nacionalidad, el tipo de visa y las fechas de
+   estadía del huésped.
+3. El sistema valida localmente que los cuatro campos estén presentes, tengan un formato correcto y
+   sean lógicamente coherentes (por ejemplo, que la fecha de ingreso al país no sea futura).
+4. Si la validación es exitosa, el sistema registra el `MigratoryValidation` con resultado `PASSED`
+   y permite que el Check-In continúe hacia su confirmación.
+5. Si faltan datos o son inválidos, el sistema bloquea la confirmación del Check-In, marca el
+   `MigratoryValidation` como `FAILED` y detalla los `missingFields` que deben corregirse.
+6. Una vez que la reserva del huésped está `CHECKED_IN`, el Recepcionista puede corregir los datos
+   migratorios ya registrados desde el resumen de la reserva, sin necesidad de repetir el Check-In.
 
----
+## User Scenarios & Testing *(mandatory)*
 
-### Historia de Usuario 1 - Validación y Registro Local de Datos Migratorios para Huéspedes Extranjeros (Prioridad: P1)
+### User Story 1 - Captura y Validación de Datos Migratorios en el Check-In (Priority: P1)
 
-Una Recepcionista está realizando el registro de check-in de un huésped cuyo tipo es extranjero (`Guest.type` igual a `FOREIGN`). Para cumplir con la normativa legal de registro de extranjeros en el hotel, la Recepcionista ingresa los datos migratorios del huésped en la pantalla de check-in. El sistema valida que la información esté completa, que el tipo de visa sea válido y que la vigencia del permiso cubra el rango de la estadía. Si la validación es exitosa, el sistema guarda localmente el registro de `MigratoryValidation` en estado `PASSED` con `sireExportStatus` en `PENDING`, permitiendo avanzar con la admisión del huésped. Esta historia es el flujo maestro de la funcionalidad: abarca en una sola pantalla el camino feliz de validación, la verificación de coincidencia con la reserva, y las alertas controladas por datos incompletos o vencidos.
+El Recepcionista ingresa los datos migratorios de un `Guest` `FOREIGN` (pasaporte, nacionalidad,
+tipo de visa y fechas de estadía) en la misma pantalla de Check-In. El sistema valida que los
+cuatro campos estén completos y sean coherentes antes de permitir que el Check-In se confirme. Por
+tratarse de un único paso dentro del flujo de admisión, el camino exitoso y el bloqueo por datos
+incompletos o inválidos se consolidan en esta misma historia de usuario y no se modelan como
+pantallas separadas.
 
-**Por qué esta prioridad**: Es el flujo crítico y obligatorio (Happy Path) para operar el negocio respetando el marco legal migratorio. Por sí sola entrega un MVP completo de validación local: garantiza que todo huésped extranjero admitido tenga sus datos migratorios en regla y guardados en el sistema antes de confirmar el check-in, habilitando el posterior reporte SIRE sin bloquear la admisión del huésped.
+**Why this priority**: Es el camino crítico que asegura el cumplimiento legal del reporte SIRE
+antes de alojar al huésped. Sin esta validación, el Check-In podría completarse con datos
+migratorios incompletos, exponiendo al hotel a sanciones y a un reporte SIRE defectuoso.
 
-**Prueba Independiente**: Se puede probar de forma aislada ingresando los datos migratorios de un huésped extranjero con un pasaporte válido, nacionalidad y tipo de visa reconocidos, y fechas de vigencia que cubran la estadía. Se verifica que el sistema cree una `MigratoryValidation` con resultado `PASSED` y `sireExportStatus` en `PENDING`, guardando los datos en la base de datos y retornando una confirmación exitosa. La prueba se complementa enviando solicitudes con tipo de visa ausente o vigencia de visa menor a la fecha de salida, verificando que la `MigratoryValidation` quede en `FAILED` y la solicitud sea bloqueada de manera segura con **HTTP 400**.
+**Independent Test**: Se puede probar de forma independiente ingresando los datos migratorios
+completos de un `Guest` `FOREIGN` durante un Check-In y verificando que el `MigratoryValidation`
+quede en `PASSED` y que el Check-In continúe. Se completa dejando el pasaporte vacío y confirmando
+que el sistema bloquea la confirmación con `MigratoryValidation` en `FAILED`.
 
-**Escenarios de Aceptación**:
+**Acceptance Scenarios**:
 
-*Escenarios de Éxito (Happy Path)*
+1. **Scenario**: Registro exitoso de datos migratorios para huésped extranjero (Happy Path)
+   - **Given** una reserva en estado `ACTIVE` asignada a un `Guest` con `type` `FOREIGN`
+   - **When** el Recepcionista ingresa el pasaporte, la nacionalidad, el tipo de visa y las fechas
+     de estadía completos y válidos
+   - **Then** el sistema registra el `MigratoryValidation` con resultado `PASSED` y permite que el
+     Check-In continúe hacia su confirmación
 
-1. **Escenario**: Procesamiento exitoso de datos migratorios completos para un huésped extranjero
-   - **Dado** que la Recepcionista tiene en pantalla un check-in en proceso para una reserva `ACTIVE` con un huésped extranjero (`Guest.type` igual a `FOREIGN`)
-   - **Cuando** la Recepcionista ingresa un `documentId` válido, `nationality` extranjera, `visaType` autorizado, y `stayDates` cuya fecha de expiración sea igual o posterior al `endDate` de la `Reservation`
-   - **Entonces** el sistema registra una `MigratoryValidation` en estado `PASSED` con `sireExportStatus` en `PENDING`, persiste los datos migratorios localmente en la base de datos, y retorna un estado favorable para habilitar la confirmación del check-in
-
-2. **Escenario**: Exención automática del procesamiento para huéspedes nacionales
-   - **Dado** que la Recepcionista procesa el check-in de un huésped con `Guest.type` igual a `NATIONAL`
-   - **Cuando** el sistema evalúa la necesidad de validación migratoria
-   - **Entonces** el sistema omite el procesamiento de `MigratoryValidation`, no exige campos de visa ni vigencia de permanencia extranjera, y permite continuar directamente con el flujo normal de check-in
-
-*Escenarios de Error / Caminos Tristes*
-
-3. **Escenario**: Rechazo controlado por tipo de visa ausente o no reconocido
-   - **Dado** que la Recepcionista procesa los datos de un huésped extranjero (`Guest.type` igual a `FOREIGN`)
-   - **Cuando** la Recepcionista deja el campo `visaType` vacío o ingresa un código de visa no registrado en la tabla oficial del sistema
-   - **Entonces** el sistema marca el resultado de `MigratoryValidation` como `FAILED`, registra `visaType` dentro del atributo `missingFields`, y responde con un error controlado **HTTP 400 (Bad Request)** detallando que el tipo de visa es obligatorio y debe ser válido, impidiendo la finalización del check-in hasta su corrección
-
-4. **Escenario**: Rechazo por vigencia del permiso de permanencia inferior a la estadía reservada
-   - **Dado** un huésped extranjero cuya visa o permiso de permanencia en `stayDates` vence en una fecha anterior al `endDate` de la `Reservation`
-   - **Cuando** la Recepcionista intenta procesar y guardar la validación migratoria
-   - **Entonces** el sistema marca la `MigratoryValidation` con resultado `FAILED`, registra la inconsistencia en `missingFields`, y responde con una alerta **HTTP 400 (Bad Request)** indicando que la vigencia del permiso migratorio no cubre la fecha de salida del hotel
-
----
-
-### Historia de Usuario 2 - Corrección y Re-validación de Datos Migratorios (Prioridad: P2)
-
-Cuando una evaluación previa de datos migratorios resulta en estado `FAILED` debido a un error tipográfico en el pasaporte, una nacionalidad mal seleccionada o una visa omitida, la Recepcionista puede corregir los campos erróneos en la misma pantalla y solicitar una re-evaluación del registro.
-
-**Por qué esta prioridad**: Es un flujo alternativo importante para la operación diaria de recepción. Permite subsanar errores humanos de digitación sin tener que cancelar ni reiniciar desde cero el proceso de check-in, garantizando fluidez operativa en la recepción.
-
-**Prueba Independiente**: Se puede probar registrando primero una `MigratoryValidation` en estado `FAILED` sobre una reserva `ACTIVE`. Posteriormente, desde la misma pantalla, la Recepcionista actualiza el campo erróneo (por ejemplo, corregir el número de pasaporte o adjuntar el tipo de visa) y envía la re-validación. Se confirma que el sistema actualiza el registro de `MigratoryValidation` a `PASSED`, cambia `sireExportStatus` a `PENDING`, y despeja los bloqueos de admisión.
-
-**Escenarios de Aceptación**:
-
-1. **Escenario**: Re-validación exitosa tras la corrección de datos en pantalla
-   - **Dado** que un huésped extranjero cuenta con una `MigratoryValidation` previa en estado `FAILED` por tener el `documentId` incompleto
-   - **Cuando** la Recepcionista corrige el valor de `documentId` con el número oficial del pasaporte y presiona la opción de re-validar
-   - **Entonces** el sistema procesa nuevamente los datos, actualiza el estado de `MigratoryValidation` a `PASSED` con `sireExportStatus` en `PENDING`, limpia la lista de `missingFields`, y habilita la confirmación del check-in
-
-2. **Escenario**: Mantenimiento del estado fallido ante corrección persistente con datos inválidos
-   - **Dado** una `MigratoryValidation` en estado `FAILED`
-   - **Cuando** la Recepcionista intenta re-validar modificando un campo pero dejando otro atributo obligatorio vacío
-   - **Entonces** el sistema mantiene el resultado de `MigratoryValidation` en `FAILED`, responde con un código **HTTP 400 (Bad Request)** especificando qué campo continúa pendiente, y no permite finalizar el check-in
+2. **Scenario**: Bloqueo por dato migratorio obligatorio faltante (Error)
+   - **Given** una reserva en estado `ACTIVE` asignada a un `Guest` `FOREIGN`
+   - **When** el Recepcionista intenta confirmar el Check-In dejando el número de pasaporte vacío
+   - **Then** el sistema registra el `MigratoryValidation` con resultado `FAILED`, detalla en
+     `missingFields` el dato faltante, y no permite completar el Check-In
 
 ---
 
-### Historia de Usuario 3 - Pre-carga Autónoma de Datos Migratorios por el Huésped (Prioridad: P3)
+### User Story 2 - Corrección de Datos Migratorios sobre una Estadía en Curso (Priority: P2)
 
-Un Huésped con una reserva confirmada en estado `ACTIVE` accede al portal web de autogestión antes de su llegada e ingresa autónomamente sus datos migratorios (`documentId`, `nationality`, `visaType`, `stayDates`). El sistema procesa y almacena la `MigratoryValidation` en estado `PASSED` de forma anticipada.
+El Recepcionista corrige la información migratoria de un `Guest` `FOREIGN` que ya tiene el
+Check-In realizado, desde la vista de resumen de la reserva, cuando detecta un error de tipeo en el
+registro original.
 
-**Por qué esta prioridad**: Es una característica deseable de optimización y confort. Reduce sustancialmente los tiempos de espera en la recepción durante las horas pico de check-in, pero no es crítica para que el negocio funcione, ya que la Recepcionista siempre puede realizar la captura directamente en mostrador.
+**Why this priority**: Es un flujo alternativo importante para resolver errores humanos de captura
+sin obligar a deshacer el Check-In ya confirmado, pero no bloquea la admisión inicial del huésped.
 
-**Prueba Independiente**: Se prueba autenticando a un **Guest** en el portal web, seleccionando su reserva `ACTIVE`, completando el formulario de datos migratorios y enviando la solicitud. Se verifica que en la base de datos se cree el registro `MigratoryValidation` en `PASSED` con `sireExportStatus` en `PENDING` y `validatedBy` indicando el canal web del huésped. Posteriormente, al consultar la reserva desde la consola de Recepcionista, se confirma que los datos figuran pre-validados.
+**Independent Test**: Se puede probar editando un `MigratoryValidation` existente de un `Guest` con
+Check-In ya realizado y comprobando que los cambios se guardan correctamente en la base de datos
+local.
 
-**Escenarios de Aceptación**:
+**Acceptance Scenarios**:
 
-1. **Escenario**: Pre-carga migratoria autónoma exitosa desde el portal web
-   - **Dado** un **Guest** autenticado en el portal web con una reserva confirmada en estado `ACTIVE`
-   - **Cuando** el Huésped diligencia y envía el formulario con todos sus datos migratorios válidos antes de su fecha de llegada
-   - **Entonces** el sistema genera una `MigratoryValidation` en estado `PASSED` con `sireExportStatus` en `PENDING`, asociándola a la reserva para que esté disponible de forma inmediata en la recepción del hotel
+1. **Scenario**: Corrección exitosa de un dato migratorio
+   - **Given** una reserva en estado `CHECKED_IN` con `MigratoryValidation` en `PASSED`
+   - **When** el Recepcionista corrige la fecha de ingreso al país del huésped desde el resumen de
+     la reserva
+   - **Then** el sistema guarda la modificación exitosamente y refleja el nuevo dato en la interfaz
+     sin alterar el estado del Check-In
 
-2. **Escenario**: Rechazo de pre-carga web por datos migratorios incompletos
-   - **Dado** un **Guest** diligenciando sus datos migratorios en el portal web
-   - **Cuando** el Huésped envía la información sin adjuntar la fecha de vencimiento de su permiso de permanencia
-   - **Entonces** el sistema rechaza la pre-carga, responde con un código **HTTP 400 (Bad Request)** indicando los datos faltantes en la interfaz web, y no genera un registro `MigratoryValidation` en estado `PASSED`
-
----
+2. **Scenario**: Rechazo de corrección con formato de fecha inválido (Error)
+   - **Given** una reserva en estado `CHECKED_IN`
+   - **When** el Recepcionista intenta actualizar la fecha de ingreso colocando un formato no
+     reconocido
+   - **Then** el sistema rechaza la actualización y notifica que el formato de fecha no es válido,
+     conservando el dato previamente validado
 
 ### Casos Borde
 
-- **Envío de formulario con campos obligatorios vacíos o ausentes**: si la Recepcionista o el Huésped intenta procesar los datos migratorios omitiendo campos esenciales como `documentId`, `nationality` o `visaType`, el sistema debe interceptar la solicitud antes de procesarla, rechazar la operación con un error de negocio controlado **HTTP 400 (Bad Request)**, y retornar un mensaje claro indicando específicamente qué campos están ausentes, prohibiendo estrictamente que se generen excepciones no capturadas que provoquen un error de infraestructura **HTTP 500**.
-- **Ingreso de fechas migratorias en formato inválido o con inconsistencia lógica**: si se envían fechas con formatos de texto no reconocidos o si la fecha de inicio del permiso de permanencia es posterior a su fecha de expiración en `stayDates`, el sistema debe validar el formato y la coherencia lógica, rechazando la solicitud con un código **HTTP 400 (Bad Request)** y un mensaje amigable al usuario, evitando fallos en el motor de base de datos o excepciones **HTTP 500**.
-- **Presencia de caracteres especiales o patrones maliciosos en campos de texto libre**: si en los campos de `documentId` o en el nombre de la nacionalidad se detectan caracteres extraños, símbolos no permitidos o secuencias asociadas a inyección de código, el sistema debe sanitizar e interceptar la entrada, respondiendo con un error **HTTP 400 (Bad Request)** y bloqueando la persistencia de datos sospechosos sin afectar la estabilidad del servidor.
-- **Intento de procesar datos migratorios sobre un huésped de nacionalidad local (`NATIONAL`)**: si se intenta invocar el procesamiento migratorio para un huésped clasificado como `NATIONAL`, el sistema intercepta la acción y responde con un código **HTTP 400 (Bad Request)** explicando que la validación migratoria aplica exclusivamente a huéspedes extranjeros (`FOREIGN`).
-- **Concurrencia al procesar los datos migratorios del mismo huésped**: si dos Recepcionistas intentan validar los datos migratorios del mismo `Guest` al mismo tiempo, el sistema controla la transacción para garantizar que solo una `MigratoryValidation` en estado `PASSED` sea registrada y vinculada a la reserva, evitando duplicidad de registros.
+- ¿Qué sucede si el pasaporte o la nacionalidad se envían vacíos de forma maliciosa a través de la
+  red? El sistema intercepta la falla antes de que alcance la base de datos y retorna un código
+  **HTTP 400 (Bad Request)** controlado con el mensaje "El pasaporte y la nacionalidad son
+  obligatorios".
+- ¿Qué sucede si la fecha de ingreso al país proporcionada es futura? El sistema valida que es
+  lógicamente imposible y rechaza la petición con **HTTP 400** y el mensaje "La fecha de ingreso al
+  país no puede ser futura", sin dejar que el error se propague como **HTTP 500**.
+- ¿Qué sucede si los datos migratorios contienen caracteres no soportados o patrones maliciosos? El
+  sistema sanitiza e intercepta la anomalía y retorna **HTTP 400** indicando "Caracteres no válidos
+  en el formulario migratorio".
+- ¿Qué sucede si se intenta procesar datos migratorios para un `Guest` cuyo `type` es `NATIONAL`?
+  El sistema omite el procesamiento por completo: `MigratoryValidation` no se genera y el Check-In
+  continúa sin exigir estos campos.
 
----
+## Requirements *(mandatory)*
 
-## Requisitos *(obligatorio)*
+### Functional Requirements
 
-### Requisitos Funcionales
+- **FR-001**: El sistema debe exigir la captura de los datos migratorios (pasaporte, nacionalidad,
+  tipo de visa y fechas de estadía) únicamente cuando el `Guest` a admitir tenga `type` igual a
+  `FOREIGN`.
+- **FR-002**: El sistema no debe ejecutar ni exigir el procesamiento de datos migratorios para
+  huéspedes con `type` igual a `NATIONAL`.
+- **FR-003**: El sistema debe validar que la fecha de ingreso al país sea anterior o igual a la
+  fecha actual del sistema.
+- **FR-004**: El sistema debe bloquear la confirmación del Check-In hasta que los cuatro campos
+  migratorios obligatorios estén presentes y sean válidos, registrando el `MigratoryValidation`
+  con resultado `PASSED` únicamente en ese caso.
+- **FR-005**: El sistema debe registrar el `MigratoryValidation` con resultado `FAILED` y detallar
+  en `missingFields` cada campo faltante o inválido cuando la validación no se supere.
+- **FR-006**: El sistema debe permitir corregir los datos migratorios ya registrados desde el
+  resumen de la reserva mientras esta se encuentre en estado `CHECKED_IN`, sin alterar dicho estado.
+- **FR-007**: El sistema debe retornar errores estructurados **HTTP 400 (Bad Request)** ante fallos
+  de formato o datos incompletos, prohibiendo que se propaguen como fallas de infraestructura
+  **HTTP 500**.
 
-- **FR-001**: El sistema DEBE requerir la captura y validación de datos migratorios exclusivamente para los huéspedes clasificados con `Guest.type` igual a `FOREIGN`.
-- **FR-002**: El sistema NO DEBE solicitar ni procesar registros de `MigratoryValidation` para huéspedes cuyo `Guest.type` sea `NATIONAL`.
-- **FR-003**: El sistema DEBE exigir como obligatorios los siguientes atributos para la entidad `MigratoryValidation`: `documentId` (pasaporte o documento migratorio equivalente), `nationality`, `visaType` y `stayDates`.
-- **FR-004**: El sistema DEBE verificar que el `visaType` suministrado coincida con la lista oficial de tipos de visa y permisos autorizados por las autoridades migratorias.
-- **FR-005**: El sistema DEBE validar que la fecha de vencimiento incluida en `stayDates` sea igual o posterior a la fecha final de la reserva (`endDate` de la entidad `Reservation`).
-- **FR-006**: El sistema DEBE registrar la entidad `MigratoryValidation` con estado `result` igual a `PASSED` cuando todos los datos obligatorios sean válidos y coherentes.
-- **FR-007**: El sistema DEBE registrar la entidad `MigratoryValidation` con estado `result` igual a `FAILED` y listar los atributos omitidos o erróneos en el campo `missingFields` cuando se detecten inconsistencias.
-- **FR-008**: El sistema DEBE asignar el valor `PENDING` al atributo `sireExportStatus` en toda `MigratoryValidation` que alcance el estado `PASSED`, dejándola disponible para su posterior uso en la exportación de reportes.
-- **FR-009**: El sistema DEBE almacenar localmente en la base de datos los datos migratorios validados y NO DEBE realizar ni requerir conexión o transmisión síncrona/asíncrona hacia sistemas externos de Migración durante la validación o el check-in.
-- **FR-010**: El sistema DEBE condicionar la finalización exitosa del `CheckIn` de un huésped `FOREIGN` a la existencia de una `MigratoryValidation` en estado `PASSED`.
-- **FR-011**: El sistema DEBE permitir a la `Receptionist` corregir y re-evaluar los datos de una `MigratoryValidation` en estado `FAILED` desde la misma pantalla de recepción.
-- **FR-012**: El sistema DEBE permitir al actor `Guest` realizar la pre-carga y validación anticipada de sus datos migratorios a través del portal web de autogestión para reservas en estado `ACTIVE`.
-- **FR-013**: El sistema DEBE interceptar cualquier fallo de validación de entradas (campos obligatorios vacíos, fechas en formatos inválidos o caracteres no permitidos) y responder estrictamente con códigos **HTTP 400 (Bad Request)** acompañados de un mensaje amigable; el sistema DEBE prohibir que estas inconsistencias se propaguen como errores **HTTP 500**.
-- **FR-014**: El sistema DEBE mantener un registro auditable de cada intento de validación migratoria, almacenando la fecha de ejecución, el actor responsable (`Receptionist` o `Guest`), el resultado obtenido (`PASSED` | `FAILED`) y el detalle de inconsistencias detectadas.
+### Non-Functional Requirements
 
-### Requisitos No Funcionales
+- **NFR-001**: El procesamiento de datos migratorios no debe añadir más de 1 minuto adicional al
+  tiempo total de Check-In del huésped en recepción.
 
-- **NFR-001**: El tiempo total de procesamiento y evaluación local de la `MigratoryValidation` en el servidor DEBE ser inferior a 1 segundo por cada huésped.
-- **NFR-002**: Los datos migratorios de los huéspedes extranjeros DEBEN ser almacenados en la base de datos cumpliendo con los estándares de seguridad y protección de datos personales vigentes, garantizando confidencialidad y restricciones de acceso no autorizado.
+### Key Entities *(include if feature involves data)*
 
-### Entidades Clave *(incluir si la funcionalidad involucra datos)*
+- **MigratoryValidation**: Representa el procesamiento local de datos migratorios de un `Guest`
+  `FOREIGN`. Atributos: `guestRef`, `submittedData` (pasaporte, nacionalidad, tipo de visa, fechas
+  de estadía), `result` (`PASSED` | `FAILED`), `missingFields` (lista de campos faltantes o
+  inválidos), y `sireExportStatus` (`PENDING` | `EXPORTED`), que esta funcionalidad inicializa en
+  `PENDING` al validar con éxito y que "Exportar archivo SIRE" consume y actualiza después. Los
+  datos validados quedan almacenados localmente; su exportación hacia Migración mediante "Exportar
+  archivo SIRE" es un caso de uso independiente y desacoplado de esta funcionalidad. Es obligatoria
+  para cada `Guest` `FOREIGN` antes de que su `CheckIn` pueda completarse.
+- **Guest**: Representa al huésped cuyos datos se procesan. Atributos: `id`, `fullName`,
+  `documentNumber`, `nationality`, `contactPhone`, `contactEmail`, y `type` (`NATIONAL` |
+  `FOREIGN`), clasificación que determina si esta funcionalidad se activa.
+- **Reservation**: Representa la estadía asociada al huésped. Atributos: `reservationRef` y
+  `state` con estados permitidos: `ACTIVE`, `CHECKED_IN`, `CHECKED_OUT`, `CANCELLED`. El estado
+  `PENDING` queda inhabilitado en los flujos estándar: toda reserva nace directamente en `ACTIVE`.
+- **CheckIn**: Representa la admisión del huésped, referenciada únicamente como contexto: el
+  `MigratoryValidation` de un `Guest` `FOREIGN` es obligatorio antes de que su `CheckIn` pueda
+  completarse.
+- **Habitation**: Se referencia únicamente de forma informativa, como contexto del Check-In al que
+  pertenece esta validación. Atributos: `habitationId` y `stateHabitation` con los siete estados
+  oficiales del glosario: `Available`, `Occupied`, `PendingCleaning`, `InCleaning`,
+  `DisabledForRepairs`, `TechnicalBlock`, `Inactive`. Esta funcionalidad no interactúa con el
+  Módulo 1 ni modifica el `stateHabitation`.
 
-- **MigratoryValidation**: Representa la verificación local de cumplimiento de datos migratorios para un huésped extranjero. Atributos clave: `id` (identificador único), `guestRef` (referencia al `Guest`), `reservationRef` (referencia a la `Reservation`), `submittedData` (datos presentados: `documentId`, `nationality`, `visaType`, `stayDates`), `result` (`PASSED` | `FAILED`), `missingFields` (lista de atributos incompletos o erróneos), `sireExportStatus` (`PENDING` | `EXPORTED`), `validatedAt` (fecha y hora del procesamiento), y `validatedBy` (actor responsable: `Receptionist` o `Guest`).
-- **Guest**: Representa al huésped asociado al proceso. Atributos clave: `fullName` (nombre completo), `documentId` (documento de identidad o pasaporte), `nationality` (nacionalidad), y `type` (`NATIONAL` | `FOREIGN`). Para huéspedes con `type` igual a `FOREIGN`, se requiere obligatoriamente una `MigratoryValidation` en estado `PASSED` para su admisión.
-- **Reservation**: Representa la estadía reservada sobre la cual se registran los huéspedes. Atributos clave: `reservationRef` (código de reserva), `startDate` (fecha de llegada), `endDate` (fecha de salida), `assignedRoom` (habitación asignada), y `status` con valores posibles: `PENDING`, `ACTIVE`, `CHECKED_IN`, `CHECKED_OUT`, `CANCELLED`.
-- **CheckIn**: Representa el evento de admisión formal en el hotel. Atributos clave: `reservationRef`, `guests` (lista de huéspedes admitidos), `assignedRoom`, `arrivalTime` (momento real de ingreso), `receptionist` (Recepcionista responsable), y `status` (`IN_HOUSE`). Su confirmación para huéspedes `FOREIGN` exige que la `MigratoryValidation` asociada esté en `PASSED`.
-- **Room**: Representa la unidad física de alojamiento asignada al huésped (propiedad del Módulo 1). Atributos clave: `roomId` (identificador de habitación), `roomType` (tipo de habitación), y `status` (`AVAILABLE`, `OCCUPIED`, `CLEANING`, `OUT_OF_SERVICE`).
+## Success Criteria *(mandatory)*
 
----
+### Measurable Outcomes
 
-## Criterios de Éxito *(obligatorio)*
-
-### Resultados Medibles
-
-- **SC-001**: El 100% de los huéspedes extranjeros (`Guest.type` igual a `FOREIGN`) que completan el registro de check-in cuentan con una `MigratoryValidation` registrada en estado `PASSED` y `sireExportStatus` en `PENDING`.
-- **SC-002**: El 100% de los huéspedes de nacionalidad local (`Guest.type` igual a `NATIONAL`) completan su admisión sin requerir ni generar registros de validación migratoria extranjera.
-- **SC-003**: Cero errores de servidor **HTTP 500** son generados ante envíos de datos migratorios con formatos vacíos, fechas inválidas o caracteres no autorizados; el 100% de estos intentos es respondido con errores de negocio **HTTP 400 (Bad Request)** controlados y mensajes amigables.
-- **SC-004**: Una Recepcionista puede capturar y validar los datos migratorios de un huésped extranjero en la pantalla de check-in en menos de 30 segundos.
-- **SC-005**: El 95% de las re-validaciones intentadas tras una respuesta `FAILED` se resuelven exitosamente en el primer reintento gracias a la claridad del detalle proporcionado en `missingFields`.
-- **SC-006**: El 100% de las validaciones aprobadas (`PASSED`) almacenan los datos migratorios localmente en la base de datos quedando listas con `sireExportStatus` en `PENDING` para la posterior ejecución desacoplada del reporte SIRE.
+- **SC-001**: El 100% de los Check-In de huéspedes `FOREIGN` cuentan con un `MigratoryValidation`
+  en `PASSED` con sus cuatro campos obligatorios completos.
+- **SC-002**: Cero caídas del servidor (**HTTP 500**) son causadas por fechas ilógicas o campos
+  vacíos en el proceso migratorio; el 100% se resuelve con **HTTP 400**.
+- **SC-003**: El procesamiento de datos migratorios añade como máximo 1 minuto adicional al tiempo
+  total de Check-In del huésped en recepción.
