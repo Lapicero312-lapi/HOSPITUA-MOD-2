@@ -1,169 +1,60 @@
-# Feature Specification: Registro de Check-Out
+# Feature Specification: Registrar Check-Out (Notificación)
 
-**Created**: 2026-09-08
-
-## Use Case (Caso de Uso)
-
-### Descripción del problema
-
-El cierre de la estadía de un huésped es hoy un cuello de botella. El recepcionista debe reunir a
-mano los consumos locales de la habitación, buscar tarifas y calcular el monto final antes de
-dejar salir al huésped, lo que produce filas en recepción y retrasa la disponibilidad de la
-habitación para el personal de aseo y para el siguiente cliente. Cuando la información de consumos
-locales no se consolida y liquida a tiempo con el área responsable de precios, aparecen fugas
-financieras: cargos que nunca se registran, cobros aplicados sin control y diferencias entre lo
-que el huésped paga y lo que realmente corresponde a su estadía. El negocio necesita un check-out
-ágil, con una única liquidación confiable y trazable calculada por el Módulo 3, y con la
-habitación marcada de inmediato como pendiente de limpieza.
-
-### Flujo de Usuario de Alto Nivel
-
-1. El **Recepcionista** ubica la reserva del huésped mediante el caso de uso interno "Consultar /
-   ver reserva" y el sistema valida que se encuentre en estado `CHECKED_IN`.
-2. El **Recepcionista** registra en el Módulo 2 los cargos por consumos adicionales de la estadía
-   (por ejemplo, servicio a la habitación o minibar), si los hubiera.
-3. El sistema recopila la información básica de la salida (`reservationRef`, consumos locales
-   registrados y fechas reales de estadía) y la envía al caso de uso "Procesar liquidación y
-   validación" del **Módulo 3 (Pricing)**.
-4. El **Módulo 3** procesa, valida y calcula la liquidación final y la retorna al Módulo 2. El
-   Módulo 2 no realiza ninguna suma, tarifa ni cálculo de cobros: solo expone el resultado
-   recibido.
-5. El sistema presenta en pantalla el resumen consolidado de la liquidación retornada por el
-   Módulo 3 para la confirmación visual del **Recepcionista**.
-6. Tras la confirmación manual del **Recepcionista**, el sistema cambia el estado de la reserva a
-   `CHECKED_OUT` de forma local y registra la transacción de salida.
-7. El sistema solicita de forma asíncrona al **Módulo 1**, mediante el caso de uso `Set Habitation
-   State` ("Establecer el estado de la habitación"), transicionar la `Habitation` asignada de
-   `Occupied` a `PendingCleaning`.
+**Created**: 2026-09-19
 
 ## User Scenarios & Testing *(mandatory)*
 
-### User Story 1 - Registro de Check-Out de un Huésped (Priority: P1)
+### User Story 1 - Sincronización de Salida y Finalización de Reserva (Priority: P2)
 
-El **Recepcionista** formaliza la salida de un huésped cuya reserva está en estado `CHECKED_IN`:
-registra los consumos locales de la estadía, obtiene del **Módulo 3** la liquidación final,
-confirma visualmente el resumen y cierra la estadía. Toda la operación transcurre en una sola
-pantalla de check-out; por eso, el flujo feliz y los bloqueos lógicos (reserva en estado inválido,
-intento de salida duplicada, indisponibilidad del Módulo 3, datos mal formados) se consolidan en
-esta misma historia de usuario y no se modelan como pantallas ni historias separadas, para evitar
-la sobre-atomización. Al completarse con éxito, la reserva queda en `CHECKED_OUT` y la `Habitation`
-se solicita al Módulo 1 para pasar de `Occupied` a `PendingCleaning`.
+Como sistema de Control de Reservas (Módulo 2), necesito recibir la notificación de Check-Out exitoso ejecutado en el Módulo 1, para marcar la estadía de la `Reservation` correspondiente como terminada, manteniendo la coherencia sin duplicar procesos de salida en este módulo.
 
-**Why this priority**: Es el flujo principal y de mayor frecuencia del módulo. Dejar la habitación
-en `PendingCleaning` apenas se confirma la salida permite que el personal de aseo actúe de
-inmediato y que la habitación vuelva a estar disponible cuanto antes, lo que impacta de forma
-directa la ocupación y los ingresos. A la vez, exigir que la liquidación provenga del Módulo 3
-antes de la salida física impide fugas de caja: ningún huésped abandona el hotel sin que sus
-consumos hayan sido validados y liquidados. Sin este flujo, el negocio no puede operar el cierre
-de estadías de forma ordenada ni auditable.
+**Why this priority**: Es el paso final del ciclo de vida de una reserva que fue utilizada. Permite liberar la carga lógica en este módulo, dejando la liberación física de la habitación a cargo del Módulo 1, asegurando así un historial limpio y finalizado.
 
-**Independent Test**: Se puede probar de forma aislada tomando una reserva en estado `CHECKED_IN`
-con una `Habitation` asignada, registrando uno o más consumos locales y enviando los datos de
-estadía y cargos al Módulo 3 ("Procesar liquidación y validación"). Se verifica que el sistema
-recibe la liquidación calculada, la muestra como resumen consolidado en pantalla, y que al
-confirmar el resumen la reserva se persiste en estado `CHECKED_OUT` con su transacción de
-check-out y la referencia de la liquidación. Finalmente se comprueba que se emite la solicitud
-asíncrona al Módulo 1 (`Set Habitation State`) para pasar la `Habitation` a `PendingCleaning`. La
-prueba se completa repitiendo el intento sobre una reserva en estado `ACTIVE` y sobre una ya en
-`CHECKED_OUT`, confirmando que ambos se bloquean con un error de negocio controlado y sin efectos
-colaterales.
+**Independent Test**: Puede ser probado enviando un payload de notificación simulado (webhook/API) desde el Módulo 1 para una reserva que se encuentra en curso. Se valida que el estado interno cambia correctamente sin afectar la disponibilidad que ya gestiona el Módulo 1.
 
 **Acceptance Scenarios**:
 
-1. **Scenario**: Registro exitoso de Check-Out con liquidación del Módulo 3 (Happy Path)
-   - **Given** que existe una reserva en estado `CHECKED_IN` con una `Habitation` asignada en el
-     Módulo 1
-   - **When** el **Recepcionista** inicia el Check-Out, el sistema envía los datos requeridos al
-     Módulo 3 ("Procesar liquidación y validación") y este devuelve la liquidación calculada
-     exitosamente
-   - **Then** el sistema presenta el resumen consolidado en pantalla; al recibir la confirmación
-     explícita del Recepcionista, cambia el estado de la reserva a `CHECKED_OUT`, guarda los datos
-     de la transacción de salida y solicita al Módulo 1 cambiar el estado físico de la `Habitation`
-     a `PendingCleaning` mediante `Set Habitation State`
+1. **Scenario**: Finalización exitosa de reserva por notificación de Check-Out
+   - **Given** una `Reservation` en estado `status: IN_PROGRESS`
+   - **When** el sistema recibe la notificación del Módulo 1 indicando que el check-out físico ha finalizado
+   - **Then** el sistema actualiza de forma automática la `Reservation` a `status: COMPLETED`.
 
-2. **Scenario**: Bloqueo de Check-Out si la reserva no está en estado CHECKED_IN
-   - **Given** que se carga una reserva que se encuentra en estado `ACTIVE` o `CANCELLED`
-   - **When** se intenta proceder con el Check-Out
-   - **Then** el sistema bloquea la acción, arrojando un error de negocio controlado HTTP 400 y el
-     mensaje explicativo en pantalla
+2. **Scenario**: Rechazo de notificación para reservas no iniciadas
+   - **Given** una `Reservation` que se encuentra en estado `status: ACTIVE` o `status: PENDING`
+   - **When** el Módulo 1 envía erróneamente una notificación de Check-Out
+   - **Then** el sistema prohíbe el cambio de estado y retorna un código HTTP 400 (Bad Request) informando que la reserva aún no registra un ingreso.
 
-3. **Scenario**: Prevención de un Check-Out duplicado
-   - **Given** una reserva que ya se encuentra en estado `CHECKED_OUT` con su transacción de salida
-     registrada
-   - **When** el Recepcionista intenta registrar el Check-Out nuevamente sobre esa reserva
-   - **Then** el sistema rechaza el intento con un error de negocio controlado HTTP 400, muestra
-     los datos de la salida ya registrada y no crea una nueva transacción de check-out ni emite
-     otra solicitud de limpieza al Módulo 1
+3. **Scenario**: Rechazo de notificación duplicada
+   - **Given** una `Reservation` que ya se encuentra en `status: COMPLETED`
+   - **When** el sistema recibe nuevamente una notificación de Check-Out
+   - **Then** el sistema rechaza la acción por idempotencia y devuelve un código HTTP 400 controlado.
 
-### Casos Borde
+### Edge Cases
 
-- ¿Qué sucede si el Módulo 3 (Pricing) no responde o devuelve un error durante la llamada a
-  "Procesar liquidación y validación"? El sistema aplica un fallback resiliente: guarda un estado
-  local temporal del Check-Out marcado para regularización financiera posterior y permite la
-  salida física del huésped sin bloquearla; la cuenta pendiente se regulariza de forma asíncrona
-  en cuanto el Módulo 3 vuelve a estar disponible, y el Módulo 2 no asume ni calcula montos
-  locales por su cuenta.
-- ¿Cómo maneja el sistema si la llamada de actualización de estado de la habitación (`Set
-  Habitation State`) al Módulo 1 falla después de haber registrado el Check-Out de manera exitosa?
-  La transacción financiera se mantiene firme en `CHECKED_OUT` y la solicitud de cambio de estado
-  de la `Habitation` a `PendingCleaning` queda marcada de forma local como `PENDING` para
-  reintentarse de forma asíncrona en segundo plano, sin obligar a repetir la salida del huésped.
-- ¿Qué sucede cuando el Recepcionista intenta enviar datos con campos obligatorios vacíos, montos
-  de consumo no numéricos o negativos, o texto libre con caracteres maliciosos? El sistema
-  intercepta la validación de forma local en el controlador del Módulo 2 y responde con un error
-  estructurado **HTTP 400 (Bad Request)** amigable que indica qué corregir, impidiendo la
-  propagación de fallas técnicas que deriven en un error **HTTP 500 (Internal Server Error)**.
+- ¿Qué sucede si el payload enviado por el Módulo 1 viene vacío o incompleto?
+  - El sistema bloquea el procesamiento en la validación inicial y retorna un código HTTP 400 (Bad Request) con el mensaje: "Petición inválida. Faltan datos requeridos para procesar la notificación de check-out."
+- ¿Qué sucede si la notificación de check-out llega por un problema de red horas más tarde, durante un proceso de cierre del día?
+  - El sistema procesa la notificación normalmente si la reserva aún está `IN_PROGRESS`, actualizándola a `COMPLETED` de forma transaccional y sin interrumpir procesos paralelos.
+- ¿Qué sucede si la base de datos local no encuentra la reserva notificada?
+  - El sistema intercepta el error y retorna un HTTP 400 amigable (ej. "Referencia de reserva no encontrada") evitando por completo un error de servidor HTTP 500.
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **FR-001**: El sistema debe permitir al **Recepcionista** buscar la reserva mediante el caso de
-  uso interno "Consultar / ver reserva" antes de iniciar el check-out.
-- **FR-002**: El sistema debe validar que la reserva se encuentre estrictamente en estado
-  `CHECKED_IN` para autorizar el proceso de salida física.
-- **FR-003**: El sistema debe enviar la información requerida de la reserva al Módulo 3 ("Procesar
-  liquidación y validación") para que este realice de forma externa el cálculo de los cobros
-  finales; el Módulo 2 no debe realizar sumas ni cálculos propios de tarifas.
-- **FR-004**: El sistema debe mostrar en pantalla el resumen de liquidación retornado por el
-  Módulo 3 y exigir la confirmación manual del **Recepcionista** antes de persistir la transacción
-  de salida.
-- **FR-005**: Al confirmar la salida, el sistema debe cambiar el estado de la reserva a
-  `CHECKED_OUT` de manera local y solicitar de forma asíncrona al Módulo 1 cambiar el estado de la
-  `Habitation` asignada a `PendingCleaning` mediante `Set Habitation State`.
-- **FR-006**: El sistema debe interceptar cualquier inconsistencia de datos o fallo de red para
-  retornar errores estructurados **HTTP 400 (Bad Request)** amigables, impidiendo que escalen a un
-  error de infraestructura **HTTP 500 (Internal Server Error)**.
+- **FR-001**: El sistema (Módulo 2) ya no posee interfaz ni responsabilidad para el Check-Out. Su única función DEBE ser exponer un servicio interno/API para recibir la notificación desde el Módulo 1.
+- **FR-002**: El sistema DEBE validar que el estado actual de la `Reservation` sea estrictamente `status: IN_PROGRESS` antes de procesar la salida.
+- **FR-003**: El sistema DEBE actualizar el estado interno de la `Reservation` a `status: COMPLETED` tras una notificación exitosa.
+- **FR-004**: El sistema DEBE responder con códigos de estado HTTP 400 ante cualquier inconsistencia de negocio o datos, prohibiendo de forma estricta los errores HTTP 500.
 
-### Non-Functional Requirements
+### Key Entities
 
-- **NFR-001**: El tiempo de comunicación e integración con el Módulo 3 para retornar la
-  liquidación debe ser inferior a 3 segundos bajo condiciones normales de carga.
-
-### Key Entities *(include if feature involves data)*
-
-- **CheckOut**: Representa la transacción física y financiera de salida de un huésped. Atributos:
-  `id`, `reservationRef`, `checkOutTime` (momento real de la salida), `processedBy` (identificador
-  del Recepcionista), `liquidationRef` (referencia de la liquidación confirmada del Módulo 3) y
-  `habitationRequestStatus` (`PENDING` | `COMPLETED`, para el seguimiento del cambio de estado
-  enviado al Módulo 1). El Módulo 2 solo registra la confirmación de la liquidación; no almacena
-  cálculos propios de tarifa.
-- **Reservation**: Representa la estadía sobre la que opera el check-out. Atributos:
-  `reservationRef`, `guestList`, `assignedHabitation`, `startDate`, `endDate` y `state` con
-  estados permitidos: `PENDING`, `ACTIVE`, `CHECKED_IN`, `CHECKED_OUT`, `CANCELLED`. Solo puede
-  pasar a `CHECKED_OUT` desde el estado `CHECKED_IN`.
-- **Habitation**: Representa la habitación física ocupada por el huésped, cuya gestión de estado
-  es propiedad del Módulo 1. Atributos: `habitationId`, `numberHabitation` y `stateHabitation` con
-  los siete estados oficiales del glosario: `Available`, `Occupied`, `PendingCleaning`,
-  `InCleaning`, `DisabledForRepairs`, `TechnicalBlock`, `Inactive`. Como resultado de un check-out
-  confirmado, el sistema solicita al Módulo 1 su transición de `Occupied` a `PendingCleaning`.
+- **`Reservation`**: Entidad local que transiciona de `IN_PROGRESS` a `COMPLETED`.
+- **`Room`**: Entidad física controlada por el Módulo 1. (En este paso, el Módulo 1 ya se encarga directamente de pasarla de `OCCUPIED` a `AVAILABLE` o limpieza).
 
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
-- **SC-001**: El Recepcionista puede finalizar un Check-Out estándar en menos de 1 minuto una vez
-  que el Módulo 3 confirma y devuelve el cálculo de liquidación.
-- **SC-002**: El 100% de las solicitudes de validación de cobro fallidas o caídas de Pricing se
-  resuelven con respuestas HTTP 400 controladas, con cero errores de infraestructura HTTP 500 en
-  producción.
+- **SC-001**: 100% de las notificaciones de check-out válidas recibidas cambian la reserva al estado finalizado correctamente.
+- **SC-002**: 100% de los intentos de check-out sobre reservas no iniciadas o ya finalizadas arrojan HTTP 400 sin generar errores de sistema.
