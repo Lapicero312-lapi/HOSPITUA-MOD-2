@@ -112,7 +112,7 @@ Módulo 3 no disponible y confirmando que la reserva no se crea y que la respues
 
 ### User Story 2 - Recotización por Modificación de Estadía (Priority: P1)
 
-Cuando un recepcionista o el huésped titular modifica las fechas o la categoría
+Cuando la recepcionista modifica las fechas o la categoría
 de una reserva `ACTIVE`, el Módulo 2 debe volver a consultar el valor de la estadía. En este flujo
 el Módulo 2 consume el mismo servicio del Módulo 3 pero añade el `previousGrossAmount` de la reserva
 como referencia. El Módulo 3 retorna la nueva `RateQuote` incluyendo el `amountDifference` (monto a
@@ -138,7 +138,7 @@ en el segundo caso borde.
    - **When** el Módulo 2 invoca "Calcular tarifa dinámica" del Módulo 3 enviando
      `categoryRoom`, las nuevas `startDate` y `endDate`, y el `previousGrossAmount`
    - **Then** el Módulo 2 recibe una `RateQuote` con el nuevo `grossAmount` y un `amountDifference`
-     positivo, presenta la diferencia a pagar al recepcionista o al huésped, y solo tras la
+     positivo, presenta la diferencia a pagar a la recepcionista, y solo tras la
      confirmación persiste el nuevo `grossAmount` en la reserva local, incrementando su `version`
 
 2. **Scenario**: Recotización exitosa con diferencia a reembolsar
@@ -150,7 +150,7 @@ en el segundo caso borde.
 
 3. **Scenario**: El solicitante no confirma la diferencia
    - **Given** una `RateQuote` de recálculo ya recibida con un `amountDifference` distinto de cero
-   - **When** el recepcionista o el huésped no confirma el cambio
+   - **When** la recepcionista no confirma el cambio
    - **Then** el Módulo 2 descarta la cotización, no modifica el `grossAmount` ni las fechas de la
      reserva, y la reserva permanece exactamente en su estado anterior
 
@@ -196,8 +196,7 @@ en el segundo caso borde.
 - **FR-006**: El sistema debe verificar la disponibilidad mediante "Verificar disponibilidades"
   antes de invocar al Módulo 3, y no debe realizar ninguna llamada al Módulo 1 dentro de este caso
   de uso.
-- **FR-007**: El sistema debe presentar el `amountDifference` al recepcionista o al huésped en los
-  flujos de recotización y persistir el nuevo `grossAmount` en la reserva local únicamente tras la
+- **FR-007**: El sistema debe presentar el `amountDifference` a la recepcionista en los flujos de recotización y persistir el nuevo `grossAmount` en la reserva local únicamente tras la
   confirmación explícita del solicitante, incrementando la `version` de la reserva.
 - **FR-008**: El sistema debe interceptar los errores de validación de entrada y las respuestas de
   error del Módulo 3 (rango de fechas incoherente, categoría inexistente, parámetros ausentes) y

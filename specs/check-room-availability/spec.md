@@ -30,7 +30,7 @@ mantenimientos del Módulo 1.
 
 ### User Story 1 - Consulta y Validación de Disponibilidad (Priority: P1)
 
-La Recepcionista, la Huésped desde el portal o la OTA necesitan verificar que una `Room` está
+La Recepcionista o la OTA necesitan verificar que una `Room` está
 disponible antes de registrar una `Reservation`, para evitar cruces de hospedaje y asegurar que la
 habitación no esté inhabilitada por mantenimiento. Por tratarse de una única verificación, los
 casos libre, bloqueada por mantenimiento, cruzada con otra reserva y ocupada hoy se consolidan en

@@ -155,7 +155,7 @@ reintento y la solicitud pasa a `COMPLETED`.
 - **RoomStateRequest**: Orden de actualización de estado enviada al Módulo 1. Atributos:
   `requestId`, `roomId`, `requestedStatus` (`RESERVED` | `AVAILABLE`), `previousStatus`,
   `originEvent` (`RESERVATION_CREATED` | `RESERVATION_CANCELLED`), `reservationRef`, `requestedAt`,
-  `requestedBy` (Recepcionista, Huésped, Ota o sistema) y `requestStatus` (`PENDING` |
+  `requestedBy` (Recepcionista, Ota o sistema) y `requestStatus` (`PENDING` |
   `COMPLETED`).
 - **Room**: Unidad física de alojamiento, propiedad del Módulo 1. Atributos: `roomId`, `numberRoom`,
   `categoryRoom` y `status` (`AVAILABLE` | `RESERVED` | `OCCUPIED`).

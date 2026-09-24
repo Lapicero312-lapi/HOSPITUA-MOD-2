@@ -6,12 +6,10 @@
 
 ### Descripción del problema
 
-El hotel capta demanda directa por dos frentes: huéspedes que llaman o llegan a recepción y
-huéspedes que reservan por su cuenta desde el portal web o la aplicación. El negocio necesita
+El hotel capta demanda directa cuando los huéspedes llaman o llegan a recepción y la Recepcionista registra su reserva. El negocio necesita
 registrar esas reservas de forma ágil, dejándolas confirmadas de inmediato, sin obligar al huésped
 a pasar por una pasarela de pago al momento de reservar: en HOSPITUA el pago del 100% de la estadía
-se realiza de forma exclusiva en el Check-Out, un proceso presencial que ejecuta el Módulo 1. Si
-además cada canal se opera con reglas distintas o si la disponibilidad no se valida contra el
+se realiza de forma exclusiva en el Check-Out, un proceso presencial que ejecuta el Módulo 1. Si además la disponibilidad no se valida contra el
 calendario real de la habitación, aparecen dos problemas costosos. El primero es la sobreventa: dos
 solicitudes pueden tomar la misma habitación o una que estará en mantenimiento. El segundo es un
 dato de precio poco confiable: si el valor del hospedaje no proviene siempre de la misma fuente, la
@@ -22,8 +20,7 @@ para apartar la habitación.
 
 ### Flujo de Usuario de Alto Nivel
 
-1. El solicitante (el **Recepcionista** desde el canal de recepción, o el **Huésped** desde el
-   portal o la aplicación) indica las fechas de estadía y la habitación o categoría de `Room`
+1. La **Recepcionista** indica las fechas de estadía y la habitación o categoría de `Room`
    deseada.
 2. El sistema ejecuta "Verificar disponibilidades": cruza las fechas contra las reservas locales del
    Módulo 2 y consulta al Módulo 1 el calendario de mantenimientos y el inventario en tiempo real.
@@ -45,13 +42,10 @@ IVA en esta etapa: se fija al facturar en el Check-Out.
 
 ### User Story 1 - Creación de Reservación Directa (Priority: P1)
 
-Un solicitante necesita crear una reserva de canal directo para un rango de fechas y una habitación.
-El proceso es el mismo para los dos canales y ocurre sobre una única interfaz: se verifica la
+La Recepcionista necesita crear, a pedido del huésped, una reserva de canal directo para un rango de fechas y una habitación. El proceso ocurre sobre una única interfaz: se verifica la
 disponibilidad, se obtiene el valor de hospedaje bruto del Módulo 3 y se muestra como información,
-se capturan los datos del `Guest` titular y se confirma. Tanto si el origen es el **Recepcionista**
-como el **Huésped** de autoservicio, la `Reservation` se crea directamente en estado `ACTIVE` y se
-notifica al Módulo 1 para apartar la habitación. Por tratarse de un mismo flujo de negocio, el
-camino de éxito de ambos canales y los bloqueos lógicos (sin disponibilidad, caída del Módulo 3,
+se capturan los datos del `Guest` titular y se confirma. La `Reservation` se crea directamente en estado `ACTIVE` y se
+notifica al Módulo 1 para apartar la habitación. Por tratarse de un mismo flujo de negocio, el camino de éxito y los bloqueos lógicos (sin disponibilidad, caída del Módulo 3,
 fechas o datos mal formados, concurrencia por la última habitación) se consolidan en esta misma
 historia de usuario, para evitar la sobre-atomización.
 
@@ -70,10 +64,10 @@ reserva y se devuelve un error controlado.
 
 **Acceptance Scenarios**:
 
-1. **Scenario**: Generación de reserva exitosa por Recepcionista o Huésped (Happy Path)
+1. **Scenario**: Generación de reserva exitosa por la Recepcionista (Happy Path)
    - **Given** que la `Room` solicitada está disponible en las fechas indicadas según "Verificar
      disponibilidades"
-   - **When** el solicitante ingresa los datos del huésped titular, cotiza el valor bruto con el
+   - **When** la Recepcionista ingresa los datos del huésped titular, cotiza el valor bruto con el
      Módulo 3 y confirma la reserva
    - **Then** el sistema persiste la `Reservation` directamente en `ACTIVE` con `grossAmount`
      asignado, comisión `0` y `externalConfirmationCode` `null`, asocia el `RateQuote` de forma
@@ -154,7 +148,7 @@ reserva y se devuelve un error controlado.
 
 ### Measurable Outcomes
 
-- **SC-001**: El Huésped o el Recepcionista completa una reserva de canal directo en menos de 1
+- **SC-001**: La Recepcionista completa una reserva de canal directo en menos de 1
   minuto, al no requerir transacciones de pago en esta etapa.
 - **SC-002**: El 100% de las reservas directas cuentan con comisión `0`, código de confirmación
   externo nulo y valor bruto almacenado correctamente.

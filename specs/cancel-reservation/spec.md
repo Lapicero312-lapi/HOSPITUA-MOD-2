@@ -8,8 +8,7 @@
 
 Las reservas se caen todo el tiempo: el huésped cambia de planes, la agencia recibe una anulación o
 la Recepcionista atiende una llamada para dar de baja una reserva. El hotel necesita procesar esas
-cancelaciones de forma ágil por los tres canales por los que llegan —recepción, portal de
-autogestión y API de la OTA— y, sobre todo, necesita que la habitación vuelva a estar libre de
+cancelaciones de forma ágil por los dos canales por los que llegan —recepción y API de la OTA— y, sobre todo, necesita que la habitación vuelva a estar libre de
 inmediato para poder venderla otra vez. Como el pago del 100% de la estadía se liquida en el
 Check-Out, cancelar antes del ingreso no genera cobros ni penalidades: es un proceso gratuito que
 solo tiene efecto sobre la reserva y sobre el estado físico de la habitación. El sistema debe además
@@ -18,11 +17,9 @@ en curso.
 
 ### Flujo de Usuario de Alto Nivel
 
-1. El solicitante (la **Recepcionista**, el **Huésped** titular desde el portal, o la **Ota** desde
-   su API) localiza la reserva mediante "Consultar reservas".
+1. El solicitante (la **Recepcionista** o la **Ota** desde su API) localiza la reserva mediante "Consultar reservas".
 2. El sistema valida que la `Reservation` esté en estado `ACTIVE` o `PENDING`.
-3. El solicitante confirma la cancelación: en pantalla para la Recepcionista y el Huésped, o
-   mediante el JSON recibido para la Ota.
+3. El solicitante confirma la cancelación: en pantalla para la Recepcionista, o mediante el JSON recibido para la Ota.
 4. El sistema cambia el `status` de la reserva a `CANCELLED`.
 5. El sistema ejecuta "Establecer estado de habitación" para ordenar al Módulo 1 que la `Room`
    vuelva a `AVAILABLE`, si estaba en `RESERVED`.
@@ -32,10 +29,9 @@ en curso.
 
 ### User Story 1 - Cancelación de Reservación y Liberación de Habitación (Priority: P1)
 
-Un solicitante necesita anular una reserva que aún no ha iniciado su estadía. El caso de negocio es
-el mismo para los tres canales: se localiza la reserva, se valida que su estado admita cancelación,
+Un solicitante necesita anular una reserva que aún no ha iniciado su estadía. El caso de negocio es el mismo para los dos canales: se localiza la reserva, se valida que su estado admita cancelación,
 se confirma la baja, se cambia el estado a `CANCELLED` y se ordena al Módulo 1 liberar la
-habitación. Por eso los caminos de éxito de los tres canales y los bloqueos lógicos (estadía en
+habitación. Por eso los caminos de éxito de los dos canales y los bloqueos lógicos (estadía en
 curso o finalizada, referencia vacía, cancelación concurrente) se consolidan en esta misma historia
 de usuario, para evitar la sobre-atomización.
 
@@ -43,7 +39,7 @@ de usuario, para evitar la sobre-atomización.
 recuperar inventario vendible en tiempo real, evitando ocupaciones fantasma por reservas que ya no
 se van a honrar.
 
-**Independent Test**: Se cancela una reserva `ACTIVE` por cada uno de los tres canales y se verifica
+**Independent Test**: Se cancela una reserva `ACTIVE` por cada uno de los dos canales y se verifica
 que el `status` cambia a `CANCELLED`, que se registra la `Cancellation` con el canal correcto y que
 el Módulo 1 recibe la orden de devolver la `Room` a `AVAILABLE`. La prueba se completa intentando
 cancelar reservas `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`, confirmando que cada intento
@@ -51,9 +47,9 @@ se bloquea con un error controlado.
 
 **Acceptance Scenarios**:
 
-1. **Scenario**: Cancelación exitosa por Recepcionista o Huésped (Happy Path)
+1. **Scenario**: Cancelación exitosa por la Recepcionista (Happy Path)
    - **Given** una `Reservation` en `ACTIVE` cuya `Room` está en `RESERVED`
-   - **When** la Recepcionista, o el Huésped titular desde su portal, confirma la cancelación
+   - **When** la Recepcionista confirma la cancelación
    - **Then** el sistema cambia la reserva a `CANCELLED`, registra la `Cancellation` con su canal, y
      ordena al Módulo 1 cambiar la `Room` a `AVAILABLE`
 
@@ -83,8 +79,7 @@ se bloquea con un error controlado.
   concurrencia optimista: la primera aplica la cancelación y la segunda recibe **HTTP 400**
   indicando: "Esta reserva ya fue actualizada o cancelada recientemente", sin duplicar registros ni
   órdenes al Módulo 1.
-- ¿Qué sucede si un Huésped intenta cancelar una reserva de la que no es titular? El sistema
-  rechaza la operación con **HTTP 400** sin revelar datos de la reserva ajena.
+
 
 ## Requirements *(mandatory)*
 
@@ -100,12 +95,10 @@ se bloquea con un error controlado.
   devolver la `Room` a `AVAILABLE` cuando estuviera en `RESERVED`, sin revertir la cancelación si esa
   orden falla.
 - **FR-005**: El sistema debe registrar cada cancelación en `Cancellation` con la referencia de la
-  reserva, la fecha, el canal (`RECEPTION`, `USER_PORTAL` u `OTA_API`) y quién la procesó.
+  reserva, la fecha, el canal (`RECEPTION` u `OTA_API`) y quién la procesó.
 - **FR-006**: El sistema no debe cobrar penalidades ni invocar la liquidación del Módulo 3 al
   cancelar.
-- **FR-007**: El sistema debe permitir al Huésped cancelar únicamente las reservas de las que es
-  titular.
-- **FR-008**: El sistema debe interceptar errores de validación, estado incorrecto o concurrencia y
+- **FR-007**: El sistema debe interceptar errores de validación, estado incorrecto o concurrencia y
   responder con **HTTP 400 (Bad Request)** amigable, prohibiendo errores **HTTP 500**.
 
 ### Non-Functional Requirements
@@ -116,8 +109,7 @@ se bloquea con un error controlado.
 ### Key Entities *(include if feature involves data)*
 
 - **Cancellation**: Registro de auditoría de la anulación. Atributos: `cancellationId`,
-  `reservationRef`, `cancellationDate`, `reason` (opcional), `channel` (`RECEPTION` | `USER_PORTAL` |
-  `OTA_API`), `processedBy` y `status` (`COMPLETED`).
+  `reservationRef`, `cancellationDate`, `reason` (opcional), `channel` (`RECEPTION` | `OTA_API`), `processedBy` y `status` (`COMPLETED`).
 - **Reservation**: Estadía que se anula. Atributos: `reservationRef`, `guestRef`, `roomId`,
   `startDate`, `endDate`, `source` (`DIRECT` | `OTA`) y `status` (`PENDING`, `ACTIVE`,
   `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`). Solo pasa a `CANCELLED` desde `ACTIVE` o

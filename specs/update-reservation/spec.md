@@ -18,7 +18,7 @@ persista tras la confirmación del solicitante.
 
 ### Flujo de Usuario de Alto Nivel
 
-1. La **Recepcionista**, el **Huésped** titular o la **Ota** localiza la reserva mediante "Consultar
+1. La **Recepcionista** o la **Ota** localiza la reserva mediante "Consultar
    reservas" y valida que esté en `ACTIVE` o `PENDING`.
 2. El solicitante edita las fechas, la categoría de `Room` o los datos personales del `Guest`.
 3. Si cambian las fechas, el sistema ejecuta "Verificar disponibilidades".
@@ -34,7 +34,7 @@ usan esta funcionalidad para cambiar el `status` de la reserva a `IN_PROGRESS`, 
 
 ### User Story 1 - Modificación de Datos de Reservación (Priority: P1)
 
-Un solicitante —la Recepcionista, el Huésped titular o la Ota— modifica una reserva que aún no ha
+Un solicitante —la Recepcionista o la Ota— modifica una reserva que aún no ha
 iniciado su estadía. Puede cambiar fechas, categoría o datos personales. Cuando el cambio afecta
 fechas o categoría, el sistema valida disponibilidad y delega el recálculo en el Módulo 3, mostrando
 la diferencia antes de confirmar; cuando solo toca datos personales, guarda directamente. Por
@@ -80,8 +80,7 @@ los cambios. Se repite con datos personales (sin recálculo) y sobre reservas `I
 5. **Scenario**: Bloqueo de edición sobre reservas finalizadas o en curso (Error)
    - **Given** una `Reservation` en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` o `NO_SHOW`
    - **When** un solicitante intenta editarla
-   - **Then** el sistema bloquea la edición con **HTTP 400**; si es un Huésped con la reserva ya en
-     curso, le indica que debe solicitar el cambio en recepción
+   - **Then** el sistema bloquea la edición con **HTTP 400** indicando que el estado actual no admite modificaciones
 
 ### Casos Borde
 
@@ -95,8 +94,6 @@ los cambios. Se repite con datos personales (sin recálculo) y sobre reservas `I
   antes de guardar con **HTTP 400**: "El formato de los datos contiene caracteres no válidos."
 - ¿Cómo maneja el sistema dos ediciones simultáneas de la misma reserva? Usa control de concurrencia
   optimista con el atributo `version`: la segunda recibe **HTTP 400** indicando que debe recargar.
-- ¿Qué sucede si un Huésped intenta editar una reserva de la que no es titular? El sistema rechaza
-  la operación con **HTTP 400** sin revelar datos de la reserva ajena.
 - ¿Qué sucede si el Módulo 1 se entera del cambio de fechas? La actualización de fechas no altera
   el estado físico de la `Room` en esta funcionalidad; si la habitación cambia, se coordina con
   "Establecer estado de habitación".
@@ -116,10 +113,8 @@ los cambios. Se repite con datos personales (sin recálculo) y sobre reservas `I
 - **FR-005**: El sistema debe ser el único punto de cambio de `status` de la reserva, aceptando las
   transiciones `PENDING`→`ACTIVE`, `ACTIVE`→`IN_PROGRESS`, `IN_PROGRESS`→`COMPLETED`, y `ACTIVE` o
   `PENDING`→`NO_SHOW`.
-- **FR-006**: El sistema debe permitir al Huésped editar únicamente las reservas de las que es
-  titular y mientras no hayan iniciado su estadía.
-- **FR-007**: El sistema debe aplicar control de concurrencia optimista mediante `version`.
-- **FR-008**: El sistema debe interceptar excepciones de validación, concurrencia e integración,
+- **FR-006**: El sistema debe aplicar control de concurrencia optimista mediante `version`.
+- **FR-007**: El sistema debe interceptar excepciones de validación, concurrencia e integración,
   respondiendo **HTTP 400 (Bad Request)** y prohibiendo errores **HTTP 500**.
 
 ### Non-Functional Requirements

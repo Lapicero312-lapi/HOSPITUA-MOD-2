@@ -11,18 +11,16 @@ verificar disponibilidades o procesar un Check-In o Check-Out, el sistema necesi
 exacta y conocer su estado vigente. Si cada funcionalidad implementara su propia búsqueda, los
 criterios y las validaciones de acceso serían inconsistentes. El negocio necesita un único servicio
 de consulta, reutilizado por el resto de funcionalidades y disponible también para el Módulo 1, que
-localice reservas por referencia, documento o nombre, y que respete la visibilidad de cada canal: la
-Recepcionista ve cualquier reserva, y el Huésped solo la suya.
+localice reservas por referencia, documento o nombre, y que devuelva siempre el estado vigente de la reserva.
 
 ### Flujo de Usuario de Alto Nivel
 
-1. La **Recepcionista**, el **Huésped** (desde el portal) o el **Módulo 1** envían un criterio de
+1. La **Recepcionista** o el **Módulo 1** envían un criterio de
    búsqueda: la referencia de la reserva (`reservationRef`), el documento del huésped
    (`documentNumber`) o su nombre (`fullName`).
 2. El sistema busca la `Reservation` coincidente en la base de datos local.
-3. Si el canal es el Huésped, el sistema verifica que sea el titular antes de mostrar los datos.
-4. El sistema retorna el detalle completo: `status`, fechas, habitación, titular y origen.
-5. Si no se envía criterio o no existe coincidencia, responde con una alerta controlada **HTTP 400
+3. El sistema retorna el detalle completo: `status`, fechas, habitación, titular y origen.
+4. Si no se envía criterio o no existe coincidencia, responde con una alerta controlada **HTTP 400
    (Bad Request)**.
 
 ## User Scenarios & Testing *(mandatory)*
@@ -60,31 +58,6 @@ confirmando la respuesta controlada **HTTP 400**.
    - **Then** el sistema intercepta la excepción y responde con un error controlado **HTTP 400** o
      404 indicando que la reserva no existe
 
----
-
-### User Story 2 - Consulta Restringida desde el Portal del Huésped (Priority: P2)
-
-Un Huésped autenticado consulta los detalles de su propia reserva con su `reservationRef`. El
-sistema verifica que sea el titular antes de mostrar información.
-
-**Why this priority**: Permite la autogestión del cliente protegiendo la confidencialidad de los
-datos de otros huéspedes, pero no bloquea la operación de recepción.
-
-**Independent Test**: Se autentica a un `Guest` y se consulta su propia reserva; luego se intenta
-consultar la de otro titular, confirmando el rechazo con **HTTP 400**.
-
-**Acceptance Scenarios**:
-
-1. **Scenario**: Consulta exitosa de la reserva propia (Happy Path)
-   - **Given** un Huésped autenticado que es titular de una reserva
-   - **When** ingresa su `reservationRef`
-   - **Then** el sistema valida la titularidad y muestra el resumen de su estadía
-
-2. **Scenario**: Rechazo de consulta sobre una reserva ajena (Error)
-   - **Given** un Huésped autenticado
-   - **When** intenta consultar la reserva de otra persona
-   - **Then** el sistema rechaza la consulta con **HTTP 400** sin revelar ningún dato privado
-
 ### Casos Borde
 
 - ¿Qué sucede si la consulta carece del identificador o viene con espacios? El sistema la intercepta
@@ -102,17 +75,15 @@ consultar la de otro titular, confirmando el rechazo con **HTTP 400**.
 
 ### Functional Requirements
 
-- **FR-001**: El sistema debe permitir a la Recepcionista, al Huésped y al Módulo 1 consultar el
+- **FR-001**: El sistema debe permitir a la Recepcionista y al Módulo 1 consultar el
   detalle de una `Reservation`.
 - **FR-002**: El sistema debe soportar búsquedas por `reservationRef`, `documentNumber` o
   `fullName`.
 - **FR-003**: El sistema debe retornar `reservationRef`, `guestRef`, `roomId`, `startDate`,
   `endDate`, `source` y el `status` unificado: `PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`,
   `CANCELLED` o `NO_SHOW`.
-- **FR-004**: El sistema debe verificar, en el canal del Huésped, que el usuario autenticado sea el
-  titular de la reserva antes de mostrar sus datos.
-- **FR-005**: El sistema debe ser de solo lectura e idempotente, sin modificar ninguna entidad.
-- **FR-006**: El sistema debe interceptar las consultas inválidas y responder **HTTP 400 (Bad
+- **FR-004**: El sistema debe ser de solo lectura e idempotente, sin modificar ninguna entidad.
+- **FR-005**: El sistema debe interceptar las consultas inválidas y responder **HTTP 400 (Bad
   Request)**, prohibiendo la propagación a **HTTP 500**.
 
 ### Non-Functional Requirements
@@ -135,6 +106,4 @@ consultar la de otro titular, confirmando el rechazo con **HTTP 400**.
 
 - **SC-001**: El 100% de las consultas por `reservationRef` exacta retornan el detalle completo en
   menos de 500 milisegundos.
-- **SC-002**: El 100% de los intentos de consultar reservas ajenas desde el portal se bloquean con
-  **HTTP 400** sin revelar datos privados.
-- **SC-003**: Cero errores **HTTP 500** ante identificadores vacíos, inválidos o inexistentes.
+- **SC-002**: Cero errores **HTTP 500** ante identificadores vacíos, inválidos o inexistentes.
