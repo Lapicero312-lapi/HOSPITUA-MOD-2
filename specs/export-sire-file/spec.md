@@ -2,59 +2,128 @@
 
 **Created**: 2026-09-19
 
+## Use Case (Caso de Uso)
+
+### Descripción del problema
+
+Todo hotel en Colombia está obligado a reportar periódicamente a Migración Colombia los huéspedes
+extranjeros que aloja, a través del sistema SIRE. Cuando ese reporte se arma a mano, es lento, se
+presta a errores de formato que el sistema oficial rechaza, y es fácil omitir huéspedes o reportar
+dos veces al mismo, lo que expone al hotel a multas. El negocio necesita automatizar la generación
+del archivo: consolidar los datos de los huéspedes extranjeros recibidos del Módulo 1 durante el
+Check-In y ofrecer al actor **Migración** una forma segura de filtrar por fechas y descargar el
+reporte directamente, sin intermediación de la Recepcionista.
+
+### Flujo de Usuario de Alto Nivel
+
+1. El actor **Migración** se autentica en la interfaz restringida provista para este fin.
+2. El actor define el periodo del reporte (`startDate` y `endDate`).
+3. El sistema ejecuta "Procesar datos de huéspedes extranjeros" para obtener los registros
+   migratorios completos de los huéspedes `FOREIGN` con reservas en `IN_PROGRESS` o `COMPLETED`, e
+   identificar los incompletos.
+4. El sistema genera el archivo de texto plano (`.TXT`) con las columnas, anchos y delimitadores de
+   Migración Colombia.
+5. El sistema registra la exportación en `SireExport` y entrega el archivo para su descarga.
+
+Esta funcionalidad no interactúa con el Módulo 1 ni con el Módulo 3: opera sobre datos locales del
+Módulo 2.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Generación y Exportación de SIRE con Datos de Extranjeros (Priority: P2)
 
-Como actor o sistema regulatorio (Migración), necesito extraer periódicamente un archivo consolidado con el formato SIRE, para reportar el alojamiento de huéspedes extranjeros basándome en los datos procesados en la fase de Check-in notificada por el Módulo 1.
+El actor Migración define un periodo y descarga el reporte de huéspedes extranjeros. En una sola
+pantalla se resuelven la exportación normal, el bloqueo por datos migratorios incompletos y el
+periodo sin extranjeros, por lo que se consolidan en esta misma historia de usuario.
 
-**Why this priority**: Es una funcionalidad de cumplimiento normativo legal. Aunque no bloquea la operación diaria del hotel en tiempo real, es obligatorio enviar este reporte periódicamente; de lo contrario, el hotel enfrenta multas migratorias.
+**Why this priority**: Es una funcionalidad de cumplimiento legal. Aunque no bloquea la operación
+diaria del hotel, es obligatorio enviar el reporte periódicamente; de lo contrario el hotel enfrenta
+multas migratorias.
 
-**Independent Test**: Puede ser probado generando el archivo SIRE para un periodo de fechas determinado, y validando internamente que su estructura exportada cumple con el formato gubernamental y que incluye sin falta el tipo de movimiento y fecha ingresados durante la notificación del Módulo 1.
+**Independent Test**: Se genera el archivo para un periodo con huéspedes extranjeros y se valida que
+su estructura cumpla el formato oficial e incluya el tipo de movimiento y la fecha recibidos del
+Módulo 1. Se repite con un huésped incompleto y con un periodo sin extranjeros, confirmando el
+comportamiento controlado.
 
 **Acceptance Scenarios**:
 
-1. **Scenario**: Exportación exitosa con datos de extranjeros integrados
-   - **Given** reservas con huéspedes extranjeros en estado `status: IN_PROGRESS` o `status: COMPLETED` que cuentan con información migratoria notificada previamente por el Módulo 1
-   - **When** se solicita la generación y exportación del archivo SIRE para el periodo
-   - **Then** el sistema extrae los datos combinados de la `Reservation` y el `Guest`, e incluye obligatoriamente el tipo de movimiento migratorio y la fecha procesados en el Check-in, generando el archivo válido.
+1. **Scenario**: Exportación exitosa con datos de extranjeros (Happy Path)
+   - **Given** reservas de huéspedes `FOREIGN` en `IN_PROGRESS` o `COMPLETED` con datos migratorios
+     completos
+   - **When** el actor Migración solicita la exportación del periodo
+   - **Then** el sistema genera el archivo válido con nacionalidad, documento, tipo de movimiento y
+     fecha de cada huésped, y registra la exportación en `SireExport`
 
-2. **Scenario**: Bloqueo por falta de datos requeridos de extranjeros
-   - **Given** una `Reservation` que requiere exportación SIRE, pero cuyo `Guest` extranjero carece de tipo de movimiento o fecha migratoria válida
-   - **When** el sistema intenta consolidar la exportación del archivo SIRE
-   - **Then** el sistema interrumpe el proceso de forma controlada o alerta al usuario mediante un error de validación (HTTP 400), indicando: "Datos incompletos para extranjeros en la reserva X".
+2. **Scenario**: Exclusión de reservas no efectivas
+   - **Given** reservas del periodo en `CANCELLED` o `NO_SHOW`
+   - **When** se genera el archivo
+   - **Then** el sistema las excluye del archivo
 
-3. **Scenario**: Periodo de fechas sin huéspedes extranjeros
-   - **Given** un periodo solicitado donde solo hubo reservas nacionales o no hubo ocupación
-   - **When** se ejecuta la exportación del archivo SIRE
-   - **Then** el sistema genera un reporte o alerta controlada indicando que no hay registros migratorios que reportar, sin generar errores de infraestructura.
+3. **Scenario**: Bloqueo por datos migratorios incompletos (Error)
+   - **Given** un `Guest` `FOREIGN` sin tipo de movimiento o sin fecha migratoria válida
+   - **When** el sistema consolida la exportación
+   - **Then** el sistema omite ese registro, genera el archivo con los demás y responde con un
+     error de validación **HTTP 400** indicando: "Datos incompletos para extranjeros en la reserva
+     X"
 
-### Edge Cases
+4. **Scenario**: Periodo sin huéspedes extranjeros (Error)
+   - **Given** un periodo con solo reservas nacionales o sin ocupación
+   - **When** se ejecuta la exportación
+   - **Then** el sistema responde de forma controlada indicando que no hay registros migratorios que
+     reportar, sin generar errores de infraestructura
 
-- ¿Qué sucede si el rango de fechas solicitado para exportar es superior a 1 año y sobrecarga el sistema?
-  - El sistema detecta el límite abusivo de consultas, detiene la operación y retorna un código HTTP 400 (Bad Request) con el mensaje: "El periodo solicitado excede el límite permitido. Por favor exporte periodos más cortos."
-- ¿Qué ocurre si los datos del `Guest` extranjero tienen caracteres corruptos no válidos para el archivo SIRE?
-  - El sistema realiza una validación de saneamiento en la fase de exportación y, si no puede codificarlos, frena el proceso retornando un HTTP 400 (Bad Request) estructurado: "Caracteres no válidos en el registro del huésped."
-- ¿Qué sucede si se llama a la API de exportación simultáneamente más veces de las permitidas?
-  - El sistema aplica rate-limiting y retorna un HTTP 429 o 400 amigable evitando que el servidor devuelva HTTP 500 por falta de memoria.
+### Casos Borde
+
+- ¿Qué sucede si el rango de fechas supera 1 año y sobrecarga el sistema? El sistema detiene la
+  operación y retorna **HTTP 400 (Bad Request)** con el mensaje: "El periodo solicitado excede el
+  límite permitido. Por favor exporte periodos más cortos."
+- ¿Qué sucede si el rango de fechas está invertido o tiene formato inválido? El sistema responde
+  **HTTP 400** sin ejecutar ninguna consulta.
+- ¿Qué ocurre si los datos del `Guest` contienen caracteres corruptos que no pueden codificarse en
+  el archivo? El sistema detiene el proceso con **HTTP 400** y el mensaje: "Caracteres no válidos en
+  el registro del huésped."
+- ¿Qué sucede si la exportación se solicita simultáneamente más veces de las permitidas? El sistema
+  aplica un límite de solicitudes y responde **HTTP 400** o 429, evitando un **HTTP 500** por falta
+  de memoria.
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **FR-001**: El sistema DEBE proveer la capacidad de generar y exportar el archivo SIRE basándose en los registros de huéspedes.
-- **FR-002**: El sistema DEBE verificar e integrar correctamente los datos migratorios (tipo de movimiento y fecha) que fueron notificados previamente por el Módulo 1 y almacenados en la entidad `Guest`.
-- **FR-003**: El sistema DEBE excluir del archivo final a las reservas que se encuentren en estado `status: CANCELLED` o `status: NO_SHOW`.
-- **FR-004**: El sistema DEBE interceptar excepciones de datos incompletos o errores de consulta en base de datos retornando un HTTP 400 controlado para evitar errores técnicos internos (HTTP 500).
+- **FR-001**: El sistema debe proveer una interfaz exclusiva y segura para que el actor Migración
+  genere y descargue el archivo.
+- **FR-002**: El sistema debe filtrar por un periodo obligatorio (`startDate` y `endDate`).
+- **FR-003**: El sistema debe extraer únicamente huéspedes `FOREIGN` con reservas en `IN_PROGRESS`
+  o `COMPLETED`, excluyendo `CANCELLED` y `NO_SHOW`.
+- **FR-004**: El sistema debe obtener los datos migratorios mediante "Procesar datos de huéspedes
+  extranjeros" y omitir los registros incompletos, informando cuáles requieren corrección.
+- **FR-005**: El sistema debe generar el archivo `.TXT` respetando las columnas, anchos y
+  delimitadores oficiales de Migración Colombia.
+- **FR-006**: El sistema debe registrar cada exportación en `SireExport` con la fecha, el periodo,
+  la cantidad de registros y el actor que la ejecutó.
+- **FR-007**: El sistema debe interceptar los datos incompletos y los errores de consulta,
+  respondiendo **HTTP 400 (Bad Request)** y prohibiendo errores **HTTP 500**.
 
-### Key Entities
+### Non-Functional Requirements
 
-- **`Reservation`**: Entidad base. Se exportan solo reservas efectivas (`IN_PROGRESS` o `COMPLETED`).
-- **`Guest`**: Entidad principal de la cual se extrae la nacionalidad, número de documento y los datos migratorios.
+- **NFR-001**: La generación del archivo debe tardar menos de 2 segundos para consultas de hasta 500
+  huéspedes.
+
+### Key Entities *(include if feature involves data)*
+
+- **SireExport**: Histórico de exportaciones. Atributos: `id`, `exportDate`, `recordsCount`,
+  `dateRangeStart`, `dateRangeEnd` y `processedBy`.
+- **Reservation**: Reserva de origen. Atributos: `reservationRef`, `guestRef`, `startDate`,
+  `endDate` y `status`. Solo se exportan las `IN_PROGRESS` o `COMPLETED`.
+- **Guest**: Huésped reportado. Atributos: `fullName`, `documentNumber`, `nationality`, `type`
+  (`NATIONAL` | `FOREIGN`), `migratoryMovementType` y `migratoryMovementDate`.
 
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
-- **SC-001**: El 100% de los archivos exportados contienen la información obligatoria de extranjeros notificada por el Módulo 1 en el formato exacto requerido.
-- **SC-002**: 100% de los intentos fallidos por datos incompletos arrojan alertas controladas de negocio (HTTP 400) en vez de crashear el servidor.
+- **SC-001**: El 100% de los archivos exportados contienen la información migratoria obligatoria en
+  el formato exacto requerido.
+- **SC-002**: El 100% de los intentos por datos incompletos arrojan alertas controladas **HTTP
+  400**, con cero errores **HTTP 500**.
+- **SC-003**: El 100% de las exportaciones generan un registro auditable en `SireExport`.

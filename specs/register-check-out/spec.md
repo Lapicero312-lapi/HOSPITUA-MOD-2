@@ -2,59 +2,99 @@
 
 **Created**: 2026-09-19
 
+## Use Case (Caso de Uso)
+
+### Descripción del problema
+
+El Check-Out es un proceso presencial: se recibe la habitación, se libera físicamente y se cierra la
+cuenta. Ese proceso pertenece al Módulo 1, que opera el hotel en persona. El Módulo 2 no debe
+duplicar una pantalla de salida ni asumir la liberación de la habitación: solo necesita saber que el
+huésped ya salió para cerrar el ciclo de vida de su reserva. Si esa notificación no se procesa, las
+reservas quedan eternamente "en curso", distorsionando la ocupación y los reportes.
+
+### Flujo de Usuario de Alto Nivel
+
+1. El **Módulo 1** ejecuta el Check-Out físico: libera la `Room` y cierra la estadía.
+2. El Módulo 1 envía a la API del Módulo 2 una notificación con la referencia de la reserva.
+3. El sistema localiza la reserva mediante "Consultar reservas" y valida que esté en `IN_PROGRESS`.
+4. El sistema ejecuta "Actualizar reservación" para cambiar el `status` a `COMPLETED`.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Sincronización de Salida y Finalización de Reserva (Priority: P2)
 
-Como sistema de Control de Reservas (Módulo 2), necesito recibir la notificación de Check-Out exitoso ejecutado en el Módulo 1, para marcar la estadía de la `Reservation` correspondiente como terminada, manteniendo la coherencia sin duplicar procesos de salida en este módulo.
+El Módulo 2 recibe la notificación de Check-Out ejecutado en el Módulo 1 para marcar la estadía de
+la `Reservation` como terminada, sin duplicar procesos de salida. Por tratarse de una única
+notificación, el camino exitoso y los rechazos por estado inválido o duplicado se consolidan en esta
+misma historia de usuario.
 
-**Why this priority**: Es el paso final del ciclo de vida de una reserva que fue utilizada. Permite liberar la carga lógica en este módulo, dejando la liberación física de la habitación a cargo del Módulo 1, asegurando así un historial limpio y finalizado.
+**Why this priority**: Es el paso final del ciclo de vida de una reserva utilizada. Deja un
+historial limpio y finalizado, y deja la liberación física de la habitación a cargo del Módulo 1.
 
-**Independent Test**: Puede ser probado enviando un payload de notificación simulado (webhook/API) desde el Módulo 1 para una reserva que se encuentra en curso. Se valida que el estado interno cambia correctamente sin afectar la disponibilidad que ya gestiona el Módulo 1.
+**Independent Test**: Se envía una notificación simulada del Módulo 1 para una reserva en curso y se
+valida que el estado cambie a `COMPLETED` sin afectar la disponibilidad que gestiona el Módulo 1.
 
 **Acceptance Scenarios**:
 
-1. **Scenario**: Finalización exitosa de reserva por notificación de Check-Out
-   - **Given** una `Reservation` en estado `status: IN_PROGRESS`
-   - **When** el sistema recibe la notificación del Módulo 1 indicando que el check-out físico ha finalizado
-   - **Then** el sistema actualiza de forma automática la `Reservation` a `status: COMPLETED`.
+1. **Scenario**: Finalización exitosa por notificación de Check-Out (Happy Path)
+   - **Given** una `Reservation` en `IN_PROGRESS`
+   - **When** el sistema recibe la notificación del Módulo 1 indicando que el Check-Out finalizó
+   - **Then** el sistema actualiza la `Reservation` a `COMPLETED`
 
-2. **Scenario**: Rechazo de notificación para reservas no iniciadas
-   - **Given** una `Reservation` que se encuentra en estado `status: ACTIVE` o `status: PENDING`
-   - **When** el Módulo 1 envía erróneamente una notificación de Check-Out
-   - **Then** el sistema prohíbe el cambio de estado y retorna un código HTTP 400 (Bad Request) informando que la reserva aún no registra un ingreso.
+2. **Scenario**: Rechazo de notificación para reservas sin ingreso (Error)
+   - **Given** una `Reservation` en `ACTIVE` o `PENDING`
+   - **When** el Módulo 1 envía una notificación de Check-Out
+   - **Then** el sistema prohíbe el cambio de estado y responde **HTTP 400 (Bad Request)**
+     informando que la reserva aún no registra un ingreso
 
-3. **Scenario**: Rechazo de notificación duplicada
-   - **Given** una `Reservation` que ya se encuentra en `status: COMPLETED`
-   - **When** el sistema recibe nuevamente una notificación de Check-Out
-   - **Then** el sistema rechaza la acción por idempotencia y devuelve un código HTTP 400 controlado.
+3. **Scenario**: Rechazo de notificación duplicada (Error)
+   - **Given** una `Reservation` en `COMPLETED`
+   - **When** el sistema recibe de nuevo una notificación de Check-Out
+   - **Then** el sistema la rechaza por idempotencia con **HTTP 400** controlado
 
-### Edge Cases
+### Casos Borde
 
-- ¿Qué sucede si el payload enviado por el Módulo 1 viene vacío o incompleto?
-  - El sistema bloquea el procesamiento en la validación inicial y retorna un código HTTP 400 (Bad Request) con el mensaje: "Petición inválida. Faltan datos requeridos para procesar la notificación de check-out."
-- ¿Qué sucede si la notificación de check-out llega por un problema de red horas más tarde, durante un proceso de cierre del día?
-  - El sistema procesa la notificación normalmente si la reserva aún está `IN_PROGRESS`, actualizándola a `COMPLETED` de forma transaccional y sin interrumpir procesos paralelos.
-- ¿Qué sucede si la base de datos local no encuentra la reserva notificada?
-  - El sistema intercepta el error y retorna un HTTP 400 amigable (ej. "Referencia de reserva no encontrada") evitando por completo un error de servidor HTTP 500.
+- ¿Qué sucede si el payload llega vacío o incompleto? El sistema bloquea el procesamiento y responde
+  **HTTP 400** con el mensaje: "Petición inválida. Faltan datos requeridos para procesar la
+  notificación de Check-Out."
+- ¿Qué sucede si la notificación llega con horas de retraso por un problema de red? El sistema la
+  procesa normalmente si la reserva sigue `IN_PROGRESS`, actualizándola a `COMPLETED` de forma
+  transaccional.
+- ¿Qué sucede si la reserva notificada no existe? El sistema responde **HTTP 400** con el mensaje:
+  "Referencia de reserva no encontrada", evitando un error **HTTP 500**.
+- ¿Qué sucede si la reserva está `CANCELLED` o `NO_SHOW`? El sistema la rechaza con **HTTP 400**,
+  porque nunca tuvo un ingreso.
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **FR-001**: El sistema (Módulo 2) ya no posee interfaz ni responsabilidad para el Check-Out. Su única función DEBE ser exponer un servicio interno/API para recibir la notificación desde el Módulo 1.
-- **FR-002**: El sistema DEBE validar que el estado actual de la `Reservation` sea estrictamente `status: IN_PROGRESS` antes de procesar la salida.
-- **FR-003**: El sistema DEBE actualizar el estado interno de la `Reservation` a `status: COMPLETED` tras una notificación exitosa.
-- **FR-004**: El sistema DEBE responder con códigos de estado HTTP 400 ante cualquier inconsistencia de negocio o datos, prohibiendo de forma estricta los errores HTTP 500.
+- **FR-001**: El sistema no debe ofrecer una interfaz para el Check-Out físico: debe limitarse a
+  exponer un servicio para recibir la notificación del Módulo 1.
+- **FR-002**: El sistema debe validar que la `Reservation` esté en `IN_PROGRESS` antes de procesar
+  la salida.
+- **FR-003**: El sistema debe actualizar el `status` a `COMPLETED` mediante "Actualizar reservación"
+  tras una notificación válida.
+- **FR-004**: El sistema no debe modificar el estado de la `Room`, que gestiona el Módulo 1.
+- **FR-005**: El sistema debe responder **HTTP 400 (Bad Request)** ante cualquier inconsistencia de
+  negocio o de datos, prohibiendo errores **HTTP 500**.
 
-### Key Entities
+### Non-Functional Requirements
 
-- **`Reservation`**: Entidad local que transiciona de `IN_PROGRESS` a `COMPLETED`.
-- **`Room`**: Entidad física controlada por el Módulo 1. (En este paso, el Módulo 1 ya se encarga directamente de pasarla de `OCCUPIED` a `AVAILABLE` o limpieza).
+- **NFR-001**: El procesamiento de la notificación debe completarse en menos de 500 milisegundos.
+
+### Key Entities *(include if feature involves data)*
+
+- **Reservation**: Reserva que transiciona de `IN_PROGRESS` a `COMPLETED`. Atributos:
+  `reservationRef`, `roomId` y `status` (`PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`,
+  `CANCELLED`, `NO_SHOW`).
+- **Room**: Habitación física controlada por el Módulo 1, que la libera en el Check-Out. Atributos:
+  `roomId`, `status` (`AVAILABLE` | `RESERVED` | `OCCUPIED`).
 
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
-- **SC-001**: 100% de las notificaciones de check-out válidas recibidas cambian la reserva al estado finalizado correctamente.
-- **SC-002**: 100% de los intentos de check-out sobre reservas no iniciadas o ya finalizadas arrojan HTTP 400 sin generar errores de sistema.
+- **SC-001**: El 100% de las notificaciones de Check-Out válidas cambian la reserva a `COMPLETED`.
+- **SC-002**: El 100% de los intentos sobre reservas sin ingreso o ya finalizadas responden **HTTP
+  400** sin generar errores de sistema.

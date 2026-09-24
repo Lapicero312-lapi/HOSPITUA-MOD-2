@@ -26,7 +26,7 @@ fórmula contractual y deje el importe neto listo para la conciliación mensual 
    con el `externalConfirmationCode`, y marca el `commissionStatus` como `CALCULATED`.
 5. Durante el ciclo de vida de la reserva, el sistema permite conciliar la comisión contra el
    cierre contable mensual, cambiando el `commissionStatus` a `RECONCILED` o `PAID`, o ajustándolo
-   a cero cuando la reserva se cancela sin cobro de penalidad.
+   a cero cuando la reserva se cancela.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -72,27 +72,27 @@ confirmando el rechazo con **HTTP 400**.
 
 La Recepcionista o el analista financiero revisa el reporte de comisiones de un periodo mensual,
 comparando las reservas con `commissionStatus` `CALCULATED` contra aquellas que completaron su
-estadía (`CHECKED_OUT`) o que se cancelaron con cobro de penalidad. El sistema permite marcar las
-comisiones como `RECONCILED` o `PAID`, y ajustar a cero las reservas canceladas sin costo.
+estadía (`COMPLETED`) o que se cancelaron. El sistema permite marcar las comisiones como
+`RECONCILED` o `PAID`, y ajustar a cero las reservas canceladas.
 
 **Why this priority**: Es un flujo de auditoría contable importante para la liquidación mensual con
 los proveedores de distribución, pero no interviene en la ingesta síncrona diaria de reservas.
 
 **Independent Test**: Se genera el listado de comisiones de un canal sobre un conjunto de reservas
-en `CHECKED_OUT`. Se ejecuta la conciliación y se comprueba que las comisiones pasen a
-`RECONCILED` y que las asociadas a reservas `CANCELLED` sin penalidad ajusten su comisión a cero.
+en `COMPLETED`. Se ejecuta la conciliación y se comprueba que las comisiones pasen a
+`RECONCILED` y que las asociadas a reservas `CANCELLED` ajusten su comisión a cero.
 
 **Acceptance Scenarios**:
 
-1. **Scenario**: Conciliación exitosa de comisiones para reservas con Check-Out completado
-   - **Given** un conjunto de reservas OTA con `commissionStatus` `CALCULATED` en `state`
-     `CHECKED_OUT`
+1. **Scenario**: Conciliación exitosa de comisiones para reservas con estadía finalizada
+   - **Given** un conjunto de reservas OTA con `commissionStatus` `CALCULATED` en `status`
+     `COMPLETED`
    - **When** el usuario financiero ejecuta el proceso de conciliación del periodo
    - **Then** el sistema confirma la coincidencia de montos y actualiza el `commissionStatus` de
      esas reservas a `RECONCILED`
 
-2. **Scenario**: Anulación de comisión por cancelación libre de penalidad
-   - **Given** una reserva de canal OTA que pasó a `state` `CANCELLED` sin cobro de penalidad
+2. **Scenario**: Anulación de comisión por cancelación de la reserva
+   - **Given** una reserva de canal OTA que pasó a `status` `CANCELLED`
    - **When** el sistema procesa la conciliación de comisiones
    - **Then** el sistema ajusta el `commissionAmount` a cero y marca el `commissionStatus` como
      `RECONCILED`, evitando una obligación de pago indebida hacia la agencia
@@ -133,9 +133,9 @@ calcular el `commissionAmount`.
 - ¿Qué sucede si se recibe una nueva reserva reutilizando un `externalConfirmationCode` ya
   registrado para la misma `Ota`? El sistema rechaza el intento por duplicidad, responde con **HTTP
   400 (Bad Request)**, y no genera un registro de comisión duplicado.
-- ¿Cómo maneja el sistema una cancelación tardía con penalidad parcial de una reserva OTA? El
-  sistema recalcula el `commissionAmount` aplicando el `commissionPercentage` exclusivamente sobre
-  la porción cobrada por penalidad, manteniendo la consistencia financiera.
+- ¿Cómo maneja el sistema la cancelación de una reserva OTA, incluso si es tardía? La cancelación no
+  genera cobro de penalidad, por lo que el sistema ajusta el `commissionAmount` a cero y conserva el
+  histórico de la comisión originalmente calculada para auditoría.
 - ¿Cómo maneja el sistema dos actualizaciones simultáneas de la misma reserva OTA? El sistema
   procesa secuencialmente los eventos para garantizar que el `commissionStatus` final refleje la
   versión de datos más reciente.
@@ -157,7 +157,7 @@ calcular el `commissionAmount`.
 - **FR-006**: El sistema debe proveer una función de conciliación que cambie el `commissionStatus`
   de `CALCULATED` a `RECONCILED` o `PAID`.
 - **FR-007**: El sistema debe ajustar a cero el `commissionAmount` de las reservas que pasen a
-  `state` `CANCELLED` sin cobro de penalización.
+  `status` `CANCELLED`, ya que la cancelación no genera cobro de penalización.
 - **FR-008**: El sistema debe permitir configurar y actualizar el `name` y el `commissionPercentage`
   por defecto de cada `Ota`.
 - **FR-009**: El sistema debe interceptar cualquier error de validación de entrada o integración y
@@ -175,13 +175,13 @@ calcular el `commissionAmount`.
 ### Key Entities *(include if feature involves data)*
 
 - **Reservation**: Representa la reserva de canal OTA sobre la que se calcula la comisión.
-  Atributos: `reservationRef`, `guestRef`, categoría o habitación asignada, `totalAmount` (valor
+  Atributos: `reservationRef`, `guestRef`, `roomId`, `categoryRoom`, `totalAmount` (valor
   bruto recibido de la OTA), `commissionAmount` (comisión calculada), `commissionPercentage`
   (porcentaje contractual aplicado), `commissionStatus` (`CALCULATED` | `RECONCILED` | `PAID` |
-  `DISPUTED`), `externalConfirmationCode`, `source` (`OTA`), y `state` con estados permitidos en
-  este flujo: `ACTIVE`, `CHECKED_IN`, `CHECKED_OUT`, `CANCELLED`. Al provenir de un canal que ya
-  respalda y garantiza la reserva del lado de la agencia, se persiste siempre directamente en
-  `ACTIVE`; este flujo no utiliza el estado `PENDING`.
+  `DISPUTED`), `externalConfirmationCode`, `source` (`OTA`), y `status` con estados permitidos:
+  `PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`. Una reserva OTA se crea en
+  `PENDING` y pasa a `ACTIVE` cuando la agencia confirma el pago o la garantía; la comisión se
+  calcula desde el momento de su registro.
 - **Ota**: Representa al intermediario externo que origina la reserva. Atributos: `id`, `name`, y
   `commissionPercentage` (porcentaje de comisión pactado por defecto).
 - **Guest**: Representa al huésped titular de la reserva. Atributos: `id`, `fullName`,
