@@ -124,7 +124,7 @@
     
     <div class="alert alert-warning">
         <strong>⚠️ Estándar de Respuesta de Errores</strong><br>
-        Las integraciones entre módulos cuentan con un estricto blindaje de excepciones lógicas. Ante timeouts, identificadores inválidos, desajuste de datos o fechas pasadas, el sistema debe interceptar la falla y retornar invariablemente un código <strong>HTTP 400 (Bad Request)</strong> estructurado con un mensaje amigable. <br><br><strong>Queda completamente prohibida la propagación de fallos que deriven en errores de infraestructura HTTP 500 (Internal Server Error).</strong>
+        Las integraciones entre módulos cuentan con un estricto blindaje de excepciones lógicas. Ante timeouts, identificadores inválidos, desajuste de datos o fechas pasadas, el sistema debe interceptar la falla y retornar invariablemente un código de error de la <strong>familia HTTP 4xx</strong> estructurado con un mensaje amigable: <strong>HTTP 400 (Bad Request)</strong> por defecto, y códigos más específicos cuando corresponda (por ejemplo, <strong>HTTP 409</strong> para un conflicto de disponibilidad de una reserva OTA o <strong>HTTP 429</strong> para el límite de solicitudes). Nunca se usa un código 2xx o 3xx para representar un error. <br><br><strong>Queda completamente prohibida la propagación de fallos que deriven en errores de infraestructura HTTP 500 (Internal Server Error).</strong>
     </div>
 
     <h3>Pantallas Retiradas del Módulo 2</h3>
