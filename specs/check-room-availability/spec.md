@@ -25,8 +25,7 @@ mantenimientos del Módulo 1.
    reserva indicada en `reservationRef`.
 3. El sistema consulta el calendario del Módulo 1 mediante "Consultar calendario de
    mantenimientos".
-4. Si la estadía incluye el día en curso, el sistema consulta el estado físico real mediante
-   "Consultar inventario de habitaciones".
+4. Si la estadía incluye el día en curso, el sistema consulta el estado físico real mediante "Consultar inventario de habitaciones", enviando también la `reservationRef` de la reserva editada. El Módulo 1 informa qué reserva mantiene apartada la `Room` (`reservedByReservationRef`); si coincide con la reserva editada, ese `RESERVED` es su propio apartado y no cuenta como conflicto.
 5. El sistema devuelve si la `Room` está disponible o no, indicando el motivo cuando no lo esté.
 
 ## User Scenarios & Testing *(mandatory)*
@@ -69,8 +68,7 @@ inventario del Módulo 1, devolviendo la disponibilidad precisa en cada caso.
 4. **Scenario**: Validación en tiempo real para una reserva del mismo día
    - **Given** una consulta cuya estadía incluye el día en curso
    - **When** el solicitante verifica la disponibilidad
-   - **Then** el sistema consulta el inventario del Módulo 1 y, si la `Room` está `OCCUPIED` o
-     `RESERVED`, informa que no está disponible
+   - **Then** el sistema consulta el inventario del Módulo 1 y, si la `Room` está `OCCUPIED`, o `RESERVED` por una reserva distinta de la consultada, informa que no está disponible
 
 5. **Scenario**: Modificación de fechas de una reserva existente
    - **Given** una `Reservation` en `ACTIVE` sobre una `Room` sin otras reservas ni mantenimientos
@@ -84,6 +82,11 @@ inventario del Módulo 1, devolviendo la disponibilidad precisa en cada caso.
      `NO_SHOW`
    - **When** el solicitante verifica la disponibilidad
    - **Then** el sistema ignora esas reservas y confirma la disponibilidad
+
+7. **Scenario**: Modificación de una reserva cuya estadía incluye hoy
+   - **Given** una `Reservation` `ACTIVE` cuya `Room` está `RESERVED` por esa misma reserva y cuya estadía incluye el día en curso
+   - **When** el solicitante verifica la disponibilidad enviando su `reservationRef` con nuevas fechas
+   - **Then** el sistema reconoce que el `RESERVED` es el apartado propio (`reservedByReservationRef` coincide) y no lo trata como conflicto, por lo que la reserva puede modificar sus fechas
 
 ### Casos Borde
 
@@ -114,8 +117,7 @@ inventario del Módulo 1, devolviendo la disponibilidad precisa en cada caso.
 - **FR-003**: El sistema debe aceptar la `reservationRef` de la reserva que se está modificando y
   excluirla del cruce, para que una modificación de fechas no se reporte como no disponible por
   solaparse consigo misma.
-- **FR-004**: El sistema debe consultar el `status` físico de la `Room` mediante "Consultar
-  inventario de habitaciones" cuando la estadía incluya el día en curso.
+- **FR-004**: El sistema debe consultar el `status` físico de la `Room` mediante "Consultar inventario de habitaciones" cuando la estadía incluya el día en curso, enviando la `reservationRef` de la reserva editada, y debe tratar un `RESERVED` cuyo `reservedByReservationRef` coincida con ella como el apartado propio de la reserva, no como un conflicto.
 - **FR-005**: El sistema no debe asumir disponibilidad cuando el Módulo 1 no responda.
 - **FR-006**: El sistema debe interceptar timeouts, fechas y formatos inválidos, respondiendo con
   **HTTP 400 (Bad Request)** y prohibiendo errores **HTTP 500**.
