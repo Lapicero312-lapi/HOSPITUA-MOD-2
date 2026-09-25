@@ -130,13 +130,17 @@ reintento y la solicitud pasa a `COMPLETED`.
    - **Then** el Módulo 1 la ignora por tener una secuencia menor a la última aplicada, y la `Room`
      permanece `RESERVED` para la reserva nueva; el sistema marca la orden vieja como `REJECTED`
 
+4. **Scenario**: Dos órdenes simultáneas reciben secuencias distintas
+   - **Given** dos solicitudes de reserva que piden la misma `Room` en el mismo instante
+   - **When** el sistema registra ambas órdenes al Módulo 1
+   - **Then** el sistema les asigna `sequenceNumber` consecutivos y distintos, en el orden en que se confirmó cada transacción, de modo que el Módulo 1 aplica ambas en el orden correcto y ninguna válida se ignora por error
+
 ### Casos Borde
 
 - ¿Qué sucede si se envía una solicitud con `roomId` vacío, nulo o inexistente? El sistema
   intercepta la solicitud y retorna **HTTP 400 (Bad Request)**, sin emitir peticiones erróneas al
   Módulo 1 ni generar fallas **HTTP 500**.
-- ¿Cómo maneja el sistema dos órdenes simultáneas sobre la misma `Room`? La primera solicitud válida
-  se procesa, y la segunda recibe **HTTP 400** informando del cambio de estado previo.
+- ¿Cómo maneja el sistema dos órdenes simultáneas sobre la misma `Room`? El sistema serializa la asignación del `sequenceNumber` por `Room`: cada orden recibe un número distinto, en el orden en que se confirmó su transacción, y nunca se repite ni se salta. La primera solicitud válida se procesa, y la segunda, si al validar detecta que la habitación ya cambió de estado, recibe **HTTP 400** informando del cambio previo.
 - ¿Qué sucede si el Módulo 1 responde con un mensaje ambiguo o un código de error desconocido? El
   sistema marca la solicitud como `PENDING` para revisión, sin asumir estados no verificados.
 - ¿Qué sucede si la reserva se cancela mientras su orden `RESERVED` sigue en `PENDING`? El sistema
@@ -164,9 +168,7 @@ reintento y la solicitud pasa a `COMPLETED`.
   que el Módulo 1 reporte en `OCCUPIED`.
 - **FR-008**: El sistema debe interceptar cualquier error de validación de entrada y responder con
   **HTTP 400 (Bad Request)**, prohibiendo fallas de infraestructura **HTTP 500**.
-- **FR-009**: El sistema debe asignar a cada solicitud un `sequenceNumber` creciente por `Room`, y
-  el Módulo 1 solo debe aplicarla si es mayor que la última aplicada para esa habitación; las
-  obsoletas deben quedar como `REJECTED`.
+- **FR-009**: El sistema debe asignar a cada solicitud un `sequenceNumber` creciente por `Room`, y el Módulo 1 solo debe aplicarla si es mayor que la última aplicada para esa habitación; las obsoletas deben quedar como `REJECTED`. La asignación debe ser atómica y serializada por `Room`, dentro de la misma transacción que registra la solicitud, con unicidad garantizada de `(roomId, sequenceNumber)`, de modo que dos solicitudes simultáneas nunca reciban el mismo número ni queden numeradas en un orden distinto al de su confirmación.
 - **FR-010**: El sistema debe condicionar toda orden `AVAILABLE` a que la `Room` siga apartada por
   la misma reserva (`previousStatus` `RESERVED` y `reservationRef` coincidente), y no debe liberar
   una `Room` que el Módulo 1 reporte en `OCCUPIED`; en ese caso la orden queda `REJECTED`, sin
@@ -189,8 +191,8 @@ reintento y la solicitud pasa a `COMPLETED`.
 - **RoomStateRequest**: Orden de actualización de estado enviada al Módulo 1. Atributos:
   `requestId`, `roomId`, `requestedStatus` (`RESERVED` | `AVAILABLE`), `previousStatus`,
   `originEvent` (`RESERVATION_CREATED` | `RESERVATION_CANCELLED` | `RESERVATION_NO_SHOW` |
-  `ROOM_CHANGED`), `reservationRef`, `sequenceNumber` (secuencia creciente por `Room`),
-  `requestedAt`,   `requestedBy` (Recepcionista, Ota o sistema) y `requestStatus` (`PENDING` |
+  `ROOM_CHANGED`), `reservationRef`, `sequenceNumber` (secuencia creciente y única por `Room`, asignada de forma atómica),
+  `requestedAt`, `requestedBy` (Recepcionista, Ota o sistema) y `requestStatus` (`PENDING` |
   `COMPLETED` | `REJECTED`).
 - **ReconciliationIncident**: Registro de una orden rechazada o sin efecto que requiere revisión
   humana (definida en "Registrar Check-In"). Atributos relevantes: `origin` `ROOM_STATE`, `roomId`,
