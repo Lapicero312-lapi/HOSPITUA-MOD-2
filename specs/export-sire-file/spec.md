@@ -133,9 +133,9 @@ comportamiento controlado.
 
 ### Key Entities *(include if feature involves data)*
 
-- **SireExport**: Histórico de exportaciones. Atributos: `id` (identificador de la exportación, el
-  `exportId`), `excludedCount`, `exportDate`, `recordsCount`,
-  `dateRangeStart`, `dateRangeEnd` y `processedBy`.
+- **SireExport**: Histórico de exportaciones. Atributos: `id` (identificador único de la
+  exportación; es el valor que `SireExportExclusion` referencia mediante `exportId`), `exportDate`,
+  `recordsCount`, `excludedCount`, `dateRangeStart`, `dateRangeEnd` y `processedBy`.
 - **Reservation**: Reserva de origen. Atributos: `reservationRef`, `guestRef`, `startDate`,
   `endDate` y `status`. Solo se exportan las `IN_PROGRESS` o `COMPLETED`.
 - **Guest**: Huésped reportado. Atributos: `fullName`, `documentNumber`, `nationality` y `type`
@@ -146,8 +146,8 @@ comportamiento controlado.
   `validationReason` (estos dos últimos, solo cuando es `INCOMPLETE`, y son los que alimentan el
   reporte de exclusiones). Solo los `COMPLETE` se exportan.
 - **SireExportExclusion**: Registro excluido de una exportación por tener datos incompletos.
-  Atributos: `exportId` (referencia al `SireExport`), `reservationRef`, `guestRef`, `missingFields`
-  y `reason`. Forma el reporte de exclusiones de esa exportación.
+  Atributos: `exportId` (referencia directa a `SireExport.id`), `reservationRef`, `guestRef`,
+  `missingFields` y `reason`. Forma el reporte de exclusiones de esa exportación.
 
 ## Success Criteria *(mandatory)*
 
