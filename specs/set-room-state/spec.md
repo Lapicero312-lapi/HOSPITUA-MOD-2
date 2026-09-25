@@ -163,6 +163,15 @@ de apartado.
      la anterior esté `COMPLETED` o `REJECTED`, de modo que el Módulo 1 siempre recibe primero la de
      menor secuencia y ninguna orden válida se descarta por llegar desordenada
 
+5. **Scenario**: Orden ambigua resuelta antes de avanzar la cola
+   - **Given** una orden `RESERVED` en `PENDING` por una respuesta ambigua del Módulo 1, y una orden
+     `AVAILABLE` de la misma `Room` esperando en cola
+   - **When** el sistema consulta el resultado de la orden `RESERVED` por su `requestId`
+   - **Then** si el Módulo 1 confirma el resultado, la orden pasa a `COMPLETED` o `REJECTED` y la
+     cola avanza; si tras los reintentos acotados no hay respuesta concluyente, la orden queda
+     `REJECTED` con `rejectionReason` `UNRESOLVED`, se registra una `ReconciliationIncident` y la
+     orden `AVAILABLE` puede enviarse
+
 ### Casos Borde
 
 - ¿Qué sucede si se envía una solicitud con `roomId` vacío, nulo o inexistente? El sistema
@@ -174,7 +183,13 @@ de apartado.
   procesa, y la segunda, si al validar detecta que la habitación ya cambió de estado, recibe **HTTP
   400** informando del cambio previo.
 - ¿Qué sucede si el Módulo 1 responde con un mensaje ambiguo o un código de error desconocido? El
-  sistema marca la solicitud como `PENDING` para revisión, sin asumir estados no verificados.
+  sistema no asume ningún estado: mantiene la solicitud en `PENDING` solo de forma transitoria y la
+  lleva a un estado terminal antes de avanzar la cola de esa `Room`. Para ello consulta al Módulo 1
+  el resultado de esa orden por su `requestId` (consulta idempotente) con reintentos acotados; si el
+  Módulo 1 confirma que se aplicó, queda `COMPLETED`, y si confirma que no, `REJECTED`. Si al agotar
+  los reintentos o el plazo no hay una respuesta concluyente, la marca `REJECTED` con
+  `rejectionReason` `UNRESOLVED`, registra una `ReconciliationIncident` y libera la cola, de modo
+  que ninguna orden ambigua bloquea indefinidamente a las siguientes.
 - ¿Qué sucede si la reserva se cancela mientras su orden `RESERVED` sigue en `PENDING`? El sistema
   no descarta nada: registra la orden de liberación con un `sequenceNumber` mayor y la deja en cola
   detrás de la `RESERVED`, sin enviarla hasta que esa quede `COMPLETED` o `REJECTED`, respetando la
@@ -206,12 +221,13 @@ de apartado.
 - **FR-008**: El sistema debe interceptar cualquier error de validación de entrada y responder con
   **HTTP 400 (Bad Request)**, prohibiendo fallas de infraestructura **HTTP 500**.
 - **FR-009**: El sistema debe enviar las órdenes de una misma `Room` de una en una, en el orden de
-  su `sequenceNumber`: no debe enviar la orden N+1 hasta que la N esté `COMPLETED` o `REJECTED`, y
-  las siguientes deben esperar en cola por `Room`, de modo que el Módulo 1 reciba siempre primero la
+  su `sequenceNumber`: no debe enviar la orden N+1 hasta que la N esté `COMPLETED` o `REJECTED`
+  (según FR-012, una orden en `PENDING` debe resolverse a uno de esos estados terminales), y las
+  siguientes deben esperar en cola por `Room`, de modo que el Módulo 1 reciba siempre primero la
   de menor secuencia; el rechazo por obsoleta del Módulo 1 queda solo como red de seguridad ante
   reintentos tardíos. El sistema debe asignar a cada solicitud un `sequenceNumber` creciente por
-  `Room`, y
-  el Módulo 1 solo debe aplicarla si es mayor que la última aplicada para esa habitación; las
+  `Room`; el Módulo 1 solo debe aplicarla si es mayor que la última aplicada para esa habitación;
+  las
   obsoletas deben quedar como `REJECTED`. La asignación debe ser atómica y serializada por `Room`,
   dentro de la misma transacción que registra la solicitud, con unicidad garantizada de `(roomId,
   sequenceNumber)`, de modo que dos solicitudes simultáneas nunca reciban el mismo número ni queden
@@ -230,7 +246,13 @@ de apartado.
   `ROOM_CHANGED` y el Módulo 1 no responde, el sistema debe además neutralizar la posible reserva de
   la `Room` nueva con una orden `AVAILABLE` de mayor `sequenceNumber`, ya que el resultado es
   ambiguo.
-- **FR-012**: El sistema debe mantener un registro auditable de cada solicitud, incluyendo fecha,
+- **FR-012**: El sistema debe llevar a un estado terminal (`COMPLETED` o `REJECTED`) toda orden que
+  quede en `PENDING` por una respuesta ambigua, un timeout o una falla de comunicación, consultando
+  al Módulo 1 el resultado de esa orden por su `requestId` con reintentos y un plazo acotados; si no
+  obtiene una respuesta concluyente, debe marcarla `REJECTED` con `rejectionReason` `UNRESOLVED`,
+  registrar una `ReconciliationIncident` y liberar la cola de esa `Room`, para que ninguna orden
+  bloquee indefinidamente a las siguientes.
+- **FR-013**: El sistema debe mantener un registro auditable de cada solicitud, incluyendo fecha,
   actor, habitación, estado anterior, estado solicitado y resultado.
 
 ### Non-Functional Requirements
@@ -248,7 +270,8 @@ de apartado.
   `ROOM_CHANGED`), `reservationRef`, `sequenceNumber` (secuencia creciente y única por `Room`,
   asignada de forma atómica),
   `requestedAt`, `requestedBy` (Recepcionista, Ota o sistema) y `requestStatus` (`PENDING` |
-  `COMPLETED` | `REJECTED`).
+  `COMPLETED` | `REJECTED`) y `rejectionReason` (`OBSOLETE` | `ROOM_OCCUPIED` | `UNRESOLVED`, solo
+  cuando es `REJECTED`).
 - **ReconciliationIncident**: Registro de una orden rechazada o sin efecto que requiere revisión
   humana (definida en "Registrar Check-In"). Atributos relevantes: `origin` `ROOM_STATE`, `roomId`,
   `reservationRef`, `reason` y `resolutionStatus`.
