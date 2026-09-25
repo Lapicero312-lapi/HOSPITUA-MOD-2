@@ -20,7 +20,7 @@ en curso.
 1. El solicitante (la **Recepcionista** o la **Ota** desde su API) localiza la reserva mediante "Consultar reservas".
 2. El sistema valida que la `Reservation` esté en estado `ACTIVE` o `PENDING`.
 3. El solicitante confirma la cancelación: en pantalla para la Recepcionista, o mediante el JSON recibido para la Ota.
-4. El sistema cambia el `status` de la reserva a `CANCELLED`.
+4. El sistema ejecuta "Actualizar reservación" para cambiar el `status` de la reserva a `CANCELLED`.
 5. El sistema ejecuta "Establecer estado de habitación" para ordenar al Módulo 1 que la `Room`
    vuelva a `AVAILABLE`, si estaba en `RESERVED`.
 6. El sistema registra la cancelación en `Cancellation` para auditoría.
@@ -89,11 +89,9 @@ se bloquea con un error controlado.
   cancelación.
 - **FR-002**: El sistema debe autorizar la cancelación únicamente si la `Reservation` está en
   `ACTIVE` o `PENDING`.
-- **FR-003**: El sistema debe cambiar el `status` de la `Reservation` a `CANCELLED` al confirmarse
-  la solicitud.
+- **FR-003**: El sistema debe cambiar el `status` de la `Reservation` a `CANCELLED` al confirmarse la solicitud, mediante "Actualizar reservación", que aplica las transiciones `ACTIVE` o `PENDING` → `CANCELLED` y el control de concurrencia; esta funcionalidad no debe modificar el `status` por su cuenta.
 - **FR-004**: El sistema debe ordenar al Módulo 1, mediante "Establecer estado de habitación",
-  devolver la `Room` a `AVAILABLE` cuando estuviera en `RESERVED`, sin revertir la cancelación si esa
-  orden falla.
+  devolver la `Room` a `AVAILABLE` solo si sigue apartada por esa reserva (`previousStatus` `RESERVED`), sin revertir la cancelación si esa orden falla.
 - **FR-005**: El sistema debe registrar cada cancelación en `Cancellation` con la referencia de la
   reserva, la fecha, el canal (`RECEPTION` u `OTA_API`) y quién la procesó.
 - **FR-006**: El sistema no debe cobrar penalidades ni invocar la liquidación del Módulo 3 al

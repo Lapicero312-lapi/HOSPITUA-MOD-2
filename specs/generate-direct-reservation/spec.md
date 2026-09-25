@@ -31,6 +31,7 @@ para apartar la habitación.
 5. El sistema crea la `Reservation` directamente en estado `ACTIVE`, sin ningún paso de cobro.
 6. El sistema ejecuta "Establecer estado de habitación" para ordenar al Módulo 1 marcar la `Room`
    como `RESERVED`, adjuntando el detalle de la reserva.
+7. El sistema responde 201 (Created) con la reserva creada, indicando si la sincronización con el Módulo 1 quedó pendiente (`roomSyncStatus`).
 
 El sistema guarda el monto devuelto por el Módulo 3 bajo `grossAmount` (valor de hospedaje bruto,
 suma de las tarifas dinámicas de todas las noches, antes de comisión e impuestos), con carácter
@@ -99,9 +100,8 @@ reserva y se devuelve un error controlado.
   se realiza dentro de una transacción con control de concurrencia, de modo que solo una de las dos
   solicitudes se registra en `ACTIVE`; a la segunda se le responde con **HTTP 400** indicando que ya
   no hay disponibilidad, sin producir sobreventa.
-- ¿Qué sucede si la reserva se crea pero el Módulo 1 no responde a la orden `RESERVED`? La reserva
-  permanece registrada en `ACTIVE`; la orden queda en `PENDING` para reintentarse y el sistema
-  responde con una alerta controlada **HTTP 400** indicando el error de comunicación.
+- ¿Qué sucede si la reserva se crea pero el Módulo 1 no responde a la orden `RESERVED`? La reserva permanece registrada en `ACTIVE` con `roomSyncStatus` `PENDING`, la orden se reintenta en segundo plano y el sistema responde **201 (Created)** con esa advertencia. No responde 400, porque la reserva sí existe y un reintento del consumidor la duplicaría.
+- ¿Qué sucede si el Módulo 1 rechaza la orden `RESERVED` porque la `Room` ya está `OCCUPIED`? El sistema compensa: cancela la reserva recién creada mediante "Actualizar reservación" con el motivo `ROOM_REJECTED`, y responde **HTTP 400** indicando que la habitación ya no está disponible. Como no queda ninguna reserva, el consumidor puede reintentar con seguridad.
 
 ## Requirements *(mandatory)*
 
@@ -118,10 +118,9 @@ reserva y se devuelve un error controlado.
 - **FR-005**: El sistema debe registrar `source` como `DIRECT`, `grossAmount` con la tarifa bruta
   devuelta por el Módulo 3, `commissionPercentage` y `commissionAmount` con valor `0` y
   `externalConfirmationCode` como `null`; no debe calcular ni almacenar IVA en esta etapa.
-- **FR-006**: El sistema debe ordenar al Módulo 1, mediante "Establecer estado de habitación",
-  marcar la `Room` como `RESERVED` con el detalle de la reserva, sin revertir la reserva si esa
-  orden falla.
-- **FR-007**: El sistema debe interceptar cualquier error de validación de campos, fechas o
+- **FR-006**: El sistema debe ordenar al Módulo 1, mediante "Establecer estado de habitación", marcar la `Room` como `RESERVED` con el detalle de la reserva. Si la orden falla por comunicación, debe conservar la reserva con `roomSyncStatus` `PENDING`, reintentar y responder 201 (Created) con la advertencia.
+- **FR-007**: El sistema debe compensar el rechazo explícito del Módulo 1 (`Room` ya `OCCUPIED`) cancelando la reserva creada con el motivo `ROOM_REJECTED` y respondiendo **HTTP 400**.
+- **FR-008**: El sistema debe interceptar cualquier error de validación de campos, fechas o
   integraciones y responder con **HTTP 400 (Bad Request)**, prohibiendo errores **HTTP 500**.
 
 ### Non-Functional Requirements
@@ -134,7 +133,7 @@ reserva y se devuelve un error controlado.
 - **Reservation**: Contrato de reserva de canal directo. Atributos: `id`, `guestRef`, `roomId`,
   `categoryRoom`, `startDate`, `endDate`, `grossAmount` (valor bruto calculado por el Módulo 3,
   informativo), `commissionPercentage` (`0`), `commissionAmount` (`0`), `externalConfirmationCode`
-  (`null`), `source` (`DIRECT`), `createdAt`, y `status` con estados permitidos:
+  (`null`), `source` (`DIRECT`), `createdAt`, `roomSyncStatus` (`SYNCED` | `PENDING`, estado de la orden `RESERVED` al Módulo 1), y `status` con estados permitidos:
   `PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`. En este flujo se crea
   siempre en `ACTIVE`.
 - **Guest**: Huésped titular. Atributos: `id`, `fullName`, `documentNumber`, `nationality`,

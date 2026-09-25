@@ -89,7 +89,7 @@
             </tr>
             <tr>
                 <td><strong>Creación</strong></td>
-                <td>Crea entidad <code>Reservation</code> (<code>ACTIVE</code>).</td>
+                <td>Crea entidad <code>Reservation</code>: <code>ACTIVE</code> si es directa, <code>PENDING</code> si es de OTA (pasa a <code>ACTIVE</code> cuando la agencia confirma el pago o la garantía).</td>
                 <td><strong>M2 notifica a M1:</strong> Envía detalles y ordena marcar la <code>Room</code> como <code>RESERVED</code>.</td>
             </tr>
             <tr>
@@ -110,7 +110,7 @@
             <tr>
                 <td><strong>Fin de Día</strong></td>
                 <td>Cron automático marca reserva como <code>NO_SHOW</code> si no hay ingreso.</td>
-                <td>Ninguna interacción (Se asume que M1 no reportó ingreso).</td>
+                <td><strong>M2 notifica a M1:</strong> Ordena devolver la <code>Room</code> a <code>AVAILABLE</code>, solo si sigue apartada por esa reserva (nunca si M1 la reporta <code>OCCUPIED</code>).</td>
             </tr>
             <tr>
                 <td><strong>Exportación SIRE</strong></td>

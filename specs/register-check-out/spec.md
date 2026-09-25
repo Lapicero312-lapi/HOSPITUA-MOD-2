@@ -44,13 +44,12 @@ valida que el estado cambie a `COMPLETED` sin afectar la disponibilidad que gest
 2. **Scenario**: Rechazo de notificación para reservas sin ingreso (Error)
    - **Given** una `Reservation` en `ACTIVE` o `PENDING`
    - **When** el Módulo 1 envía una notificación de Check-Out
-   - **Then** el sistema prohíbe el cambio de estado y responde **HTTP 400 (Bad Request)**
-     informando que la reserva aún no registra un ingreso
+   - **Then** el sistema prohíbe el cambio de estado, responde **HTTP 400 (Bad Request)** informando que la reserva aún no registra un ingreso, y registra una incidencia de conciliación con el Módulo 1
 
-3. **Scenario**: Rechazo de notificación duplicada (Error)
+3. **Scenario**: Notificación duplicada (idempotente)
    - **Given** una `Reservation` en `COMPLETED`
    - **When** el sistema recibe de nuevo una notificación de Check-Out
-   - **Then** el sistema la rechaza por idempotencia con **HTTP 400** controlado
+   - **Then** el sistema responde 200 sin efectos nuevos, porque la salida ya fue registrada
 
 ### Casos Borde
 
@@ -71,8 +70,7 @@ valida que el estado cambie a `COMPLETED` sin afectar la disponibilidad que gest
 
 - **FR-001**: El sistema no debe ofrecer una interfaz para el Check-Out físico: debe limitarse a
   exponer un servicio para recibir la notificación del Módulo 1.
-- **FR-002**: El sistema debe validar que la `Reservation` esté en `IN_PROGRESS` antes de procesar
-  la salida.
+- **FR-002**: El sistema debe validar que la `Reservation` esté en `IN_PROGRESS` antes de procesar la salida; si ya está en `COMPLETED` debe responder 200 sin efectos (idempotencia), y en cualquier otro estado debe responder **HTTP 400** y registrar una incidencia de conciliación.
 - **FR-003**: El sistema debe actualizar el `status` a `COMPLETED` mediante "Actualizar reservación"
   tras una notificación válida.
 - **FR-004**: El sistema no debe modificar el estado de la `Room`, que gestiona el Módulo 1.
@@ -96,5 +94,4 @@ valida que el estado cambie a `COMPLETED` sin afectar la disponibilidad que gest
 ### Measurable Outcomes
 
 - **SC-001**: El 100% de las notificaciones de Check-Out válidas cambian la reserva a `COMPLETED`.
-- **SC-002**: El 100% de los intentos sobre reservas sin ingreso o ya finalizadas responden **HTTP
-  400** sin generar errores de sistema.
+- **SC-002**: El 100% de los intentos sobre reservas sin ingreso responden **HTTP 400** con incidencia registrada, y los duplicados sobre reservas ya finalizadas responden 200 sin efectos, sin generar errores de sistema.
