@@ -98,7 +98,7 @@ confirmando la respuesta controlada **HTTP 400**.
   `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`).
 - **Guest**: Titular de la reserva. Atributos: `id`, `fullName`, `documentNumber`, `nationality`,
   `contactPhone`, `contactEmail`.
-- **Room**: Habitación asociada. Atributos: `roomId`, `numberRoom`, `categoryRoom` y `status`
+- **Room**: Habitación asociada. Atributos: `roomId`, `roomNumber`, `categoryRoom` y `status`
   (`AVAILABLE` | `RESERVED` | `OCCUPIED`).
 
 ## Success Criteria *(mandatory)*
