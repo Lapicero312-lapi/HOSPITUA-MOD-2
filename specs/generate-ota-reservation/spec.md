@@ -88,8 +88,7 @@ crea una reserva y que todos devuelven una respuesta JSON de error estructurada.
    - **Given** que la `Room` tiene un mantenimiento programado o una reserva cruzada en las fechas
      enviadas
    - **When** la **Ota** envía la solicitud de reserva
-   - **Then** el sistema rechaza la transacción, no crea la reserva y retorna un error JSON con
-     código HTTP 409 (Conflict): `{"errorCode": "NO_AVAILABILITY", "message": "No hay disponibilidad
+   - **Then** el sistema rechaza la transacción, no crea la reserva y retorna un error JSON con código HTTP 400 (Bad Request): `{"errorCode": "NO_AVAILABILITY", "message": "No hay disponibilidad
      para la habitación seleccionada"}`
 
 4. **Scenario**: Rechazo por ausencia de código de confirmación externo (Error)
@@ -109,15 +108,14 @@ crea una reserva y que todos devuelven una respuesta JSON de error estructurada.
   inyección con una respuesta **HTTP 400** estructurada, y nunca almacena el valor crudo.
 - ¿Qué sucede si dos solicitudes de diferentes OTAs intentan reservar simultáneamente la misma
   habitación? La creación se realiza en una transacción con bloqueo, de modo que solo una obtiene la
-  habitación y se registra; la otra recibe **HTTP 409 (Conflict)** con `errorCode`
-  `NO_AVAILABILITY`.
+  habitación y se registra; la otra recibe **HTTP 400 (Bad Request)** con `errorCode` `NO_AVAILABILITY`.
 - ¿Qué sucede si la reserva se crea pero el Módulo 1 no responde a la orden `RESERVED`? La reserva
   permanece en `PENDING` con `roomSyncStatus` `PENDING`, la orden se reintenta en segundo plano y el
   sistema responde **201 (Created)** con esa advertencia, para que la agencia no reenvíe la misma
   reserva.
 - ¿Qué sucede si el Módulo 1 rechaza la orden `RESERVED` porque la `Room` ya está `OCCUPIED`? El
   sistema cancela la reserva recién creada mediante "Actualizar reservación" con el motivo
-  `ROOM_REJECTED` y responde **HTTP 409** con `errorCode` `NO_AVAILABILITY`.
+  `ROOM_REJECTED` y responde **HTTP 400** con `errorCode` `NO_AVAILABILITY`.
 - ¿Qué sucede si la agencia nunca confirma el pago o la garantía de una reserva `PENDING`? La
   reserva permanece en `PENDING` y puede cancelarse por la vía estándar, o marcarse como `NO_SHOW`
   por el proceso de fin de día si su fecha de inicio pasa sin ingreso.
@@ -145,11 +143,9 @@ crea una reserva y que todos devuelven una respuesta JSON de error estructurada.
   debe conservar la reserva con `roomSyncStatus` `PENDING`, reintentar y responder 201 (Created) con
   la advertencia.
 - **FR-008**: El sistema debe compensar el rechazo explícito del Módulo 1 (`Room` ya `OCCUPIED`)
-  cancelando la reserva creada con el motivo `ROOM_REJECTED` y respondiendo HTTP 409 con `errorCode`
-  `NO_AVAILABILITY`.
+  cancelando la reserva creada con el motivo `ROOM_REJECTED` y respondiendo HTTP 400 con `errorCode` `NO_AVAILABILITY`.
 - **FR-009**: El sistema debe interceptar cualquier inconsistencia o fallo de validación y retornar
-  respuestas JSON estructuradas con **HTTP 400 (Bad Request)** o **HTTP 409 (Conflict)**,
-  prohibiendo **HTTP 500**.
+  respuestas JSON estructuradas con **HTTP 400 (Bad Request)**, prohibiendo **HTTP 500**.
 
 ### Non-Functional Requirements
 
@@ -178,5 +174,5 @@ crea una reserva y que todos devuelven una respuesta JSON de error estructurada.
 - **SC-001**: El 100% de las reservas registradas por la API externa cuentan con un
   `externalConfirmationCode` y con la comisión calculada y almacenada de forma exacta.
 - **SC-002**: El 100% de los rechazos por falta de disponibilidad o formato inválido devuelven
-  payloads JSON estructurados con HTTP 400 o HTTP 409, con cero errores HTTP 500.
+  payloads JSON estructurados con HTTP 400, con cero errores HTTP 500.
 - **SC-003**: El 100% de las reservas OTA generan la orden `RESERVED` hacia el Módulo 1.

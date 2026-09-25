@@ -85,8 +85,7 @@ comportamiento controlado.
   el archivo? El sistema detiene el proceso con **HTTP 400** y el mensaje: "Caracteres no válidos en
   el registro del huésped."
 - ¿Qué sucede si la exportación se solicita simultáneamente más veces de las permitidas? El sistema
-  aplica un límite de solicitudes y responde **HTTP 400** o 429, evitando un **HTTP 500** por falta
-  de memoria.
+  aplica un límite de solicitudes y responde **HTTP 400**, evitando un **HTTP 500** por falta de memoria.
 
 ## Requirements *(mandatory)*
 
