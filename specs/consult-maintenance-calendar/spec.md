@@ -102,7 +102,7 @@ se informe como inhabilitada, indicando las fechas del cruce.
 
 - **MaintenanceSchedule**: Programación de mantenimiento, propiedad del Módulo 1. Atributos:
   `roomId`, `maintenanceStart`, `maintenanceEnd` y `reason`. Esta funcionalidad solo la consulta.
-- **Room**: Habitación física. Atributos: `roomId`, `numberRoom`, `categoryRoom` y `status`
+- **Room**: Habitación física. Atributos: `roomId`, `roomNumber`, `categoryRoom` y `status`
   (`AVAILABLE` | `RESERVED` | `OCCUPIED`).
 - **Reservation**: Se referencia de forma informativa: es la reserva que se intenta crear o
   modificar. Atributos: `roomId`, `startDate`, `endDate`.
