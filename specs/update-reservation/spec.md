@@ -111,9 +111,15 @@ los cambios. Se repite con datos personales (sin recálculo) y sobre reservas `I
   de `Room` no genera órdenes al Módulo 1.
 - ¿Cómo se coordina el cambio de habitación con el Módulo 1? El sistema ejecuta "Establecer estado
   de habitación" en este orden: primero ordena `RESERVED` para la `Room` nueva y, solo si el Módulo
-  1 la confirma, ordena `AVAILABLE` para la anterior. Si el Módulo 1 rechaza la `Room` nueva o no
-  responde, el cambio no se aplica, la reserva conserva su `Room` original y se responde **HTTP
-  400**. Si falla únicamente la liberación de la `Room` anterior, el cambio ya quedó aplicado y esa
+  1 la confirma, ordena `AVAILABLE` para la anterior. Si el Módulo 1 rechaza la `Room` nueva, el
+  cambio no se aplica, la reserva conserva su `Room` original y se responde **HTTP 400**. Si no
+  responde, como el resultado es ambiguo y el Módulo 1 pudo haber apartado la `Room` nueva, el
+  cambio tampoco se aplica y el sistema neutraliza esa posible reserva emitiendo una orden
+  `AVAILABLE` para la `Room` nueva con un `sequenceNumber` mayor, secuenciada por "Establecer estado
+  de habitación" y reintentada desde `PENDING` si falla; la reserva conserva su `Room` original y se
+  responde **HTTP 400**, de modo que nunca queden apartadas la `Room` original y la nueva por la
+  misma reserva. Si falla únicamente la liberación de la `Room` anterior, el cambio ya quedó
+  aplicado y esa
   orden queda en `PENDING` para reintentarse; el sistema responde **HTTP 400** con el mensaje "La
   reserva se actualizó, pero la liberación de la habitación anterior quedó pendiente", y reenviar la
   misma solicitud no repite el cambio.
@@ -138,7 +144,9 @@ los cambios. Se repite con datos personales (sin recálculo) y sobre reservas `I
 - **FR-006**: El sistema debe aplicar control de concurrencia optimista mediante `version`.
 - **FR-007**: Cuando la modificación cambie la `Room`, el sistema debe ordenar primero `RESERVED`
   para la nueva y solo después `AVAILABLE` para la anterior, abortando el cambio si el Módulo 1
-  rechaza la nueva o no responde. Si falla únicamente la liberación de la anterior, el cambio debe
+  rechaza la nueva o no responde; en el caso de falta de respuesta debe neutralizar la posible
+  reserva de la `Room` nueva con una orden `AVAILABLE` de mayor `sequenceNumber`, reintentada desde
+  `PENDING` si falla. Si falla únicamente la liberación de la anterior, el cambio debe
   conservarse, la orden debe reintentarse desde `PENDING` y la respuesta debe ser **HTTP 400** con
   el aviso de liberación pendiente.
 - **FR-008**: El sistema debe interceptar excepciones de validación, concurrencia e integración,

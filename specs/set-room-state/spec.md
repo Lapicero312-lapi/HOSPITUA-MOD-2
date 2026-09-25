@@ -146,12 +146,14 @@ de apartado.
    - **When** el servicio en segundo plano ejecuta el reintento con la comunicación restablecida
    - **Then** el Módulo 1 procesa la orden y el `requestStatus` local pasa a `COMPLETED`
 
-3. **Scenario**: Orden obsoleta ignorada por el Módulo 1
-   - **Given** una orden `AVAILABLE` con `sequenceNumber` 5 que sigue en `PENDING`, y una reserva
-     posterior que ya ordenó `RESERVED` con `sequenceNumber` 6 para la misma `Room`
-   - **When** el reintento de la orden con secuencia 5 llega al Módulo 1
+3. **Scenario**: Copia tardía de una orden ya superada, ignorada por el Módulo 1
+   - **Given** una orden `AVAILABLE` con `sequenceNumber` 5 que ya fue aplicada, y una reserva
+     posterior cuya orden `RESERVED` con `sequenceNumber` 6 también ya fue aplicada para la misma
+     `Room`
+   - **When** una copia o reintento tardío de la orden con secuencia 5 llega de nuevo al Módulo 1
+     por un retraso de red
    - **Then** el Módulo 1 la ignora por tener una secuencia menor a la última aplicada, y la `Room`
-     permanece `RESERVED` para la reserva nueva; el sistema marca la orden vieja como `REJECTED`
+     permanece `RESERVED` para la reserva nueva; el sistema registra esa copia como `REJECTED`
 
 4. **Scenario**: Dos órdenes simultáneas reciben secuencias distintas
    - **Given** dos solicitudes de reserva que piden la misma `Room` en el mismo instante
@@ -174,9 +176,11 @@ de apartado.
 - ¿Qué sucede si el Módulo 1 responde con un mensaje ambiguo o un código de error desconocido? El
   sistema marca la solicitud como `PENDING` para revisión, sin asumir estados no verificados.
 - ¿Qué sucede si la reserva se cancela mientras su orden `RESERVED` sigue en `PENDING`? El sistema
-  no descarta nada: emite la orden de liberación con un `sequenceNumber` mayor. El Módulo 1 aplica
-  las órdenes por secuencia y descarta las de secuencia menor, de modo que una orden vieja que
-  llegue tarde nunca sobrescribe una posterior ni deja la habitación apartada o libre por error.
+  no descarta nada: registra la orden de liberación con un `sequenceNumber` mayor y la deja en cola
+  detrás de la `RESERVED`, sin enviarla hasta que esa quede `COMPLETED` o `REJECTED`, respetando la
+  entrega ordenada por `Room`. Si más tarde llega al Módulo 1 una copia tardía de una orden ya
+  superada, este la descarta por tener una secuencia menor, de modo que nunca sobrescribe una
+  posterior ni deja la habitación apartada o libre por error.
 
 ## Requirements *(mandatory)*
 
@@ -222,7 +226,10 @@ de apartado.
   Módulo 1, cancelando la reserva recién creada con el motivo `ROOM_REJECTED` o `ROOM_UNCONFIRMED`.
   Si el origen es `ROOM_CHANGED`, el rechazo debe volver al flujo "Actualizar reservación", que
   aborta el cambio, conserva la reserva y su `Room` original y responde **HTTP 400**; en ningún caso
-  debe cancelarse una estadía existente por el rechazo de una `Room` nueva.
+  debe cancelarse una estadía existente por el rechazo de una `Room` nueva. Si el origen es
+  `ROOM_CHANGED` y el Módulo 1 no responde, el sistema debe además neutralizar la posible reserva de
+  la `Room` nueva con una orden `AVAILABLE` de mayor `sequenceNumber`, ya que el resultado es
+  ambiguo.
 - **FR-012**: El sistema debe mantener un registro auditable de cada solicitud, incluyendo fecha,
   actor, habitación, estado anterior, estado solicitado y resultado.
 

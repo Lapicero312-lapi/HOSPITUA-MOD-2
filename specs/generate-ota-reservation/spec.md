@@ -36,9 +36,11 @@ registre la comisión del intermediario y avise al Módulo 1 para apartar la hab
 6. El sistema persiste la `Reservation` en estado `PENDING`, a la espera de la confirmación de pago
    o garantía de la agencia.
 7. El sistema ejecuta "Establecer estado de habitación" para ordenar al Módulo 1 marcar la `Room`
-   como `RESERVED`, adjuntando el detalle de la reserva. Si el Módulo 1 no responde, falla o rechaza
-   la orden, el sistema cancela la reserva recién creada y responde **HTTP 400**, de modo que la
-   creación es todo o nada y la agencia puede reintentar sin duplicar.
+   como `RESERVED`, adjuntando el detalle de la reserva. Si el Módulo 1 rechaza la orden porque la
+   `Room` ya está `OCCUPIED`, el sistema cancela la reserva recién creada y responde **HTTP 409
+   (Conflict)** con `errorCode` `NO_AVAILABILITY`; si no responde o falla la comunicación, la
+   cancela y responde **HTTP 400** con `errorCode` `ROOM_UNCONFIRMED`. En ambos casos la creación es
+   todo o nada y la agencia puede reintentar sin duplicar.
 8. Cuando la OTA confirma el pago o la garantía, el sistema ejecuta "Actualizar reservación" para
    cambiar la `Reservation` de `PENDING` a `ACTIVE`.
 9. El sistema retorna una respuesta JSON de confirmación con el identificador interno generado.
