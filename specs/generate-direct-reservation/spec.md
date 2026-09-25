@@ -6,10 +6,12 @@
 
 ### Descripción del problema
 
-El hotel capta demanda directa cuando los huéspedes llaman o llegan a recepción y la Recepcionista registra su reserva. El negocio necesita
+El hotel capta demanda directa cuando los huéspedes llaman o llegan a recepción y la Recepcionista
+registra su reserva. El negocio necesita
 registrar esas reservas de forma ágil, dejándolas confirmadas de inmediato, sin obligar al huésped
 a pasar por una pasarela de pago al momento de reservar: en HOSPITUA el pago del 100% de la estadía
-se realiza de forma exclusiva en el Check-Out, un proceso presencial que ejecuta el Módulo 1. Si además la disponibilidad no se valida contra el
+se realiza de forma exclusiva en el Check-Out, un proceso presencial que ejecuta el Módulo 1. Si
+además la disponibilidad no se valida contra el
 calendario real de la habitación, aparecen dos problemas costosos. El primero es la sobreventa: dos
 solicitudes pueden tomar la misma habitación o una que estará en mantenimiento. El segundo es un
 dato de precio poco confiable: si el valor del hospedaje no proviene siempre de la misma fuente, la
@@ -31,6 +33,10 @@ para apartar la habitación.
 5. El sistema crea la `Reservation` directamente en estado `ACTIVE`, sin ningún paso de cobro.
 6. El sistema ejecuta "Establecer estado de habitación" para ordenar al Módulo 1 marcar la `Room`
    como `RESERVED`, adjuntando el detalle de la reserva.
+7. Solo si el Módulo 1 confirma la orden `RESERVED`, el sistema responde 201 (Created) con la
+   reserva. Si el Módulo 1 no responde, falla o rechaza la orden, el sistema cancela la reserva
+   recién creada y responde **HTTP 400**, de modo que la creación es todo o nada y el solicitante
+   puede reintentar sin duplicar.
 
 El sistema guarda el monto devuelto por el Módulo 3 bajo `grossAmount` (valor de hospedaje bruto,
 suma de las tarifas dinámicas de todas las noches, antes de comisión e impuestos), con carácter
@@ -42,10 +48,13 @@ IVA en esta etapa: se fija al facturar en el Check-Out.
 
 ### User Story 1 - Creación de Reservación Directa (Priority: P1)
 
-La Recepcionista necesita crear, a pedido del huésped, una reserva de canal directo para un rango de fechas y una habitación. El proceso ocurre sobre una única interfaz: se verifica la
+La Recepcionista necesita crear, a pedido del huésped, una reserva de canal directo para un rango de
+fechas y una habitación. El proceso ocurre sobre una única interfaz: se verifica la
 disponibilidad, se obtiene el valor de hospedaje bruto del Módulo 3 y se muestra como información,
-se capturan los datos del `Guest` titular y se confirma. La `Reservation` se crea directamente en estado `ACTIVE` y se
-notifica al Módulo 1 para apartar la habitación. Por tratarse de un mismo flujo de negocio, el camino de éxito y los bloqueos lógicos (sin disponibilidad, caída del Módulo 3,
+se capturan los datos del `Guest` titular y se confirma. La `Reservation` se crea directamente en
+estado `ACTIVE` y se
+notifica al Módulo 1 para apartar la habitación. Por tratarse de un mismo flujo de negocio, el
+camino de éxito y los bloqueos lógicos (sin disponibilidad, caída del Módulo 3,
 fechas o datos mal formados, concurrencia por la última habitación) se consolidan en esta misma
 historia de usuario, para evitar la sobre-atomización.
 
@@ -99,9 +108,16 @@ reserva y se devuelve un error controlado.
   se realiza dentro de una transacción con control de concurrencia, de modo que solo una de las dos
   solicitudes se registra en `ACTIVE`; a la segunda se le responde con **HTTP 400** indicando que ya
   no hay disponibilidad, sin producir sobreventa.
-- ¿Qué sucede si la reserva se crea pero el Módulo 1 no responde a la orden `RESERVED`? La reserva
-  permanece registrada en `ACTIVE`; la orden queda en `PENDING` para reintentarse y el sistema
-  responde con una alerta controlada **HTTP 400** indicando el error de comunicación.
+- ¿Qué sucede si el Módulo 1 no responde o falla al recibir la orden `RESERVED`? El sistema
+  compensa: cancela la reserva recién creada mediante "Actualizar reservación" con el motivo
+  `ROOM_UNCONFIRMED`, emite una orden `AVAILABLE` con un `sequenceNumber` mayor para neutralizar
+  cualquier apartado que el Módulo 1 hubiera aplicado sin confirmar, y responde **HTTP 400**
+  indicando que no se pudo confirmar la habitación. Como no queda ninguna reserva, el solicitante
+  puede reintentar con seguridad.
+- ¿Qué sucede si el Módulo 1 rechaza la orden `RESERVED` porque la `Room` ya está `OCCUPIED`? El
+  sistema compensa: cancela la reserva recién creada mediante "Actualizar reservación" con el motivo
+  `ROOM_REJECTED`, y responde **HTTP 400** indicando que la habitación ya no está disponible. Como
+  no queda ninguna reserva, el consumidor puede reintentar con seguridad.
 
 ## Requirements *(mandatory)*
 
@@ -119,9 +135,13 @@ reserva y se devuelve un error controlado.
   devuelta por el Módulo 3, `commissionPercentage` y `commissionAmount` con valor `0` y
   `externalConfirmationCode` como `null`; no debe calcular ni almacenar IVA en esta etapa.
 - **FR-006**: El sistema debe ordenar al Módulo 1, mediante "Establecer estado de habitación",
-  marcar la `Room` como `RESERVED` con el detalle de la reserva, sin revertir la reserva si esa
-  orden falla.
-- **FR-007**: El sistema debe interceptar cualquier error de validación de campos, fechas o
+  marcar la `Room` como `RESERVED` con el detalle de la reserva, y solo debe responder 201 (Created)
+  cuando el Módulo 1 confirme. La creación debe ser todo o nada.
+- **FR-007**: El sistema debe compensar el rechazo del Módulo 1 (`Room` ya `OCCUPIED`) o su falta de
+  respuesta, cancelando la reserva creada con el motivo `ROOM_REJECTED` o `ROOM_UNCONFIRMED`
+  respectivamente, neutralizando cualquier apartado con una orden `AVAILABLE` de mayor
+  `sequenceNumber`, y respondiendo **HTTP 400**.
+- **FR-008**: El sistema debe interceptar cualquier error de validación de campos, fechas o
   integraciones y responder con **HTTP 400 (Bad Request)**, prohibiendo errores **HTTP 500**.
 
 ### Non-Functional Requirements

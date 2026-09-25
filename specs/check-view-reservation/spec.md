@@ -11,7 +11,8 @@ verificar disponibilidades o procesar un Check-In o Check-Out, el sistema necesi
 exacta y conocer su estado vigente. Si cada funcionalidad implementara su propia búsqueda, los
 criterios y las validaciones de acceso serían inconsistentes. El negocio necesita un único servicio
 de consulta, reutilizado por el resto de funcionalidades y disponible también para el Módulo 1, que
-localice reservas por referencia, documento o nombre, y que devuelva siempre el estado vigente de la reserva.
+localice reservas por referencia, documento o nombre, y que devuelva siempre el estado vigente de la
+reserva.
 
 ### Flujo de Usuario de Alto Nivel
 
@@ -55,8 +56,8 @@ confirmando la respuesta controlada **HTTP 400**.
 3. **Scenario**: Consulta de una reserva inexistente (Error)
    - **Given** una referencia errónea o borrada
    - **When** se consulta la reserva
-   - **Then** el sistema intercepta la excepción y responde con un error controlado **HTTP 400** o
-     404 indicando que la reserva no existe
+   - **Then** el sistema intercepta la excepción y responde con un error controlado **HTTP 400**
+     indicando que la reserva no existe
 
 ### Casos Borde
 

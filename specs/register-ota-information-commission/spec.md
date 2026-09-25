@@ -179,7 +179,8 @@ calcular el `commissionAmount`.
   bruto recibido de la OTA), `commissionAmount` (comisión calculada), `commissionPercentage`
   (porcentaje contractual aplicado), `commissionStatus` (`CALCULATED` | `RECONCILED` | `PAID` |
   `DISPUTED`), `externalConfirmationCode`, `source` (`OTA`), y `status` con estados permitidos:
-  `PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`. Una reserva OTA se crea en
+  `PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`. Una reserva OTA se crea
+  en
   `PENDING` y pasa a `ACTIVE` cuando la agencia confirma el pago o la garantía; la comisión se
   calcula desde el momento de su registro.
 - **Ota**: Representa al intermediario externo que origina la reserva. Atributos: `id`, `name`, y

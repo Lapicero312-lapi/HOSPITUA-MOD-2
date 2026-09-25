@@ -83,7 +83,8 @@ las habitaciones correspondientes.
   `IN_PROGRESS` y los estados finales.
 - **FR-004**: El sistema debe cambiar el `status` a `NO_SHOW` mediante "Actualizar reservación".
 - **FR-005**: El sistema debe ordenar al Módulo 1, mediante "Establecer estado de habitación",
-  devolver la `Room` a `AVAILABLE`.
+  devolver la `Room` a `AVAILABLE` solo si sigue apartada por esa reserva; si el Módulo 1 la reporta
+  `OCCUPIED`, la orden se trata como sin efecto y se registra la incidencia.
 - **FR-006**: El sistema debe procesar cada registro con manejo individual de excepciones, de modo
   que un error de validación no interrumpa el lote ni exponga errores **HTTP 500**.
 
