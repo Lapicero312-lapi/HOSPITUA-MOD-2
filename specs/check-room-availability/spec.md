@@ -12,7 +12,8 @@ reserva que se cruza, un mantenimiento programado, o estar ocupada hoy mismo. Si
 hace de forma parcial o distinta según la pantalla, aparecen sobreventas y reservas que después hay
 que cancelar. El negocio necesita una única verificación, reutilizada por todos los flujos de
 reserva, que combine las reservas locales del Módulo 2 con el inventario y el calendario de
-mantenimientos del Módulo 1.
+mantenimientos del Módulo 1. La verificación de disponibilidad admite la consulta tanto por
+categoría de habitación (`categoryRoom`) como por habitación específica (`roomId`).
 
 ### Flujo de Usuario de Alto Nivel
 
@@ -118,7 +119,8 @@ inventario del Módulo 1, devolviendo la disponibilidad precisa en cada caso.
 
 - **FR-001**: El sistema debe consultar el calendario de mantenimientos del Módulo 1 mediante
   "Consultar calendario de mantenimientos" para garantizar que la `Room` no esté en reparación en
-  las fechas pedidas.
+  las fechas pedidas. La verificación de disponibilidad admite la consulta tanto por categoría de
+  habitación (`categoryRoom`) como por habitación específica (`roomId`).
 - **FR-002**: El sistema debe cruzar el rango solicitado contra las reservas locales mediante
   "Consultar reservas" para descartar solapamientos, considerando únicamente las reservas en
   `PENDING`, `ACTIVE` o `IN_PROGRESS`; las `COMPLETED`, `CANCELLED` y `NO_SHOW` no deben bloquear la
@@ -142,7 +144,7 @@ inventario del Módulo 1, devolviendo la disponibilidad precisa en cada caso.
 
 ### Key Entities *(include if feature involves data)*
 
-- **Room**: Habitación física validada, propiedad del Módulo 1. Atributos: `roomId`, `numberRoom`,
+- **Room**: Habitación física validada, propiedad del Módulo 1. Atributos: `roomId`, `roomNumber`,
   `categoryRoom` y `status` (`AVAILABLE` | `RESERVED` | `OCCUPIED`).
 - **Reservation**: Reserva local con la que se cruzan las fechas. Atributos: `reservationRef`,
   `roomId`, `startDate`, `endDate` y `status` (`PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`,
