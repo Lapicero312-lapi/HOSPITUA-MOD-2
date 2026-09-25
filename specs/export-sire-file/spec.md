@@ -23,7 +23,8 @@ reporte directamente, sin intermediación de la Recepcionista.
    identificar los incompletos.
 4. El sistema genera el archivo de texto plano (`.TXT`) con las columnas, anchos y delimitadores de
    Migración Colombia.
-5. El sistema registra la exportación en `SireExport` y entrega el archivo para su descarga.
+5. El sistema registra la exportación en `SireExport` y entrega el archivo para su descarga; la respuesta contiene únicamente el archivo `.TXT` y lleva el identificador de la exportación (`exportId`) en la cabecera `Export-Id`.
+6. Si hubo registros excluidos por estar incompletos, el actor los consulta en un recurso aparte, el reporte de exclusiones de esa exportación (`exportId`), que lista cada registro excluido y su motivo. Una solicitud con un `exportId` inexistente se rechaza con **HTTP 400**.
 
 Esta funcionalidad no interactúa con el Módulo 1 ni con el Módulo 3: opera sobre datos locales del
 Módulo 2.
@@ -59,23 +60,25 @@ comportamiento controlado.
    - **When** se genera el archivo
    - **Then** el sistema las excluye del archivo
 
-3. **Scenario**: Exclusión con advertencias por datos migratorios incompletos
+3. **Scenario**: Exclusión de registros con datos migratorios incompletos
    - **Given** un `MigratoryMovement` `INCOMPLETE` de un huésped `FOREIGN`, sin tipo de movimiento o
      sin fecha migratoria válida
    - **When** el sistema consolida la exportación
-   - **Then** el sistema omite ese registro, genera el archivo con los demás y responde 200 con el
-     archivo y una lista de advertencias que indica: "Datos incompletos para extranjeros en la
-     reserva X"; no responde HTTP 400, porque el archivo sí se genera
+   - **Then** el sistema omite ese registro, genera el archivo con los demás y responde 200 entregando solo el archivo, con el `exportId` en la cabecera `Export-Id`; el registro omitido queda en el reporte de exclusiones de esa exportación con el motivo "Datos incompletos para extranjeros en la reserva X"
 
 4. **Scenario**: Periodo sin huéspedes extranjeros (Error)
    - **Given** un periodo con solo reservas nacionales o sin ocupación
    - **When** se ejecuta la exportación
-   - **Then** el sistema no genera archivo y responde **HTTP 400** indicando que no hay registros
-     migratorios que
-     reportar en ese periodo, sin generar errores de infraestructura
+   - **Then** el sistema no genera archivo y responde **HTTP 400** indicando que no hay registros migratorios que reportar en ese periodo, sin generar errores de infraestructura
+
+5. **Scenario**: Consulta del reporte de exclusiones de una exportación
+   - **Given** una exportación con un `exportId` válido que excluyó registros incompletos
+   - **When** el actor consulta el reporte de exclusiones con ese `exportId`
+   - **Then** el sistema devuelve la lista de registros excluidos, con la `reservationRef`, el huésped y los campos migratorios que faltan, para que puedan corregirse
 
 ### Casos Borde
 
+- ¿Qué sucede si todos los registros del periodo están incompletos y no queda ninguno válido? El sistema no genera archivo vacío: responde **HTTP 400** indicando que no hay registros válidos para exportar y que existen registros incompletos por corregir.
 - ¿Qué sucede si el rango de fechas supera 1 año y sobrecarga el sistema? El sistema detiene la
   operación y retorna **HTTP 400 (Bad Request)** con el mensaje: "El periodo solicitado excede el
   límite permitido. Por favor exporte periodos más cortos."
@@ -103,10 +106,8 @@ comportamiento controlado.
   delimitadores oficiales de Migración Colombia.
 - **FR-006**: El sistema debe registrar cada exportación en `SireExport` con la fecha, el periodo,
   la cantidad de registros y el actor que la ejecutó.
-- **FR-007**: El sistema debe excluir los registros incompletos y entregarlos como advertencias
-  junto con el archivo en una respuesta 200; y debe interceptar los errores de validación de entrada
-  (periodo inválido o sin extranjeros) y de consulta, respondiendo **HTTP 400 (Bad Request)** sin
-  archivo y prohibiendo errores **HTTP 500**.
+- **FR-007**: El sistema debe excluir los registros incompletos del archivo y entregar la respuesta 200 con únicamente el archivo `.TXT` y el `exportId` en la cabecera `Export-Id`, sin mezclar advertencias en esa respuesta; los registros excluidos deben quedar disponibles en un reporte de exclusiones consultable por `exportId`.
+- **FR-008**: El sistema debe interceptar los errores de validación de entrada (periodo inválido, sin extranjeros, sin registros válidos, `exportId` inexistente) y de consulta, respondiendo **HTTP 400 (Bad Request)** sin archivo y prohibiendo errores **HTTP 500**.
 
 ### Non-Functional Requirements
 
@@ -115,7 +116,7 @@ comportamiento controlado.
 
 ### Key Entities *(include if feature involves data)*
 
-- **SireExport**: Histórico de exportaciones. Atributos: `id`, `exportDate`, `recordsCount`,
+- **SireExport**: Histórico de exportaciones. Atributos: `id` (identificador de la exportación, el `exportId`), `excludedCount`, `exportDate`, `recordsCount`,
   `dateRangeStart`, `dateRangeEnd` y `processedBy`.
 - **Reservation**: Reserva de origen. Atributos: `reservationRef`, `guestRef`, `startDate`,
   `endDate` y `status`. Solo se exportan las `IN_PROGRESS` o `COMPLETED`.
@@ -124,6 +125,7 @@ comportamiento controlado.
 - **MigratoryMovement**: Movimiento migratorio de cada estadía, del que se toman el tipo y la fecha
   de cada línea del archivo. Atributos: `movementId`, `reservationRef`, `guestRef`, `movementType`,
   `movementDate` y `validationStatus` (`COMPLETE` | `INCOMPLETE`). Solo los `COMPLETE` se exportan.
+- **SireExportExclusion**: Registro excluido de una exportación por tener datos incompletos. Atributos: `exportId` (referencia al `SireExport`), `reservationRef`, `guestRef`, `missingFields` y `reason`. Forma el reporte de exclusiones de esa exportación.
 
 ## Success Criteria *(mandatory)*
 
@@ -131,7 +133,5 @@ comportamiento controlado.
 
 - **SC-001**: El 100% de los archivos exportados contienen la información migratoria obligatoria en
   el formato exacto requerido.
-- **SC-002**: El 100% de los registros incompletos se excluyen del archivo y se informan como
-  advertencias, y el 100% de los periodos inválidos o sin extranjeros responden **HTTP 400**, con
-  cero errores **HTTP 500**.
+- **SC-002**: El 100% de los registros incompletos se excluyen del archivo y quedan en el reporte de exclusiones de su exportación, y el 100% de los periodos inválidos, sin extranjeros o sin registros válidos responden **HTTP 400**, con cero errores **HTTP 500**.
 - **SC-003**: El 100% de las exportaciones generan un registro auditable en `SireExport`.
