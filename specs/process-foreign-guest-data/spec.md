@@ -25,7 +25,10 @@ procesamiento que reciba los datos migratorios del Módulo 1, los valide, los re
    estadías del mismo huésped, y los deja disponibles para el reporte gubernamental.
 4. Si faltan datos o son inválidos, el sistema igualmente registra el `MigratoryMovement` con
    `validationStatus` `INCOMPLETE` —porque el Check-In físico ya ocurrió en el Módulo 1— y responde
-   200 con una advertencia que detalla qué campo requiere corrección. Solo un payload inutilizable
+   200 sin advertencias mezcladas; el campo que requiere corrección queda identificado en el propio
+   `MigratoryMovement` (`INCOMPLETE`) y en el reporte de exclusiones de la exportación SIRE. Un
+   reenvío posterior del Módulo 1 con los datos completos de esa reserva actualiza únicamente ese
+   movimiento a `COMPLETE`. Solo un payload inutilizable
    (sin identificador de reserva o con caracteres maliciosos) se rechaza con **HTTP 400 (Bad
    Request)** sin registrar nada.
 5. Cuando "Exportar archivo SIRE" (ejecutado por el actor Migración) necesita los datos, invoca este
@@ -60,12 +63,12 @@ advertencia.
    - **Then** el sistema registra el `MigratoryMovement` de esa reserva con `validationStatus`
      `COMPLETE`, dejándolo disponible para "Exportar archivo SIRE"
 
-2. **Scenario**: Notificación con datos migratorios incompletos (Advertencia)
+2. **Scenario**: Notificación con datos migratorios incompletos
    - **Given** una `Reservation` de un `Guest` `FOREIGN` en proceso de Check-In
    - **When** la notificación del Módulo 1 llega sin el tipo de movimiento o sin la fecha
    - **Then** el sistema registra el `MigratoryMovement` con `validationStatus` `INCOMPLETE`,
-     conserva el cambio de estado del Check-In y responde 200 con una advertencia que indica el
-     campo faltante
+     conserva el cambio de estado del Check-In y responde 200; el campo faltante queda identificado
+     en el movimiento `INCOMPLETE`
 
 3. **Scenario**: Huésped nacional sin datos migratorios
    - **Given** una `Reservation` de un `Guest` con `type` `NATIONAL`
@@ -106,8 +109,8 @@ señale el incompleto.
 ### Casos Borde
 
 - ¿Qué sucede si la fecha de movimiento migratorio es futura? El sistema registra el
-  `MigratoryMovement` como `INCOMPLETE` y responde 200 con la advertencia "La fecha de movimiento
-  migratorio no puede ser futura."
+  `MigratoryMovement` como `INCOMPLETE` (con el motivo "La fecha de movimiento migratorio no puede
+  ser futura") y responde 200.
 - ¿Qué sucede si los datos migratorios contienen caracteres no soportados o patrones maliciosos? El
   sistema sanea la entrada, la rechaza con **HTTP 400** y el mensaje "Caracteres no válidos en los
   datos migratorios."
@@ -129,9 +132,11 @@ señale el incompleto.
   correcto y con una fecha no futura antes de consolidarlos.
 - **FR-004**: El sistema debe registrar los datos migratorios en un `MigratoryMovement` asociado a
   cada `Reservation` (estadía), sin sobrescribir los de otras estadías del mismo huésped.
-- **FR-005**: El sistema debe registrar como `INCOMPLETE`, con una advertencia, el movimiento cuyos
-  datos falten o sean inválidos, conservando el Check-In, y excluirlo de la exportación SIRE hasta
-  que se corrija.
+- **FR-005**: El sistema debe registrar como `INCOMPLETE`, indicando los campos faltantes o
+  inválidos, el movimiento cuyos datos falten o sean inválidos, conservando el Check-In, y excluirlo
+  de la exportación SIRE hasta que se corrija; la corrección se hace con un reenvío del Módulo 1 con
+  los datos completos, que debe actualizar únicamente ese movimiento a `COMPLETE` de forma
+  idempotente.
 - **FR-006**: El sistema debe entregar a "Exportar archivo SIRE" los registros migratorios
   completos del periodo y señalar los incompletos.
 - **FR-007**: El sistema no debe capturar datos migratorios desde una pantalla propia del Módulo 2:

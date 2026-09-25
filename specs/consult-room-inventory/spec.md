@@ -18,8 +18,12 @@ de insumo a "Verificar disponibilidades" antes de crear o modificar cualquier re
 
 1. El caso de uso "Verificar disponibilidades" invoca "Consultar inventario de habitaciones"
    enviando un `roomId` puntual o una categoría (`categoryRoom`) junto con el rango de fechas.
-2. El sistema consulta de forma síncrona el inventario del **Módulo 1**, fuente de verdad exclusiva del estado físico de la `Room`. Cuando la `Room` está `RESERVED`, el Módulo 1 también informa qué reserva la mantiene apartada (`reservedByReservationRef`).
-3. Si la consulta es puntual, el sistema retorna el `status` actual de esa `Room` y, si está `RESERVED`, la `reservationRef` que la mantiene apartada, para que quien consulta pueda distinguir un apartado ajeno del propio.
+2. El sistema consulta de forma síncrona el inventario del **Módulo 1**, fuente de verdad exclusiva
+   del estado físico de la `Room`. Cuando la `Room` está `RESERVED`, el Módulo 1 también informa qué
+   reserva la mantiene apartada (`reservedByReservationRef`).
+3. Si la consulta es puntual, el sistema retorna el `status` actual de esa `Room` y, si está
+   `RESERVED`, la `reservationRef` que la mantiene apartada, para que quien consulta pueda
+   distinguir un apartado ajeno del propio.
 4. Si la consulta es por categoría, el sistema retorna únicamente las habitaciones en `AVAILABLE`,
    con sus atributos (`roomId`, `numberRoom`, `categoryRoom`).
 5. Si el Módulo 1 no responde o el identificador consultado no existe, el sistema informa el
@@ -84,7 +88,9 @@ varias habitaciones y se comprueba que el listado solo incluya las `AVAILABLE`.
 
 ### Functional Requirements
 
-- **FR-001**: El sistema debe consultar el `status` de una `Room` por su `roomId` directamente en el inventario del Módulo 1 y, cuando esté `RESERVED`, retornar también la reserva que la mantiene apartada (`reservedByReservationRef`).
+- **FR-001**: El sistema debe consultar el `status` de una `Room` por su `roomId` directamente en el
+  inventario del Módulo 1 y, cuando esté `RESERVED`, retornar también la reserva que la mantiene
+  apartada (`reservedByReservationRef`).
 - **FR-002**: El sistema debe permitir consultar el inventario por `categoryRoom` y retornar
   únicamente las habitaciones en `AVAILABLE`.
 - **FR-003**: El sistema debe ser de solo lectura: no debe modificar el `status` de ninguna `Room`.
@@ -102,7 +108,9 @@ varias habitaciones y se comprueba que el listado solo incluya las `AVAILABLE`.
 ### Key Entities *(include if feature involves data)*
 
 - **Room**: Unidad física provista por el Módulo 1. Atributos: `roomId`, `numberRoom`,
-  `categoryRoom`, `status` (`AVAILABLE` | `RESERVED` | `OCCUPIED`) y `reservedByReservationRef` (reserva que la mantiene apartada; solo presente cuando el `status` es `RESERVED`). Su estado es propiedad
+  `categoryRoom`, `status` (`AVAILABLE` | `RESERVED` | `OCCUPIED`) y `reservedByReservationRef`
+  (reserva que la mantiene apartada; solo presente cuando el `status` es `RESERVED`). Su estado es
+  propiedad
   exclusiva del Módulo 1; esta funcionalidad solo lo consulta.
 - **Reservation**: Se referencia de forma informativa. Atributos: `reservationRef`, `roomId` y
   `status` (`PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`).

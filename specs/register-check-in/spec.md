@@ -63,6 +63,12 @@ datos migratorios queden registrados en un `MigratoryMovement` de esa reserva.
      reserva no admite un Check-In en su estado actual, y registra una incidencia de conciliación
      con el Módulo 1
 
+4. **Scenario**: Corrección de datos migratorios por reenvío del Módulo 1
+   - **Given** una `Reservation` en `IN_PROGRESS` cuyo `MigratoryMovement` está `INCOMPLETE`
+   - **When** el Módulo 1 reenvía la notificación de Check-In con los datos migratorios completos
+   - **Then** el sistema no cambia el estado de la reserva, actualiza únicamente ese
+     `MigratoryMovement` a `COMPLETE` y responde 200
+
 ### Casos Borde
 
 - ¿Qué sucede si el payload llega vacío o sin el identificador de la reserva? El sistema intercepta
@@ -70,14 +76,15 @@ datos migratorios queden registrados en un `MigratoryMovement` de esa reserva.
   inválido. Falta el identificador de la reserva."
 - ¿Qué sucede si los datos migratorios tienen formato inválido o fechas futuras? El Check-In físico
   ya ocurrió en el Módulo 1, así que el sistema no lo rechaza: actualiza la reserva a `IN_PROGRESS`,
-  registra el `MigratoryMovement` como `INCOMPLETE` y responde 200 con la advertencia "Los datos
-  migratorios provistos tienen un formato no válido.". Ese movimiento queda excluido de la
-  exportación SIRE hasta corregirse.
+  registra el `MigratoryMovement` como `INCOMPLETE` y responde 200. Ese movimiento queda excluido de
+  la exportación SIRE hasta que el Módulo 1 reenvíe los datos completos.
 - ¿Qué sucede si la reserva notificada no existe en el Módulo 2? El sistema responde **HTTP 400**
   con el mensaje: "La reserva notificada no existe en el sistema de reservas." y registra la
   incidencia de conciliación, porque el Módulo 1 ya ocupó físicamente una habitación.
 - ¿Qué sucede si la notificación llega duplicada o la reserva ya no está en `ACTIVE`? Si la reserva
-  ya está en `IN_PROGRESS`, la notificación es idempotente: responde 200 sin efectos nuevos. Si está
+  ya está en `IN_PROGRESS`, la notificación es idempotente: responde 200 sin cambiar el estado ni
+  duplicar el Check-In; solo si trae datos migratorios completos y el `MigratoryMovement` de esa
+  reserva está `INCOMPLETE`, lo actualiza a `COMPLETE`. Si está
   en `CANCELLED`, `NO_SHOW`, `PENDING` o `COMPLETED`, responde **HTTP 400** sin cambiar el estado y
   registra una incidencia de conciliación, para que una persona resuelva la discrepancia con el
   Módulo 1 (la habitación quedó ocupada sin una reserva vigente).
@@ -92,15 +99,20 @@ datos migratorios queden registrados en un `MigratoryMovement` de esa reserva.
 - **FR-001**: El sistema no debe ofrecer una interfaz para el Check-In físico: debe limitarse a
   exponer un servicio para recibir la notificación del Módulo 1.
 - **FR-002**: El sistema debe validar que la `Reservation` esté en `ACTIVE` antes de procesar la
-  notificación.
+  notificación, con una única excepción: si ya está en `IN_PROGRESS`, la notificación es un
+  duplicado y se trata como idempotente según FR-005 (200 sin efectos, salvo la corrección de datos
+  migratorios incompletos de FR-004).
 - **FR-003**: El sistema debe actualizar el `status` a `IN_PROGRESS` mediante "Actualizar
   reservación" al recibir una notificación válida.
 - **FR-004**: El sistema debe recibir y validar en la misma petición los datos migratorios de
   huéspedes `FOREIGN`, registrándolos en un `MigratoryMovement` de esa reserva mediante "Procesar
   datos de huéspedes extranjeros"; si son inválidos, debe conservar el Check-In y marcar el
-  movimiento como `INCOMPLETE` con una advertencia.
-- **FR-005**: El sistema debe tratar la notificación como idempotente (200 sin efectos si la reserva
-  ya está en `IN_PROGRESS`) y, cuando la reserva no esté en `ACTIVE` ni en `IN_PROGRESS`, o no
+  movimiento como `INCOMPLETE`, respondiendo 200 sin advertencias mezcladas. Una notificación
+  posterior del Módulo 1 con los datos completos de esa reserva debe actualizar únicamente ese
+  movimiento a `COMPLETE`, de forma idempotente.
+- **FR-005**: El sistema debe tratar la notificación como idempotente (200 sin efectos nuevos si la
+  reserva ya está en `IN_PROGRESS`, salvo completar un movimiento migratorio `INCOMPLETE`) y, cuando
+  la reserva no esté en `ACTIVE` ni en `IN_PROGRESS`, o no
   exista, debe responder **HTTP 400** sin cambiar el estado y registrar una incidencia de
   conciliación con el Módulo 1, porque el efecto físico ya ocurrió allá.
 - **FR-006**: El sistema debe interceptar excepciones lógicas y errores de validación, respondiendo

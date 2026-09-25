@@ -36,7 +36,9 @@ registre la comisión del intermediario y avise al Módulo 1 para apartar la hab
 6. El sistema persiste la `Reservation` en estado `PENDING`, a la espera de la confirmación de pago
    o garantía de la agencia.
 7. El sistema ejecuta "Establecer estado de habitación" para ordenar al Módulo 1 marcar la `Room`
-   como `RESERVED`, adjuntando el detalle de la reserva.
+   como `RESERVED`, adjuntando el detalle de la reserva. Si el Módulo 1 no responde, falla o rechaza
+   la orden, el sistema cancela la reserva recién creada y responde **HTTP 400**, de modo que la
+   creación es todo o nada y la agencia puede reintentar sin duplicar.
 8. Cuando la OTA confirma el pago o la garantía, el sistema ejecuta "Actualizar reservación" para
    cambiar la `Reservation` de `PENDING` a `ACTIVE`.
 9. El sistema retorna una respuesta JSON de confirmación con el identificador interno generado.
@@ -88,7 +90,9 @@ crea una reserva y que todos devuelven una respuesta JSON de error estructurada.
    - **Given** que la `Room` tiene un mantenimiento programado o una reserva cruzada en las fechas
      enviadas
    - **When** la **Ota** envía la solicitud de reserva
-   - **Then** el sistema rechaza la transacción, no crea la reserva y retorna un error JSON con código HTTP 400 (Bad Request): `{"errorCode": "NO_AVAILABILITY", "message": "No hay disponibilidad
+   - **Then** el sistema rechaza la transacción, no crea la reserva y retorna un error JSON con
+     código HTTP 400 (Bad Request): `{"errorCode": "NO_AVAILABILITY", "message": "No hay
+     disponibilidad
      para la habitación seleccionada"}`
 
 4. **Scenario**: Rechazo por ausencia de código de confirmación externo (Error)
@@ -108,11 +112,13 @@ crea una reserva y que todos devuelven una respuesta JSON de error estructurada.
   inyección con una respuesta **HTTP 400** estructurada, y nunca almacena el valor crudo.
 - ¿Qué sucede si dos solicitudes de diferentes OTAs intentan reservar simultáneamente la misma
   habitación? La creación se realiza en una transacción con bloqueo, de modo que solo una obtiene la
-  habitación y se registra; la otra recibe **HTTP 400 (Bad Request)** con `errorCode` `NO_AVAILABILITY`.
-- ¿Qué sucede si la reserva se crea pero el Módulo 1 no responde a la orden `RESERVED`? La reserva
-  permanece en `PENDING` con `roomSyncStatus` `PENDING`, la orden se reintenta en segundo plano y el
-  sistema responde **201 (Created)** con esa advertencia, para que la agencia no reenvíe la misma
-  reserva.
+  habitación y se registra; la otra recibe **HTTP 400 (Bad Request)** con `errorCode`
+  `NO_AVAILABILITY`.
+- ¿Qué sucede si el Módulo 1 no responde o falla al recibir la orden `RESERVED`? El sistema cancela
+  la reserva recién creada mediante "Actualizar reservación" con el motivo `ROOM_UNCONFIRMED`, emite
+  una orden `AVAILABLE` con un `sequenceNumber` mayor para neutralizar cualquier apartado aplicado
+  sin confirmar, y responde **HTTP 400** con `errorCode` `ROOM_UNCONFIRMED`. Como no queda ninguna
+  reserva, la agencia puede reintentar sin duplicar.
 - ¿Qué sucede si el Módulo 1 rechaza la orden `RESERVED` porque la `Room` ya está `OCCUPIED`? El
   sistema cancela la reserva recién creada mediante "Actualizar reservación" con el motivo
   `ROOM_REJECTED` y responde **HTTP 400** con `errorCode` `NO_AVAILABILITY`.
@@ -139,11 +145,12 @@ crea una reserva y que todos devuelven una respuesta JSON de error estructurada.
   mediante "Actualizar reservación", cuando la agencia confirme el pago o la garantía; esta
   funcionalidad no debe modificar el `status` por su cuenta después de la creación.
 - **FR-007**: El sistema debe ordenar al Módulo 1, mediante "Establecer estado de habitación",
-  marcar la `Room` como `RESERVED` con el detalle de la reserva. Si la orden falla por comunicación,
-  debe conservar la reserva con `roomSyncStatus` `PENDING`, reintentar y responder 201 (Created) con
-  la advertencia.
-- **FR-008**: El sistema debe compensar el rechazo explícito del Módulo 1 (`Room` ya `OCCUPIED`)
-  cancelando la reserva creada con el motivo `ROOM_REJECTED` y respondiendo HTTP 400 con `errorCode` `NO_AVAILABILITY`.
+  marcar la `Room` como `RESERVED` con el detalle de la reserva, y solo debe responder 201 (Created)
+  cuando el Módulo 1 confirme. La creación debe ser todo o nada.
+- **FR-008**: El sistema debe compensar el rechazo del Módulo 1 (`Room` ya `OCCUPIED`) o su falta de
+  respuesta, cancelando la reserva creada con el motivo `ROOM_REJECTED` o `ROOM_UNCONFIRMED`,
+  neutralizando cualquier apartado con una orden `AVAILABLE` de mayor `sequenceNumber`, y
+  respondiendo HTTP 400 con `errorCode` `NO_AVAILABILITY` o `ROOM_UNCONFIRMED` según el caso.
 - **FR-009**: El sistema debe interceptar cualquier inconsistencia o fallo de validación y retornar
   respuestas JSON estructuradas con **HTTP 400 (Bad Request)**, prohibiendo **HTTP 500**.
 
@@ -157,7 +164,7 @@ crea una reserva y que todos devuelven una respuesta JSON de error estructurada.
 - **Reservation**: Contrato de reserva registrado desde el canal externo. Atributos: `id`,
   `guestRef`, `roomId`, `categoryRoom`, `startDate`, `endDate`, `totalAmount` (valor bruto enviado
   por la OTA), `commissionAmount`, `externalConfirmationCode`, `source` (`OTA`), `createdAt`,
-  `roomSyncStatus` (`SYNCED` | `PENDING`), y `status` con estados permitidos: `PENDING`, `ACTIVE`,
+  y `status` con estados permitidos: `PENDING`, `ACTIVE`,
   `IN_PROGRESS`, `COMPLETED`, `CANCELLED`,
   `NO_SHOW`. En este flujo se crea en `PENDING` y pasa a `ACTIVE` con la confirmación de la agencia.
 - **Guest**: Huésped titular. Atributos: `id`, `fullName`, `documentNumber`, `nationality`,

@@ -111,8 +111,9 @@ los cambios. Se repite con datos personales (sin recálculo) y sobre reservas `I
   de `Room` no genera órdenes al Módulo 1.
 - ¿Cómo se coordina el cambio de habitación con el Módulo 1? El sistema ejecuta "Establecer estado
   de habitación" en este orden: primero ordena `RESERVED` para la `Room` nueva y, solo si el Módulo
-  1 la confirma, ordena `AVAILABLE` para la anterior. Si el Módulo 1 rechaza la `Room` nueva, el
-  cambio no se aplica, la reserva conserva su `Room` original y se responde **HTTP 400**. Si falla
+  1 la confirma, ordena `AVAILABLE` para la anterior. Si el Módulo 1 rechaza la `Room` nueva o no
+  responde, el cambio no se aplica, la reserva conserva su `Room` original y se responde **HTTP
+  400**. Si falla
   únicamente la liberación de la `Room` anterior, el cambio ya quedó aplicado y esa orden queda en
   `PENDING` para reintentarse.
 
@@ -148,8 +149,8 @@ los cambios. Se repite con datos personales (sin recálculo) y sobre reservas `I
 ### Key Entities *(include if feature involves data)*
 
 - **Reservation**: Entidad principal actualizada. Atributos: `reservationRef`, `guestRef`, `roomId`,
-  `categoryRoom`, `startDate`, `endDate`, `grossAmount`, `version`, `roomSyncStatus` (`SYNCED` |
-  `PENDING`), `source` (`DIRECT` | `OTA`) y `status` (`PENDING`, `ACTIVE`, `IN_PROGRESS`,
+  `categoryRoom`, `startDate`, `endDate`, `grossAmount`, `version`,  `source` (`DIRECT` | `OTA`) y
+  `status` (`PENDING`, `ACTIVE`, `IN_PROGRESS`,
   `COMPLETED`, `CANCELLED`, `NO_SHOW`).
 - **Guest**: Titular de la reserva. Atributos: `id`, `fullName`, `documentNumber`, `nationality`,
   `contactPhone`, `contactEmail`.
