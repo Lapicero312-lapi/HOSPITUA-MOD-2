@@ -1,0 +1,177 @@
+# Feature Specification: Establecer Estado de Habitación
+
+**Created**: 2026-09-23
+
+## Use Case (Caso de Uso)
+
+### Descripción del problema
+
+El Módulo 2 es el orquestador del estado lógico y financiero de las reservas, pero el estado físico
+de una `Room` pertenece exclusivamente al Módulo 1, que es quien opera el hotel en persona. Cuando
+una reserva se crea, la habitación debe quedar apartada (`RESERVED`) para que no se ofrezca a otro
+cliente; cuando se cancela, debe volver a estar libre (`AVAILABLE`). Si esa comunicación falla —por
+una caída de red o una indisponibilidad temporal del Módulo 1— la reserva o la cancelación ya
+registradas en el Módulo 2 no pueden revertirse. El negocio necesita un mecanismo de integración
+desacoplado que ordene el cambio de estado al Módulo 1 sin bloquear la operación de reservas y que
+permita reintentar la sincronización cuando la comunicación se restablezca.
+
+Los cambios de `Room` a `OCCUPIED` (Check-In) y a limpieza o `AVAILABLE` (Check-Out) los ejecuta el
+propio Módulo 1 y quedan fuera de esta funcionalidad: el Módulo 2 solo los recibe como
+notificaciones para actualizar la reserva (`IN_PROGRESS` y `COMPLETED`).
+
+### Flujo de Usuario de Alto Nivel
+
+1. Al crearse una `Reservation`, el sistema construye una solicitud con el `roomId`, el
+   `requestedStatus` `RESERVED`, el `originEvent` `RESERVATION_CREATED` y el detalle completo de la
+   reserva.
+2. Al cancelarse una `Reservation`, el sistema construye una solicitud con el `roomId`, el
+   `requestedStatus` `AVAILABLE` y el `originEvent` `RESERVATION_CANCELLED`.
+3. El sistema transmite la solicitud al **Módulo 1**.
+4. Si el Módulo 1 confirma el cambio, la solicitud local se marca como `COMPLETED`.
+5. Si la comunicación con el Módulo 1 falla, el Módulo 2 **no** revierte la reserva ni la
+   cancelación ya registradas; marca la solicitud como `PENDING` y habilita un reintento
+   desacoplado.
+6. Si se intenta un cambio de estado que el Módulo 2 no puede solicitar, o sobre una habitación que
+   el Módulo 1 reporta como ocupada, el sistema bloquea la acción con un error de negocio
+   controlado **HTTP 400 (Bad Request)**.
+
+## User Scenarios & Testing *(mandatory)*
+
+### User Story 1 - Orden de Cambio de Estado por Creación o Cancelación de Reserva (Priority: P1)
+
+Cuando el Módulo 2 crea o cancela una reserva, ordena al Módulo 1 cambiar el estado de la `Room`
+asociada: a `RESERVED` al crearla, con el detalle de la reserva adjunto, y a `AVAILABLE` al
+cancelarla. Esta historia es el flujo principal (Happy Path) que mantiene sincronizado el inventario
+físico con las reservas.
+
+**Why this priority**: Sin esta orden, el Módulo 1 desconocería qué habitaciones están apartadas o
+liberadas, y el hotel podría vender dos veces la misma habitación o mantener bloqueada una que ya
+no se va a usar.
+
+**Independent Test**: Se crea una reserva y se verifica que el Módulo 1 recibe la orden `RESERVED`
+con el detalle de la reserva y que la solicitud queda `COMPLETED`. Se cancela la reserva y se
+verifica que el Módulo 1 recibe la orden `AVAILABLE`.
+
+**Acceptance Scenarios**:
+
+1. **Scenario**: Habitación apartada al crear una reserva (Happy Path)
+   - **Given** una `Reservation` recién creada para una `Room` en estado `AVAILABLE`
+   - **When** el sistema envía la orden mediante "Establecer estado de habitación"
+   - **Then** el Módulo 1 recibe la orden junto con el detalle de la reserva, cambia el `status` de
+     la `Room` a `RESERVED`, y la solicitud queda en `COMPLETED`
+
+2. **Scenario**: Habitación liberada al cancelar una reserva (Happy Path)
+   - **Given** una `Reservation` en `ACTIVE` o `PENDING` cuya `Room` está en `RESERVED`
+   - **When** la reserva se cancela y el sistema envía la orden de liberación
+   - **Then** el Módulo 1 cambia el `status` de la `Room` a `AVAILABLE` y la solicitud queda en
+     `COMPLETED`
+
+3. **Scenario**: Rechazo de reserva sobre una habitación ocupada (Error)
+   - **Given** una `Room` que el Módulo 1 reporta en `OCCUPIED`
+   - **When** se intenta ordenar su cambio a `RESERVED`
+   - **Then** el sistema bloquea la transacción con **HTTP 400 (Bad Request)** indicando que la
+     habitación no está disponible
+
+4. **Scenario**: Rechazo de estado no permitido para el Módulo 2 (Error)
+   - **Given** una solicitud de cambio de estado
+   - **When** el `requestedStatus` es `OCCUPIED` o cualquier valor distinto de `RESERVED` y
+     `AVAILABLE`
+   - **Then** el sistema rechaza la solicitud con **HTTP 400** indicando que los cambios a
+     `OCCUPIED` los ejecuta exclusivamente el Módulo 1, y no emite ninguna orden
+
+---
+
+### User Story 2 - Reintento por Fallo de Comunicación con el Módulo 1 (Priority: P2)
+
+Cuando la orden de cambio de estado falla por desconexión de red o indisponibilidad del Módulo 1,
+el Módulo 2 mantiene la validez de la reserva o de la cancelación, registra la solicitud como
+`PENDING` y permite reintentar la sincronización sin afectar al huésped.
+
+**Why this priority**: Es un flujo de resiliencia para que los problemas de infraestructura del
+Módulo 1 no impidan crear ni cancelar reservas.
+
+**Independent Test**: Se simula una caída del Módulo 1 al crear una reserva y se comprueba que la
+reserva queda registrada con la solicitud en `PENDING`; con la red restablecida se ejecuta el
+reintento y la solicitud pasa a `COMPLETED`.
+
+**Acceptance Scenarios**:
+
+1. **Scenario**: Solicitud en PENDING tras una falla de red
+   - **Given** una reserva creada o cancelada con éxito en el Módulo 2
+   - **When** el envío al Módulo 1 falla por conexión o tiempo de espera agotado
+   - **Then** el sistema conserva la reserva o la cancelación, guarda la solicitud con
+     `requestStatus` `PENDING`, y responde con una advertencia controlada **HTTP 400**
+
+2. **Scenario**: Reintento exitoso de sincronización
+   - **Given** una solicitud en `PENDING`
+   - **When** el servicio en segundo plano ejecuta el reintento con la comunicación restablecida
+   - **Then** el Módulo 1 procesa la orden y el `requestStatus` local pasa a `COMPLETED`
+
+### Casos Borde
+
+- ¿Qué sucede si se envía una solicitud con `roomId` vacío, nulo o inexistente? El sistema
+  intercepta la solicitud y retorna **HTTP 400 (Bad Request)**, sin emitir peticiones erróneas al
+  Módulo 1 ni generar fallas **HTTP 500**.
+- ¿Cómo maneja el sistema dos órdenes simultáneas sobre la misma `Room`? La primera solicitud válida
+  se procesa, y la segunda recibe **HTTP 400** informando del cambio de estado previo.
+- ¿Qué sucede si el Módulo 1 responde con un mensaje ambiguo o un código de error desconocido? El
+  sistema marca la solicitud como `PENDING` para revisión, sin asumir estados no verificados.
+- ¿Qué sucede si la reserva se cancela mientras su orden `RESERVED` sigue en `PENDING`? El sistema
+  descarta la orden pendiente y la reemplaza por la de liberación, evitando que el Módulo 1 quede
+  con la habitación apartada.
+
+## Requirements *(mandatory)*
+
+### Functional Requirements
+
+- **FR-001**: El sistema debe enviar al Módulo 1 una orden de cambio de la `Room` a `RESERVED`,
+  incluyendo el detalle completo de la reserva, al crearse una `Reservation`.
+- **FR-002**: El sistema debe enviar al Módulo 1 una orden de cambio de la `Room` a `AVAILABLE` al
+  cancelarse una `Reservation`, si la habitación se encontraba en `RESERVED`.
+- **FR-003**: El sistema debe requerir `roomId`, `requestedStatus` y `originEvent` en toda
+  solicitud, y validar que `requestedStatus` sea únicamente `RESERVED` o `AVAILABLE`.
+- **FR-004**: El sistema no debe solicitar cambios a `OCCUPIED` ni a estados de limpieza: esos
+  cambios los ejecuta exclusivamente el Módulo 1 durante el Check-In y el Check-Out.
+- **FR-005**: El sistema debe registrar la solicitud con `requestStatus` `COMPLETED` cuando el
+  Módulo 1 confirme el cambio, y con `PENDING` cuando la comunicación falle, sin revertir la
+  reserva ni la cancelación.
+- **FR-006**: El sistema debe proveer una función de reintento para las solicitudes en `PENDING`.
+- **FR-007**: El sistema debe rechazar con **HTTP 400** cualquier orden de apartado sobre una `Room`
+  que el Módulo 1 reporte en `OCCUPIED`.
+- **FR-008**: El sistema debe interceptar cualquier error de validación de entrada y responder con
+  **HTTP 400 (Bad Request)**, prohibiendo fallas de infraestructura **HTTP 500**.
+- **FR-009**: El sistema debe mantener un registro auditable de cada solicitud, incluyendo fecha,
+  actor, habitación, estado anterior, estado solicitado y resultado.
+
+### Non-Functional Requirements
+
+- **NFR-001**: El tiempo de procesamiento de la solicitud en el Módulo 2 debe ser inferior a 1
+  segundo.
+- **NFR-002**: El mecanismo de integración debe tolerar fallas para garantizar la consistencia
+  eventual entre el Módulo 2 y el Módulo 1.
+
+### Key Entities *(include if feature involves data)*
+
+- **RoomStateRequest**: Orden de actualización de estado enviada al Módulo 1. Atributos:
+  `requestId`, `roomId`, `requestedStatus` (`RESERVED` | `AVAILABLE`), `previousStatus`,
+  `originEvent` (`RESERVATION_CREATED` | `RESERVATION_CANCELLED`), `reservationRef`, `requestedAt`,
+  `requestedBy` (Recepcionista, Ota o sistema) y `requestStatus` (`PENDING` |
+  `COMPLETED`).
+- **Room**: Unidad física de alojamiento, propiedad del Módulo 1. Atributos: `roomId`, `numberRoom`,
+  `categoryRoom` y `status` (`AVAILABLE` | `RESERVED` | `OCCUPIED`).
+- **Reservation**: Reserva asociada al evento. Atributos: `reservationRef`, `roomId` y `status`
+  (`PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`).
+
+## Success Criteria *(mandatory)*
+
+### Measurable Outcomes
+
+- **SC-001**: El 100% de las reservas creadas generan una orden `RESERVED` con el detalle de la
+  reserva, y al menos el 99% se confirman como `COMPLETED` en el Módulo 1 dentro de 60 segundos.
+- **SC-002**: El 100% de las cancelaciones generan una orden `AVAILABLE` hacia el Módulo 1.
+- **SC-003**: Cero errores **HTTP 500** por solicitudes con estados o identificadores inválidos; el
+  100% se responde con **HTTP 400**.
+- **SC-004**: El 100% de las fallas de comunicación con el Módulo 1 dejan la solicitud en `PENDING`
+  sin corromper la reserva ni la cancelación en el Módulo 2.
+- **SC-005**: El 95% de las solicitudes en `PENDING` se sincronizan a `COMPLETED` en el primer
+  reintento tras restablecerse la conexión.

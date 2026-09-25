@@ -1,173 +1,109 @@
-# Feature Specification: Consultar / Ver Reserva
+# Feature Specification: Consultar Reservas
 
-**Created**: 2026-09-08
+**Created**: 2026-09-19
 
 ## Use Case (Caso de Uso)
 
 ### Descripción del problema
 
 Casi ninguna operación del Módulo 2 puede ejecutarse a ciegas: antes de cancelar, actualizar,
-registrar un Check-In o un Check-Out, el sistema necesita ubicar la reserva exacta y conocer su
-estado vigente. Si cada funcionalidad implementara su propia búsqueda, aparecerían criterios de
-localización inconsistentes y validaciones de acceso distintas según la pantalla. El negocio
-necesita un único servicio de consulta, reutilizado como paso previo obligatorio por el resto de
-las funcionalidades, que localice una reserva por su referencia, por el documento del huésped o por
-su nombre, y que respete los límites de visibilidad de cada canal: mientras la Recepcionista ve
-cualquier reserva, el Huésped en el portal de autogestión solo puede ver la suya.
+verificar disponibilidades o procesar un Check-In o Check-Out, el sistema necesita ubicar la reserva
+exacta y conocer su estado vigente. Si cada funcionalidad implementara su propia búsqueda, los
+criterios y las validaciones de acceso serían inconsistentes. El negocio necesita un único servicio
+de consulta, reutilizado por el resto de funcionalidades y disponible también para el Módulo 1, que
+localice reservas por referencia, documento o nombre, y que devuelva siempre el estado vigente de la reserva.
 
 ### Flujo de Usuario de Alto Nivel
 
-1. El **Recepcionista** (con visibilidad global), el **Huésped** (desde el portal de autogestión,
-   restringido a su propia reserva) o la **Ota** (mediante su integración) envían un criterio de
+1. La **Recepcionista** o el **Módulo 1** envían un criterio de
    búsqueda: la referencia de la reserva (`reservationRef`), el documento del huésped
    (`documentNumber`) o su nombre (`fullName`).
-2. El sistema busca la `Reservation` coincidente en la base de datos local del Módulo 2.
-3. Si el canal es el del Huésped, el sistema verifica que el usuario autenticado sea el titular
-   (`guestRef`) antes de mostrar cualquier dato.
-4. El sistema retorna el detalle completo: estado (`state`), fechas de estadía, categoría o
-   habitación asignada, huésped titular y origen (`source`).
-5. Si no se ingresa ningún criterio o no existe ninguna reserva coincidente, el sistema responde con
-   una alerta controlada **HTTP 400 (Bad Request)**.
+2. El sistema busca la `Reservation` coincidente en la base de datos local.
+3. El sistema retorna el detalle completo: `status`, fechas, habitación, titular y origen.
+4. Si no se envía criterio o no existe coincidencia, responde con una alerta controlada **HTTP 400
+   (Bad Request)**.
 
 ## User Scenarios & Testing *(mandatory)*
 
-### User Story 1 - Consulta y Búsqueda de Reservas en Recepción (Priority: P1)
+### User Story 1 - Consulta de Reservas por Recepción y por el Módulo 1 (Priority: P1)
 
-Una Recepcionista necesita ubicar una reserva existente para verificar sus datos, confirmar su
-estado actual o dar paso a un Check-In, un Check-Out, una actualización o una cancelación. La
-Recepcionista ingresa la `reservationRef`, el `documentNumber` o el `fullName` del huésped, y el
-sistema retorna el resumen completo de la `Reservation` coincidente. Esta historia es el flujo
-maestro de la funcionalidad (Happy Path).
+La Recepcionista, o el Módulo 1 mediante su integración, necesita consultar el estado y el detalle
+completo de una `Reservation` para verificar sus datos, confirmar su estado o dar paso a otra
+operación. Esta historia es el flujo maestro de lectura y se consolida con la búsqueda por
+documento o nombre y los rechazos por reserva inexistente.
 
-**Why this priority**: Es la funcionalidad primaria de consulta del sistema. Sin la capacidad de
-ubicar y visualizar reservas de manera rápida y precisa, la recepción no puede procesar
-admisiones, modificaciones ni salidas de huéspedes.
+**Why this priority**: Es la funcionalidad de lectura indispensable para cualquier actualización,
+cancelación, verificación de disponibilidad o notificación de Check-In y Check-Out.
 
-**Independent Test**: Se puede probar ingresando el código exacto de una reserva en cualquier
-estado y verificando que el sistema devuelva sus atributos exactos, incluyendo el huésped
-vinculado, las fechas de estadía, la categoría asignada y el `state` actual. Se completa buscando
-por un código inexistente y confirmando la respuesta controlada **HTTP 400**.
+**Independent Test**: Se consulta una reserva existente en distintos estados y se verifica que se
+retorne el detalle completo; se busca por documento y nombre; y se busca un código inexistente
+confirmando la respuesta controlada **HTTP 400**.
 
 **Acceptance Scenarios**:
 
-1. **Scenario**: Consulta exitosa por referencia exacta de reserva (Happy Path)
-   - **Given** que existe una reserva en el sistema en cualquiera de sus estados oficiales
-   - **When** la Recepcionista ingresa la `reservationRef` exacta y ejecuta la búsqueda
-   - **Then** el sistema devuelve y presenta los detalles completos de la `Reservation`, incluyendo
-     fechas, huésped asociado, categoría o habitación asignada, `state` actual y origen (`source`)
+1. **Scenario**: Consulta exitosa por referencia (Happy Path)
+   - **Given** una `Reservation` válida en la base de datos
+   - **When** la Recepcionista o el Módulo 1 envía la `reservationRef` exacta
+   - **Then** el sistema retorna el `status` explícito (por ejemplo `ACTIVE`), las fechas, la
+     `Room` asociada y los datos del titular (`Guest`)
 
-2. **Scenario**: Búsqueda exitosa por documento o nombre del huésped
-   - **Given** un huésped con una o más reservas registradas
-   - **When** la Recepcionista ingresa el `documentNumber` o el `fullName` del huésped
-   - **Then** el sistema presenta el listado de reservas coincidentes asociadas a esa persona,
-     indicando el `state` de cada una para su selección
+2. **Scenario**: Búsqueda por documento o nombre del huésped
+   - **Given** un huésped con una o más reservas
+   - **When** la Recepcionista ingresa su `documentNumber` o `fullName`
+   - **Then** el sistema lista las reservas coincidentes con su `status` para su selección
 
-3. **Scenario**: Notificación amigable ante reserva no encontrada (Error)
-   - **Given** que no existe ninguna reserva en el sistema que coincida con el criterio ingresado
-   - **When** la Recepcionista realiza la búsqueda por referencia o documento
-   - **Then** el sistema responde con una alerta controlada **HTTP 400 (Bad Request)** informando
-     que no se encontró ninguna reserva coincidente
-
----
-
-### User Story 2 - Consulta Restringida de Reserva desde el Portal del Huésped (Priority: P2)
-
-Un Huésped autenticado en el portal web de autogestión consulta los detalles de su propia reserva
-ingresando su `reservationRef`. El sistema verifica que sea el titular legítimo antes de mostrar
-cualquier información de la estadía.
-
-**Why this priority**: Es un flujo importante para la autogestión del cliente, que le permite
-revisar su reserva y preparar su llegada, protegiendo la confidencialidad de los datos de otros
-huéspedes.
-
-**Independent Test**: Se prueba autenticando a un `Guest` y consultando su propia
-`reservationRef`. Se comprueba que el portal muestre la información correcta, y luego se intenta
-consultar una `reservationRef` de otro titular, confirmando el rechazo con **HTTP 400**.
-
-**Acceptance Scenarios**:
-
-1. **Scenario**: Consulta exitosa de reserva propia desde el portal (Happy Path)
-   - **Given** un `Guest` autenticado en el portal web que es titular de una reserva
-   - **When** el Huésped ingresa el código de su `reservationRef`
-   - **Then** el sistema valida la titularidad y presenta el resumen de su estadía, fechas,
-     categoría o habitación y `state` actual
-
-2. **Scenario**: Rechazo de consulta sobre una reserva ajena (Error)
-   - **Given** un `Guest` autenticado en el portal web
-   - **When** el Huésped intenta consultar la `reservationRef` de una reserva que pertenece a otra
-     persona
-   - **Then** el sistema rechaza la consulta con **HTTP 400 (Bad Request)**, indicando que la
-     reserva no corresponde a su usuario, y no revela ningún dato privado
+3. **Scenario**: Consulta de una reserva inexistente (Error)
+   - **Given** una referencia errónea o borrada
+   - **When** se consulta la reserva
+   - **Then** el sistema intercepta la excepción y responde con un error controlado **HTTP 400** o
+     404 indicando que la reserva no existe
 
 ### Casos Borde
 
-- ¿Qué sucede si se ejecuta la búsqueda con el criterio vacío o solo con espacios? El sistema
-  intercepta la solicitud y responde con **HTTP 400 (Bad Request)** indicando que debe
-  proporcionarse un criterio de búsqueda válido, sin ejecutar consultas innecesarias.
-- ¿Qué sucede si se envían caracteres especiales o patrones de inyección en el campo de búsqueda?
-  El sistema sanitiza la entrada y responde con **HTTP 400**, evitando la ejecución de código no
-  autorizado o una falla de infraestructura **HTTP 500**.
-- ¿Cómo maneja el sistema una búsqueda concurrente sobre una reserva cuyo `state` cambia en el
-  mismo instante (por ejemplo, se confirma su Check-In desde otro canal)? El sistema retorna el
-  `state` más reciente persistido, garantizando consistencia de lectura.
-- ¿Qué sucede si la búsqueda por rango de fechas es excesivamente amplia y produce un volumen
-  inusual de resultados? El sistema delimita el volumen retornado y responde con **HTTP 400**
-  sugiriendo acotar el rango de fechas.
+- ¿Qué sucede si la consulta carece del identificador o viene con espacios? El sistema la intercepta
+  con **HTTP 400 (Bad Request)** y el mensaje: "Debe proveer un identificador de reserva válido para
+  la consulta."
+- ¿Qué sucede si se envían caracteres especiales o intentos de inyección en el identificador? El
+  sistema valida el formato, detiene la petición y responde **HTTP 400**, sin provocar caídas del
+  servidor **HTTP 500**.
+- ¿Cómo maneja el sistema una consulta sobre una reserva cuyo `status` cambia en ese instante? El
+  sistema retorna el estado persistido más reciente, garantizando consistencia de lectura.
+- ¿Qué sucede si una búsqueda por rango de fechas devuelve un volumen excesivo? El sistema limita el
+  volumen y responde **HTTP 400** sugiriendo acotar el rango.
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **FR-001**: El sistema debe permitir a la Recepcionista, al Huésped y a la Ota buscar y visualizar
-  la información completa de una `Reservation`.
-- **FR-002**: El sistema debe soportar búsquedas por `reservationRef` exacta, `documentNumber` o
-  `fullName` del huésped.
-- **FR-003**: El sistema debe retornar los atributos clave de la reserva encontrada:
-  `reservationRef`, `guestRef`, categoría o habitación asignada, `startDate`, `endDate`, `source` y
-  `state`.
-- **FR-004**: El sistema debe verificar, en el canal del Huésped, que el usuario autenticado sea el
-  titular (`guestRef`) de la `Reservation` antes de mostrar sus datos.
-- **FR-005**: El sistema debe indicar con claridad cuando una reserva consultada ya completó su
-  Check-In (`CHECKED_IN`) o su Check-Out (`CHECKED_OUT`).
-- **FR-006**: El sistema debe retornar una respuesta de no encontrado amigable cuando no existan
-  coincidencias para el criterio de búsqueda enviado.
-- **FR-007**: El sistema debe rechazar cualquier solicitud de consulta con parámetros vacíos, nulos
-  o con caracteres no permitidos.
-- **FR-008**: El sistema debe interceptar cualquier error de validación de entrada y responder con
-  códigos **HTTP 400 (Bad Request)** controlados, prohibiendo que se generen errores **HTTP 500**.
-- **FR-009**: El sistema debe asegurar que la información mostrada corresponda al `state`
-  persistido más reciente en la base de datos.
+- **FR-001**: El sistema debe permitir a la Recepcionista y al Módulo 1 consultar el
+  detalle de una `Reservation`.
+- **FR-002**: El sistema debe soportar búsquedas por `reservationRef`, `documentNumber` o
+  `fullName`.
+- **FR-003**: El sistema debe retornar `reservationRef`, `guestRef`, `roomId`, `startDate`,
+  `endDate`, `source` y el `status` unificado: `PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`,
+  `CANCELLED` o `NO_SHOW`.
+- **FR-004**: El sistema debe ser de solo lectura e idempotente, sin modificar ninguna entidad.
+- **FR-005**: El sistema debe interceptar las consultas inválidas y responder **HTTP 400 (Bad
+  Request)**, prohibiendo la propagación a **HTTP 500**.
 
 ### Non-Functional Requirements
 
-- **NFR-001**: El tiempo de respuesta del servidor para resolver una consulta por `reservationRef`
-  debe ser inferior a 500 milisegundos.
-- **NFR-002**: El servicio de consulta debe ser de solo lectura e idempotente, sin producir
-  modificaciones de estado en las entidades consultadas.
+- **NFR-001**: La consulta por `reservationRef` debe responder en menos de 500 milisegundos.
 
 ### Key Entities *(include if feature involves data)*
 
-- **Reservation**: Entidad principal consultada. Atributos: `reservationRef`, `guestRef`,
-  categoría o habitación asignada, `startDate`, `endDate`, `source` (`DIRECT` | `OTA`), y `state`
-  con estados permitidos: `ACTIVE`, `CHECKED_IN`, `CHECKED_OUT`, `CANCELLED`. El estado `PENDING`
-  queda inhabilitado en los flujos estándar: toda reserva, sin importar su canal de origen, nace
-  directamente en `ACTIVE`.
-- **Guest**: Titular y acompañantes de la reserva. Atributos: `id`, `fullName`, `documentNumber`,
-  `nationality`, `contactPhone`, `contactEmail`.
-- **Habitation**: Unidad física o categoría asociada. Atributos: `habitationId`,
-  `numberHabitation`, y `stateHabitation` con los siete estados oficiales del glosario:
-  `Available`, `Occupied`, `PendingCleaning`, `InCleaning`, `DisabledForRepairs`, `TechnicalBlock`,
-  `Inactive`.
+- **Reservation**: Entidad consultada. Atributos: `reservationRef`, `guestRef`, `roomId`,
+  `startDate`, `endDate`, `source` (`DIRECT` | `OTA`) y `status` (`PENDING`, `ACTIVE`,
+  `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`).
+- **Guest**: Titular de la reserva. Atributos: `id`, `fullName`, `documentNumber`, `nationality`,
+  `contactPhone`, `contactEmail`.
+- **Room**: Habitación asociada. Atributos: `roomId`, `numberRoom`, `categoryRoom` y `status`
+  (`AVAILABLE` | `RESERVED` | `OCCUPIED`).
 
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
-- **SC-001**: El 100% de las búsquedas por `reservationRef` exacta retornan los datos completos de
-  la reserva en menos de 500 milisegundos.
-- **SC-002**: El 100% de los intentos de consulta desde el portal del Huésped sobre reservas ajenas
-  son bloqueados con **HTTP 400 (Bad Request)** sin revelar datos privados.
-- **SC-003**: Cero errores de servidor **HTTP 500** se generan ante consultas con texto vacío o
-  caracteres no permitidos; el 100% se responde con **HTTP 400**.
-- **SC-004**: Una Recepcionista puede ubicar cualquier reserva activa por el nombre o documento del
-  huésped en menos de 10 segundos.
+- **SC-001**: El 100% de las consultas por `reservationRef` exacta retornan el detalle completo en
+  menos de 500 milisegundos.
+- **SC-002**: Cero errores **HTTP 500** ante identificadores vacíos, inválidos o inexistentes.

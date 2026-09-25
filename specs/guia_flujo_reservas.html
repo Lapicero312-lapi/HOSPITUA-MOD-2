@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Guía y Flujo de Gestión de Reservas</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; max-width: 850px; margin: 40px auto; padding: 20px; }
+        h1, h2, h3 { color: #2c3e50; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-top: 30px;}
+        table { border-collapse: collapse; width: 100%; margin-bottom: 20px; font-size: 14px; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background-color: #f4f6f8; color: #2c3e50; font-weight: 600; }
+        .alert { padding: 15px; margin-bottom: 20px; border: 1px solid transparent; border-radius: 6px; }
+        .alert-info { color: #31708f; background-color: #d9edf7; border-color: #bce8f1; }
+        .alert-warning { color: #8a6d3b; background-color: #fcf8e3; border-color: #faebcc; }
+        .mermaid { text-align: center; margin: 30px 0; background-color: #f9fbfd; padding: 20px; border-radius: 8px; border: 1px solid #eee;}
+        @media print {
+            body { margin: 0; padding: 0; max-width: 100%; background: white; }
+            .no-print { display: none !important; }
+            table { page-break-inside: avoid; }
+            .mermaid { border: none; background: transparent; }
+        }
+        .print-btn { background: #0F9D58; color: white; border: none; padding: 12px 24px; font-size: 16px; cursor: pointer; border-radius: 6px; margin-bottom: 20px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: background 0.2s;}
+        .print-btn:hover { background: #0b8043; }
+        .header-meta { color: #666; font-size: 14px; margin-bottom: 30px; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script>mermaid.initialize({startOnLoad:true});</script>
+</head>
+<body>
+    <button class="print-btn no-print" onclick="window.print()">🖨️ Guardar Documento como PDF</button>
+
+    <h1>Guía y Flujo de Gestión de Reservas (Módulo 2)</h1>
+    <div class="header-meta">
+        <strong>Fecha de actualización:</strong> Septiembre 2026<br>
+        <strong>Versión:</strong> 1.0 (Alineada a Metodología SDD)
+    </div>
+    
+    <h2>1. Introducción</h2>
+    <p>Este documento formaliza el nuevo ciclo de vida de las reservas para el <strong>Módulo 2</strong>. Detalla la separación de responsabilidades y la integración con el <strong>Módulo 1</strong> (Gestión de Habitaciones físicas). Se ha unificado la nomenclatura de estados en inglés para garantizar la coherencia arquitectónica y de negocio.</p>
+    
+    <h2>2. Diagrama de Flujo de Estados (Reserva)</h2>
+    <p>El siguiente diagrama de máquina de estados ilustra las transiciones posibles de una <code>Reservation</code> y qué actor o evento dispara dicho cambio en el Módulo 2.</p>
+    
+    <div class="mermaid">
+    stateDiagram-v2
+        %% Estados Base
+        [*] --> PENDING : Generación OTA (Pendiente)
+        [*] --> ACTIVE : Generación Directa Confirmada
+        
+        PENDING --> ACTIVE : Pago/Garantía Confirmada
+        
+        %% Flujo de Operación (Notificado por Módulo 1)
+        ACTIVE --> IN_PROGRESS : Notificación Check-In (Módulo 1)
+        IN_PROGRESS --> COMPLETED : Notificación Check-Out (Módulo 1)
+        
+        %% Flujos de Anulación
+        ACTIVE --> CANCELLED : Cancelación Manual / OTA
+        PENDING --> CANCELLED : Cancelación Manual / OTA
+        
+        %% Validación Automática
+        ACTIVE --> NO_SHOW : Proceso Cron (Fin de Día)
+        PENDING --> NO_SHOW : Proceso Cron (Fin de Día)
+        
+        %% Fin de ciclo
+        CANCELLED --> [*]
+        COMPLETED --> [*]
+        NO_SHOW --> [*]
+    </div>
+
+    <h2>3. Matriz de Integración y Responsabilidades</h2>
+    
+    <div class="alert alert-info">
+        <strong>💡 Regla de Arquitectura:</strong> El <strong>Módulo 2</strong> es el orquestador que controla el estado <strong>lógico</strong> y financiero del hospedaje. El <strong>Módulo 1</strong> controla exclusivamente el estado <strong>físico</strong> (limpieza y ocupación real) de la habitación.
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Etapa Operativa</th>
+                <th>Acción Lógica (Módulo 2)</th>
+                <th>Integración Física (Módulo 1)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Previo a Reservar</strong></td>
+                <td>Cruza fechas con registros locales.</td>
+                <td><strong>Consulta a M1:</strong> Lee el Calendario de Mantenimientos y el Inventario en tiempo real.</td>
+            </tr>
+            <tr>
+                <td><strong>Creación</strong></td>
+                <td>Crea entidad <code>Reservation</code> (<code>ACTIVE</code>).</td>
+                <td><strong>M2 notifica a M1:</strong> Envía detalles y ordena marcar la <code>Room</code> como <code>RESERVED</code>.</td>
+            </tr>
+            <tr>
+                <td><strong>Cancelación</strong></td>
+                <td>Actualiza reserva a <code>CANCELLED</code>.</td>
+                <td><strong>M2 notifica a M1:</strong> Ordena revertir la <code>Room</code> a estado <code>AVAILABLE</code> (Libre).</td>
+            </tr>
+            <tr>
+                <td><strong>Check-In</strong></td>
+                <td>Pasa a <code>IN_PROGRESS</code>. Integra datos migratorios para SIRE.</td>
+                <td><strong>M1 notifica a M2:</strong> M1 ejecuta el ingreso (cambia a <code>OCCUPIED</code>) y avisa a M2.</td>
+            </tr>
+            <tr>
+                <td><strong>Check-Out</strong></td>
+                <td>Pasa a <code>COMPLETED</code>.</td>
+                <td><strong>M1 notifica a M2:</strong> M1 procesa la salida (libera cuarto) y avisa a M2.</td>
+            </tr>
+            <tr>
+                <td><strong>Fin de Día</strong></td>
+                <td>Cron automático marca reserva como <code>NO_SHOW</code> si no hay ingreso.</td>
+                <td>Ninguna interacción (Se asume que M1 no reportó ingreso).</td>
+            </tr>
+            <tr>
+                <td><strong>Exportación SIRE</strong></td>
+                <td>Genera archivo oficial para Migración.</td>
+                <td>M2 exporta los datos migratorios que M1 adjuntó durante la notificación del Check-in.</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h2>4. Lineamientos de Control y Excepciones</h2>
+    
+    <div class="alert alert-warning">
+        <strong>⚠️ Estándar de Respuesta de Errores</strong><br>
+        Las integraciones entre módulos cuentan con un estricto blindaje de excepciones lógicas. Ante timeouts, identificadores inválidos, desajuste de datos o fechas pasadas, el sistema debe interceptar la falla y retornar invariablemente un código <strong>HTTP 400 (Bad Request)</strong> estructurado con un mensaje amigable. <br><br><strong>Queda completamente prohibida la propagación de fallos que deriven en errores de infraestructura HTTP 500 (Internal Server Error).</strong>
+    </div>
+
+    <h3>Pantallas Retiradas del Módulo 2</h3>
+    <p>Para respetar el principio de responsabilidad única, las siguientes interfaces físicas <strong>pasan a ser exclusivas del Módulo 1</strong>:</p>
+    <ul>
+        <li>Interfaz de recepción para Check-in físico de la habitación y entrega de llaves.</li>
+        <li>Interfaz para Check-out físico de la habitación.</li>
+        <li>Formularios paralelos de procesamiento migratorio de extranjeros (ahora se capturan en el M1 y viajan en el payload de notificación).</li>
+    </ul>
+
+</body>
+</html>
