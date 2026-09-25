@@ -113,9 +113,10 @@ los cambios. Se repite con datos personales (sin recálculo) y sobre reservas `I
   de habitación" en este orden: primero ordena `RESERVED` para la `Room` nueva y, solo si el Módulo
   1 la confirma, ordena `AVAILABLE` para la anterior. Si el Módulo 1 rechaza la `Room` nueva o no
   responde, el cambio no se aplica, la reserva conserva su `Room` original y se responde **HTTP
-  400**. Si falla
-  únicamente la liberación de la `Room` anterior, el cambio ya quedó aplicado y esa orden queda en
-  `PENDING` para reintentarse.
+  400**. Si falla únicamente la liberación de la `Room` anterior, el cambio ya quedó aplicado y esa
+  orden queda en `PENDING` para reintentarse; el sistema responde **HTTP 400** con el mensaje "La
+  reserva se actualizó, pero la liberación de la habitación anterior quedó pendiente", y reenviar la
+  misma solicitud no repite el cambio.
 
 ## Requirements *(mandatory)*
 
@@ -137,9 +138,13 @@ los cambios. Se repite con datos personales (sin recálculo) y sobre reservas `I
 - **FR-006**: El sistema debe aplicar control de concurrencia optimista mediante `version`.
 - **FR-007**: Cuando la modificación cambie la `Room`, el sistema debe ordenar primero `RESERVED`
   para la nueva y solo después `AVAILABLE` para la anterior, abortando el cambio si el Módulo 1
-  rechaza la nueva y reintentando la liberación si esta falla.
+  rechaza la nueva o no responde. Si falla únicamente la liberación de la anterior, el cambio debe
+  conservarse, la orden debe reintentarse desde `PENDING` y la respuesta debe ser **HTTP 400** con
+  el aviso de liberación pendiente.
 - **FR-008**: El sistema debe interceptar excepciones de validación, concurrencia e integración,
-  respondiendo **HTTP 400 (Bad Request)** y prohibiendo errores **HTTP 500**.
+  respondiendo **HTTP 400 (Bad Request)** y prohibiendo errores **HTTP 500**; en el caso de la
+  liberación pendiente de FR-007, la respuesta 400 no implica que el cambio se haya revertido: el
+  cambio ya está aplicado y solo la liberación queda por reintentar.
 
 ### Non-Functional Requirements
 
