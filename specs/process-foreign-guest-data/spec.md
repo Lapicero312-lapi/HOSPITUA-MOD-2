@@ -141,8 +141,11 @@ señale el incompleto.
   completos del periodo y señalar los incompletos.
 - **FR-007**: El sistema no debe capturar datos migratorios desde una pantalla propia del Módulo 2:
   la captura presencial es responsabilidad del Módulo 1.
-- **FR-008**: El sistema debe interceptar los errores de validación y responder con **HTTP 400
-  (Bad Request)**, prohibiendo que escalen a **HTTP 500**.
+- **FR-008**: El sistema debe interceptar los errores lógicos, estructurales o de seguridad del
+  payload (sin identificador de reserva, formato de payload inválido, caracteres maliciosos) y
+  responder con **HTTP 400 (Bad Request)**, prohibiendo que escalen a **HTTP 500**. Los datos
+  migratorios faltantes o inválidos de una reserva válida no son un error del payload: se rigen por
+  FR-005 (200 y movimiento `INCOMPLETE`).
 
 ### Non-Functional Requirements
 
@@ -155,7 +158,9 @@ señale el incompleto.
   `nationality` y `type` (`NATIONAL` | `FOREIGN`).
 - **MigratoryMovement**: Movimiento migratorio de una estadía de un huésped `FOREIGN`. Atributos:
   `movementId`, `reservationRef`, `guestRef`, `movementType` (`ENTRY` | `DEPARTURE`), `movementDate`
-  y `validationStatus` (`COMPLETE` | `INCOMPLETE`). Hay uno por reserva, de modo que las estadías de
+  `validationStatus` (`COMPLETE` | `INCOMPLETE`), `missingFields` (lista de campos faltantes o
+  inválidos, solo cuando es `INCOMPLETE`) y `validationReason` (motivo legible de la invalidez, solo
+  cuando es `INCOMPLETE`). Hay uno por reserva, de modo que las estadías de
   un mismo huésped no se sobrescriben.
 - **Reservation**: Estadía asociada al huésped. Atributos: `reservationRef`, `guestRef` y `status`
   (`PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`).

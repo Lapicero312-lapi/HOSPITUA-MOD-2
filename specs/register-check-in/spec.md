@@ -115,8 +115,11 @@ datos migratorios queden registrados en un `MigratoryMovement` de esa reserva.
   la reserva no esté en `ACTIVE` ni en `IN_PROGRESS`, o no
   exista, debe responder **HTTP 400** sin cambiar el estado y registrar una incidencia de
   conciliación con el Módulo 1, porque el efecto físico ya ocurrió allá.
-- **FR-006**: El sistema debe interceptar excepciones lógicas y errores de validación, respondiendo
-  **HTTP 400 (Bad Request)** y prohibiendo errores **HTTP 500**.
+- **FR-006**: El sistema debe interceptar los errores lógicos, estructurales o de seguridad del
+  payload (sin identificador de reserva, formato inválido, caracteres maliciosos, reserva
+  inexistente o en un estado que no admite el Check-In), respondiendo **HTTP 400 (Bad Request)** y
+  prohibiendo errores **HTTP 500**. Los datos migratorios inválidos no son un error del payload:
+  conservan el Check-In y se rigen por FR-004 (200 y movimiento `INCOMPLETE`).
 
 ### Non-Functional Requirements
 
@@ -129,8 +132,9 @@ datos migratorios queden registrados en un `MigratoryMovement` de esa reserva.
 - **Guest**: Huésped titular de la reserva. Atributos: `id`, `fullName`, `documentNumber`,
   `nationality`, `type` (`NATIONAL` | `FOREIGN`).
 - **MigratoryMovement**: Movimiento migratorio de la estadía de un huésped `FOREIGN`. Atributos:
-  `movementId`, `reservationRef`, `guestRef`, `movementType`, `movementDate` y `validationStatus`
-  (`COMPLETE` | `INCOMPLETE`).
+  `movementId`, `reservationRef`, `guestRef`, `movementType`, `movementDate`, `validationStatus`
+  (`COMPLETE` | `INCOMPLETE`), `missingFields` y `validationReason` (estos dos últimos, solo cuando
+  es `INCOMPLETE`).
 - **ReconciliationIncident**: Registro de una discrepancia entre el Módulo 1 y el Módulo 2 que una
   persona debe resolver (por ejemplo, una habitación ocupada sin una reserva vigente). Atributos:
   `incidentId`, `origin` (`CHECK_IN` | `CHECK_OUT` | `ROOM_STATE`), `reservationRef`, `roomId`,

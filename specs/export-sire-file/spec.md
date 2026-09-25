@@ -142,7 +142,9 @@ comportamiento controlado.
   (`NATIONAL` | `FOREIGN`).
 - **MigratoryMovement**: Movimiento migratorio de cada estadía, del que se toman el tipo y la fecha
   de cada línea del archivo. Atributos: `movementId`, `reservationRef`, `guestRef`, `movementType`,
-  `movementDate` y `validationStatus` (`COMPLETE` | `INCOMPLETE`). Solo los `COMPLETE` se exportan.
+  `movementDate`, `validationStatus` (`COMPLETE` | `INCOMPLETE`), `missingFields` y
+  `validationReason` (estos dos últimos, solo cuando es `INCOMPLETE`, y son los que alimentan el
+  reporte de exclusiones). Solo los `COMPLETE` se exportan.
 - **SireExportExclusion**: Registro excluido de una exportación por tener datos incompletos.
   Atributos: `exportId` (referencia al `SireExport`), `reservationRef`, `guestRef`, `missingFields`
   y `reason`. Forma el reporte de exclusiones de esa exportación.

@@ -114,16 +114,21 @@ verifica que el Módulo 1 recibe la orden `AVAILABLE`.
 
 ### User Story 2 - Reintento por Fallo de Comunicación con el Módulo 1 (Priority: P2)
 
-Cuando la orden de cambio de estado falla por desconexión de red o indisponibilidad del Módulo 1,
-el Módulo 2 mantiene la validez de la reserva o de la cancelación, registra la solicitud como
-`PENDING` y permite reintentar la sincronización sin afectar al huésped.
+Cuando una orden de liberación (`AVAILABLE`) falla por desconexión de red o indisponibilidad del
+Módulo 1, el Módulo 2 mantiene la validez de la cancelación, del No-Show o del cambio de habitación,
+registra la solicitud como `PENDING` y permite reintentar la sincronización sin afectar al huésped.
+Las órdenes `RESERVED` de una reserva recién creada no se reintentan: si fallan, se compensa
+cancelando la reserva.
 
 **Why this priority**: Es un flujo de resiliencia para que los problemas de infraestructura del
-Módulo 1 no impidan crear ni cancelar reservas.
+Módulo 1 no impidan cancelar reservas ni procesar el No-Show ni un cambio de habitación ya
+registrados.
 
-**Independent Test**: Se simula una caída del Módulo 1 al crear una reserva y se comprueba que la
-reserva queda registrada con la solicitud en `PENDING`; con la red restablecida se ejecuta el
-reintento y la solicitud pasa a `COMPLETED`.
+**Independent Test**: Se simula una caída del Módulo 1 al cancelar una reserva y se comprueba que la
+cancelación queda registrada con la orden de liberación en `PENDING`; con la red restablecida se
+ejecuta el reintento y la solicitud pasa a `COMPLETED`. Se simula la misma caída al crear una
+reserva y se comprueba que la reserva se cancela por compensación y no queda ninguna orden `PENDING`
+de apartado.
 
 **Acceptance Scenarios**:
 
@@ -152,8 +157,9 @@ reintento y la solicitud pasa a `COMPLETED`.
    - **Given** dos solicitudes de reserva que piden la misma `Room` en el mismo instante
    - **When** el sistema registra ambas órdenes al Módulo 1
    - **Then** el sistema les asigna `sequenceNumber` consecutivos y distintos, en el orden en que se
-     confirmó cada transacción, de modo que el Módulo 1 aplica ambas en el orden correcto y ninguna
-     válida se ignora por error
+     confirmó cada transacción, y las envía en orden: la de mayor secuencia espera en cola hasta que
+     la anterior esté `COMPLETED` o `REJECTED`, de modo que el Módulo 1 siempre recibe primero la de
+     menor secuencia y ninguna orden válida se descarta por llegar desordenada
 
 ### Casos Borde
 
@@ -188,13 +194,19 @@ reintento y la solicitud pasa a `COMPLETED`.
   Módulo 1 confirme el cambio. Cuando la comunicación falle en una orden de liberación
   (`AVAILABLE`), debe registrarla como `PENDING` y reintentarla sin revertir la cancelación, el
   No-Show ni el cambio; cuando falle en una orden `RESERVED` de una reserva recién creada, debe
-  informarlo al flujo invocador para que compense.
+  registrarla como `REJECTED`, informarlo al flujo invocador para que compense y no debe
+  reintentarla.
 - **FR-006**: El sistema debe proveer una función de reintento para las solicitudes en `PENDING`.
 - **FR-007**: El sistema debe rechazar con **HTTP 400** cualquier orden de apartado sobre una `Room`
   que el Módulo 1 reporte en `OCCUPIED`.
 - **FR-008**: El sistema debe interceptar cualquier error de validación de entrada y responder con
   **HTTP 400 (Bad Request)**, prohibiendo fallas de infraestructura **HTTP 500**.
-- **FR-009**: El sistema debe asignar a cada solicitud un `sequenceNumber` creciente por `Room`, y
+- **FR-009**: El sistema debe enviar las órdenes de una misma `Room` de una en una, en el orden de
+  su `sequenceNumber`: no debe enviar la orden N+1 hasta que la N esté `COMPLETED` o `REJECTED`, y
+  las siguientes deben esperar en cola por `Room`, de modo que el Módulo 1 reciba siempre primero la
+  de menor secuencia; el rechazo por obsoleta del Módulo 1 queda solo como red de seguridad ante
+  reintentos tardíos. El sistema debe asignar a cada solicitud un `sequenceNumber` creciente por
+  `Room`, y
   el Módulo 1 solo debe aplicarla si es mayor que la última aplicada para esa habitación; las
   obsoletas deben quedar como `REJECTED`. La asignación debe ser atómica y serializada por `Room`,
   dentro de la misma transacción que registra la solicitud, con unicidad garantizada de `(roomId,
@@ -247,7 +259,9 @@ reintento y la solicitud pasa a `COMPLETED`.
 - **SC-002**: El 100% de las cancelaciones generan una orden `AVAILABLE` hacia el Módulo 1.
 - **SC-003**: Cero errores **HTTP 500** por solicitudes con estados o identificadores inválidos; el
   100% se responde con **HTTP 400**.
-- **SC-004**: El 100% de las fallas de comunicación con el Módulo 1 dejan la solicitud en `PENDING`
-  sin corromper la reserva ni la cancelación en el Módulo 2.
+- **SC-004**: El 100% de las fallas de comunicación con el Módulo 1 en órdenes de liberación dejan
+  la solicitud en `PENDING` sin corromper la cancelación, el No-Show ni el cambio de habitación en
+  el Módulo 2, y el 100% de las fallas en órdenes `RESERVED` de una reserva recién creada se
+  compensan cancelándola, sin dejar reservas sin habitación apartada.
 - **SC-005**: El 95% de las solicitudes en `PENDING` se sincronizan a `COMPLETED` en el primer
   reintento tras restablecerse la conexión.
