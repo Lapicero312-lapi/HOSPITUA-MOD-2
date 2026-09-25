@@ -17,8 +17,12 @@ mantenimientos del Módulo 1.
 ### Flujo de Usuario de Alto Nivel
 
 1. Un flujo de reserva (generar reservación directa, generar reservación por OTA o actualizar
-   reservación) solicita verificar la disponibilidad de una `Room` para un rango de fechas (`startDate` y `endDate`) y, cuando se trata de una modificación, la `reservationRef` de la reserva editada.
-2. El sistema cruza el rango contra las reservas locales mediante "Consultar reservas", considerando solo las que aún reservan inventario (`PENDING`, `ACTIVE` o `IN_PROGRESS`) y excluyendo la reserva indicada en `reservationRef`.
+   reservación) solicita verificar la disponibilidad de una `Room` para un rango de fechas
+   (`startDate` y `endDate`) y, cuando se trata de una modificación, la `reservationRef` de la
+   reserva editada.
+2. El sistema cruza el rango contra las reservas locales mediante "Consultar reservas", considerando
+   solo las que aún reservan inventario (`PENDING`, `ACTIVE` o `IN_PROGRESS`) y excluyendo la
+   reserva indicada en `reservationRef`.
 3. El sistema consulta el calendario del Módulo 1 mediante "Consultar calendario de
    mantenimientos".
 4. Si la estadía incluye el día en curso, el sistema consulta el estado físico real mediante
@@ -69,12 +73,15 @@ inventario del Módulo 1, devolviendo la disponibilidad precisa en cada caso.
      `RESERVED`, informa que no está disponible
 
 5. **Scenario**: Modificación de fechas de una reserva existente
-   - **Given** una `Reservation` en `ACTIVE` sobre una `Room` sin otras reservas ni mantenimientos en las nuevas fechas
-   - **When** el solicitante verifica la disponibilidad enviando la `reservationRef` de esa reserva con las nuevas fechas
+   - **Given** una `Reservation` en `ACTIVE` sobre una `Room` sin otras reservas ni mantenimientos
+     en las nuevas fechas
+   - **When** el solicitante verifica la disponibilidad enviando la `reservationRef` de esa reserva
+     con las nuevas fechas
    - **Then** el sistema excluye la propia reserva del cruce y confirma la disponibilidad
 
 6. **Scenario**: Reservas históricas que no bloquean
-   - **Given** una `Room` cuyas únicas reservas solapadas están en `COMPLETED`, `CANCELLED` o `NO_SHOW`
+   - **Given** una `Room` cuyas únicas reservas solapadas están en `COMPLETED`, `CANCELLED` o
+     `NO_SHOW`
    - **When** el solicitante verifica la disponibilidad
    - **Then** el sistema ignora esas reservas y confirma la disponibilidad
 
@@ -100,8 +107,13 @@ inventario del Módulo 1, devolviendo la disponibilidad precisa en cada caso.
 - **FR-001**: El sistema debe consultar el calendario de mantenimientos del Módulo 1 mediante
   "Consultar calendario de mantenimientos" para garantizar que la `Room` no esté en reparación en
   las fechas pedidas.
-- **FR-002**: El sistema debe cruzar el rango solicitado contra las reservas locales mediante "Consultar reservas" para descartar solapamientos, considerando únicamente las reservas en `PENDING`, `ACTIVE` o `IN_PROGRESS`; las `COMPLETED`, `CANCELLED` y `NO_SHOW` no deben bloquear la disponibilidad.
-- **FR-003**: El sistema debe aceptar la `reservationRef` de la reserva que se está modificando y excluirla del cruce, para que una modificación de fechas no se reporte como no disponible por solaparse consigo misma.
+- **FR-002**: El sistema debe cruzar el rango solicitado contra las reservas locales mediante
+  "Consultar reservas" para descartar solapamientos, considerando únicamente las reservas en
+  `PENDING`, `ACTIVE` o `IN_PROGRESS`; las `COMPLETED`, `CANCELLED` y `NO_SHOW` no deben bloquear la
+  disponibilidad.
+- **FR-003**: El sistema debe aceptar la `reservationRef` de la reserva que se está modificando y
+  excluirla del cruce, para que una modificación de fechas no se reporte como no disponible por
+  solaparse consigo misma.
 - **FR-004**: El sistema debe consultar el `status` físico de la `Room` mediante "Consultar
   inventario de habitaciones" cuando la estadía incluya el día en curso.
 - **FR-005**: El sistema no debe asumir disponibilidad cuando el Módulo 1 no responda.

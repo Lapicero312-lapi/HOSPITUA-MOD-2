@@ -32,7 +32,8 @@ de insumo a "Verificar disponibilidades" antes de crear o modificar cualquier re
 
 Al verificar la disponibilidad, el sistema consulta el inventario del Módulo 1 para una habitación
 puntual o para una categoría completa, y obtiene el estado físico vigente. Por tratarse de una única
-consulta de lectura reutilizada por varios flujos (crear, actualizar y verificar reservas), el camino
+consulta de lectura reutilizada por varios flujos (crear, actualizar y verificar reservas), el
+camino
 de éxito puntual, el listado por categoría y los fallos de integración se consolidan en esta misma
 historia de usuario.
 

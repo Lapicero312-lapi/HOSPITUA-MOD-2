@@ -60,14 +60,18 @@ comportamiento controlado.
    - **Then** el sistema las excluye del archivo
 
 3. **Scenario**: Exclusión con advertencias por datos migratorios incompletos
-   - **Given** un `MigratoryMovement` `INCOMPLETE` de un huésped `FOREIGN`, sin tipo de movimiento o sin fecha migratoria válida
+   - **Given** un `MigratoryMovement` `INCOMPLETE` de un huésped `FOREIGN`, sin tipo de movimiento o
+     sin fecha migratoria válida
    - **When** el sistema consolida la exportación
-   - **Then** el sistema omite ese registro, genera el archivo con los demás y responde 200 con el archivo y una lista de advertencias que indica: "Datos incompletos para extranjeros en la reserva X"; no responde HTTP 400, porque el archivo sí se genera
+   - **Then** el sistema omite ese registro, genera el archivo con los demás y responde 200 con el
+     archivo y una lista de advertencias que indica: "Datos incompletos para extranjeros en la
+     reserva X"; no responde HTTP 400, porque el archivo sí se genera
 
 4. **Scenario**: Periodo sin huéspedes extranjeros (Error)
    - **Given** un periodo con solo reservas nacionales o sin ocupación
    - **When** se ejecuta la exportación
-   - **Then** el sistema no genera archivo y responde **HTTP 400** indicando que no hay registros migratorios que
+   - **Then** el sistema no genera archivo y responde **HTTP 400** indicando que no hay registros
+     migratorios que
      reportar en ese periodo, sin generar errores de infraestructura
 
 ### Casos Borde
@@ -93,12 +97,17 @@ comportamiento controlado.
 - **FR-002**: El sistema debe filtrar por un periodo obligatorio (`startDate` y `endDate`).
 - **FR-003**: El sistema debe extraer únicamente huéspedes `FOREIGN` con reservas en `IN_PROGRESS`
   o `COMPLETED`, excluyendo `CANCELLED` y `NO_SHOW`.
-- **FR-004**: El sistema debe obtener el `MigratoryMovement` de cada reserva mediante "Procesar datos de huéspedes extranjeros" y omitir los registros incompletos, informando cuáles requieren corrección.
+- **FR-004**: El sistema debe obtener el `MigratoryMovement` de cada reserva mediante "Procesar
+  datos de huéspedes extranjeros" y omitir los registros incompletos, informando cuáles requieren
+  corrección.
 - **FR-005**: El sistema debe generar el archivo `.TXT` respetando las columnas, anchos y
   delimitadores oficiales de Migración Colombia.
 - **FR-006**: El sistema debe registrar cada exportación en `SireExport` con la fecha, el periodo,
   la cantidad de registros y el actor que la ejecutó.
-- **FR-007**: El sistema debe excluir los registros incompletos y entregarlos como advertencias junto con el archivo en una respuesta 200; y debe interceptar los errores de validación de entrada (periodo inválido o sin extranjeros) y de consulta, respondiendo **HTTP 400 (Bad Request)** sin archivo y prohibiendo errores **HTTP 500**.
+- **FR-007**: El sistema debe excluir los registros incompletos y entregarlos como advertencias
+  junto con el archivo en una respuesta 200; y debe interceptar los errores de validación de entrada
+  (periodo inválido o sin extranjeros) y de consulta, respondiendo **HTTP 400 (Bad Request)** sin
+  archivo y prohibiendo errores **HTTP 500**.
 
 ### Non-Functional Requirements
 
@@ -111,8 +120,11 @@ comportamiento controlado.
   `dateRangeStart`, `dateRangeEnd` y `processedBy`.
 - **Reservation**: Reserva de origen. Atributos: `reservationRef`, `guestRef`, `startDate`,
   `endDate` y `status`. Solo se exportan las `IN_PROGRESS` o `COMPLETED`.
-- **Guest**: Huésped reportado. Atributos: `fullName`, `documentNumber`, `nationality` y `type` (`NATIONAL` | `FOREIGN`).
-- **MigratoryMovement**: Movimiento migratorio de cada estadía, del que se toman el tipo y la fecha de cada línea del archivo. Atributos: `movementId`, `reservationRef`, `guestRef`, `movementType`, `movementDate` y `validationStatus` (`COMPLETE` | `INCOMPLETE`). Solo los `COMPLETE` se exportan.
+- **Guest**: Huésped reportado. Atributos: `fullName`, `documentNumber`, `nationality` y `type`
+  (`NATIONAL` | `FOREIGN`).
+- **MigratoryMovement**: Movimiento migratorio de cada estadía, del que se toman el tipo y la fecha
+  de cada línea del archivo. Atributos: `movementId`, `reservationRef`, `guestRef`, `movementType`,
+  `movementDate` y `validationStatus` (`COMPLETE` | `INCOMPLETE`). Solo los `COMPLETE` se exportan.
 
 ## Success Criteria *(mandatory)*
 
@@ -120,5 +132,7 @@ comportamiento controlado.
 
 - **SC-001**: El 100% de los archivos exportados contienen la información migratoria obligatoria en
   el formato exacto requerido.
-- **SC-002**: El 100% de los registros incompletos se excluyen del archivo y se informan como advertencias, y el 100% de los periodos inválidos o sin extranjeros responden **HTTP 400**, con cero errores **HTTP 500**.
+- **SC-002**: El 100% de los registros incompletos se excluyen del archivo y se informan como
+  advertencias, y el 100% de los periodos inválidos o sin extranjeros responden **HTTP 400**, con
+  cero errores **HTTP 500**.
 - **SC-003**: El 100% de las exportaciones generan un registro auditable en `SireExport`.

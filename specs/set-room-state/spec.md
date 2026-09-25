@@ -24,16 +24,24 @@ notificaciones para actualizar la reserva (`IN_PROGRESS` y `COMPLETED`).
 1. Al crearse una `Reservation`, el sistema construye una solicitud con el `roomId`, el
    `requestedStatus` `RESERVED`, el `originEvent` `RESERVATION_CREATED` y el detalle completo de la
    reserva.
-2. Al cancelarse una `Reservation`, el sistema construye una solicitud con el `roomId`, el
-   `requestedStatus` `AVAILABLE` y el `originEvent` `RESERVATION_CANCELLED`.
+2. Al cancelarse una `Reservation` o marcarse como `NO_SHOW`, el sistema construye una solicitud con
+   el `roomId`, el `requestedStatus` `AVAILABLE` y el `originEvent` `RESERVATION_CANCELLED` o
+   `RESERVATION_NO_SHOW`. Cuando una modificación cambia la habitación de una reserva
+   (`ROOM_CHANGED`), envía primero `RESERVED` para la nueva `Room` y, tras su confirmación,
+   `AVAILABLE` para la anterior.
 3. El sistema transmite la solicitud al **Módulo 1**.
 4. Si el Módulo 1 confirma el cambio, la solicitud local se marca como `COMPLETED`.
 5. Si la comunicación con el Módulo 1 falla, el Módulo 2 **no** revierte la reserva ni la
    cancelación ya registradas; marca la solicitud como `PENDING` y habilita un reintento
    desacoplado.
-6. Cada orden lleva un `sequenceNumber` creciente por `Room`: el Módulo 1 solo aplica una orden si su secuencia es mayor que la última aplicada para esa habitación, e ignora las obsoletas.
-7. Si el Módulo 1 rechaza una orden `RESERVED` porque la `Room` ya está `OCCUPIED`, el sistema lo informa al flujo invocador para que compense la reserva. Si rechaza una orden `AVAILABLE` porque la `Room` está `OCCUPIED` o ya no la apartó esa reserva, el sistema la trata como sin efecto y registra la incidencia, sin liberar nunca una habitación ocupada.
-8. Si se intenta un cambio de estado que el Módulo 2 no puede solicitar, el sistema bloquea la acción con un error de negocio controlado **HTTP 400 (Bad Request)**.
+6. Cada orden lleva un `sequenceNumber` creciente por `Room`: el Módulo 1 solo aplica una orden si
+   su secuencia es mayor que la última aplicada para esa habitación, e ignora las obsoletas.
+7. Si el Módulo 1 rechaza una orden `RESERVED` porque la `Room` ya está `OCCUPIED`, el sistema lo
+   informa al flujo invocador para que compense la reserva. Si rechaza una orden `AVAILABLE` porque
+   la `Room` está `OCCUPIED` o ya no la apartó esa reserva, el sistema la trata como sin efecto y
+   registra la incidencia, sin liberar nunca una habitación ocupada.
+8. Si se intenta un cambio de estado que el Módulo 2 no puede solicitar, el sistema bloquea la
+   acción con un error de negocio controlado **HTTP 400 (Bad Request)**.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -80,9 +88,12 @@ verifica que el Módulo 1 recibe la orden `AVAILABLE`.
      `OCCUPIED` los ejecuta exclusivamente el Módulo 1, y no emite ninguna orden
 
 5. **Scenario**: Liberación rechazada sobre una habitación ocupada (Error)
-   - **Given** una `Room` que el Módulo 1 reporta en `OCCUPIED` porque su Check-In llegó antes que la cancelación o el No-Show
+   - **Given** una `Room` que el Módulo 1 reporta en `OCCUPIED` porque su Check-In llegó antes que
+     la cancelación o el No-Show
    - **When** el sistema ordena `AVAILABLE` para esa `Room`
-   - **Then** el Módulo 1 rechaza la orden y la `Room` permanece `OCCUPIED`; el sistema registra la solicitud como `REJECTED`, la trata como sin efecto y deja la incidencia registrada para revisión
+   - **Then** el Módulo 1 rechaza la orden y la `Room` permanece `OCCUPIED`; el sistema registra la
+     solicitud como `REJECTED`, la trata como sin efecto y deja la incidencia registrada para
+     revisión
 
 ---
 
@@ -113,9 +124,11 @@ reintento y la solicitud pasa a `COMPLETED`.
    - **Then** el Módulo 1 procesa la orden y el `requestStatus` local pasa a `COMPLETED`
 
 3. **Scenario**: Orden obsoleta ignorada por el Módulo 1
-   - **Given** una orden `AVAILABLE` con `sequenceNumber` 5 que sigue en `PENDING`, y una reserva posterior que ya ordenó `RESERVED` con `sequenceNumber` 6 para la misma `Room`
+   - **Given** una orden `AVAILABLE` con `sequenceNumber` 5 que sigue en `PENDING`, y una reserva
+     posterior que ya ordenó `RESERVED` con `sequenceNumber` 6 para la misma `Room`
    - **When** el reintento de la orden con secuencia 5 llega al Módulo 1
-   - **Then** el Módulo 1 la ignora por tener una secuencia menor a la última aplicada, y la `Room` permanece `RESERVED` para la reserva nueva; el sistema marca la orden vieja como `REJECTED`
+   - **Then** el Módulo 1 la ignora por tener una secuencia menor a la última aplicada, y la `Room`
+     permanece `RESERVED` para la reserva nueva; el sistema marca la orden vieja como `REJECTED`
 
 ### Casos Borde
 
@@ -126,7 +139,10 @@ reintento y la solicitud pasa a `COMPLETED`.
   se procesa, y la segunda recibe **HTTP 400** informando del cambio de estado previo.
 - ¿Qué sucede si el Módulo 1 responde con un mensaje ambiguo o un código de error desconocido? El
   sistema marca la solicitud como `PENDING` para revisión, sin asumir estados no verificados.
-- ¿Qué sucede si la reserva se cancela mientras su orden `RESERVED` sigue en `PENDING`? El sistema no descarta nada: emite la orden de liberación con un `sequenceNumber` mayor. El Módulo 1 aplica las órdenes por secuencia y descarta las de secuencia menor, de modo que una orden vieja que llegue tarde nunca sobrescribe una posterior ni deja la habitación apartada o libre por error.
+- ¿Qué sucede si la reserva se cancela mientras su orden `RESERVED` sigue en `PENDING`? El sistema
+  no descarta nada: emite la orden de liberación con un `sequenceNumber` mayor. El Módulo 1 aplica
+  las órdenes por secuencia y descarta las de secuencia menor, de modo que una orden vieja que
+  llegue tarde nunca sobrescribe una posterior ni deja la habitación apartada o libre por error.
 
 ## Requirements *(mandatory)*
 
@@ -148,9 +164,16 @@ reintento y la solicitud pasa a `COMPLETED`.
   que el Módulo 1 reporte en `OCCUPIED`.
 - **FR-008**: El sistema debe interceptar cualquier error de validación de entrada y responder con
   **HTTP 400 (Bad Request)**, prohibiendo fallas de infraestructura **HTTP 500**.
-- **FR-009**: El sistema debe asignar a cada solicitud un `sequenceNumber` creciente por `Room`, y el Módulo 1 solo debe aplicarla si es mayor que la última aplicada para esa habitación; las obsoletas deben quedar como `REJECTED`.
-- **FR-010**: El sistema debe condicionar toda orden `AVAILABLE` a que la `Room` siga apartada por la misma reserva (`previousStatus` `RESERVED` y `reservationRef` coincidente), y no debe liberar una `Room` que el Módulo 1 reporte en `OCCUPIED`; en ese caso la orden queda `REJECTED`, sin efecto, y se registra la incidencia.
-- **FR-011**: El sistema debe informar al flujo invocador el rechazo explícito de una orden `RESERVED` (por `Room` `OCCUPIED`), para que ese flujo compense cancelando la reserva creada con el motivo `ROOM_REJECTED`.
+- **FR-009**: El sistema debe asignar a cada solicitud un `sequenceNumber` creciente por `Room`, y
+  el Módulo 1 solo debe aplicarla si es mayor que la última aplicada para esa habitación; las
+  obsoletas deben quedar como `REJECTED`.
+- **FR-010**: El sistema debe condicionar toda orden `AVAILABLE` a que la `Room` siga apartada por
+  la misma reserva (`previousStatus` `RESERVED` y `reservationRef` coincidente), y no debe liberar
+  una `Room` que el Módulo 1 reporte en `OCCUPIED`; en ese caso la orden queda `REJECTED`, sin
+  efecto, y se registra la incidencia.
+- **FR-011**: El sistema debe informar al flujo invocador el rechazo explícito de una orden
+  `RESERVED` (por `Room` `OCCUPIED`), para que ese flujo compense cancelando la reserva creada con
+  el motivo `ROOM_REJECTED`.
 - **FR-012**: El sistema debe mantener un registro auditable de cada solicitud, incluyendo fecha,
   actor, habitación, estado anterior, estado solicitado y resultado.
 
@@ -165,7 +188,13 @@ reintento y la solicitud pasa a `COMPLETED`.
 
 - **RoomStateRequest**: Orden de actualización de estado enviada al Módulo 1. Atributos:
   `requestId`, `roomId`, `requestedStatus` (`RESERVED` | `AVAILABLE`), `previousStatus`,
-  `originEvent` (`RESERVATION_CREATED` | `RESERVATION_CANCELLED` | `RESERVATION_NO_SHOW` | `ROOM_CHANGED`), `reservationRef`, `sequenceNumber` (secuencia creciente por `Room`), `requestedAt`, `requestedBy` (Recepcionista, Ota o sistema) y `requestStatus` (`PENDING` | `COMPLETED` | `REJECTED`).
+  `originEvent` (`RESERVATION_CREATED` | `RESERVATION_CANCELLED` | `RESERVATION_NO_SHOW` |
+  `ROOM_CHANGED`), `reservationRef`, `sequenceNumber` (secuencia creciente por `Room`),
+  `requestedAt`,   `requestedBy` (Recepcionista, Ota o sistema) y `requestStatus` (`PENDING` |
+  `COMPLETED` | `REJECTED`).
+- **ReconciliationIncident**: Registro de una orden rechazada o sin efecto que requiere revisión
+  humana (definida en "Registrar Check-In"). Atributos relevantes: `origin` `ROOM_STATE`, `roomId`,
+  `reservationRef`, `reason` y `resolutionStatus`.
 - **Room**: Unidad física de alojamiento, propiedad del Módulo 1. Atributos: `roomId`, `numberRoom`,
   `categoryRoom` y `status` (`AVAILABLE` | `RESERVED` | `OCCUPIED`).
 - **Reservation**: Reserva asociada al evento. Atributos: `reservationRef`, `roomId` y `status`

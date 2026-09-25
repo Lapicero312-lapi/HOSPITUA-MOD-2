@@ -20,7 +20,8 @@ registre la comisión del intermediario y avise al Módulo 1 para apartar la hab
 
 ### Flujo de Usuario de Alto Nivel
 
-1. La **Ota** envía a la API del Módulo 2 una solicitud de reserva en JSON, que incluye las fechas de
+1. La **Ota** envía a la API del Módulo 2 una solicitud de reserva en JSON, que incluye las fechas
+   de
    estadía, la habitación o categoría de `Room`, los datos del `Guest` titular, el valor bruto del
    hospedaje y el `externalConfirmationCode` de la agencia.
 2. El sistema valida la estructura JSON y que estén presentes todos los campos obligatorios,
@@ -36,7 +37,8 @@ registre la comisión del intermediario y avise al Módulo 1 para apartar la hab
    o garantía de la agencia.
 7. El sistema ejecuta "Establecer estado de habitación" para ordenar al Módulo 1 marcar la `Room`
    como `RESERVED`, adjuntando el detalle de la reserva.
-8. Cuando la OTA confirma el pago o la garantía, el sistema ejecuta "Actualizar reservación" para cambiar la `Reservation` de `PENDING` a `ACTIVE`.
+8. Cuando la OTA confirma el pago o la garantía, el sistema ejecuta "Actualizar reservación" para
+   cambiar la `Reservation` de `PENDING` a `ACTIVE`.
 9. El sistema retorna una respuesta JSON de confirmación con el identificador interno generado.
 
 ## User Scenarios & Testing *(mandatory)*
@@ -79,7 +81,8 @@ crea una reserva y que todos devuelven una respuesta JSON de error estructurada.
 2. **Scenario**: Confirmación de pago o garantía por la agencia
    - **Given** una `Reservation` de canal OTA en estado `PENDING`
    - **When** la **Ota** notifica la confirmación del pago o la garantía
-   - **Then** el sistema ejecuta "Actualizar reservación" para pasar la `Reservation` de `PENDING` a `ACTIVE` y retorna HTTP 200
+   - **Then** el sistema ejecuta "Actualizar reservación" para pasar la `Reservation` de `PENDING` a
+     `ACTIVE` y retorna HTTP 200
 
 3. **Scenario**: Intento de reserva por OTA sin disponibilidad (Error)
    - **Given** que la `Room` tiene un mantenimiento programado o una reserva cruzada en las fechas
@@ -106,9 +109,15 @@ crea una reserva y que todos devuelven una respuesta JSON de error estructurada.
   inyección con una respuesta **HTTP 400** estructurada, y nunca almacena el valor crudo.
 - ¿Qué sucede si dos solicitudes de diferentes OTAs intentan reservar simultáneamente la misma
   habitación? La creación se realiza en una transacción con bloqueo, de modo que solo una obtiene la
-  habitación y se registra; la otra recibe **HTTP 409 (Conflict)** con `errorCode` `NO_AVAILABILITY`.
-- ¿Qué sucede si la reserva se crea pero el Módulo 1 no responde a la orden `RESERVED`? La reserva permanece en `PENDING` con `roomSyncStatus` `PENDING`, la orden se reintenta en segundo plano y el sistema responde **201 (Created)** con esa advertencia, para que la agencia no reenvíe la misma reserva.
-- ¿Qué sucede si el Módulo 1 rechaza la orden `RESERVED` porque la `Room` ya está `OCCUPIED`? El sistema cancela la reserva recién creada mediante "Actualizar reservación" con el motivo `ROOM_REJECTED` y responde **HTTP 409** con `errorCode` `NO_AVAILABILITY`.
+  habitación y se registra; la otra recibe **HTTP 409 (Conflict)** con `errorCode`
+  `NO_AVAILABILITY`.
+- ¿Qué sucede si la reserva se crea pero el Módulo 1 no responde a la orden `RESERVED`? La reserva
+  permanece en `PENDING` con `roomSyncStatus` `PENDING`, la orden se reintenta en segundo plano y el
+  sistema responde **201 (Created)** con esa advertencia, para que la agencia no reenvíe la misma
+  reserva.
+- ¿Qué sucede si el Módulo 1 rechaza la orden `RESERVED` porque la `Room` ya está `OCCUPIED`? El
+  sistema cancela la reserva recién creada mediante "Actualizar reservación" con el motivo
+  `ROOM_REJECTED` y responde **HTTP 409** con `errorCode` `NO_AVAILABILITY`.
 - ¿Qué sucede si la agencia nunca confirma el pago o la garantía de una reserva `PENDING`? La
   reserva permanece en `PENDING` y puede cancelarse por la vía estándar, o marcarse como `NO_SHOW`
   por el proceso de fin de día si su fecha de inicio pasa sin ingreso.
@@ -128,10 +137,16 @@ crea una reserva y que todos devuelven una respuesta JSON de error estructurada.
   mediante "Registrar confirmación y comisión de ota".
 - **FR-005**: El sistema debe registrar el valor bruto enviado por la OTA en `totalAmount` sin
   recalcularlo y sin invocar "Calcular tarifa dinámica".
-- **FR-006**: El sistema debe guardar la reserva en estado `PENDING` y cambiarla a `ACTIVE`, mediante "Actualizar reservación", cuando la agencia confirme el pago o la garantía; esta funcionalidad no debe modificar el `status` por su cuenta después de la creación.
+- **FR-006**: El sistema debe guardar la reserva en estado `PENDING` y cambiarla a `ACTIVE`,
+  mediante "Actualizar reservación", cuando la agencia confirme el pago o la garantía; esta
+  funcionalidad no debe modificar el `status` por su cuenta después de la creación.
 - **FR-007**: El sistema debe ordenar al Módulo 1, mediante "Establecer estado de habitación",
-  marcar la `Room` como `RESERVED` con el detalle de la reserva. Si la orden falla por comunicación, debe conservar la reserva con `roomSyncStatus` `PENDING`, reintentar y responder 201 (Created) con la advertencia.
-- **FR-008**: El sistema debe compensar el rechazo explícito del Módulo 1 (`Room` ya `OCCUPIED`) cancelando la reserva creada con el motivo `ROOM_REJECTED` y respondiendo HTTP 409 con `errorCode` `NO_AVAILABILITY`.
+  marcar la `Room` como `RESERVED` con el detalle de la reserva. Si la orden falla por comunicación,
+  debe conservar la reserva con `roomSyncStatus` `PENDING`, reintentar y responder 201 (Created) con
+  la advertencia.
+- **FR-008**: El sistema debe compensar el rechazo explícito del Módulo 1 (`Room` ya `OCCUPIED`)
+  cancelando la reserva creada con el motivo `ROOM_REJECTED` y respondiendo HTTP 409 con `errorCode`
+  `NO_AVAILABILITY`.
 - **FR-009**: El sistema debe interceptar cualquier inconsistencia o fallo de validación y retornar
   respuestas JSON estructuradas con **HTTP 400 (Bad Request)** o **HTTP 409 (Conflict)**,
   prohibiendo **HTTP 500**.
@@ -145,7 +160,9 @@ crea una reserva y que todos devuelven una respuesta JSON de error estructurada.
 
 - **Reservation**: Contrato de reserva registrado desde el canal externo. Atributos: `id`,
   `guestRef`, `roomId`, `categoryRoom`, `startDate`, `endDate`, `totalAmount` (valor bruto enviado
-  por la OTA), `commissionAmount`, `externalConfirmationCode`, `source` (`OTA`), `createdAt`, `roomSyncStatus` (`SYNCED` | `PENDING`), y `status` con estados permitidos: `PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`,
+  por la OTA), `commissionAmount`, `externalConfirmationCode`, `source` (`OTA`), `createdAt`,
+  `roomSyncStatus` (`SYNCED` | `PENDING`), y `status` con estados permitidos: `PENDING`, `ACTIVE`,
+  `IN_PROGRESS`, `COMPLETED`, `CANCELLED`,
   `NO_SHOW`. En este flujo se crea en `PENDING` y pasa a `ACTIVE` con la confirmación de la agencia.
 - **Guest**: Huésped titular. Atributos: `id`, `fullName`, `documentNumber`, `nationality`,
   `contactPhone`, `contactEmail`, extraídos del payload de la OTA.

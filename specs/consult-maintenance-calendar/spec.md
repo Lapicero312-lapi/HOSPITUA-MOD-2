@@ -38,7 +38,8 @@ con un mantenimiento y los fallos de integración se consolidan en esta misma hi
 estadía, protegiendo la experiencia del huésped y evitando reubicaciones de último momento.
 
 **Independent Test**: Se consulta una `Room` sin mantenimientos programados y se verifica que se
-informe como libre; se consulta otra con un mantenimiento que se cruza con el rango y se verifica que
+informe como libre; se consulta otra con un mantenimiento que se cruza con el rango y se verifica
+que
 se informe como inhabilitada, indicando las fechas del cruce.
 
 **Acceptance Scenarios**:
