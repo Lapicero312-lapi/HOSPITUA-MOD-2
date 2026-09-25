@@ -107,7 +107,7 @@ varias habitaciones y se comprueba que el listado solo incluya las `AVAILABLE`.
 
 ### Key Entities *(include if feature involves data)*
 
-- **Room**: Unidad física provista por el Módulo 1. Atributos: `roomId`, `numberRoom`,
+- **Room**: Unidad física provista por el Módulo 1. Atributos: `roomId`, `roomNumber`,
   `categoryRoom`, `status` (`AVAILABLE` | `RESERVED` | `OCCUPIED`) y `reservedByReservationRef`
   (reserva que la mantiene apartada; solo presente cuando el `status` es `RESERVED`). Su estado es
   propiedad
