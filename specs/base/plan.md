@@ -298,9 +298,9 @@ guarda como texto. `Room`, `ForeignGuestData`, `MaintenanceCalendar` y `RateQuot
    `consult-maintenance-calendar`, `calculate-dynamic-rate`.
 2. **Disponibilidad**: `check-room-availability` (usa las tres consultas anteriores).
 3. **Integración con el Módulo 1**: `set-room-state`.
-4. **Punto de estado y notificaciones**: `update-reservation` (modificación, Check-In, Check-Out y
-   cierre del día; depende de disponibilidad, tarifa y `set-room-state`), y
-   `process-foreign-guest-data`.
+4. **Datos migratorios y punto de estado**: primero `process-foreign-guest-data`, y después `update-reservation`
+   (modificación, Check-In, Check-Out y cierre del día; depende de disponibilidad, tarifa, `set-room-state`
+   y del registro del movimiento migratorio).
 5. **Creación de reservas**: `generate-direct-reservation`, `generate-ota-reservation` y
    `register-ota-information-commission`.
 6. **Cancelación**: `cancel-reservation`.
