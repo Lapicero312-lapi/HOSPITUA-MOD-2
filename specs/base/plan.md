@@ -44,7 +44,7 @@ cierre del día < 1 min para 1000 reservas; falta un objetivo global de carga)
 | Migraciones de esquema | Flyway | Versionar el esquema; alternativa: `ddl-auto=validate` + SQL manual |
 | Autenticación y autorización | Spring Security | Las specs exigen interfaces "exclusivas y seguras" (Migración) y que cada Ota vea solo sus reservas |
 | Tareas programadas | `@Scheduled` (viene con Spring) | Apartado del inicio del día, cierre del día y reintentos |
-| Exclusión mutua de tareas con varias instancias | Bloqueo asesor de PostgreSQL o instancia única | Evitar que dos instancias ejecuten el mismo cierre del día |
+| Exclusión mutua de tareas con varias instancias | Bloqueo asesor de PostgreSQL (decisión C10) | Evitar que dos instancias ejecuten el mismo cierre del día |
 | Timeouts y reintentos REST | `RestClient` con timeouts; Resilience4j opcional | No asumir disponibilidad ante caídas |
 | Paquete base | `com.hospitua.reservas` | Convención |
 
@@ -303,11 +303,12 @@ guarda como texto. `Room`, `ForeignGuestData`, `MaintenanceCalendar` y `RateQuot
 - Los planes de feature dependen de este plan base y entre sí según el orden anterior.
 - Dentro de cada feature: modelos, servicios, endpoints y pruebas de integración por escenario.
 
-## Contradicciones y decisiones abiertas (a resolver antes de los planes de feature)
+## Contradicciones detectadas y decisiones tomadas
 
-Cada una tiene una suposición provisional para poder avanzar; se confirma o se cambia.
+Las 10 contradicciones entre la especificación técnica, los specs, el diccionario y los diagramas
+quedaron decididas. La tabla registra cada decisión y lo que falta ajustar en otros documentos.
 
-| # | Contradicción | Suposición provisional |
+| # | Contradicción | Decisión |
 |---|---|---|
 | C1 | Los specs dicen que el Módulo 1 "envía a la API del Módulo 2" el Check-In y el Check-Out y que este "responde HTTP 200/400". La especificación técnica y el diagrama de integración los definen como **cola**, donde no hay respuesta HTTP al Módulo 1. | **DECIDIDO: solo cola.** Reglas en "Traducción de respuestas HTTP a cola". Los specs se ajustarán después. |
 | C2 | El diagrama de integración muestra "Datos de huéspedes extranjeros" como **cola separada**; la especificación técnica no la incluye entre las routing keys y los specs los reciben **dentro** de la notificación de Check-In. | **DECIDIDO: dentro de `habitacion.checkin`** (según los specs, sin routing key nueva). Pendiente acordar con el Módulo 1 y actualizar `mod-1-2-3.drawio` (quitar la flecha aparte y anotar los datos en la del check-in). |
@@ -318,7 +319,21 @@ Cada una tiene una suposición provisional para poder avanzar; se confirma o se 
 | C7 | Fórmula de comisión `totalAmount × commissionPercentage` sin `/100`, con ejemplo 15% de $400 = $60, validación 0–100% y, en el diccionario, `-(Valor × %)` para el Módulo 3. | **DECIDIDO: porcentaje de 0 a 100 y se divide entre 100.** `commissionAmount = grossAmount × commissionPercentage / 100`, con `BigDecimal`, 2 decimales y redondeo `HALF_UP`; el valor queda positivo en el Módulo 2 (el signo lo aplica el Módulo 3). Pendiente confirmar con el Módulo 3 cómo expresa el porcentaje que recibe por `GET /api/otas/{otaId}`. |
 | C8 | El estado `Reserved` del Módulo 1 es una solicitud pendiente de aprobación por su equipo (diccionario), pero todo el flujo del día de llegada depende de él. | **DECIDIDO: se implementa según los specs, sin interruptor.** Las reservas con llegada hoy generan la orden `Reserved` al Módulo 1 (que es quien guarda ese estado en la habitación). Hasta que el Módulo 1 lo agregue, esas reservas fallarán y se cancelarán por compensación; el equipo lo acordará con el Módulo 1. |
 | C9 | Para reservas con llegada hoy, el spec exige "todo o nada" con la respuesta del Módulo 1 y, a la vez, que la compensación cancele la reserva recién creada mediante `update-reservation`. | **DECIDIDO: guardar primero, ordenar después y compensar si falla** (regla transversal 2). La reserva guardada bloquea la habitación en la verificación de disponibilidad mientras se espera al Módulo 1, y los intentos fallidos quedan como `CANCELLED` con su motivo. La llamada al Módulo 1 no se hace dentro de una transacción de base de datos abierta. |
-| C10 | Las tareas programadas (apartado del inicio del día, cierre del día, reintentos) no tienen mecanismo definido y no se puede ejecutar dos veces con varias instancias. | `@Scheduled` con instancia única o bloqueo asesor de PostgreSQL. |
+| C10 | Las tareas programadas (apartado del inicio del día, cierre del día, reintentos) no tienen mecanismo definido y con varias instancias podrían ejecutarse dos veces. | **DECIDIDO: `@Scheduled` con bloqueo asesor de PostgreSQL** (`pg_try_advisory_lock`, consulta nativa, sin dependencias nuevas). Si otra instancia tiene el bloqueo, se salta esa ejecución. Zona horaria y horas de inicio y cierre del día configurables (`hospitua.hotel.timezone` y horas del día operativo). La idempotencia que piden los specs sigue siendo la garantía principal. |
+
+### Cambios pendientes en otros documentos (consecuencia de las decisiones)
+
+Estos ajustes **no** están hechos; los specs y los diagramas son del equipo y se acuerdan aparte.
+
+| Documento | Cambio | Decisión |
+|---|---|---|
+| `update-reservation/spec.md`, `process-foreign-guest-data/spec.md` | Cambiar "envía a la API del Módulo 2 / responde 200 o 400" por las reglas de cola (confirmar, incidencia, dead-letter) | C1 |
+| `mod-1-2-3.drawio` | Quitar la flecha aparte "Datos de huéspedes extranjeros" y anotar los datos en la flecha de "Notificación de check-in"; agregar la flecha de "Consultar calendario de mantenimientos" (M2 → M1, REST GET); confirmar la flecha "Consultar % de comisión OTA" (M3 → M2) | C2, C4, C3a |
+| `register-ota-information-commission/spec.md` | Agregar que el Módulo 2 expone `GET /api/otas/{otaId}` al Módulo 3; usar `grossAmount` en la entidad; documentar el porcentaje de 0 a 100 y el redondeo `HALF_UP` a 2 decimales | C3a, C6, C7 |
+| `generate-ota-reservation/spec.md` | Usar `grossAmount` en la entidad (el campo del JSON de la OTA sigue siendo `totalAmount`) | C6 |
+| `DIAGRAMA.drawio` (casos de uso) | Quitar la línea "Generar reservación por OTA" → "Calcular tarifa dinámica" | C5 |
+| Equipo del Módulo 1 | Agregar el estado `Reserved`; confirmar que los datos migratorios viajan dentro de `habitacion.checkin`; confirmar el origen del tipo y la fecha del movimiento migratorio | C8, C2 |
+| Equipo del Módulo 3 | Confirmar cómo expresa el porcentaje de comisión (0 a 100) | C7 |
 
 ## Notes
 
