@@ -1,177 +1,183 @@
 # Feature Specification: Generar Reservación Directa
 
-**Created**: 2026-09-23
+**Created**: 2026-09-25
 
-## Use Case (Caso de Uso)
+## 1. Caso de Uso
 
 ### Descripción del problema
 
-El hotel capta demanda directa cuando los huéspedes llaman o llegan a recepción y la Recepcionista
-registra su reserva. El negocio necesita
-registrar esas reservas de forma ágil, dejándolas confirmadas de inmediato, sin obligar al huésped
-a pasar por una pasarela de pago al momento de reservar: en HOSPITUA el pago del 100% de la estadía
-se realiza de forma exclusiva en el Check-Out, un proceso presencial que ejecuta el Módulo 1. Si
-además la disponibilidad no se valida contra el
-calendario real de la habitación, aparecen dos problemas costosos. El primero es la sobreventa: dos
-solicitudes pueden tomar la misma habitación o una que estará en mantenimiento. El segundo es un
-dato de precio poco confiable: si el valor del hospedaje no proviene siempre de la misma fuente, la
-información que se le entrega al huésped queda distorsionada. El negocio necesita una única lógica
-de captura de reservas de canal directo que valide la disponibilidad antes de reservar, cotice el
-valor de hospedaje bruto con el área de precios (Módulo 3) de forma informativa, y avise al Módulo 1
-para apartar la habitación.
+El hotel capta demanda directa cuando los huéspedes llaman, escriben por el portal web o llegan a
+recepción y la Recepcionista registra su reserva. El negocio necesita registrar esas reservas de
+forma ágil, dejándolas confirmadas de inmediato, sin obligar al huésped a pasar por una pasarela de
+pago al momento de reservar: en HOSPITUA el pago del 100% de la estadía se realiza de forma
+exclusiva en el Check-Out, un proceso presencial que ejecuta el Módulo 1.
+
+Durante la etapa de reserva no se asigna ningún `numberRoom` ni `roomId` físico: esa asignación
+ocurre únicamente en el Check-In, dentro del Módulo 1 / Front Desk. Por lo tanto, la reserva se
+registra siempre bajo una `categoryRoom`, y su confirmación descuenta de inmediato un cupo del
+aforo lógico de esa categoría, calculado 100% de forma local dentro del Módulo 2 mediante "Verificar
+disponibilidades". Queda estrictamente prohibido que este flujo invoque al Módulo 1 para marcar
+ningún cuarto como apartado, porque el Módulo 1 no administra ni conoce ningún concepto de reserva:
+solo informa el estado físico real de sus habitaciones y solo participa de forma activa cuando el
+huésped se presenta al Check-In.
+
+Si además el valor del hospedaje no proviene siempre de la misma fuente, la información que se le
+entrega al huésped queda distorsionada. El negocio necesita una única lógica de captura de reservas
+de canal directo que valide el aforo lógico local antes de reservar, y cotice el valor de hospedaje
+bruto con el área de precios (Módulo 3) de forma informativa, sin ningún cobro ni integración hacia
+el Módulo 1.
 
 ### Flujo de Usuario de Alto Nivel
 
-1. La **Recepcionista** indica las fechas de estadía y la habitación o categoría de `Room`
-   deseada.
-2. El sistema ejecuta "Verificar disponibilidades": cruza las fechas contra las reservas locales del
-   Módulo 2 y consulta al Módulo 1 el calendario de mantenimientos y el inventario en tiempo real.
-3. Si la habitación está disponible, el sistema solicita al Módulo 3 el cálculo del valor de
-   hospedaje bruto mediante "Calcular tarifa dinámica" y obtiene un `RateQuote`, que se muestra al
-   huésped de forma informativa.
+1. La Recepcionista o el Huésped selecciona la `categoryRoom`, el `checkInDate` y el `checkOutDate`
+   deseados.
+2. El sistema ejecuta internamente "Verificar disponibilidades" sobre la `categoryRoom` solicitada,
+   validando el aforo lógico local del Módulo 2.
+3. Si existe cupo disponible, el sistema invoca síncronamente al Módulo 3 ("Calcular tarifa
+   dinámica") y obtiene el `grossAmount` de carácter informativo.
 4. El solicitante ingresa los datos de identidad del `Guest` titular y confirma la reserva.
-5. El sistema crea la `Reservation` directamente en estado `ACTIVE`, sin ningún paso de cobro.
-6. El sistema ejecuta "Establecer estado de habitación" para ordenar al Módulo 1 marcar la `Room`
-   como `RESERVED`, adjuntando el detalle de la reserva.
-7. Solo si el Módulo 1 confirma la orden `RESERVED`, el sistema responde 201 (Created) con la
-   reserva. Si el Módulo 1 no responde, falla o rechaza la orden, el sistema cancela la reserva
-   recién creada y responde **HTTP 400**, de modo que la creación es todo o nada y el solicitante
-   puede reintentar sin duplicar.
+5. El sistema persiste la `Reservation` localmente en estado `ACTIVE` (`source`: `DIRECT`,
+   `commissionPercentage` y `commissionAmount` en `0`, `externalConfirmationCode` en `null`),
+   descontando de inmediato un cupo del aforo lógico local de la `categoryRoom`.
+6. El sistema responde con **HTTP 201 (Created)** junto con la reserva confirmada, sin realizar
+   ninguna llamada hacia el Módulo 1.
 
-El sistema guarda el monto devuelto por el Módulo 3 bajo `grossAmount` (valor de hospedaje bruto,
-suma de las tarifas dinámicas de todas las noches, antes de comisión e impuestos), con carácter
-informativo; registra `source` como `DIRECT`, la comisión (`commissionPercentage` y
-`commissionAmount`) en `0` y el `externalConfirmationCode` como `null`. No se calcula ni se almacena
-IVA en esta etapa: se fija al facturar en el Check-Out.
-
-## User Scenarios & Testing *(mandatory)*
+## 2. Escenarios de Usuario y Pruebas
 
 ### User Story 1 - Creación de Reservación Directa (Priority: P1)
 
-La Recepcionista necesita crear, a pedido del huésped, una reserva de canal directo para un rango de
-fechas y una habitación. El proceso ocurre sobre una única interfaz: se verifica la
-disponibilidad, se obtiene el valor de hospedaje bruto del Módulo 3 y se muestra como información,
-se capturan los datos del `Guest` titular y se confirma. La `Reservation` se crea directamente en
-estado `ACTIVE` y se
-notifica al Módulo 1 para apartar la habitación. Por tratarse de un mismo flujo de negocio, el
-camino de éxito y los bloqueos lógicos (sin disponibilidad, caída del Módulo 3,
-fechas o datos mal formados, concurrencia por la última habitación) se consolidan en esta misma
+**Plain Language**: Registro ágil y gratuito de reservas de canal directo, confirmadas de inmediato
+en `ACTIVE` contra el aforo lógico local de una `categoryRoom`, con cotización informativa del
+Módulo 3 y sin ninguna llamada de modificación hacia el Módulo 1.
+
+La Recepcionista o el Huésped necesitan crear una reserva de canal directo para un rango de fechas y
+una `categoryRoom`. El proceso ocurre sobre una única interfaz: se verifica el aforo lógico local, se
+obtiene el valor de hospedaje bruto del Módulo 3 y se muestra como información, se capturan los
+datos del `Guest` titular y se confirma. La `Reservation` se crea directamente en estado `ACTIVE`,
+descontando el cupo de aforo local, sin ninguna orden hacia el Módulo 1. Por tratarse de un mismo
+flujo de negocio, el camino de éxito y los bloqueos lógicos (sin aforo disponible, caída del Módulo
+3, fechas o datos mal formados, concurrencia por el último cupo) se consolidan en esta misma
 historia de usuario, para evitar la sobre-atomización.
 
 **Why this priority**: Es la funcionalidad nuclear del negocio: sin ella el hotel no puede captar
 ventas directas. Dejar la reserva confirmada en `ACTIVE` sin exigir cobro hace el proceso rápido y
-sin fricción; validar la disponibilidad contra el Módulo 1 evita la sobreventa; y congelar el valor
-bruto cotizado por el Módulo 3, sin impuestos, entrega al huésped un precio confiable.
+sin fricción; validar el aforo lógico local evita la sobreventa de cupo sin acoplar la creación de la
+reserva a la disponibilidad ni a la respuesta del Módulo 1; y congelar el valor bruto cotizado por el
+Módulo 3, sin impuestos, entrega al huésped un precio confiable.
 
-**Independent Test**: Se puede probar seleccionando una habitación disponible para un rango de
-fechas y simulando la respuesta del Módulo 3 con un valor bruto válido. Se verifica que la
-`Reservation` se persiste en `ACTIVE` con `grossAmount` asignado, `commissionAmount` en `0`,
-`externalConfirmationCode` en `null` y `source` en `DIRECT`, y que se emite al Módulo 1 la orden
-`RESERVED` con el detalle de la reserva. La prueba se completa intentando reservar una habitación
-no disponible y simulando una caída del Módulo 3, confirmando que en ambos casos no se crea ninguna
-reserva y se devuelve un error controlado.
+**Independent Test**: Se registra una reserva directa para una `categoryRoom` con cupo disponible,
+simulando la respuesta del Módulo 3 con un valor bruto válido, y se verifica que la `Reservation` se
+persiste en `ACTIVE` con `grossAmount` asignado, `commissionAmount` en `0`,
+`externalConfirmationCode` en `null`, `source` en `DIRECT`, y que el aforo lógico local de la
+`categoryRoom` se descuenta en 1, sin registrar ninguna llamada hacia el Módulo 1. La prueba se
+completa intentando reservar una `categoryRoom` sin cupo disponible y simulando una caída del Módulo
+3, confirmando que en ambos casos no se crea ninguna reserva y se devuelve un error controlado.
 
 **Acceptance Scenarios**:
 
-1. **Scenario**: Generación de reserva exitosa por la Recepcionista (Happy Path)
-   - **Given** que la `Room` solicitada está disponible en las fechas indicadas según "Verificar
-     disponibilidades"
-   - **When** la Recepcionista ingresa los datos del huésped titular, cotiza el valor bruto con el
-     Módulo 3 y confirma la reserva
-   - **Then** el sistema persiste la `Reservation` directamente en `ACTIVE` con `grossAmount`
-     asignado, comisión `0` y `externalConfirmationCode` `null`, asocia el `RateQuote` de forma
-     informativa, y ordena al Módulo 1 marcar la `Room` como `RESERVED` con el detalle de la reserva
+1. **Escenario 1**: Creación exitosa de reserva directa (Happy Path)
 
-2. **Scenario**: Intento de reserva sobre una habitación no disponible (Error)
-   - **Given** que la `Room` tiene un mantenimiento programado o una reserva cruzada en las fechas
-     deseadas
-   - **When** el solicitante intenta procesar la reserva directa
-   - **Then** el sistema bloquea la reserva, impide avanzar a la cotización y arroja un error
-     controlado HTTP 400: "Error 400: La habitación no está disponible para el rango de fechas
-     solicitado"
+   ```gherkin
+   Given una categoryRoom con cupo de aforo lógico disponible según "Verificar disponibilidades" para el rango solicitado
+   When el solicitante ingresa los datos del Guest titular, cotiza el grossAmount con el Módulo 3 y confirma la reserva
+   Then el sistema persiste la Reservation directamente en state ACTIVE con source DIRECT, comisión 0 y externalConfirmationCode null
+   And descuenta de inmediato un cupo del aforo lógico local de la categoryRoom
+   And responde HTTP 201 (Created) sin emitir ninguna llamada hacia el Módulo 1
+   ```
 
-3. **Scenario**: Bloqueo de reserva por caída de comunicación con Módulo 3 (Error)
-   - **Given** que la habitación está disponible
-   - **When** el sistema intenta cotizar la tarifa y el Módulo 3 no responde (timeout o error de
-     red)
-   - **Then** el sistema cancela la transacción de forma segura y devuelve un error controlado HTTP
-     400: "Error 400: El servicio de cotización de tarifas no se encuentra disponible. Por favor
-     intente más tarde"
+2. **Escenario 2**: Bloqueo por falta de aforo en la `categoryRoom` solicitada (Error)
 
-### Casos Borde
+   ```gherkin
+   Given una categoryRoom cuyo aforo lógico local está agotado para el rango de fechas solicitado
+   When el solicitante intenta procesar la reserva directa
+   Then el sistema bloquea la reserva antes de cotizar con el Módulo 3
+   And responde con un error controlado HTTP 400 (Bad Request) indicando que no hay cupo disponible en la categoryRoom
+   ```
 
-- ¿Qué sucede si un solicitante intenta reservar con un rango de fechas inválido o incoherente (por
-  ejemplo, una fecha de salida anterior a la de llegada, o una fecha inexistente)? El sistema
-  intercepta la validación de forma local y responde con un error **HTTP 400 (Bad Request)**
-  amigable, sin llegar a consultar disponibilidad ni a cotizar con el Módulo 3.
-- ¿Qué sucede si dos clientes intentan reservar la misma habitación de forma simultánea? La creación
-  se realiza dentro de una transacción con control de concurrencia, de modo que solo una de las dos
-  solicitudes se registra en `ACTIVE`; a la segunda se le responde con **HTTP 400** indicando que ya
-  no hay disponibilidad, sin producir sobreventa.
-- ¿Qué sucede si el Módulo 1 no responde o falla al recibir la orden `RESERVED`? El sistema
-  compensa: cancela la reserva recién creada mediante "Actualizar reservación" con el motivo
-  `ROOM_UNCONFIRMED`, emite una orden `AVAILABLE` con un `sequenceNumber` mayor para neutralizar
-  cualquier apartado que el Módulo 1 hubiera aplicado sin confirmar, y responde **HTTP 400**
-  indicando que no se pudo confirmar la habitación. Como no queda ninguna reserva, el solicitante
-  puede reintentar con seguridad.
-- ¿Qué sucede si el Módulo 1 rechaza la orden `RESERVED` porque la `Room` ya está `OCCUPIED`? El
-  sistema compensa: cancela la reserva recién creada mediante "Actualizar reservación" con el motivo
-  `ROOM_REJECTED`, y responde **HTTP 400** indicando que la habitación ya no está disponible. Como
-  no queda ninguna reserva, el consumidor puede reintentar con seguridad.
+3. **Escenario 3**: Bloqueo por falla de comunicación o timeout con el Módulo 3 (Error)
 
-## Requirements *(mandatory)*
+   ```gherkin
+   Given una categoryRoom con cupo de aforo disponible
+   When el sistema intenta cotizar la tarifa y el Módulo 3 no responde o agota el tiempo de espera
+   Then el sistema cancela la transacción de forma segura sin persistir ninguna Reservation
+   And responde con un error controlado HTTP 400 (Bad Request) indicando que el servicio de cotización de tarifas no está disponible
+   ```
 
-### Functional Requirements
+4. **Escenario 4**: Intento de reserva con fechas o datos del `Guest` inválidos (Error)
 
-- **FR-001**: El sistema debe verificar la disponibilidad de la `Room` mediante "Verificar
-  disponibilidades" antes de cotizar o registrar cualquier reserva.
-- **FR-002**: El sistema debe exigir como requisito obligatorio invocar al Módulo 3 ("Calcular
-  tarifa dinámica") para obtener el valor de hospedaje bruto antes de registrar la reserva.
-- **FR-003**: El sistema debe bloquear el flujo y rechazar el registro de forma controlada si la
-  comunicación con el Módulo 3 falla, arrojando un error amigable HTTP 400.
-- **FR-004**: El sistema debe crear y almacenar la reserva directamente en estado `ACTIVE`, sin
-  ningún paso de cobro ni estado intermedio.
-- **FR-005**: El sistema debe registrar `source` como `DIRECT`, `grossAmount` con la tarifa bruta
-  devuelta por el Módulo 3, `commissionPercentage` y `commissionAmount` con valor `0` y
-  `externalConfirmationCode` como `null`; no debe calcular ni almacenar IVA en esta etapa.
-- **FR-006**: El sistema debe ordenar al Módulo 1, mediante "Establecer estado de habitación",
-  marcar la `Room` como `RESERVED` con el detalle de la reserva, y solo debe responder 201 (Created)
-  cuando el Módulo 1 confirme. La creación debe ser todo o nada.
-- **FR-007**: El sistema debe compensar el rechazo del Módulo 1 (`Room` ya `OCCUPIED`) o su falta de
-  respuesta, cancelando la reserva creada con el motivo `ROOM_REJECTED` o `ROOM_UNCONFIRMED`
-  respectivamente, neutralizando cualquier apartado con una orden `AVAILABLE` de mayor
-  `sequenceNumber`, y respondiendo **HTTP 400**.
-- **FR-008**: El sistema debe interceptar cualquier error de validación de campos, fechas o
-  integraciones y responder con **HTTP 400 (Bad Request)**, prohibiendo errores **HTTP 500**.
+   ```gherkin
+   Given una solicitud de reserva directa con un rango de fechas incoherente o con datos del Guest incompletos o mal formados
+   When el solicitante intenta procesar la reserva
+   Then el sistema intercepta la validación localmente antes de consultar el aforo o cotizar con el Módulo 3
+   And responde con un error controlado HTTP 400 (Bad Request)
+   ```
 
-### Non-Functional Requirements
+## 3. Casos Borde
 
-- **NFR-001**: El procesamiento de la verificación local de reservas cruzadas debe completarse en
-  menos de 200 milisegundos.
+- **Caso Borde 1**: Rango de fechas incoherente. Si el `checkOutDate` es anterior o igual al
+  `checkInDate`, el sistema responde con un error controlado **HTTP 400 (Bad Request)**, sin
+  consultar el aforo ni el Módulo 3.
+- **Caso Borde 2**: Concurrencia por el último cupo del aforo. Si dos solicitudes intentan tomar el
+  último cupo disponible de la misma `categoryRoom` de forma simultánea, el sistema aplica control
+  de concurrencia optimista mediante el atributo `version` de `Reservation`, de modo que solo una de
+  las dos solicitudes se confirma en `ACTIVE`; a la segunda se le responde con **HTTP 400**
+  indicando que ya no hay cupo disponible, sin producir sobreventa.
+- **Caso Borde 3**: Caída del Módulo 3 durante la cotización. El sistema cancela la transacción de
+  forma limpia, sin persistir ninguna `Reservation` parcial, y responde con **HTTP 400 (Bad
+  Request)**.
 
-### Key Entities *(include if feature involves data)*
+## 4. Requisitos
 
-- **Reservation**: Contrato de reserva de canal directo. Atributos: `id`, `guestRef`, `roomId`,
-  `categoryRoom`, `startDate`, `endDate`, `grossAmount` (valor bruto calculado por el Módulo 3,
-  informativo), `commissionPercentage` (`0`), `commissionAmount` (`0`), `externalConfirmationCode`
-  (`null`), `source` (`DIRECT`), `createdAt`, y `status` con estados permitidos:
-  `PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`. En este flujo se crea
-  siempre en `ACTIVE`.
-- **Guest**: Huésped titular. Atributos: `id`, `fullName`, `documentNumber`, `nationality`,
-  `contactPhone`, `contactEmail`.
-- **RateQuote**: Cotización del valor bruto calculada por el Módulo 3, con carácter informativo.
-  Atributos: `reservationRef`, `grossAmount`, `currency`, `calculatedAt`.
-- **Room**: Habitación física, cuyo estado es propiedad del Módulo 1. Atributos: `roomId`,
-  `numberRoom`, `categoryRoom` y `status` (`AVAILABLE` | `RESERVED` | `OCCUPIED`).
+### Requisitos Funcionales
 
-## Success Criteria *(mandatory)*
+- **FR-001**: El sistema debe validar el aforo lógico local disponible de la `categoryRoom`
+  mediante "Verificar disponibilidades" antes de proceder con la cotización o el registro.
+- **FR-002**: El sistema debe invocar obligatoriamente al Módulo 3 ("Calcular tarifa dinámica") para
+  congelar el `grossAmount` de carácter informativo, antes de registrar la reserva.
+- **FR-003**: El sistema debe persistir la reserva localmente en estado `ACTIVE`, con `source`
+  `DIRECT`, `commissionPercentage` y `commissionAmount` en `0`, y `externalConfirmationCode` en
+  `null`; no debe calcular ni almacenar IVA en esta etapa.
+- **FR-004**: Queda estrictamente prohibido que el sistema realice cualquier llamada de
+  modificación de estado hacia el Módulo 1 (incluyendo el caso de uso "Establecer estado de
+  habitación") durante este proceso.
+- **FR-005**: El sistema debe registrar los datos completos del titular en `Guest`.
+- **FR-006**: El sistema debe descontar de inmediato un cupo del aforo lógico de la `categoryRoom`
+  en la base de datos local del Módulo 2, al confirmarse la reserva.
+- **FR-007**: El sistema debe interceptar cualquier fallo de validación o de integración con el
+  Módulo 3, y responder obligatoriamente con **HTTP 400 (Bad Request)**, quedando estrictamente
+  prohibida la propagación de excepciones de infraestructura **HTTP 500**.
 
-### Measurable Outcomes
+### Requisitos No Funcionales
 
-- **SC-001**: La Recepcionista completa una reserva de canal directo en menos de 1
-  minuto, al no requerir transacciones de pago en esta etapa.
-- **SC-002**: El 100% de las reservas directas cuentan con comisión `0`, código de confirmación
-  externo nulo y valor bruto almacenado correctamente.
-- **SC-003**: Cero sobreventas de habitaciones; el sistema bloquea las transacciones sobre una
-  habitación no disponible antes de confirmar.
-- **SC-004**: El 100% de las reservas creadas generan la orden `RESERVED` hacia el Módulo 1.
+- **NFR-001**: El tiempo de respuesta total del proceso, incluyendo la verificación de aforo local y
+  la cotización del Módulo 3, debe ser inferior a 1.5 segundos.
+- **NFR-002**: La creación de la reserva y el descuento del cupo de aforo deben ejecutarse dentro de
+  una transacción atómica local, de modo que ninguna reserva quede persistida sin su
+  correspondiente descuento de aforo, ni viceversa.
+
+## 5. Entidades Clave
+
+- **Reservation**: Contrato de reserva de canal directo. Atributos: `id`, `guestRef`,
+  `categoryRoom`, `checkInDate`, `checkOutDate`, `grossAmount` (valor bruto calculado por el Módulo
+  3, informativo), `commissionPercentage` (`0`), `commissionAmount` (`0`),
+  `externalConfirmationCode` (`null`), `source` (`DIRECT`), `version` (control de concurrencia
+  optimista) y `state` (`PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`). En
+  este flujo se crea siempre en `ACTIVE`.
+- **Guest**: Huésped titular. Atributos: `id`, `fullName`, `documentNumber`, `documentType`,
+  `email`, `phone` y `nationality`.
+- **Room**: Concepto de categoría de habitación (`categoryRoom`) y su cupo de aforo lógico local,
+  administrado dentro del Módulo 2. No representa aquí ninguna habitación física individual, ya que
+  el `numberRoom` y el `roomId` no se asignan sino hasta el Check-In, dentro del Módulo 1.
+
+## 6. Criterios de Éxito
+
+### Resultados Medibles
+
+- **SC-001**: El 100% de las reservas directas confirmadas quedan en estado `ACTIVE` con comisión
+  `0` y `grossAmount` congelado.
+- **SC-002**: Cero llamadas de modificación de estado realizadas hacia el Módulo 1 durante todo el
+  proceso de creación de la reserva.
+- **SC-003**: Cero sobreventas de cupo; el sistema bloquea la creación de reservas cuando el aforo
+  lógico local de la `categoryRoom` se agota.
+- **SC-004**: El 100% de las fallas de integración con el Módulo 3 o de validación de datos se
+  responden con **HTTP 400**, con cero excepciones **HTTP 500**.
