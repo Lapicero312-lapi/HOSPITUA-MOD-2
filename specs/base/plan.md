@@ -103,13 +103,15 @@ Contenido propuesto del `payload` (según las specs):
 | Recurso | Quién lo consume | Feature |
 |---|---|---|
 | `GET /api/reservations?reservationRef=|documentNumber=|fullName=` | Recepcionista, Módulo 1, procesos internos | `check-view-reservation` |
-| `POST /api/reservations` (canal directo) | Recepcionista | `generate-direct-reservation` |
-| `PATCH /api/reservations/{reservationRef}` | Recepcionista, Ota | `update-reservation` |
+| `POST /api/reservations/direct/preview` y `POST /api/reservations/direct` (canal directo) | Recepcionista | `generate-direct-reservation` |
+| `POST /api/reservations/{reservationRef}/modification-preview` y `PATCH /api/reservations/{reservationRef}` | Recepcionista, Ota | `update-reservation` |
 | `POST /api/reservations/{reservationRef}/cancellation` | Recepcionista, Ota | `cancel-reservation` |
-| `POST /api/ota/reservations` y confirmación de pago/garantía | Ota | `generate-ota-reservation` |
+| `POST /api/ota/reservations` y `POST /api/ota/reservations/{reservationRef}/confirmation` (pago o garantía) | Ota | `generate-ota-reservation` |
 | `POST /api/sire/exports` con cuerpo `startDate` y `endDate` (devuelve `.TXT` y cabecera `Export-Id`; es `POST` porque registra un `SireExport`, decisión D9) | Migración | `export-sire-file` |
 | `GET /api/sire/exports/{exportId}/exclusions` | Migración | `export-sire-file` |
 | `GET /api/otas/{otaId}` (devuelve `id`, `name`, `commissionPercentage`) | Módulo 3 | `register-ota-information-commission` |
+| `POST /api/otas` y `PUT /api/otas/{otaId}` (alta y edición de agencias) | Recepcionista, Administrador | `register-ota-information-commission` |
+| `POST /api/ota-commissions/reconciliations` (conciliación de comisiones) | Área financiera | `register-ota-information-commission` |
 
 **El Módulo 2 consume** (a través de `Module1Client` y `Module3Client`):
 
@@ -191,7 +193,7 @@ Migración; la Ota solo usa la API y el Módulo 1 tiene su propia interfaz.
 
 | Tabla | Entidad | Notas |
 |---|---|---|
-| `reservation` | `Reservation` | `reservation_ref` único; `room_id` (referencia a `Room.id` del Módulo 1); `late_arrival_notice`; `version` (`@Version`); `gross_amount` y `gross_amount_currency` (decisión D2); `commission_percentage`, `commission_amount`, `commission_status`; único `(ota_id, external_confirmation_code)` |
+| `reservation` | `Reservation` | `reservation_ref` único; `guest_id`, `category_room`, `start_date`, `end_date`, `source`, `status`, `status_reason` (D6), `created_at`; `room_id` (referencia a `Room.id` del Módulo 1); `late_arrival_notice`; `version` (`@Version`); `gross_amount` y `gross_amount_currency` (decisión D2); `commission_percentage`, `commission_amount`, `commission_status`; único `(ota_id, external_confirmation_code)` |
 | `guest` | `Guest` | `type` `NATIONAL` o `FOREIGN` |
 | `ota` | `Ota` | `commission_percentage` |
 | `cancellation` | `Cancellation` | Inmutable; `channel` `RECEPTION` u `OTA_API` |
@@ -200,6 +202,8 @@ Migración; la Ota solo usa la API y el Módulo 1 tiene su propia interfaz.
 | `migratory_movement` | `MigratoryMovement` | Uno por reserva |
 | `sire_export`, `sire_export_exclusion` | `SireExport`, `SireExportExclusion` | `exportId` = `SireExport.id` |
 | `reservation_audit` | auditoría de actualizaciones | Inmutable |
+| `room_sequence` | último `sequenceNumber` por habitación | Una fila por `room_id`; se bloquea (`FOR UPDATE`) al asignar la secuencia |
+| `commission_audit` | auditoría de comisiones OTA | Inmutable: reserva, agencia, acción, importes y actor |
 | `processed_event` | idempotencia de colas | Clave `event_id` |
 
 `Reservation.status` (`PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`) se
@@ -224,7 +228,7 @@ guarda como texto. `Room`, `ForeignGuestData`, `MaintenanceCalendar` y `RateQuot
 4. **Tareas programadas** (zona horaria del hotel, idempotentes): apartado del inicio del día
    (`RESERVATION_DUE_TODAY`), cierre del día (No-Show: `NO_SHOW` en OTA, `CANCELLED` en directa, sin
    `Cancellation`, ignorando `lateArrivalNotice`) y reintento de órdenes `PENDING`.
-5. **Errores uniformes.** Un `@RestControllerAdvice` traduce toda excepción a `ApiError` 4xx. Ningún
+5. **Errores uniformes.** Un `@RestControllerAdvice` traduce toda excepción a `ApiError` 4xx; un conflicto de `version` (ediciones o cancelaciones simultáneas) es siempre 400 `CONCURRENT_UPDATE`. Ningún
    error no controlado sale como 500; el manejador genérico registra el detalle en el log y responde
    un error controlado sin datos de infraestructura.
 6. **Clientes de otros módulos** detrás de interfaces (`Module1Client`, `Module3Client`) con timeout.
@@ -289,7 +293,7 @@ guarda como texto. `Room`, `ForeignGuestData`, `MaintenanceCalendar` y `RateQuot
 - [ ] T015 [P] Crear `ReconciliationIncident` y su servicio de registro
 - [ ] T016 Configurar la infraestructura de pruebas (Testcontainers de PostgreSQL y RabbitMQ)
 - [ ] T017 [P] Esqueleto del frontend: enrutamiento, cliente HTTP y manejo de errores de API
-- [ ] T018 Configurar autenticación y autorización por actor (Recepcionista, Ota, Migración),
+- [ ] T018 Configurar autenticación y autorización con los roles `RECEPTIONIST`, `OTA`, `MIGRATION`, `ADMIN`, `FINANCE`, `MODULE1` y `MODULE3` (los dos últimos, de servicio a servicio),
   con Spring Security
 - [ ] T019 Configurar logs y correlación de solicitudes
 

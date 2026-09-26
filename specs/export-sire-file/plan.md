@@ -146,4 +146,4 @@ frontend/src/services/sireExportService.ts
 2. **Mapeo de `movementType`** (`ENTRY` o `DEPARTURE`) a los códigos que exige Migración Colombia.
 3. **Límite de exportaciones simultáneas** (`max-concurrent`) y su alcance por instancia.
 4. **Autenticación del actor Migración** (Spring Security): mecanismo y expiración de la sesión.
-5. **Doble reporte**: cómo evitar exportar dos veces al mismo huésped en periodos que se solapan; el spec lo menciona como riesgo pero no define la regla (`sireExportStatus` del diccionario no está en los specs).
+5. **Doble reporte**: cómo evitar exportar dos veces al mismo huésped en periodos que se solapan; el spec lo menciona como riesgo pero no define la regla (el diccionario actual ya no incluye `sireExportStatus`).

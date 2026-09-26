@@ -46,7 +46,7 @@ compensatoria) y `cancel-reservation` (dentro de su transacción). Guarda el mot
   personales o `lateArrivalNotice` no se llama al Módulo 3 ni a disponibilidad.
 - Errores (400 mediante `GlobalExceptionHandler`): estado no editable, falta de disponibilidad,
   fechas inválidas ("Las nuevas fechas de reserva son inválidas"), caracteres no válidos ("El formato
-  de los datos contiene caracteres no válidos."), versión desactualizada ("...debe recargar"), Módulo 3
+  de los datos contiene caracteres no válidos."), versión desactualizada (`CONCURRENT_UPDATE`, "...debe recargar"), Módulo 3
   sin respuesta ("No se pudo calcular la nueva tarifa en este momento. Intente más tarde."),
   Módulo 1 rechaza o no responde el cambio de habitación.
 
