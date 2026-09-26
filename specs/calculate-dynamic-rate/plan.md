@@ -151,8 +151,6 @@ backend/src/test/java/com/hospitua/reservas/
 ## Preguntas abiertas (NEEDS CLARIFICATION)
 
 1. **Contrato real del Módulo 3**: ruta, nombres de campos y autenticación.
-2. **`currency` en `Reservation`**: FR-002 pide conservarla, pero el diccionario no la lista en
-   `Reservation`. Se propone agregar una columna `gross_amount_currency` al esquema base.
-3. **Confirmación con revalidación**: el diseño propuesto (volver a cotizar al confirmar y comparar) debe
-   aceptarse antes de escribir `update-reservation` y `generate-direct-reservation`.
+2. **`currency` en `Reservation`**: decidido (D2 del plan base): columna `gross_amount_currency` junto a `gross_amount`.
+3. **Confirmación con revalidación**: decidido (D1 del plan base): al confirmar se vuelve a cotizar y se compara con el importe que vio el solicitante.
 4. **Escala del importe** (decimales y moneda): NEEDS CLARIFICATION con el Módulo 3.

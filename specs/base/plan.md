@@ -191,7 +191,7 @@ Migración; la Ota solo usa la API y el Módulo 1 tiene su propia interfaz.
 
 | Tabla | Entidad | Notas |
 |---|---|---|
-| `reservation` | `Reservation` | `reservation_ref` único; `room_id` (referencia a `Room.id` del Módulo 1); `late_arrival_notice`; `version` (`@Version`); `commission_percentage`, `commission_amount`, `commission_status`; único `(ota_id, external_confirmation_code)` |
+| `reservation` | `Reservation` | `reservation_ref` único; `room_id` (referencia a `Room.id` del Módulo 1); `late_arrival_notice`; `version` (`@Version`); `gross_amount` y `gross_amount_currency` (decisión D2); `commission_percentage`, `commission_amount`, `commission_status`; único `(ota_id, external_confirmation_code)` |
 | `guest` | `Guest` | `type` `NATIONAL` o `FOREIGN` |
 | `ota` | `Ota` | `commission_percentage` |
 | `cancellation` | `Cancellation` | Inmutable; `channel` `RECEPTION` u `OTA_API` |
@@ -235,6 +235,13 @@ guarda como texto. `Room`, `ForeignGuestData`, `MaintenanceCalendar` y `RateQuot
 8. **Nomenclatura del diccionario**: `Reservation.status`, `roomNumber`, `startDate`/`endDate`,
    `externalConfirmationCode`, `grossAmount`, `categoryRoom`, `reservationRef`; estados del Módulo 1
    en PascalCase (`Available`, `Reserved`, `Occupied`, ...).
+
+### Decisiones de diseño tomadas al escribir los planes de feature
+
+| # | Decisión | Origen |
+|---|---|---|
+| D1 | **La confirmación de una cotización no confía en el importe de la pantalla.** Al confirmar, el servidor vuelve a cotizar con el Módulo 3 y lo compara con el importe que vio el solicitante; si difiere, responde 400 "La tarifa cambió, vuelva a cotizar". Nunca se guarda un monto enviado por el cliente y la `RateQuote` sigue sin persistirse. Lo aplican `generate-direct-reservation` y `update-reservation`. | `calculate-dynamic-rate` |
+| D2 | **`Reservation` guarda la moneda del importe:** columna `gross_amount_currency` junto a `gross_amount`, porque FR-002 pide conservar la `currency` y el diccionario no la lista. Pendiente agregarla al diccionario. | `calculate-dynamic-rate` |
 
 ## Estrategia de testing base
 
