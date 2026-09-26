@@ -19,7 +19,8 @@ registre en un
 
 1. El **Módulo 1** notifica el Check-In de una reserva cuyo huésped es extranjero (`Guest.type`
    `FOREIGN`) e incluye en la misma notificación sus `ForeignGuestData`, de los que el sistema toma
-   el tipo de movimiento migratorio y su fecha.
+   el tipo de movimiento migratorio y su fecha. El cambio de estado de la reserva a `IN_PROGRESS` lo
+   ejecuta "Actualizar reservación".
 2. El sistema valida que los datos migratorios estén presentes, tengan formato correcto y sean
    coherentes (por ejemplo, que la fecha de movimiento no sea futura).
 3. Si son válidos, el sistema los registra en un `MigratoryMovement` asociado a esa `Reservation`
@@ -76,6 +77,12 @@ advertencia.
    - **Given** una `Reservation` de un `Guest` con `type` `NATIONAL`
    - **When** el sistema recibe la notificación de Check-In
    - **Then** el sistema omite el procesamiento migratorio y no exige ningún dato migratorio
+
+4. **Scenario**: Corrección de datos migratorios por reenvío del Módulo 1
+   - **Given** una `Reservation` en `IN_PROGRESS` cuyo `MigratoryMovement` está `INCOMPLETE`
+   - **When** el Módulo 1 reenvía la notificación de Check-In con los datos migratorios completos
+   - **Then** el sistema no cambia el estado de la reserva, actualiza únicamente ese
+     `MigratoryMovement` a `COMPLETE` y responde 200
 
 ---
 

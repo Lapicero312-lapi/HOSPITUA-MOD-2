@@ -325,7 +325,8 @@ de apartado.
   `COMPLETED` | `REJECTED`) y `rejectionReason` (`OBSOLETE` | `ROOM_OCCUPIED` | `UNRESOLVED`, solo
   cuando es `REJECTED`).
 - **ReconciliationIncident**: Registro de una orden rechazada o sin efecto que requiere revisión
-  humana (definida en "Registrar Check-In"). Atributos relevantes: `origin` `ROOM_STATE`, `roomId`,
+  humana (definida en "Actualizar reservación"). Atributos relevantes: `origin` `ROOM_STATE`,
+  `roomId`,
   `reservationRef`, `reason` y `resolutionStatus`.
 - **Room**: Unidad física de alojamiento, propiedad del Módulo 1. Atributos: `id`, `roomNumber`,
   `categoryRoom` y `status` (`Available` | `Reserved` | `Occupied`).
