@@ -21,8 +21,9 @@ pruebas. Cada plan de feature (`specs/[feature]/plan.md`) depende de este y solo
 ## Technical Context
 
 **Language/Version**: Java 21
-**Primary Dependencies**: Spring Boot, Spring Web, Spring Data JPA, Bean Validation, Lombok, Spring AMQP
+**Primary Dependencies**: Spring Boot, Spring Web, Spring Data JPA, Bean Validation, Lombok, Spring AMQP, Spring Security, Flyway
 **Storage**: PostgreSQL
+**Build**: Maven
 **Messaging**: RabbitMQ
 **Testing**: JUnit 5, Mockito, Spring Boot Test, Testcontainers
 **Target Platform**: servidor Linux/Windows + navegador web
@@ -36,17 +37,17 @@ cierre del día < 1 min para 1000 reservas; falta un objetivo global de carga)
 **Constraints**: NEEDS CLARIFICATION
 **Scale/Scope**: NEEDS CLARIFICATION
 
-### Dependencias o herramientas que este plan necesita y no están en la lista (requieren aprobación)
+### Dependencias y herramientas adicionales a la lista original (aprobadas)
 
 | Necesidad | Propuesta | Por qué |
 |---|---|---|
-| Herramienta de build | Maven | Estándar con Spring Boot |
-| Migraciones de esquema | Flyway | Versionar el esquema; alternativa: `ddl-auto=validate` + SQL manual |
-| Autenticación y autorización | Spring Security | Las specs exigen interfaces "exclusivas y seguras" (Migración) y que cada Ota vea solo sus reservas |
+| Herramienta de build | Maven (aprobado) | Estándar con Spring Boot |
+| Migraciones de esquema | Flyway (aprobado) | Versionar el esquema en `db/migration` |
+| Autenticación y autorización | Spring Security (aprobado) | Las specs exigen interfaces "exclusivas y seguras" (Migración) y que cada Ota vea solo sus reservas |
 | Tareas programadas | `@Scheduled` (viene con Spring) | Apartado del inicio del día, cierre del día y reintentos |
 | Exclusión mutua de tareas con varias instancias | Bloqueo asesor de PostgreSQL (decisión C10) | Evitar que dos instancias ejecuten el mismo cierre del día |
 | Timeouts y reintentos REST | `RestClient` con timeouts; Resilience4j opcional | No asumir disponibilidad ante caídas |
-| Paquete base | `com.hospitua.reservas` | Convención |
+| Paquete base | `com.hospitua.reservas` (aprobado) | Convención |
 
 ## Comunicación entre módulos
 
@@ -164,7 +165,7 @@ backend/
     │   │   └── messaging/            # consumidores RabbitMQ, EventEnvelope, idempotencia
     │   └── resources/
     │       ├── application.yml
-    │       └── db/migration/         # V1__esquema_base.sql (si se aprueba Flyway)
+    │       └── db/migration/         # V1__esquema_base.sql 
     └── test/java/com/hospitua/reservas/
         ├── unit/
         ├── integration/              # Spring Boot Test + Testcontainers (PostgreSQL, RabbitMQ)
@@ -261,7 +262,7 @@ guarda como texto. `Room`, `ForeignGuestData`, `MaintenanceCalendar` y `RateQuot
 
 **⚠️ CRÍTICO**: Ninguna feature puede empezar hasta terminar esta fase.
 
-- [ ] T007 Definir el esquema base (tablas de Diseño técnico base) y el mecanismo de migración
+- [ ] T007 Definir el esquema base (tablas de Diseño técnico base) y las migraciones con Flyway
 - [ ] T008 [P] Crear `Reservation`, `Guest`, `Ota` y sus repositorios
 - [ ] T009 [P] Crear `ApiError`, las excepciones de negocio y `GlobalExceptionHandler` en `common/`
 - [ ] T010 [P] Configurar el bean `Clock` de la zona horaria del hotel
@@ -274,8 +275,8 @@ guarda como texto. `Room`, `ForeignGuestData`, `MaintenanceCalendar` y `RateQuot
 - [ ] T015 [P] Crear `ReconciliationIncident` y su servicio de registro
 - [ ] T016 Configurar la infraestructura de pruebas (Testcontainers de PostgreSQL y RabbitMQ)
 - [ ] T017 [P] Esqueleto del frontend: enrutamiento, cliente HTTP y manejo de errores de API
-- [ ] T018 Configurar autenticación y autorización por actor (Recepcionista, Ota, Migración), una
-  vez resuelta la decisión de seguridad
+- [ ] T018 Configurar autenticación y autorización por actor (Recepcionista, Ota, Migración),
+  con Spring Security
 - [ ] T019 Configurar logs y correlación de solicitudes
 
 **Checkpoint**: Base lista; los planes de feature pueden implementarse.
