@@ -1,204 +1,185 @@
 # Feature Specification: Registrar Confirmación y Comisión de OTA
 
-**Created**: 2026-09-08
+**Created**: 2026-09-25
 
-## Use Case (Caso de Uso)
+## 1. Caso de Uso
 
 ### Descripción del problema
 
 Cada reserva que llega de una agencia de viajes en línea (OTA) trae consigo una obligación
-financiera con esa agencia: una comisión pactada sobre el valor bruto de la estadía. Si esa
-comisión no se calcula y se asienta en el mismo instante en que se registra la reserva, la
-conciliación posterior con la OTA se vuelve imprecisa y el hotel pierde trazabilidad sobre cuánto
-le corresponde retener a cada canal. El negocio necesita un caso de uso interno, invocado siempre
-que "Generar Reservación por OTA" registra una nueva reserva, que aplique de forma estricta la
-fórmula contractual y deje el importe neto listo para la conciliación mensual con cada agencia.
+financiera con esa agencia: una comisión pactada sobre el valor bruto de la estadía. Si esa comisión
+no se calcula y se asienta en el mismo instante en que se registra la reserva, la conciliación
+posterior con la OTA se vuelve imprecisa y el hotel pierde trazabilidad sobre cuánto le corresponde
+retener a cada canal. La reserva y su comisión se asocian siempre a una `categoryRoom`: en esta
+etapa no existe ningún `roomId` ni `numberRoom` físico asignado, ya que esa asignación ocurre
+únicamente en el Check-In, dentro del Módulo 1.
+
+El negocio necesita un caso de uso interno, invocado siempre que "Generar Reservación por OTA"
+registra una nueva reserva, que aplique de forma estricta la fórmula contractual sobre el
+`grossAmount` recibido y deje el importe neto listo para la conciliación mensual con cada agencia,
+incluyendo el ajuste automático a cero cuando la reserva se cancela sin costo.
 
 ### Flujo de Usuario de Alto Nivel
 
-1. El caso de uso "Generar Reservación por OTA" invoca internamente "Registrar confirmación y
-   comisión de ota" al validar una nueva reserva, enviando el `totalAmount` recibido de la OTA y el
-   `externalConfirmationCode`.
+1. "Generar Reservación por OTA" invoca internamente "Registrar confirmación y comisión de ota" al
+   validar una nueva reserva, enviando el `grossAmount`, el `externalConfirmationCode` y la `Ota`
+   originadora.
 2. El sistema consulta el `commissionPercentage` contractual configurado para esa `Ota`.
-3. El sistema calcula el `commissionAmount` aplicando estrictamente la fórmula del glosario:
-   `totalAmount × commissionPercentage`.
-4. El sistema persiste el `commissionAmount` y el `commissionPercentage` en la `Reservation`, junto
-   con el `externalConfirmationCode`, y marca el `commissionStatus` como `CALCULATED`.
-5. Durante el ciclo de vida de la reserva, el sistema permite conciliar la comisión contra el
-   cierre contable mensual, cambiando el `commissionStatus` a `RECONCILED` o `PAID`, o ajustándolo
-   a cero cuando la reserva se cancela.
+3. El sistema calcula el `commissionAmount` aplicando la fórmula `grossAmount ×
+   commissionPercentage / 100`.
+4. El sistema persiste el `commissionAmount`, el `commissionPercentage` y el
+   `externalConfirmationCode` en la `Reservation`, asociada a su `categoryRoom`, con
+   `commissionStatus` `CALCULATED`.
+5. Durante el cierre mensual, el área financiera concilia las comisiones de las reservas en
+   `Reservation.state` `COMPLETED`, cambiando su `commissionStatus` a `RECONCILED` o `PAID`, y
+   ajusta a cero las comisiones de las reservas en `CANCELLED`.
 
-## User Scenarios & Testing *(mandatory)*
+## 2. Escenarios de Usuario y Pruebas
 
-### User Story 1 - Cálculo y Registro de Comisión al Confirmar una Reserva OTA (Priority: P1)
+### User Story 1 - Registro Automático de Comisión (Priority: P1)
 
-Al validarse una nueva reserva proveniente de una `Ota`, el sistema aplica el porcentaje
-contractual configurado para esa agencia sobre el `totalAmount` recibido, calcula el
-`commissionAmount` y lo persiste junto con el `externalConfirmationCode` en la `Reservation`, con
-`commissionStatus` `CALCULATED`. Esta historia es el flujo maestro (Happy Path), invocado siempre
-como parte de "Generar Reservación por OTA".
+**Plain Language**: Cálculo y registro automático de la comisión OTA al validar una nueva reserva,
+aplicando el porcentaje contractual sobre el `grossAmount` y dejando el `commissionAmount` y el
+`externalConfirmationCode` persistidos con `commissionStatus` `CALCULATED`.
+
+Al validarse una nueva reserva proveniente de una `Ota`, el sistema aplica el porcentaje contractual
+configurado para esa agencia sobre el `grossAmount` recibido, calcula el `commissionAmount` y lo
+persiste junto con el `externalConfirmationCode` en la `Reservation`, con `commissionStatus`
+`CALCULATED`. Esta historia es el flujo maestro (Happy Path), invocado siempre como parte de
+"Generar Reservación por OTA", y se consolida con el rechazo por porcentaje de comisión inválido
+para evitar la sobre-atomización.
 
 **Why this priority**: Es la funcionalidad esencial para operar con canales de distribución de
 terceros: sin ella, el hotel recibiría reservas de OTA sin registrar con exactitud la comisión
 pactada ni el ingreso neto real de cada una.
 
-**Independent Test**: Se prueba invocando el caso de uso con un `totalAmount` de \$400 y un
+**Independent Test**: Se prueba invocando el caso de uso con un `grossAmount` de $400 y un
 `commissionPercentage` del 15% configurado para la agencia. Se verifica que el sistema calcule un
-`commissionAmount` de \$60, lo persista junto al `externalConfirmationCode`, y marque el
+`commissionAmount` de $60, lo persista junto al `externalConfirmationCode`, y marque el
 `commissionStatus` como `CALCULATED`. Se completa enviando un `commissionPercentage` inválido,
 confirmando el rechazo con **HTTP 400**.
 
 **Acceptance Scenarios**:
 
-1. **Scenario**: Registro exitoso de comisión al confirmar una reserva OTA (Happy Path)
-   - **Given** una reserva proveniente de una `Ota` válida con `commissionPercentage`
-     contractual configurado
-   - **When** "Generar Reservación por OTA" invoca "Registrar confirmación y comisión de ota" con
-     el `totalAmount` y el `externalConfirmationCode`
-   - **Then** el sistema calcula el `commissionAmount` aplicando `totalAmount ×
-     commissionPercentage`, lo persiste en la `Reservation`, y marca el `commissionStatus` como
-     `CALCULATED`
+1. **Escenario 1**: Cálculo y registro exitoso de comisión OTA (Happy Path)
 
-2. **Scenario**: Rechazo controlado por porcentaje de comisión inválido (Error)
-   - **Given** una solicitud de registro de comisión
-   - **When** el `commissionPercentage` configurado para el canal es menor a cero o superior al
-     100%
-   - **Then** el sistema intercepta la solicitud, responde con **HTTP 400 (Bad Request)**
-     indicando que el porcentaje de comisión no es válido, y no persiste la reserva
+   ```gherkin
+   Given una reserva proveniente de una Ota válida con commissionPercentage contractual configurado
+   When "Generar Reservación por OTA" invoca "Registrar confirmación y comisión de ota" con el grossAmount y el externalConfirmationCode
+   Then el sistema calcula el commissionAmount aplicando grossAmount × commissionPercentage / 100
+   And lo persiste en la Reservation asociada a su categoryRoom
+   And marca el commissionStatus como CALCULATED
+   ```
+
+2. **Escenario 2**: Rechazo controlado por porcentaje de comisión inválido (Error)
+
+   ```gherkin
+   Given una solicitud de registro de comisión
+   When el commissionPercentage configurado para el canal es menor a 0% o superior al 100%
+   Then el sistema intercepta la solicitud sin calcular ni persistir ninguna comisión
+   And responde con un error controlado HTTP 400 (Bad Request) indicando que el porcentaje de comisión no es válido
+   ```
 
 ---
 
-### User Story 2 - Conciliación Financiera de Comisiones OTA (Priority: P2)
+### User Story 2 - Conciliación Financiera Mensual (Priority: P2)
 
-La Recepcionista o el analista financiero revisa el reporte de comisiones de un periodo mensual,
-comparando las reservas con `commissionStatus` `CALCULATED` contra aquellas que completaron su
-estadía (`COMPLETED`) o que se cancelaron. El sistema permite marcar las comisiones como
-`RECONCILED` o `PAID`, y ajustar a cero las reservas canceladas.
+**Plain Language**: Conciliación mensual de las comisiones OTA, marcando como `RECONCILED` o `PAID`
+las de reservas con estadía finalizada (`COMPLETED`) y ajustando a cero las de reservas
+`CANCELLED`, para evitar obligaciones de pago indebidas hacia la agencia.
+
+El área financiera revisa el reporte de comisiones de un periodo mensual, comparando las reservas
+con `commissionStatus` `CALCULATED` contra aquellas que completaron su estadía o que se cancelaron.
+El sistema permite marcar las comisiones como `RECONCILED` o `PAID`, y ajusta a cero las de las
+reservas canceladas.
 
 **Why this priority**: Es un flujo de auditoría contable importante para la liquidación mensual con
-los proveedores de distribución, pero no interviene en la ingesta síncrona diaria de reservas.
+los proveedores de distribución, pero no interviene en la ingesta síncrona diaria de reservas. Se
+prioriza como P2 por depender de la ejecución previa de la User Story 1.
 
 **Independent Test**: Se genera el listado de comisiones de un canal sobre un conjunto de reservas
-en `COMPLETED`. Se ejecuta la conciliación y se comprueba que las comisiones pasen a
-`RECONCILED` y que las asociadas a reservas `CANCELLED` ajusten su comisión a cero.
+en `COMPLETED` y se ejecuta la conciliación, verificando que sus comisiones pasen a `RECONCILED`. Se
+repite sobre reservas en `CANCELLED`, verificando que su `commissionAmount` se ajuste a cero.
 
 **Acceptance Scenarios**:
 
-1. **Scenario**: Conciliación exitosa de comisiones para reservas con estadía finalizada
-   - **Given** un conjunto de reservas OTA con `commissionStatus` `CALCULATED` en `status`
-     `COMPLETED`
-   - **When** el usuario financiero ejecuta el proceso de conciliación del periodo
-   - **Then** el sistema confirma la coincidencia de montos y actualiza el `commissionStatus` de
-     esas reservas a `RECONCILED`
+1. **Escenario 1**: Conciliación exitosa de comisiones para reservas en `COMPLETED`
 
-2. **Scenario**: Anulación de comisión por cancelación de la reserva
-   - **Given** una reserva de canal OTA que pasó a `status` `CANCELLED`
-   - **When** el sistema procesa la conciliación de comisiones
-   - **Then** el sistema ajusta el `commissionAmount` a cero y marca el `commissionStatus` como
-     `RECONCILED`, evitando una obligación de pago indebida hacia la agencia
+   ```gherkin
+   Given un conjunto de reservas OTA con commissionStatus CALCULATED en Reservation.state COMPLETED
+   When el área financiera ejecuta el proceso de conciliación del periodo
+   Then el sistema confirma la coincidencia de montos
+   And actualiza el commissionStatus de esas reservas a RECONCILED o PAID
+   ```
 
----
+2. **Escenario 2**: Ajuste automático a cero para reservas en `CANCELLED`
 
-### User Story 3 - Configuración del Porcentaje Contractual por Canal OTA (Priority: P3)
+   ```gherkin
+   Given una reserva de canal OTA en Reservation.state CANCELLED con commissionStatus CALCULATED
+   When el sistema procesa la conciliación de comisiones del periodo
+   Then el sistema ajusta el commissionAmount a cero
+   And conserva el histórico de la comisión originalmente calculada para auditoría
+   ```
 
-La Recepcionista o un Administrador configura los parámetros de una nueva `Ota`, especificando su
-`name` y el `commissionPercentage` contractual por defecto que se aplicará a sus futuras reservas.
+## 3. Casos Borde
 
-**Why this priority**: Es una función administrativa de soporte para incorporar nuevos canales
-comerciales, pero no interviene en la ingesta diaria de reservas existentes.
+- **Caso Borde 1**: Modificación posterior del porcentaje contractual de una `Ota`. El nuevo
+  `commissionPercentage` aplica exclusivamente a las reservas futuras; las reservas previas
+  conservan el `commissionAmount` calculado al momento de su creación.
+- **Caso Borde 2**: Reutilización de `externalConfirmationCode` para la misma `Ota`. El sistema
+  rechaza el intento por duplicidad con un error controlado **HTTP 400 (Bad Request)**, sin generar
+  un registro de comisión duplicado.
+- **Caso Borde 3**: Cancelación de una reserva OTA. El proceso de conciliación ajusta el
+  `commissionAmount` a cero y conserva el histórico de auditoría de la comisión originalmente
+  calculada.
 
-**Independent Test**: Se registra una nueva `Ota` con un 15% de comisión por defecto. Se envía una
-reserva de prueba sobre ese canal y se verifica que el sistema aplique automáticamente el 15% al
-calcular el `commissionAmount`.
+## 4. Requisitos
 
-**Acceptance Scenarios**:
-
-1. **Scenario**: Registro exitoso de nuevo canal OTA con comisión contractual
-   - **Given** la consola de configuración de canales
-   - **When** el Administrador registra una nueva `Ota` con un `commissionPercentage` válido
-   - **Then** el sistema guarda la nueva `Ota` y la habilita para calcular comisiones de forma
-     automática en sus futuras reservas
-
-2. **Scenario**: Rechazo de configuración por nombre de canal ausente (Error)
-   - **Given** el formulario de alta de canal OTA
-   - **When** el Administrador intenta guardar el registro con el campo `name` vacío
-   - **Then** el sistema responde con **HTTP 400 (Bad Request)** especificando los campos
-     requeridos faltantes
-
-### Casos Borde
-
-- ¿Qué sucede si se modifica el `commissionPercentage` contractual de una `Ota` con reservas ya
-  registradas? El nuevo porcentaje aplica exclusivamente a las reservas futuras; las reservas
-  existentes conservan el `commissionAmount` calculado al momento de su creación.
-- ¿Qué sucede si se recibe una nueva reserva reutilizando un `externalConfirmationCode` ya
-  registrado para la misma `Ota`? El sistema rechaza el intento por duplicidad, responde con **HTTP
-  400 (Bad Request)**, y no genera un registro de comisión duplicado.
-- ¿Cómo maneja el sistema la cancelación de una reserva OTA, incluso si es tardía? La cancelación no
-  genera cobro de penalidad, por lo que el sistema ajusta el `commissionAmount` a cero y conserva el
-  histórico de la comisión originalmente calculada para auditoría.
-- ¿Cómo maneja el sistema dos actualizaciones simultáneas de la misma reserva OTA? El sistema
-  procesa secuencialmente los eventos para garantizar que el `commissionStatus` final refleje la
-  versión de datos más reciente.
-
-## Requirements *(mandatory)*
-
-### Functional Requirements
+### Requisitos Funcionales
 
 - **FR-001**: El sistema debe calcular automáticamente el `commissionAmount` aplicando la fórmula
-  `totalAmount × commissionPercentage` al validar una nueva reserva de canal OTA.
+  `grossAmount × commissionPercentage / 100` al validar una nueva reserva de canal OTA.
 - **FR-002**: El sistema debe consultar el `commissionPercentage` contractual configurado para la
   `Ota` que origina cada reserva.
 - **FR-003**: El sistema debe asignar el `commissionStatus` inicial `CALCULATED` a toda reserva OTA
   registrada correctamente.
-- **FR-004**: El sistema debe rechazar el registro de reservas OTA cuyo `commissionPercentage` sea
-  menor a cero o superior al 100%.
+- **FR-004**: El sistema debe rechazar el registro cuando el `commissionPercentage` sea menor a 0%
+  o superior al 100%, respondiendo **HTTP 400 (Bad Request)**.
 - **FR-005**: El sistema debe rechazar cualquier intento de registrar una reserva OTA con un
-  `externalConfirmationCode` ya existente para el mismo canal.
-- **FR-006**: El sistema debe proveer una función de conciliación que cambie el `commissionStatus`
+  `externalConfirmationCode` ya existente para la misma `Ota`, respondiendo **HTTP 400 (Bad
+  Request)**.
+- **FR-006**: El sistema debe permitir la conciliación financiera, cambiando el `commissionStatus`
   de `CALCULATED` a `RECONCILED` o `PAID`.
-- **FR-007**: El sistema debe ajustar a cero el `commissionAmount` de las reservas que pasen a
-  `status` `CANCELLED`, ya que la cancelación no genera cobro de penalización.
-- **FR-008**: El sistema debe permitir configurar y actualizar el `name` y el `commissionPercentage`
-  por defecto de cada `Ota`.
-- **FR-009**: El sistema debe interceptar cualquier error de validación de entrada o integración y
-  responder con **HTTP 400 (Bad Request)**, prohibiendo que se propaguen como fallas **HTTP 500**.
-- **FR-010**: El sistema debe mantener un registro auditable de cada comisión calculada, ajustada o
-  conciliada, incluyendo la fecha, el canal responsable y los importes aplicados.
+- **FR-007**: El sistema debe ajustar a cero el `commissionAmount` de las reservas que se
+  encuentren en `Reservation.state` `CANCELLED`.
+- **FR-008**: El sistema debe interceptar cualquier error de validación de entrada y responder con
+  **HTTP 400 (Bad Request)**, quedando estrictamente prohibida la propagación de excepciones de
+  infraestructura **HTTP 500**.
 
-### Non-Functional Requirements
+### Requisitos No Funcionales
 
-- **NFR-001**: El cálculo y registro de la comisión al validar una reserva OTA debe completarse en
-  un tiempo inferior a 1 segundo.
-- **NFR-002**: El cálculo de comisiones debe realizarse con precisión decimal exacta para evitar
-  descuadres en los cierres contables mensuales.
+- **NFR-001**: El cálculo y registro de la comisión debe completarse en menos de 1 segundo, con
+  precisión decimal exacta.
 
-### Key Entities *(include if feature involves data)*
+## 5. Entidades Clave
 
-- **Reservation**: Representa la reserva de canal OTA sobre la que se calcula la comisión.
-  Atributos: `reservationRef`, `guestRef`, `roomId`, `categoryRoom`, `totalAmount` (valor
-  bruto recibido de la OTA), `commissionAmount` (comisión calculada), `commissionPercentage`
-  (porcentaje contractual aplicado), `commissionStatus` (`CALCULATED` | `RECONCILED` | `PAID` |
-  `DISPUTED`), `externalConfirmationCode`, `source` (`OTA`), y `status` con estados permitidos:
-  `PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`. Una reserva OTA se crea
-  en
-  `PENDING` y pasa a `ACTIVE` cuando la agencia confirma el pago o la garantía; la comisión se
-  calcula desde el momento de su registro.
-- **Ota**: Representa al intermediario externo que origina la reserva. Atributos: `id`, `name`, y
-  `commissionPercentage` (porcentaje de comisión pactado por defecto).
-- **Guest**: Representa al huésped titular de la reserva. Atributos: `id`, `fullName`,
-  `documentNumber`, `nationality`.
+- **Reservation**: Reserva de canal OTA sobre la que se calcula la comisión. Atributos:
+  `reservationRef`, `guestRef`, `categoryRoom`, `grossAmount` (valor bruto recibido de la OTA),
+  `commissionAmount`, `commissionPercentage`, `commissionStatus` (`CALCULATED` | `RECONCILED` |
+  `PAID` | `DISPUTED`), `externalConfirmationCode`, `source` (`OTA`) y `Reservation.state`
+  (`PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`).
+- **Ota**: Intermediario externo que origina la reserva. Atributos: `id`, `name` y
+  `commissionPercentage`.
+- **Guest**: Huésped titular de la reserva. Atributos: `id`, `fullName`, `documentNumber` y
+  `nationality`.
 
-## Success Criteria *(mandatory)*
+## 6. Criterios de Éxito
 
-### Measurable Outcomes
+### Resultados Medibles
 
-- **SC-001**: El 100% de las reservas con `source` `OTA` cuentan con `commissionAmount` y
-  `commissionStatus` `CALCULATED` calculados de forma exacta al momento de su registro.
-- **SC-002**: El 100% de los intentos de registro con `externalConfirmationCode` duplicado o
-  `commissionPercentage` inválido son rechazados con **HTTP 400 (Bad Request)**.
-- **SC-003**: Cero errores de servidor **HTTP 500** son provocados por fallos en el cálculo o
-  conciliación de comisiones OTA; el 100% se responde con **HTTP 400**.
-- **SC-004**: El 100% de las reservas canceladas libres de costo ajustan su `commissionAmount` a
-  cero en el proceso de conciliación mensual.
-- **SC-005**: El tiempo de respuesta para el registro y cálculo de comisión de una reserva OTA es
-  inferior a 1 segundo.
+- **SC-001**: El 100% de las reservas OTA registran su `commissionAmount` y `commissionStatus`
+  `CALCULATED` al crearse.
+- **SC-002**: El 100% de los códigos duplicados o porcentajes de comisión inválidos se rechazan con
+  **HTTP 400**.
+- **SC-003**: El 100% de las reservas canceladas ajustan su comisión a cero en la conciliación.
+- **SC-004**: Cero errores **HTTP 500** en producción.
