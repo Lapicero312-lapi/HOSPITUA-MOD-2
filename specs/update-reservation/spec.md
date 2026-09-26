@@ -1,186 +1,174 @@
 # Feature Specification: Actualizar Reservación
 
-**Created**: 2026-09-19
+**Created**: 2026-09-25
 
-## Use Case (Caso de Uso)
+## 1. Caso de Uso
 
 ### Descripción del problema
 
 Los planes de viaje de un huésped cambian con frecuencia: adelanta o pospone su llegada, extiende la
-estadía, cambia de categoría de habitación o corrige datos personales. Si el hotel no puede reflejar
-esos cambios de forma ágil sobre una reserva, la fricción crece, se pierden ventas y el personal
-termina llevando ajustes por fuera del sistema. El problema tiene tres caras: verificar que las
-nuevas fechas estén disponibles, recalcular el valor cuando cambian las fechas o la categoría (lo
-hace el Módulo 3, no el Módulo 2), y mantener un único punto donde se cambia el estado de la
-reserva, que también usan el Check-In, el Check-Out y el proceso de No-Show. El negocio necesita una
-única funcionalidad de actualización que valide la disponibilidad, delegue el recálculo y solo
-persista tras la confirmación del solicitante.
+estadía, cambia de `categoryRoom` o corrige datos personales. Si el hotel no puede reflejar esos
+cambios de forma ágil sobre una reserva, la fricción crece, se pierden ventas y el personal termina
+llevando ajustes por fuera del sistema. El problema tiene dos caras: verificar que exista cupo de
+aforo lógico disponible para las nuevas fechas o categoría, y recalcular el valor bruto cuando
+cambian las fechas o la categoría (lo hace el Módulo 3, no el Módulo 2, y de forma informativa).
+
+Durante la etapa de reserva no existe ningún `numberRoom` ni `roomId` físico asignado al huésped —esa
+asignación ocurre únicamente en el Check-In, dentro del Módulo 1—, por lo que esta funcionalidad
+nunca invoca al Módulo 1 para intentar cambiar el estado de ninguna habitación física. El negocio
+necesita una única funcionalidad de actualización que valide el aforo lógico local, delegue el
+recálculo informativo en el Módulo 3, y solo persista los cambios tras la confirmación del
+solicitante.
 
 ### Flujo de Usuario de Alto Nivel
 
-1. La **Recepcionista** o la **Ota** localiza la reserva mediante "Consultar
-   reservas" y valida que esté en `ACTIVE` o `PENDING`.
-2. El solicitante edita las fechas, la categoría de `Room` o los datos personales del `Guest`.
-3. Si cambian las fechas o la habitación, el sistema ejecuta "Verificar disponibilidades" enviando
-   la `reservationRef` de la reserva editada, para que esta no se cruce consigo misma.
-4. Si cambian las fechas o la categoría, el sistema ejecuta "Calcular tarifa dinámica" en el Módulo
-   3 para obtener el nuevo valor y la diferencia.
-5. El solicitante revisa el resumen y confirma; el sistema persiste los cambios.
+1. La Recepcionista busca la reserva por `reservationRef` o por el documento del titular.
+2. El sistema valida que la `Reservation` se encuentre en `Reservation.state` `PENDING` o `ACTIVE`.
+3. La Recepcionista ajusta las fechas, la `categoryRoom` o los datos personales del `Guest`.
+4. Si cambian las fechas o la `categoryRoom`, el sistema ejecuta "Verificar disponibilidades" sobre
+   el aforo lógico local, enviando la `reservationRef` de la reserva editada para que esta no se
+   cruce consigo misma, y solicita al Módulo 3 ("Calcular tarifa dinámica") el nuevo `grossAmount`
+   de carácter informativo.
+5. La Recepcionista revisa el resumen financiero (diferencia a pagar o saldo a favor) y confirma los
+   cambios; el sistema persiste la `Reservation` y el `Guest` de forma local y genera un registro de
+   auditoría.
+6. El sistema responde con **HTTP 200 (OK)**.
 
-Adicionalmente, los procesos "Cancelar reservación", "Generar reservación por OTA" (confirmación de
-pago o garantía), "Generar reservación directa" y "Generar reservación por OTA" (cancelación
-compensatoria con el motivo `ROOM_REJECTED` cuando el Módulo 1 rechaza apartar la habitación),
-"Registrar Check-In", "Registrar Check-Out" y "Marcar No-Show" usan esta funcionalidad para cambiar
-el `status` de la reserva a `CANCELLED`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED` o `NO_SHOW`, de modo
-que las reglas de transición y de concurrencia vivan en un solo lugar.
+## 2. Escenarios de Usuario y Pruebas
 
-## User Scenarios & Testing *(mandatory)*
+### User Story 1 - Modificación de Reservación Existente (Priority: P1)
 
-### User Story 1 - Modificación de Datos de Reservación (Priority: P1)
+**Plain Language**: Actualización ágil de fechas, `categoryRoom` o datos de huéspedes sobre reservas
+en `PENDING` o `ACTIVE`, validando el aforo lógico local y recalculando el valor bruto de forma
+informativa con el Módulo 3, sin ninguna llamada hacia el Módulo 1.
 
-Un solicitante —la Recepcionista o la Ota— modifica una reserva que aún no ha
-iniciado su estadía. Puede cambiar fechas, categoría o datos personales. Cuando el cambio afecta
-fechas o categoría, el sistema valida disponibilidad y delega el recálculo en el Módulo 3, mostrando
-la diferencia antes de confirmar; cuando solo toca datos personales, guarda directamente. Por
-tratarse de una única vista, el camino feliz y los bloqueos lógicos se consolidan en esta misma
-historia de usuario.
+Un solicitante —la Recepcionista— modifica una reserva que aún no ha iniciado su estadía. Puede
+cambiar fechas, `categoryRoom` o datos personales. Cuando el cambio afecta fechas o categoría, el
+sistema valida el aforo lógico local y delega el recálculo en el Módulo 3, mostrando la diferencia
+antes de confirmar; cuando solo toca datos personales, guarda directamente sin recotización ni
+validación de inventario. Por tratarse de una única funcionalidad, el camino exitoso y los bloqueos
+lógicos (estado no modificable, falta de aforo) se consolidan en esta misma historia de usuario,
+para evitar la sobre-atomización.
 
 **Why this priority**: Da al hotel la flexibilidad de acomodar los cambios del cliente sin fricción
-y sin gestiones por fuera del sistema, garantizando la consistencia de la disponibilidad y del valor
-de la estadía antes de la llegada.
+y sin gestiones por fuera del sistema, garantizando la consistencia del aforo lógico y del valor de
+la estadía antes de la llegada, sin acoplar la actualización a la disponibilidad ni a la respuesta
+del Módulo 1.
 
-**Independent Test**: Se modifica una reserva `ACTIVE` y se verifica que el sistema valide la
-disponibilidad, muestre la diferencia calculada por el Módulo 3 y solo tras la confirmación guarde
-los cambios. Se repite con datos personales (sin recálculo) y sobre reservas `IN_PROGRESS`,
-`COMPLETED`, `CANCELLED` y `NO_SHOW`, confirmando el bloqueo.
+**Independent Test**: Se modifica una `Reservation` en `ACTIVE` cambiando fechas y `categoryRoom`, y
+se verifica que el sistema valide el aforo lógico local, muestre la diferencia calculada por el
+Módulo 3 y solo tras la confirmación persista los cambios. Se repite modificando únicamente datos
+personales del `Guest`, confirmando que no se invoca al Módulo 3 ni se valida aforo. La prueba se
+completa intentando modificar reservas en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`, y
+solicitando un cambio sobre una `categoryRoom` sin aforo disponible, confirmando el bloqueo
+controlado en ambos casos.
 
 **Acceptance Scenarios**:
 
-1. **Scenario**: Actualización de fechas o categoría con recálculo exitoso (Happy Path)
-   - **Given** una `Reservation` en `ACTIVE` con disponibilidad validada para las nuevas fechas
-   - **When** el solicitante modifica las fechas o la categoría y el Módulo 3 devuelve la tarifa
-     recalculada
-   - **Then** el sistema muestra el resumen con la diferencia a pagar o reembolsar y, tras la
-     confirmación, actualiza la reserva
+1. **Escenario 1**: Actualización exitosa de fechas/categoría con recálculo tarifario (Happy Path)
 
-2. **Scenario**: Modificación de datos personales sin afectación financiera
-   - **Given** una `Reservation` en `ACTIVE` o `PENDING`
-   - **When** el solicitante corrige datos del `Guest`
-   - **Then** el sistema guarda los cambios sin invocar al Módulo 3 ni alterar fechas o categoría
+   ```gherkin
+   Given una Reservation en Reservation.state ACTIVE con cupo de aforo lógico disponible para las nuevas fechas o categoryRoom
+   When el solicitante modifica las fechas o la categoryRoom y confirma los cambios
+   Then el sistema verifica el aforo lógico local excluyendo la propia reservationRef
+   And solicita al Módulo 3 el grossAmount recalculado de forma informativa
+   And muestra el resumen con la diferencia a pagar o reembolsar antes de confirmar
+   And, tras la confirmación, persiste los cambios sobre la Reservation
+   And registra la auditoría de la modificación
+   ```
 
-3. **Scenario**: Cambio de estado solicitado por un proceso interno
-   - **Given** una cancelación, una confirmación de pago OTA, una cancelación compensatoria por
-     `ROOM_REJECTED`, o una notificación de Check-In, Check-Out o No-Show válida
-   - **When** el proceso correspondiente ejecuta "Actualizar reservación"
-   - **Then** el sistema cambia el `status` a `CANCELLED`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED` o
-     `NO_SHOW` según la transición permitida
+2. **Escenario 2**: Modificación exclusiva de datos personales de `Guest` sin afectación financiera ni recotización
 
-4. **Scenario**: Bloqueo por falta de disponibilidad (Error)
-   - **Given** que "Verificar disponibilidades" indica que la `Room` no está disponible en las
-     nuevas fechas
-   - **When** el solicitante intenta modificar las fechas
-   - **Then** el sistema bloquea la confirmación y responde **HTTP 400 (Bad Request)** indicando la
-     falta de disponibilidad
+   ```gherkin
+   Given una Reservation en Reservation.state ACTIVE o PENDING
+   When el solicitante corrige únicamente los datos personales del Guest
+   Then el sistema guarda los cambios directamente
+   And no invoca al Módulo 3 ni verifica el aforo lógico
+   ```
 
-5. **Scenario**: Bloqueo de edición sobre reservas finalizadas o en curso (Error)
-   - **Given** una `Reservation` en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` o `NO_SHOW`
-   - **When** un solicitante intenta editarla
-   - **Then** el sistema bloquea la edición con **HTTP 400** indicando que el estado actual no
-     admite modificaciones
+3. **Escenario 3**: Intento de modificación sobre reserva en estado no modificable (Error)
 
-6. **Scenario**: Cambio de habitación coordinado con el Módulo 1
-   - **Given** una `Reservation` en `ACTIVE` con la `Room` A en `RESERVED`, y la `Room` B disponible
-     en sus fechas
-   - **When** el solicitante cambia la reserva a la `Room` B y confirma
-   - **Then** el sistema ordena al Módulo 1 `RESERVED` para la `Room` B y, tras su confirmación,
-     ordena `AVAILABLE` para la `Room` A, y actualiza la reserva
+   ```gherkin
+   Given una Reservation en Reservation.state IN_PROGRESS, COMPLETED, CANCELLED o NO_SHOW
+   When un solicitante intenta editarla
+   Then el sistema bloquea la edición
+   And responde con un error controlado HTTP 400 (Bad Request) indicando que el estado actual no admite modificaciones
+   ```
 
-### Casos Borde
+4. **Escenario 4**: Rechazo por falta de aforo en la nueva `categoryRoom` o fechas solicitadas (Error)
 
-- ¿Qué sucede cuando el Módulo 3 no responde durante el recálculo? El sistema detiene la
-  confirmación financiera y responde **HTTP 400** con el mensaje: "No se pudo calcular la nueva
-  tarifa en este momento. Intente más tarde."
-- ¿Qué sucede si se envían fechas inválidas (salida antes de llegada)? El sistema rechaza la
-  solicitud con **HTTP 400**: "Las nuevas fechas de reserva son inválidas", sin consultar al Módulo
-  3.
-- ¿Qué sucede si se ingresan caracteres extraños en los datos del huésped? El sistema los rechaza
-  antes de guardar con **HTTP 400**: "El formato de los datos contiene caracteres no válidos."
-- ¿Cómo maneja el sistema dos ediciones simultáneas de la misma reserva? Usa control de concurrencia
-  optimista con el atributo `version`: la segunda recibe **HTTP 400** indicando que debe recargar.
-- ¿Qué sucede con el Módulo 1 cuando solo cambian las fechas? Nada: un cambio de fechas sin cambio
-  de `Room` no genera órdenes al Módulo 1.
-- ¿Cómo se coordina el cambio de habitación con el Módulo 1? El sistema ejecuta "Establecer estado
-  de habitación" en este orden: primero ordena `RESERVED` para la `Room` nueva y, solo si el Módulo
-  1 la confirma, ordena `AVAILABLE` para la anterior. Si el Módulo 1 rechaza la `Room` nueva, el
-  cambio no se aplica, la reserva conserva su `Room` original y se responde **HTTP 400**. Si no
-  responde, como el resultado es ambiguo y el Módulo 1 pudo haber apartado la `Room` nueva, el
-  cambio tampoco se aplica y el sistema neutraliza esa posible reserva emitiendo una orden
-  `AVAILABLE` para la `Room` nueva con un `sequenceNumber` mayor, secuenciada por "Establecer estado
-  de habitación" y reintentada desde `PENDING` si falla; la reserva conserva su `Room` original y se
-  responde **HTTP 400**, de modo que nunca queden apartadas la `Room` original y la nueva por la
-  misma reserva. Si falla únicamente la liberación de la `Room` anterior, el cambio ya quedó
-  aplicado y esa
-  orden queda en `PENDING` para reintentarse; el sistema responde **HTTP 400** con el mensaje "La
-  reserva se actualizó, pero la liberación de la habitación anterior quedó pendiente", y reenviar la
-  misma solicitud no repite el cambio.
+   ```gherkin
+   Given que "Verificar disponibilidades" indica que no hay cupo de aforo disponible para la categoryRoom y fechas solicitadas
+   When el solicitante intenta confirmar la modificación
+   Then el sistema bloquea la confirmación sin invocar al Módulo 3
+   And responde con un error controlado HTTP 400 (Bad Request) indicando la falta de disponibilidad
+   ```
 
-## Requirements *(mandatory)*
+## 3. Casos Borde
 
-### Functional Requirements
+- **Caso Borde 1**: Rango de fechas incoherente. Si el `checkOutDate` es anterior o igual al
+  `checkInDate`, el sistema responde con un error controlado **HTTP 400 (Bad Request)**, sin
+  consultar el aforo ni el Módulo 3.
+- **Caso Borde 2**: Modificación simultánea por dos usuarios. El sistema aplica control de
+  concurrencia optimista mediante el atributo `version` de `Reservation`: la segunda solicitud es
+  rechazada con un error controlado **HTTP 400**, indicando que debe recargar la reserva.
+- **Caso Borde 3**: Caída de comunicación con el Módulo 3 durante el recálculo. El sistema
+  interrumpe la confirmación de forma limpia, sin persistir ningún cambio parcial, y responde con
+  un error controlado **HTTP 400 (Bad Request)**.
 
-- **FR-001**: El sistema debe permitir editar los datos de estadía y los datos personales de una
-  `Reservation` en `ACTIVE` o `PENDING`.
-- **FR-002**: El sistema debe validar la disponibilidad mediante "Verificar disponibilidades" cuando
-  cambien las fechas o la habitación, enviando la `reservationRef` de la reserva editada para
-  excluirla del cruce de solapamientos.
-- **FR-003**: El sistema debe invocar "Calcular tarifa dinámica" del Módulo 3 cuando el cambio
-  afecte fechas o categoría, y exigir la confirmación del solicitante antes de persistir.
-- **FR-004**: El sistema debe permitir modificar los datos personales del `Guest` sin invocar al
-  Módulo 3 ni exigir disponibilidad.
-- **FR-005**: El sistema debe ser el único punto de cambio de `status` de la reserva, aceptando las
-  transiciones `PENDING`→`ACTIVE`, `ACTIVE`→`IN_PROGRESS`, `IN_PROGRESS`→`COMPLETED`, `ACTIVE` o
-  `PENDING`→`CANCELLED`, y `ACTIVE` o `PENDING`→`NO_SHOW`; cualquier otra transición debe rechazarse
-  con **HTTP 400**.
-- **FR-006**: El sistema debe aplicar control de concurrencia optimista mediante `version`.
-- **FR-007**: Cuando la modificación cambie la `Room`, el sistema debe ordenar primero `RESERVED`
-  para la nueva y solo después `AVAILABLE` para la anterior, abortando el cambio si el Módulo 1
-  rechaza la nueva o no responde; en el caso de falta de respuesta debe neutralizar la posible
-  reserva de la `Room` nueva con una orden `AVAILABLE` de mayor `sequenceNumber`, reintentada desde
-  `PENDING` si falla. Si falla únicamente la liberación de la anterior, el cambio debe
-  conservarse, la orden debe reintentarse desde `PENDING` y la respuesta debe ser **HTTP 400** con
-  el aviso de liberación pendiente.
-- **FR-008**: El sistema debe interceptar excepciones de validación, concurrencia e integración,
-  respondiendo **HTTP 400 (Bad Request)** y prohibiendo errores **HTTP 500**; en el caso de la
-  liberación pendiente de FR-007, la respuesta 400 no implica que el cambio se haya revertido: el
-  cambio ya está aplicado y solo la liberación queda por reintentar.
+## 4. Requisitos
 
-### Non-Functional Requirements
+### Requisitos Funcionales
 
-- **NFR-001**: La recotización integrada con el Módulo 3 debe completarse en menos de 3 segundos en
-  condiciones normales.
+- **FR-001**: El sistema debe permitir la localización de la reserva por `reservationRef` o por el
+  documento de identidad del titular.
+- **FR-002**: El sistema debe validar que la `Reservation` se encuentre en `Reservation.state`
+  `PENDING` o `ACTIVE` antes de autorizar cualquier edición.
+- **FR-003**: El sistema debe verificar el aforo lógico local de la `categoryRoom` mediante
+  "Verificar disponibilidades" cuando cambien las fechas o la categoría, excluyendo la propia
+  `reservationRef` del cálculo.
+- **FR-004**: El sistema debe invocar al Módulo 3 ("Calcular tarifa dinámica") para recalcular el
+  `grossAmount` de carácter informativo únicamente cuando cambien las fechas o la `categoryRoom`.
+- **FR-005**: El sistema debe persistir localmente los cambios sobre `Reservation` y `Guest` solo
+  tras la confirmación manual del solicitante.
+- **FR-006**: El sistema debe registrar una bitácora de auditoría inmutable con el `processedBy`,
+  la marca de tiempo y el detalle de los cambios aplicados.
+- **FR-007**: Queda estrictamente prohibido que el sistema realice cualquier llamada de
+  modificación de estado hacia el Módulo 1 durante este proceso.
+- **FR-008**: El sistema debe interceptar cualquier error de validación, de aforo, de concurrencia o
+  de integración con el Módulo 3, y responder obligatoriamente con **HTTP 400 (Bad Request)**,
+  quedando estrictamente prohibida la propagación de excepciones de infraestructura **HTTP 500**.
 
-### Key Entities *(include if feature involves data)*
+### Requisitos No Funcionales
 
-- **Reservation**: Entidad principal actualizada. Atributos: `reservationRef`, `guestRef`, `roomId`,
-  `categoryRoom`, `startDate`, `endDate`, `grossAmount`, `version`,  `source` (`DIRECT` | `OTA`) y
-  `status` (`PENDING`, `ACTIVE`, `IN_PROGRESS`,
-  `COMPLETED`, `CANCELLED`, `NO_SHOW`).
-- **Guest**: Titular de la reserva. Atributos: `id`, `fullName`, `documentNumber`, `nationality`,
-  `contactPhone`, `contactEmail`.
-- **Room**: Habitación física referenciada para la disponibilidad. Atributos: `roomId`,
-  `numberRoom`, `categoryRoom` y `status` (`AVAILABLE` | `RESERVED` | `OCCUPIED`).
-- **RateQuote**: Cotización del Módulo 3 para la modificación. Atributos: `reservationRef`,
-  `previousGrossAmount`, `grossAmount`, `amountDifference`, `currency`, `calculatedAt`.
+- **NFR-001**: El sistema debe aplicar control de concurrencia optimista mediante el atributo
+  `version` de `Reservation`.
+- **NFR-002**: El tiempo de respuesta total de la actualización, incluyendo la recotización con el
+  Módulo 3 cuando aplique, debe ser inferior a 1.5 segundos.
 
-## Success Criteria *(mandatory)*
+## 5. Entidades Clave
 
-### Measurable Outcomes
+- **Reservation**: Entidad principal actualizada. Atributos: `id`, `guestRef`, `categoryRoom`,
+  `checkInDate`, `checkOutDate`, `grossAmount`, `commissionPercentage`, `commissionAmount`,
+  `externalConfirmationCode`, `source` (`DIRECT` | `OTA`), `version` (control de concurrencia
+  optimista) y `Reservation.state` (`PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`,
+  `NO_SHOW`).
+- **Guest**: Titular de la reserva. Atributos: `id`, `fullName`, `documentNumber`, `documentType`,
+  `email`, `phone` y `nationality`.
+- **Room**: Concepto de categoría de habitación (`categoryRoom`) y su cupo de aforo lógico local,
+  administrado dentro del Módulo 2. No representa aquí ninguna habitación física individual, ya que
+  el `numberRoom` y el `roomId` no se asignan sino hasta el Check-In, dentro del Módulo 1. Estados
+  físicos administrados por el Módulo 1: `Available`, `Occupied`, `PendingCleaning`, `InCleaning`,
+  `DisabledForRepairs`, `TechnicalBlock` e `Inactive`.
 
-- **SC-001**: El solicitante completa la actualización de fechas y tarifa en menos de 1 minuto una
-  vez recibida la cotización del Módulo 3.
-- **SC-002**: El 100% de los cambios de estado cumplen con las transiciones permitidas y con la
-  nomenclatura unificada de estados.
-- **SC-003**: El 100% de los intentos inválidos (fechas pasadas, falta de disponibilidad, reservas
-  finalizadas) responden **HTTP 400**, con cero errores **HTTP 500**.
-- **SC-004**: Cero discrepancias financieras entre el Módulo 2 y el Módulo 3 tras actualizaciones
-  exitosas.
+## 6. Criterios de Éxito
+
+### Resultados Medibles
+
+- **SC-001**: El 100% de las modificaciones de fechas o categoría recalculan su `grossAmount` con el
+  Módulo 3 y verifican el aforo lógico local antes de confirmarse.
+- **SC-002**: Cero llamadas de modificación de estado realizadas hacia el Módulo 1 durante todo el
+  proceso de actualización.
+- **SC-003**: El 100% de los intentos sobre estados no modificables o sin aforo disponible se
+  rechazan con **HTTP 400**, con cero excepciones **HTTP 500**.
+- **SC-004**: El 100% de las actualizaciones exitosas generan un registro de auditoría.
