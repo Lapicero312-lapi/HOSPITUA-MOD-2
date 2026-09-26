@@ -221,11 +221,9 @@ respuesta es un **HTTP 400** controlado.
 - **Reservation** (entidad local del Módulo 2): Representa la reserva sobre la que se congela el
   valor informativo de la estadía. Atributos: `id`, `guestRef`, `categoryRoom`, `startDate`,
   `endDate`, `grossAmount` (almacena de forma informativa el valor retornado por la `RateQuote` del
-  Módulo 3), `version` (control de
-  concurrencia optimista), `source` (`DIRECT` | `OTA`), y `status` con estados permitidos:
-  `PENDING`,
-  `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`. Las reservas directas nacen en
-  `ACTIVE` y las de OTA en `PENDING`.
+  Módulo 3), `version` (control de concurrencia optimista), `source` (`DIRECT` | `OTA`) y
+  `Reservation.state` con estados permitidos: `PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`,
+  `CANCELLED`, `NO_SHOW`. Las reservas directas nacen en `ACTIVE` y las de OTA en `PENDING`.
 - **RateQuote** (entidad de paso / contrato consumido del Módulo 3): Representa la cotización que el
   Módulo 2 recibe y mapea, sin ser su propietario. Atributos: `grossAmount` (precio bruto total
   calculado por el motor dinámico), `amountDifference` (diferencia respecto al `previousGrossAmount`
@@ -234,10 +232,11 @@ respuesta es un **HTTP 400** controlado.
   como registro propio: extrae sus valores hacia la `Reservation` y hacia la vista de confirmación
   de diferencia.
 - **Room**: Se referencia únicamente a través de su categoría (`categoryRoom`) para construir el
-  contrato de entrada del servicio de tarificación. Sus estados en el Módulo 1 son `AVAILABLE`,
-  `RESERVED` y `OCCUPIED`. Este caso de uso no consulta ni modifica el `status` de ninguna `Room`:
-  la tarificación opera sobre la categoría y la disponibilidad se verifica antes mediante
-  "Verificar disponibilidades".
+  contrato de entrada del servicio de tarificación. Sus estados físicos, propiedad exclusiva del
+  Módulo 1, son `Available`, `Occupied`, `PendingCleaning`, `InCleaning`, `DisabledForRepairs`,
+  `TechnicalBlock` e `Inactive` (el Módulo 1 no cuenta con un estado `RESERVED`). Este caso de uso
+  no consulta ni modifica el estado físico de ninguna `Room`: la tarificación opera sobre la
+  categoría y la disponibilidad se verifica antes mediante "Verificar disponibilidades".
 
 ## Success Criteria *(mandatory)*
 
