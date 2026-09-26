@@ -16,10 +16,11 @@ reporte SIRE incompleto.
 
 ### Flujo de Usuario de Alto Nivel
 
-1. El **Módulo 1** ejecuta el Check-In físico: cambia la `Room` a `OCCUPIED` y entrega la
-   habitación al huésped.
+1. El **Módulo 1** ejecuta el Check-In físico: cambia la `Room` a `Occupied` (desde `Reserved` si la
+   reserva era para hoy) y entrega la habitación al huésped.
 2. El Módulo 1 envía a la API del Módulo 2 una notificación con la referencia de la reserva y, si el
-   huésped es extranjero, sus datos migratorios (tipo de movimiento y fecha).
+   huésped es extranjero, sus datos migratorios (`ForeignGuestData`, de los que se toma el tipo de
+   movimiento y la fecha).
 3. El sistema localiza la reserva mediante "Consultar reservas" y valida que esté en `ACTIVE`.
 4. El sistema ejecuta "Actualizar reservación" para cambiar el `status` a `IN_PROGRESS`.
 5. Si hay datos migratorios, el sistema ejecuta "Procesar datos de huéspedes extranjeros" para
@@ -139,8 +140,8 @@ datos migratorios queden registrados en un `MigratoryMovement` de esa reserva.
   persona debe resolver (por ejemplo, una habitación ocupada sin una reserva vigente). Atributos:
   `incidentId`, `origin` (`CHECK_IN` | `CHECK_OUT` | `ROOM_STATE`), `reservationRef`, `roomId`,
   `reason`, `createdAt` y `resolutionStatus` (`OPEN` | `RESOLVED`).
-- **Room**: Habitación física controlada por el Módulo 1, que ya la pasó a `OCCUPIED`. Atributos:
-  `roomId`, `status` (`AVAILABLE` | `RESERVED` | `OCCUPIED`).
+- **Room**: Habitación física controlada por el Módulo 1, que ya la pasó a `Occupied`. Atributos:
+  `id`, `status` (`Available` | `Reserved` | `Occupied`).
 
 ## Success Criteria *(mandatory)*
 
