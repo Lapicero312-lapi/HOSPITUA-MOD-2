@@ -20,19 +20,22 @@ persista tras la confirmación del solicitante.
 
 1. La **Recepcionista** o la **Ota** localiza la reserva mediante "Consultar
    reservas" y valida que esté en `ACTIVE` o `PENDING`.
-2. El solicitante edita las fechas, la categoría de `Room` o los datos personales del `Guest`.
+2. El solicitante edita las fechas, la categoría de `Room`, los datos personales del `Guest` o
+   registra el aviso de llegada tardía del huésped (`lateArrivalNotice`).
 3. Si cambian las fechas o la habitación, el sistema ejecuta "Verificar disponibilidades" enviando
    la `reservationRef` de la reserva editada, para que esta no se cruce consigo misma.
 4. Si cambian las fechas o la categoría, el sistema ejecuta "Calcular tarifa dinámica" en el Módulo
    3 para obtener el nuevo valor y la diferencia.
 5. El solicitante revisa el resumen y confirma; el sistema persiste los cambios.
 
-Adicionalmente, los procesos "Cancelar reservación", "Generar reservación por OTA" (confirmación de
-pago o garantía), "Generar reservación directa" y "Generar reservación por OTA" (cancelación
-compensatoria con el motivo `ROOM_REJECTED` cuando el Módulo 1 rechaza apartar la habitación),
-"Registrar Check-In", "Registrar Check-Out" y "Marcar No-Show" usan esta funcionalidad para cambiar
-el `status` de la reserva a `CANCELLED`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED` o `NO_SHOW`, de modo
-que las reglas de transición y de concurrencia vivan en un solo lugar.
+Adicionalmente, los procesos "Generar reservación por OTA" (confirmación de pago o garantía),
+"Generar reservación directa" y "Generar reservación por OTA" (cancelación compensatoria con el
+motivo `ROOM_REJECTED` cuando el Módulo 1 rechaza apartar la habitación), "Registrar Check-In",
+"Registrar Check-Out" y "Marcar No-Show" (`NO_SHOW` para canal OTA y `CANCELLED` para canal
+directo) usan esta funcionalidad para cambiar el `status` de la reserva a `ACTIVE`, `IN_PROGRESS`,
+`COMPLETED`, `CANCELLED` o `NO_SHOW`, de modo que las reglas de transición y de concurrencia vivan
+en un solo lugar. "Cancelar reservación" es la excepción: cambia el `status` directamente a
+`CANCELLED`, de forma atómica dentro de su propia transacción.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -69,8 +72,8 @@ los cambios. Se repite con datos personales (sin recálculo) y sobre reservas `I
    - **Then** el sistema guarda los cambios sin invocar al Módulo 3 ni alterar fechas o categoría
 
 3. **Scenario**: Cambio de estado solicitado por un proceso interno
-   - **Given** una cancelación, una confirmación de pago OTA, una cancelación compensatoria por
-     `ROOM_REJECTED`, o una notificación de Check-In, Check-Out o No-Show válida
+   - **Given** una confirmación de pago OTA, una cancelación compensatoria por `ROOM_REJECTED`, o
+     una notificación de Check-In, Check-Out o No-Show válida
    - **When** el proceso correspondiente ejecuta "Actualizar reservación"
    - **Then** el sistema cambia el `status` a `CANCELLED`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED` o
      `NO_SHOW` según la transición permitida
@@ -89,11 +92,17 @@ los cambios. Se repite con datos personales (sin recálculo) y sobre reservas `I
      admite modificaciones
 
 6. **Scenario**: Cambio de habitación coordinado con el Módulo 1
-   - **Given** una `Reservation` en `ACTIVE` con la `Room` A en `RESERVED`, y la `Room` B disponible
-     en sus fechas
+   - **Given** una `Reservation` en `ACTIVE` con llegada hoy, con la `Room` A en `Reserved`, y la
+     `Room` B disponible en sus fechas
    - **When** el solicitante cambia la reserva a la `Room` B y confirma
-   - **Then** el sistema ordena al Módulo 1 `RESERVED` para la `Room` B y, tras su confirmación,
-     ordena `AVAILABLE` para la `Room` A, y actualiza la reserva
+   - **Then** el sistema ordena al Módulo 1 `Reserved` para la `Room` B y, tras su confirmación,
+     ordena `Available` para la `Room` A, y actualiza la reserva
+
+7. **Scenario**: Cambio de habitación en una reserva con llegada futura
+   - **Given** una `Reservation` en `ACTIVE` con llegada dentro de varias semanas, cuya `Room` A no
+     está apartada en el Módulo 1, y la `Room` B disponible en sus fechas
+   - **When** el solicitante cambia la reserva a la `Room` B y confirma
+   - **Then** el sistema actualiza la reserva a la `Room` B sin enviar ninguna orden al Módulo 1
 
 ### Casos Borde
 
@@ -107,15 +116,20 @@ los cambios. Se repite con datos personales (sin recálculo) y sobre reservas `I
   antes de guardar con **HTTP 400**: "El formato de los datos contiene caracteres no válidos."
 - ¿Cómo maneja el sistema dos ediciones simultáneas de la misma reserva? Usa control de concurrencia
   optimista con el atributo `version`: la segunda recibe **HTTP 400** indicando que debe recargar.
-- ¿Qué sucede con el Módulo 1 cuando solo cambian las fechas? Nada: un cambio de fechas sin cambio
-  de `Room` no genera órdenes al Módulo 1.
-- ¿Cómo se coordina el cambio de habitación con el Módulo 1? El sistema ejecuta "Establecer estado
-  de habitación" en este orden: primero ordena `RESERVED` para la `Room` nueva y, solo si el Módulo
-  1 la confirma, ordena `AVAILABLE` para la anterior. Si el Módulo 1 rechaza la `Room` nueva, el
+- ¿Qué sucede con el Módulo 1 cuando solo cambian las fechas? Por lo general nada: un cambio de
+  fechas sin cambio de `Room` no genera órdenes al Módulo 1. Las únicas excepciones son las que
+  cruzan el día actual: si la nueva llegada es hoy, el sistema ordena `Reserved` para la `Room`
+  (`originEvent` `DATES_CHANGED`), y si la llegada era hoy y deja de serlo, ordena `Available`. Un
+  cambio de habitación en una reserva con llegada futura tampoco genera órdenes, porque ninguna de
+  las dos `Room` está apartada.
+- ¿Cómo se coordina el cambio de habitación con el Módulo 1 cuando la llegada es hoy? El sistema
+  ejecuta "Establecer estado de habitación" en este orden: primero ordena `Reserved` para la `Room`
+  nueva y, solo si el Módulo
+  1 la confirma, ordena `Available` para la anterior. Si el Módulo 1 rechaza la `Room` nueva, el
   cambio no se aplica, la reserva conserva su `Room` original y se responde **HTTP 400**. Si no
   responde, como el resultado es ambiguo y el Módulo 1 pudo haber apartado la `Room` nueva, el
   cambio tampoco se aplica y el sistema neutraliza esa posible reserva emitiendo una orden
-  `AVAILABLE` para la `Room` nueva con un `sequenceNumber` mayor, secuenciada por "Establecer estado
+  `Available` para la `Room` nueva con un `sequenceNumber` mayor, secuenciada por "Establecer estado
   de habitación" y reintentada desde `PENDING` si falla; la reserva conserva su `Room` original y se
   responde **HTTP 400**, de modo que nunca queden apartadas la `Room` original y la nueva por la
   misma reserva. Si falla únicamente la liberación de la `Room` anterior, el cambio ya quedó
@@ -129,7 +143,8 @@ los cambios. Se repite con datos personales (sin recálculo) y sobre reservas `I
 ### Functional Requirements
 
 - **FR-001**: El sistema debe permitir editar los datos de estadía y los datos personales de una
-  `Reservation` en `ACTIVE` o `PENDING`.
+  `Reservation` en `ACTIVE` o `PENDING`, así como registrar el aviso de llegada tardía del huésped
+  (`lateArrivalNotice`).
 - **FR-002**: El sistema debe validar la disponibilidad mediante "Verificar disponibilidades" cuando
   cambien las fechas o la habitación, enviando la `reservationRef` de la reserva editada para
   excluirla del cruce de solapamientos.
@@ -137,15 +152,19 @@ los cambios. Se repite con datos personales (sin recálculo) y sobre reservas `I
   afecte fechas o categoría, y exigir la confirmación del solicitante antes de persistir.
 - **FR-004**: El sistema debe permitir modificar los datos personales del `Guest` sin invocar al
   Módulo 3 ni exigir disponibilidad.
-- **FR-005**: El sistema debe ser el único punto de cambio de `status` de la reserva, aceptando las
+- **FR-005**: El sistema debe ser el punto de cambio de `status` de la reserva para la confirmación
+  OTA, la cancelación compensatoria, el Check-In, el Check-Out y el No-Show, aceptando las
   transiciones `PENDING`→`ACTIVE`, `ACTIVE`→`IN_PROGRESS`, `IN_PROGRESS`→`COMPLETED`, `ACTIVE` o
-  `PENDING`→`CANCELLED`, y `ACTIVE` o `PENDING`→`NO_SHOW`; cualquier otra transición debe rechazarse
-  con **HTTP 400**.
+  `PENDING`→`CANCELLED` (cancelación compensatoria o No-Show de canal directo), y `ACTIVE` o
+  `PENDING`→`NO_SHOW` (No-Show de canal OTA); cualquier otra transición debe rechazarse con **HTTP
+  400**. La cancelación explícita la ejecuta "Cancelar reservación" directamente, con las mismas
+  transiciones y el mismo control de concurrencia.
 - **FR-006**: El sistema debe aplicar control de concurrencia optimista mediante `version`.
-- **FR-007**: Cuando la modificación cambie la `Room`, el sistema debe ordenar primero `RESERVED`
-  para la nueva y solo después `AVAILABLE` para la anterior, abortando el cambio si el Módulo 1
+- **FR-007**: Cuando la modificación cambie la `Room` de una reserva con llegada hoy, el sistema
+  debe ordenar primero `Reserved`
+  para la nueva y solo después `Available` para la anterior, abortando el cambio si el Módulo 1
   rechaza la nueva o no responde; en el caso de falta de respuesta debe neutralizar la posible
-  reserva de la `Room` nueva con una orden `AVAILABLE` de mayor `sequenceNumber`, reintentada desde
+  reserva de la `Room` nueva con una orden `Available` de mayor `sequenceNumber`, reintentada desde
   `PENDING` si falla. Si falla únicamente la liberación de la anterior, el cambio debe
   conservarse, la orden debe reintentarse desde `PENDING` y la respuesta debe ser **HTTP 400** con
   el aviso de liberación pendiente.
@@ -153,6 +172,9 @@ los cambios. Se repite con datos personales (sin recálculo) y sobre reservas `I
   respondiendo **HTTP 400 (Bad Request)** y prohibiendo errores **HTTP 500**; en el caso de la
   liberación pendiente de FR-007, la respuesta 400 no implica que el cambio se haya revertido: el
   cambio ya está aplicado y solo la liberación queda por reintentar.
+- **FR-009**: El sistema no debe emitir órdenes al Módulo 1 por un cambio de `Room` en una reserva
+  con llegada futura, y solo debe ordenar `Reserved` o `Available` por un cambio de fechas
+  (`DATES_CHANGED`) cuando este haga que la llegada pase a ser hoy o deje de serlo.
 
 ### Non-Functional Requirements
 
@@ -162,13 +184,13 @@ los cambios. Se repite con datos personales (sin recálculo) y sobre reservas `I
 ### Key Entities *(include if feature involves data)*
 
 - **Reservation**: Entidad principal actualizada. Atributos: `reservationRef`, `guestRef`, `roomId`,
-  `categoryRoom`, `startDate`, `endDate`, `grossAmount`, `version`,  `source` (`DIRECT` | `OTA`) y
-  `status` (`PENDING`, `ACTIVE`, `IN_PROGRESS`,
+  `categoryRoom`, `startDate`, `endDate`, `grossAmount`, `version`, `source` (`DIRECT` | `OTA`),
+  `lateArrivalNotice` y `status` (`PENDING`, `ACTIVE`, `IN_PROGRESS`,
   `COMPLETED`, `CANCELLED`, `NO_SHOW`).
 - **Guest**: Titular de la reserva. Atributos: `id`, `fullName`, `documentNumber`, `nationality`,
   `contactPhone`, `contactEmail`.
-- **Room**: Habitación física referenciada para la disponibilidad. Atributos: `roomId`,
-  `numberRoom`, `categoryRoom` y `status` (`AVAILABLE` | `RESERVED` | `OCCUPIED`).
+- **Room**: Habitación física referenciada para la disponibilidad. Atributos: `id`,
+  `roomNumber`, `categoryRoom` y `status` (`Available` | `Reserved` | `Occupied`).
 - **RateQuote**: Cotización del Módulo 3 para la modificación. Atributos: `reservationRef`,
   `previousGrossAmount`, `grossAmount`, `amountDifference`, `currency`, `calculatedAt`.
 
