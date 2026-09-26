@@ -7,8 +7,9 @@
 ### Descripción del problema
 
 Para saber si una habitación puede reservarse, el Módulo 2 necesita conocer su estado físico real en
-ese instante: si está libre (`AVAILABLE`), apartada por otra reserva (`RESERVED`) o con un huésped
-adentro (`OCCUPIED`). Ese estado es propiedad exclusiva del Módulo 1, que es quien opera el hotel en
+ese instante: si está libre (`Available`), apartada por una reserva cuya llegada es hoy (`Reserved`)
+o con un huésped adentro (`Occupied`). Ese estado es propiedad exclusiva del Módulo 1, que es quien
+opera el hotel en
 persona. Si el Módulo 2 guardara una copia propia, o asumiera valores por su cuenta, aparecerían
 sobreventas o reservas rechazadas sobre habitaciones que en realidad están libres. El negocio
 necesita una consulta de solo lectura, en tiempo real, contra el inventario del Módulo 1, que sirva
@@ -19,13 +20,13 @@ de insumo a "Verificar disponibilidades" antes de crear o modificar cualquier re
 1. El caso de uso "Verificar disponibilidades" invoca "Consultar inventario de habitaciones"
    enviando un `roomId` puntual o una categoría (`categoryRoom`) junto con el rango de fechas.
 2. El sistema consulta de forma síncrona el inventario del **Módulo 1**, fuente de verdad exclusiva
-   del estado físico de la `Room`. Cuando la `Room` está `RESERVED`, el Módulo 1 también informa qué
+   del estado físico de la `Room`. Cuando la `Room` está `Reserved`, el Módulo 1 también informa qué
    reserva la mantiene apartada (`reservedByReservationRef`).
 3. Si la consulta es puntual, el sistema retorna el `status` actual de esa `Room` y, si está
-   `RESERVED`, la `reservationRef` que la mantiene apartada, para que quien consulta pueda
+   `Reserved`, la `reservationRef` que la mantiene apartada, para que quien consulta pueda
    distinguir un apartado ajeno del propio.
-4. Si la consulta es por categoría, el sistema retorna únicamente las habitaciones en `AVAILABLE`,
-   con sus atributos (`roomId`, `numberRoom`, `categoryRoom`).
+4. Si la consulta es por categoría, el sistema retorna únicamente las habitaciones en `Available`,
+   con sus atributos (`id`, `roomNumber`, `categoryRoom`).
 5. Si el Módulo 1 no responde o el identificador consultado no existe, el sistema informa el
    fallo con un error de negocio controlado **HTTP 400 (Bad Request)**.
 
@@ -44,31 +45,31 @@ historia de usuario.
 de la `Room` en el Módulo 1, el hotel no puede evitar reservar habitaciones que ya están apartadas u
 ocupadas.
 
-**Independent Test**: Se consulta una `Room` conocida en `AVAILABLE` y se verifica que se retorne
-ese estado; se repite con una en `RESERVED` y otra en `OCCUPIED`; se consulta una categoría con
-varias habitaciones y se comprueba que el listado solo incluya las `AVAILABLE`.
+**Independent Test**: Se consulta una `Room` conocida en `Available` y se verifica que se retorne
+ese estado; se repite con una en `Reserved` y otra en `Occupied`; se consulta una categoría con
+varias habitaciones y se comprueba que el listado solo incluya las `Available`.
 
 **Acceptance Scenarios**:
 
 1. **Scenario**: Consulta puntual de una habitación disponible (Happy Path)
-   - **Given** el `roomId` de una `Room` en `AVAILABLE` en el Módulo 1
+   - **Given** el `roomId` de una `Room` en `Available` en el Módulo 1
    - **When** el sistema consulta su estado mediante "Consultar inventario de habitaciones"
-   - **Then** el Módulo 1 retorna `AVAILABLE` y el sistema lo reporta a "Verificar
+   - **Then** el Módulo 1 retorna `Available` y el sistema lo reporta a "Verificar
      disponibilidades" sin modificar ningún dato
 
 2. **Scenario**: Consulta puntual de una habitación no disponible
-   - **Given** el `roomId` de una `Room` en `RESERVED` u `OCCUPIED`
+   - **Given** el `roomId` de una `Room` en `Reserved` u `Occupied`
    - **When** el sistema consulta su estado
    - **Then** el sistema retorna ese estado indicando que la habitación no está disponible
 
 3. **Scenario**: Listado de habitaciones disponibles por categoría
    - **Given** una categoría con varias habitaciones en distintos estados
    - **When** el sistema consulta el inventario por `categoryRoom`
-   - **Then** el sistema retorna únicamente las habitaciones en `AVAILABLE`, con `roomId`,
-     `numberRoom` y `categoryRoom`
+   - **Then** el sistema retorna únicamente las habitaciones en `Available`, con `id`,
+     `roomNumber` y `categoryRoom`
 
 4. **Scenario**: Categoría sin habitaciones disponibles
-   - **Given** una categoría cuyas habitaciones están todas en `RESERVED` u `OCCUPIED`
+   - **Given** una categoría cuyas habitaciones están todas en `Reserved` u `Occupied`
    - **When** el sistema consulta el inventario por `categoryRoom`
    - **Then** el sistema retorna un listado vacío indicando que no hay habitaciones disponibles
 
@@ -89,10 +90,10 @@ varias habitaciones y se comprueba que el listado solo incluya las `AVAILABLE`.
 ### Functional Requirements
 
 - **FR-001**: El sistema debe consultar el `status` de una `Room` por su `roomId` directamente en el
-  inventario del Módulo 1 y, cuando esté `RESERVED`, retornar también la reserva que la mantiene
+  inventario del Módulo 1 y, cuando esté `Reserved`, retornar también la reserva que la mantiene
   apartada (`reservedByReservationRef`).
 - **FR-002**: El sistema debe permitir consultar el inventario por `categoryRoom` y retornar
-  únicamente las habitaciones en `AVAILABLE`.
+  únicamente las habitaciones en `Available`.
 - **FR-003**: El sistema debe ser de solo lectura: no debe modificar el `status` de ninguna `Room`.
 - **FR-004**: El sistema debe entregar el resultado a "Verificar disponibilidades" como insumo de la
   validación previa a cualquier reserva.
@@ -107,9 +108,9 @@ varias habitaciones y se comprueba que el listado solo incluya las `AVAILABLE`.
 
 ### Key Entities *(include if feature involves data)*
 
-- **Room**: Unidad física provista por el Módulo 1. Atributos: `roomId`, `roomNumber`,
-  `categoryRoom`, `status` (`AVAILABLE` | `RESERVED` | `OCCUPIED`) y `reservedByReservationRef`
-  (reserva que la mantiene apartada; solo presente cuando el `status` es `RESERVED`). Su estado es
+- **Room**: Unidad física provista por el Módulo 1. Atributos: `id`, `roomNumber`,
+  `categoryRoom`, `status` (`Available` | `Reserved` | `Occupied`) y `reservedByReservationRef`
+  (reserva que la mantiene apartada; solo presente cuando el `status` es `Reserved`). Su estado es
   propiedad
   exclusiva del Módulo 1; esta funcionalidad solo lo consulta.
 - **Reservation**: Se referencia de forma informativa. Atributos: `reservationRef`, `roomId` y
