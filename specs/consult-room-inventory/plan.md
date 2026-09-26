@@ -31,7 +31,7 @@ Rutas **propuestas**; el contrato real lo define el Módulo 1 (ver Preguntas abi
 | Operación | Petición al Módulo 1 | Respuesta esperada |
 |---|---|---|
 | Habitación puntual | `GET {module1}/rooms/{roomId}` | `{ id, roomNumber, categoryRoom, status, reservedByReservationRef? }` |
-| Habitaciones por categoría | `GET {module1}/rooms?categoryRoom={categoryRoom}` | lista de objetos `Room` |
+| Habitaciones por categoría | `GET {module1}/rooms?categoryRoom={categoryRoom}` y, opcional, `&status=Available` | lista de objetos `Room` (todas si no hay filtro) |
 
 ### Componentes
 
@@ -40,14 +40,14 @@ Rutas **propuestas**; el contrato real lo define el Módulo 1 (ver Preguntas abi
 | `Module1Client` (interfaz) y `Module1RestClient` | `integration/module1/` | Llamadas REST con `RestClient`, timeouts configurables, traducción de errores |
 | `RoomDto`, `RoomStatus` (enum) | `integration/module1/` | Contrato de `Room`; `RoomStatus` con los estados del diccionario (`Available`, `Reserved`, `Occupied`, `PendingCleaning`, `InCleaning`, `DisabledForRepairs`, `TechnicalBlock`, `Inactive`) |
 | `Module1UnavailableException` | `integration/module1/` | Módulo 1 sin respuesta, timeout o error de servidor |
-| `RoomInventoryService` | `availability/` | `getRoom(roomId)` y `listAvailableByCategory(categoryRoom)`; valida entrada |
+| `RoomInventoryService` | `availability/` | `getRoom(roomId)` y `listByCategory(categoryRoom, statusFilter)` (filtro opcional); valida entrada |
 | `InvalidRoomIdentifierException` | `common/` | Identificador vacío o con caracteres inválidos |
 
 ### Reglas (mapa a los requisitos)
 
 - **FR-001**: `getRoom` devuelve el estado y, si es `Reserved`, `reservedByReservationRef`.
-- **FR-002**: `listAvailableByCategory` devuelve solo las de estado `Available`; el filtro se aplica en
-  el Módulo 2 aunque el Módulo 1 ya filtre. Categoría sin habitaciones libres → lista vacía (escenario 4).
+- **FR-002**: `listByCategory` devuelve las habitaciones de la categoría con su `status`; con filtro `Available` devuelve
+  solo esas (el filtro se reaplica en el Módulo 2 aunque el Módulo 1 ya filtre) y sin filtro devuelve todas. Categoría sin libres con el filtro `Available` → lista vacía (escenario 5).
 - **FR-003**: no hay métodos de escritura; solo `GET`.
 - **FR-004**: el resultado es un objeto de dominio que consume `check-room-availability`.
 - **FR-005 / errores** (todos mapeados por `GlobalExceptionHandler` a 400):
@@ -87,8 +87,9 @@ backend/src/test/java/com/hospitua/reservas/
 |---|---|
 | Esc. 1: puntual `Available` | `RoomInventoryServiceTest` con cliente simulado |
 | Esc. 2: puntual `Reserved` u `Occupied` | Igual; verifica `reservedByReservationRef` en `Reserved` |
-| Esc. 3: por categoría, solo `Available` | `Module1RoomContractTest` con `MockRestServiceServer`: lista mezclada, se filtra |
-| Esc. 4: categoría sin libres | Lista vacía |
+| Esc. 3: por categoría sin filtro | `Module1RoomContractTest`: lista mezclada, se devuelven todas con su `status` |
+| Esc. 4: por categoría con filtro `Available` | Lista mezclada, se devuelven solo las `Available` |
+| Esc. 5: categoría sin libres con filtro `Available` | Lista vacía |
 | Caso borde: Módulo 1 sin respuesta o timeout | `Module1RoomContractTest`: `MODULE1_UNAVAILABLE`, sin propagar 500 |
 | Caso borde: `roomId` inválido | `RoomInventoryServiceTest`: `INVALID_ROOM_ID` sin llamar al Módulo 1 |
 | Estado desconocido | `Module1RoomContractTest`: tratado como no disponible |
@@ -101,8 +102,8 @@ backend/src/test/java/com/hospitua/reservas/
 
 ### Tests
 
-- [ ] T-CRI-01 [P] [US1] `Module1RoomContractTest`: escenarios 1 a 4, timeout, error de servidor y estado desconocido
-- [ ] T-CRI-02 [P] [US1] `RoomInventoryServiceTest`: validación de `roomId` y filtro por `Available`
+- [ ] T-CRI-01 [P] [US1] `Module1RoomContractTest`: escenarios 1 a 5, timeout, error de servidor y estado desconocido
+- [ ] T-CRI-02 [P] [US1] `RoomInventoryServiceTest`: validación de `roomId` y filtro por estado
 
 ### Implementation
 

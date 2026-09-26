@@ -242,6 +242,8 @@ guarda como texto. `Room`, `ForeignGuestData`, `MaintenanceCalendar` y `RateQuot
 |---|---|---|
 | D1 | **La confirmación de una cotización no confía en el importe de la pantalla.** Al confirmar, el servidor vuelve a cotizar con el Módulo 3 y lo compara con el importe que vio el solicitante; si difiere, responde 400 "La tarifa cambió, vuelva a cotizar". Nunca se guarda un monto enviado por el cliente y la `RateQuote` sigue sin persistirse. Lo aplican `generate-direct-reservation` y `update-reservation`. | `calculate-dynamic-rate` |
 | D2 | **`Reservation` guarda la moneda del importe:** columna `gross_amount_currency` junto a `gross_amount`, porque FR-002 pide conservar la `currency` y el diccionario no la lista. Pendiente agregarla al diccionario. | `calculate-dynamic-rate` |
+| D3 | **Restricción de exclusión en PostgreSQL** sobre `reservation`: `EXCLUDE USING gist (room_id WITH =, daterange(start_date, end_date) WITH &&) WHERE (status IN ('PENDING','ACTIVE','IN_PROGRESS'))`, con la extensión `btree_gist` creada en la migración base (T007). Impide dos reservas activas solapadas en la misma habitación aun con concurrencia; una violación se traduce en 409 `NO_AVAILABILITY` (o en probar la siguiente habitación candidata). | `check-room-availability` |
+| D4 | **El spec `consult-room-inventory` se ajustó**: la consulta por categoría admite listado completo o filtrado por estado, porque las estadías futuras necesitan todas las habitaciones de la categoría. Pendiente acordar con el Módulo 1 que su API permita ambos modos. | `check-room-availability` |
 
 ## Estrategia de testing base
 
@@ -269,7 +271,7 @@ guarda como texto. `Room`, `ForeignGuestData`, `MaintenanceCalendar` y `RateQuot
 
 **⚠️ CRÍTICO**: Ninguna feature puede empezar hasta terminar esta fase.
 
-- [ ] T007 Definir el esquema base (tablas de Diseño técnico base) y las migraciones con Flyway
+- [ ] T007 Definir el esquema base (tablas de Diseño técnico base), la extensión `btree_gist` y la restricción de exclusión de `reservation` (D3), con migraciones Flyway
 - [ ] T008 [P] Crear `Reservation`, `Guest`, `Ota` y sus repositorios
 - [ ] T009 [P] Crear `ApiError`, las excepciones de negocio y `GlobalExceptionHandler` en `common/`
 - [ ] T010 [P] Configurar el bean `Clock` de la zona horaria del hotel

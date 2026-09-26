@@ -40,8 +40,8 @@ AvailabilityResult check(AvailabilityQuery query);
 
 1. **Validar** entrada: fechas (`DateRangeValidator`), un solo de `roomId` o `categoryRoom`, formato de
    identificadores. Sin llamar a nadie si es inválida (400).
-2. **Habitaciones candidatas**: por `roomId`, la propia habitación; por `categoryRoom`, las habitaciones
-   de la categoría que informa el Módulo 1, excluyendo las `Inactive`.
+2. **Habitaciones candidatas**: por `roomId`, la propia habitación; por `categoryRoom`, **todas** las habitaciones
+   de la categoría que informa el Módulo 1 (`listByCategory` sin filtro de estado), excluyendo las `Inactive`.
 3. **Calendario** (Módulo 1): descartar las habitaciones con mantenimiento que cruza el rango
    (`MaintenanceCalendarService`).
 4. **Reservas locales**: descartar las habitaciones con otra reserva en `PENDING`, `ACTIVE` o
@@ -79,7 +79,7 @@ La verificación no bloquea (caso borde del spec): dos verificaciones simultáne
 disponible. La creación revalida al insertar. **Propuesta**: una restricción de exclusión en PostgreSQL
 sobre `reservation` (`EXCLUDE USING gist (room_id WITH =, daterange(start_date, end_date) WITH &&)
 WHERE (status IN ('PENDING','ACTIVE','IN_PROGRESS'))`, con la extensión `btree_gist`) hace imposible
-que dos reservas activas se solapen en la misma habitación, incluso con concurrencia. Ver Preguntas abiertas.
+que dos reservas activas se solapen en la misma habitación, incluso con concurrencia. Decidido (D3 del plan base).
 
 ## Project Structure
 
@@ -144,11 +144,9 @@ backend/src/test/java/com/hospitua/reservas/
 
 ## Preguntas abiertas (NEEDS CLARIFICATION)
 
-1. **Inventario por categoría para estadías futuras**: `consult-room-inventory` devuelve por categoría
-   **solo** las habitaciones `Available`, pero para una estadía futura hace falta el listado de **todas**
-   las habitaciones de la categoría (una `Occupied` hoy puede estar libre dentro de un mes). Se propone
-   que el Módulo 1 permita listar sin filtrar por estado. Esto afecta el spec de `consult-room-inventory`.
-2. **Restricción de exclusión** en PostgreSQL para impedir reservas solapadas en la misma habitación
-   (extensión `btree_gist`): ¿se adopta? Recomendada; simplifica la concurrencia de las features de creación.
+1. **Inventario por categoría para estadías futuras**: decidido. Se ajustó el spec `consult-room-inventory`: la consulta por
+   categoría admite el listado completo (sin filtrar por estado) o solo las `Available`; esta feature usa el listado completo.
+2. **Restricción de exclusión en PostgreSQL**: decidido (D3 del plan base). Impide reservas activas solapadas en la misma habitación,
+   incluso con concurrencia; las features de creación la usan para resolver la última habitación.
 3. **Habitaciones `Inactive`** se excluyen siempre (el spec no lo dice; el diccionario las define como dadas de baja).
 4. **Tope de habitaciones candidatas** por categoría y valor de `hospitua.availability.max-parallel`.
