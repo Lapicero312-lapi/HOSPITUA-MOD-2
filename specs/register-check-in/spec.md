@@ -1,156 +1,156 @@
 # Feature Specification: Registrar Check-In (Notificación)
 
-**Created**: 2026-09-19
+**Created**: 2026-09-25
 
-## Use Case (Caso de Uso)
+## 1. Caso de Uso
 
 ### Descripción del problema
 
 El Check-In es un proceso presencial que ocurre en la recepción física del hotel: se entrega la
 habitación y, si el huésped es extranjero, se capturan sus datos migratorios. Ese proceso pertenece
-al Módulo 1, que es quien opera el hotel en persona. El Módulo 2, que gestiona el ciclo de vida de
-las reservas, no debe duplicar una pantalla de ingreso: solo necesita enterarse de que el huésped ya
-ingresó para actualizar el estado de su reserva y conservar los datos migratorios que exige el
-reporte a Migración. Si esa notificación no se procesa, las reservas quedan desactualizadas y el
-reporte SIRE incompleto.
+al Módulo 1, que es quien opera el hotel en persona y quien ya pasó la `Room` correspondiente a
+`Occupied`. El Módulo 2, que gestiona el ciclo de vida de las reservas, no expone ninguna interfaz
+de Check-In propia: solo necesita enterarse de que el huésped ya ingresó para actualizar el estado
+de su reserva y conservar los datos migratorios que exige el reporte a Migración. Módulo 2 no altera
+en ningún momento el estado físico de la `Room`, que ya fue actualizado por el Módulo 1. Si esa
+notificación no se procesa, las reservas quedan desactualizadas y el reporte SIRE incompleto.
 
 ### Flujo de Usuario de Alto Nivel
 
-1. El **Módulo 1** ejecuta el Check-In físico: cambia la `Room` a `OCCUPIED` y entrega la
-   habitación al huésped.
-2. El Módulo 1 envía a la API del Módulo 2 una notificación con la referencia de la reserva y, si el
+1. El Módulo 1 ejecuta el Check-In físico de forma presencial en Recepción, cambiando la `Room`
+   correspondiente a `Occupied`.
+2. El Módulo 1 envía a la API del Módulo 2 una notificación con la `reservationRef` y, si el
    huésped es extranjero, sus datos migratorios (tipo de movimiento y fecha).
-3. El sistema localiza la reserva mediante "Consultar reservas" y valida que esté en `ACTIVE`.
-4. El sistema ejecuta "Actualizar reservación" para cambiar el `status` a `IN_PROGRESS`.
-5. Si hay datos migratorios, el sistema ejecuta "Procesar datos de huéspedes extranjeros" para
-   validarlos y registrarlos en un `MigratoryMovement` de esa reserva.
+3. El sistema valida que la `Reservation` se encuentre en `Reservation.state` `ACTIVE`.
+4. El sistema transiciona la `Reservation` a `Reservation.state` `IN_PROGRESS`.
+5. Si la notificación incluye datos migratorios, el sistema los valida y los registra en un
+   `MigratoryMovement` de esa reserva mediante "Procesar datos de huéspedes extranjeros", y responde
+   **HTTP 200**.
 
-## User Scenarios & Testing *(mandatory)*
+## 2. Escenarios de Usuario y Pruebas
 
 ### User Story 1 - Sincronización de Estado e Integración de Extranjeros (Priority: P2)
 
+**Plain Language**: Recepción de la notificación de Check-In del Módulo 1 para sincronizar el
+estado de la `Reservation` a `IN_PROGRESS` y consolidar, en la misma petición, los datos migratorios
+de huéspedes extranjeros, sin exponer ninguna interfaz de Check-In propia ni alterar el estado
+físico de la `Room`.
+
 El Módulo 2 recibe la notificación de Check-In ejecutado en el Módulo 1 para actualizar el estado de
 la `Reservation` y consolidar los datos migratorios de huéspedes extranjeros, sin duplicar el
-proceso en pantallas diferentes. Por tratarse de una única notificación, el camino exitoso, los
-datos migratorios y los rechazos por estado inválido se consolidan en esta misma historia de
-usuario.
+proceso en pantallas diferentes. Por tratarse de una única notificación, el camino exitoso, la
+recepción de datos migratorios, los rechazos por estado inválido y el reenvío idempotente se
+consolidan en esta misma historia de usuario, para evitar la sobre-atomización.
 
 **Why this priority**: Es vital para mantener la coherencia del estado de la reserva y para no
 duplicar la operación física, que pertenece al Módulo 1. Integra en una sola petición los datos del
-reporte gubernamental.
+reporte gubernamental. Se prioriza como P2 por tratarse de una notificación de sincronización, no
+del flujo transaccional de venta.
 
 **Independent Test**: Se envía una notificación simulada del Módulo 1 con el identificador de la
 reserva y datos migratorios opcionales, y se valida que el estado cambie a `IN_PROGRESS` y que los
-datos migratorios queden registrados en un `MigratoryMovement` de esa reserva.
+datos migratorios queden registrados en un `MigratoryMovement` de esa reserva. La prueba se completa
+enviando notificaciones sobre reservas en un estado inválido, confirmando el rechazo y el registro
+de la incidencia de conciliación, y reenviando la misma notificación para confirmar el
+comportamiento idempotente.
 
 **Acceptance Scenarios**:
 
-1. **Scenario**: Actualización de estado por notificación de Check-In (Happy Path)
-   - **Given** una `Reservation` en estado `ACTIVE`
-   - **When** el sistema recibe la notificación del Módulo 1 indicando que el Check-In se completó
-   - **Then** el sistema actualiza la `Reservation` a `IN_PROGRESS`
+1. **Escenario 1**: Actualización de estado por notificación válida (Happy Path - `IN_PROGRESS`)
 
-2. **Scenario**: Recepción de datos de un huésped extranjero
-   - **Given** una `Reservation` de un `Guest` `FOREIGN` en proceso de Check-In
-   - **When** la notificación incluye el tipo de movimiento migratorio y la fecha de ingreso
-   - **Then** el sistema los valida y los registra en un `MigratoryMovement` asociado a esa reserva,
-     para su futura exportación SIRE
+   ```gherkin
+   Given una Reservation en Reservation.state ACTIVE
+   When el sistema recibe la notificación del Módulo 1 indicando que el Check-In se completó
+   Then el sistema transiciona la Reservation a Reservation.state IN_PROGRESS
+   And no realiza ninguna alteración sobre el estado físico de la Room
+   ```
 
-3. **Scenario**: Rechazo de notificación con estado inválido (Error)
-   - **Given** una `Reservation` en `PENDING`, `COMPLETED`, `CANCELLED` o `NO_SHOW`
-   - **When** el Módulo 1 envía una notificación de Check-In retrasada o prematura
-   - **Then** el sistema no cambia el estado, responde **HTTP 400 (Bad Request)** indicando que la
-     reserva no admite un Check-In en su estado actual, y registra una incidencia de conciliación
-     con el Módulo 1
+2. **Escenario 2**: Recepción y consolidación de datos migratorios de extranjero (`FOREIGN`)
 
-4. **Scenario**: Corrección de datos migratorios por reenvío del Módulo 1
-   - **Given** una `Reservation` en `IN_PROGRESS` cuyo `MigratoryMovement` está `INCOMPLETE`
-   - **When** el Módulo 1 reenvía la notificación de Check-In con los datos migratorios completos
-   - **Then** el sistema no cambia el estado de la reserva, actualiza únicamente ese
-     `MigratoryMovement` a `COMPLETE` y responde 200
+   ```gherkin
+   Given una Reservation de un Guest con type FOREIGN en proceso de Check-In
+   When la notificación incluye el movementType y la fecha de ingreso migratorio
+   Then el sistema los valida y los registra en un MigratoryMovement asociado a esa reserva
+   And responde HTTP 200
+   ```
 
-### Casos Borde
+3. **Escenario 3**: Rechazo de notificación con estado inválido y registro de `ReconciliationIncident` (Error)
 
-- ¿Qué sucede si el payload llega vacío o sin el identificador de la reserva? El sistema intercepta
-  el error de inmediato y responde **HTTP 400** con el mensaje: "El payload de notificación es
-  inválido. Falta el identificador de la reserva."
-- ¿Qué sucede si los datos migratorios tienen formato inválido o fechas futuras? El Check-In físico
-  ya ocurrió en el Módulo 1, así que el sistema no lo rechaza: actualiza la reserva a `IN_PROGRESS`,
-  registra el `MigratoryMovement` como `INCOMPLETE` y responde 200. Ese movimiento queda excluido de
-  la exportación SIRE hasta que el Módulo 1 reenvíe los datos completos.
-- ¿Qué sucede si la reserva notificada no existe en el Módulo 2? El sistema responde **HTTP 400**
-  con el mensaje: "La reserva notificada no existe en el sistema de reservas." y registra la
-  incidencia de conciliación, porque el Módulo 1 ya ocupó físicamente una habitación.
-- ¿Qué sucede si la notificación llega duplicada o la reserva ya no está en `ACTIVE`? Si la reserva
-  ya está en `IN_PROGRESS`, la notificación es idempotente: responde 200 sin cambiar el estado ni
-  duplicar el Check-In; solo si trae datos migratorios completos y el `MigratoryMovement` de esa
-  reserva está `INCOMPLETE`, lo actualiza a `COMPLETE`. Si está
-  en `CANCELLED`, `NO_SHOW`, `PENDING` o `COMPLETED`, responde **HTTP 400** sin cambiar el estado y
-  registra una incidencia de conciliación, para que una persona resuelva la discrepancia con el
-  Módulo 1 (la habitación quedó ocupada sin una reserva vigente).
-- ¿Qué sucede si la notificación llega antes de la fecha de inicio de la estadía? El sistema procesa
-  la notificación normalmente, porque el Check-In físico ya ocurrió en el Módulo 1, que es quien
-  valida las fechas de ingreso.
+   ```gherkin
+   Given una Reservation en Reservation.state PENDING, COMPLETED, CANCELLED o NO_SHOW
+   When el Módulo 1 envía una notificación de Check-In retrasada o prematura
+   Then el sistema no modifica el Reservation.state
+   And registra un ReconciliationIncident con origin CHECK_IN
+   And responde con un error controlado HTTP 400 (Bad Request) indicando que la reserva no admite un Check-In en su estado actual
+   ```
 
-## Requirements *(mandatory)*
+4. **Escenario 4**: Reenvío idempotente para completar datos migratorios en estado `IN_PROGRESS`
 
-### Functional Requirements
+   ```gherkin
+   Given una Reservation en Reservation.state IN_PROGRESS cuyo MigratoryMovement está INCOMPLETE
+   When el Módulo 1 reenvía la notificación de Check-In con los datos migratorios completos
+   Then el sistema no vuelve a modificar el Reservation.state
+   And actualiza únicamente ese MigratoryMovement a validationStatus COMPLETE
+   And responde HTTP 200
+   ```
 
-- **FR-001**: El sistema no debe ofrecer una interfaz para el Check-In físico: debe limitarse a
-  exponer un servicio para recibir la notificación del Módulo 1.
-- **FR-002**: El sistema debe validar que la `Reservation` esté en `ACTIVE` antes de procesar la
-  notificación, con una única excepción: si ya está en `IN_PROGRESS`, la notificación es un
-  duplicado y se trata como idempotente según FR-005 (200 sin efectos, salvo la corrección de datos
-  migratorios incompletos de FR-004).
-- **FR-003**: El sistema debe actualizar el `status` a `IN_PROGRESS` mediante "Actualizar
-  reservación" al recibir una notificación válida.
-- **FR-004**: El sistema debe recibir y validar en la misma petición los datos migratorios de
-  huéspedes `FOREIGN`, registrándolos en un `MigratoryMovement` de esa reserva mediante "Procesar
-  datos de huéspedes extranjeros"; si son inválidos, debe conservar el Check-In y marcar el
-  movimiento como `INCOMPLETE`, respondiendo 200 sin advertencias mezcladas. Una notificación
-  posterior del Módulo 1 con los datos completos de esa reserva debe actualizar únicamente ese
-  movimiento a `COMPLETE`, de forma idempotente.
-- **FR-005**: El sistema debe tratar la notificación como idempotente (200 sin efectos nuevos si la
-  reserva ya está en `IN_PROGRESS`, salvo completar un movimiento migratorio `INCOMPLETE`) y, cuando
-  la reserva no esté en `ACTIVE` ni en `IN_PROGRESS`, o no
-  exista, debe responder **HTTP 400** sin cambiar el estado y registrar una incidencia de
-  conciliación con el Módulo 1, porque el efecto físico ya ocurrió allá.
-- **FR-006**: El sistema debe interceptar los errores lógicos, estructurales o de seguridad del
-  payload (sin identificador de reserva, formato inválido, caracteres maliciosos, reserva
-  inexistente o en un estado que no admite el Check-In), respondiendo **HTTP 400 (Bad Request)** y
-  prohibiendo errores **HTTP 500**. Los datos migratorios inválidos no son un error del payload:
-  conservan el Check-In y se rigen por FR-004 (200 y movimiento `INCOMPLETE`).
+## 3. Casos Borde
 
-### Non-Functional Requirements
+- **Caso Borde 1**: Payload sin identificador de reserva. El sistema intercepta el error de
+  inmediato y responde con un error controlado **HTTP 400 (Bad Request)**.
+- **Caso Borde 2**: Reserva no encontrada en el Módulo 2. El sistema responde con **HTTP 400 (Bad
+  Request)** y registra un `ReconciliationIncident`, porque el Módulo 1 ya ocupó físicamente una
+  habitación sin que exista una reserva vigente que la respalde.
+- **Caso Borde 3**: Notificación duplicada sobre una reserva ya en `IN_PROGRESS`. El sistema
+  responde **HTTP 200** de forma idempotente, sin alterar el `Reservation.state`; solo si la
+  notificación trae datos migratorios completos y el `MigratoryMovement` de esa reserva está
+  `INCOMPLETE`, lo actualiza a `COMPLETE`.
+
+## 4. Requisitos
+
+### Requisitos Funcionales
+
+- **FR-001**: El sistema debe limitarse a exponer un endpoint de API para recibir la notificación
+  del Módulo 1, sin ofrecer ninguna interfaz propia de Check-In presencial.
+- **FR-002**: El sistema debe validar que la `Reservation` se encuentre en `Reservation.state`
+  `ACTIVE` antes de procesar la notificación como transición nueva.
+- **FR-003**: El sistema debe transicionar la `Reservation` a `Reservation.state` `IN_PROGRESS` al
+  recibir una notificación válida.
+- **FR-004**: El sistema debe recibir y consolidar, en la misma petición, los datos migratorios de
+  huéspedes `FOREIGN`, registrándolos en un `MigratoryMovement` de esa reserva.
+- **FR-005**: El sistema debe registrar un `ReconciliationIncident` y responder **HTTP 400 (Bad
+  Request)** cuando la reserva notificada no exista o se encuentre en un `Reservation.state` que no
+  admite Check-In (`PENDING`, `COMPLETED`, `CANCELLED` o `NO_SHOW`).
+- **FR-006**: El sistema debe interceptar los errores de estructura o de seguridad del payload y
+  responder con **HTTP 400 (Bad Request)**, quedando estrictamente prohibida la propagación de
+  excepciones de infraestructura **HTTP 500**.
+
+### Requisitos No Funcionales
 
 - **NFR-001**: El procesamiento de la notificación debe completarse en menos de 500 milisegundos.
 
-### Key Entities *(include if feature involves data)*
+## 5. Entidades Clave
 
-- **Reservation**: Reserva que transiciona a `IN_PROGRESS`. Atributos: `reservationRef`, `guestRef`,
-  `roomId` y `status` (`PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`).
+- **Reservation**: Reserva que transiciona a `IN_PROGRESS`. Atributos: `reservationRef`,
+  `guestRef`, `categoryRoom` y `Reservation.state` (`PENDING`, `ACTIVE`, `IN_PROGRESS`,
+  `COMPLETED`, `CANCELLED`, `NO_SHOW`).
 - **Guest**: Huésped titular de la reserva. Atributos: `id`, `fullName`, `documentNumber`,
-  `nationality`, `type` (`NATIONAL` | `FOREIGN`).
+  `nationality` y `type` (`NATIONAL` | `FOREIGN`).
 - **MigratoryMovement**: Movimiento migratorio de la estadía de un huésped `FOREIGN`. Atributos:
-  `movementId`, `reservationRef`, `guestRef`, `movementType`, `movementDate`, `validationStatus`
-  (`COMPLETE` | `INCOMPLETE`), `missingFields` y `validationReason` (estos dos últimos, solo cuando
-  es `INCOMPLETE`).
+  `movementId`, `reservationRef`, `guestRef` y `validationStatus` (`COMPLETE` | `INCOMPLETE`).
 - **ReconciliationIncident**: Registro de una discrepancia entre el Módulo 1 y el Módulo 2 que una
-  persona debe resolver (por ejemplo, una habitación ocupada sin una reserva vigente). Atributos:
-  `incidentId`, `origin` (`CHECK_IN` | `CHECK_OUT` | `ROOM_STATE`), `reservationRef`, `roomId`,
-  `reason`, `createdAt` y `resolutionStatus` (`OPEN` | `RESOLVED`).
-- **Room**: Habitación física controlada por el Módulo 1, que ya la pasó a `OCCUPIED`. Atributos:
-  `roomId`, `status` (`AVAILABLE` | `RESERVED` | `OCCUPIED`).
+  persona debe resolver. Atributos: `incidentId`, `origin` (`CHECK_IN`), `reservationRef`, `reason`,
+  `createdAt` y `resolutionStatus`.
+- **Room**: Habitación física controlada por el Módulo 1, ya pasada a `Occupied` antes de esta
+  notificación. Atributos: `categoryRoom`, `roomId` y `numberRoom`. Estados físicos administrados
+  por el Módulo 1: `Available`, `Occupied`, `PendingCleaning`, `InCleaning`, `DisabledForRepairs`,
+  `TechnicalBlock` e `Inactive`.
 
-## Success Criteria *(mandatory)*
+## 6. Criterios de Éxito
 
-### Measurable Outcomes
+### Resultados Medibles
 
-- **SC-001**: El 100% de las notificaciones válidas del Módulo 1 actualizan la reserva a
-  `IN_PROGRESS`.
-- **SC-002**: El 100% de la información migratoria enviada en el payload se registra en el
-  `MigratoryMovement` de la reserva sin intervención manual, o queda marcada como `INCOMPLETE` con
-  una advertencia.
-- **SC-003**: Cero errores **HTTP 500** ante payloads mal formados o reservas inexistentes, y el
-  100% de las notificaciones que no pueden aplicarse dejan una incidencia de conciliación
-  registrada.
+- **SC-001**: El 100% de las notificaciones válidas actualizan la reserva a `IN_PROGRESS`.
+- **SC-002**: El 100% de los datos migratorios recibidos quedan registrados en `MigratoryMovement`.
+- **SC-003**: Cero errores **HTTP 500**; el 100% de los rechazos generan un
+  `ReconciliationIncident` y responden **HTTP 400**.
