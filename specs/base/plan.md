@@ -120,9 +120,9 @@ Contenido propuesto del `payload` (según las specs):
 | Establecer estado de habitación (`Reserved` o `Available`, con `sequenceNumber`, `originEvent`, `reservationRef`) y consulta del resultado por `requestId` | M1 POST/PUT | `set-room-state` |
 | Tarifa dinámica: cuerpo `categoryRoom`, `startDate`, `endDate`, `previousGrossAmount` (opcional); respuesta `grossAmount`, `amountDifference`, `currency`, `calculatedAt` | M3 POST | `calculate-dynamic-rate` |
 
-**Errores**: cuerpo `{ "errorCode", "message", "timestamp", "path" }` con HTTP 400 (por defecto), 404,
-409 (conflicto de disponibilidad) o 429 (exportación SIRE). El diccionario prohíbe 500 y cualquier 2xx
-o 3xx para un error.
+**Errores**: cuerpo `{ "errorCode", "message", "timestamp", "path" }` con HTTP 400 (por defecto, también
+para recursos inexistentes, como piden los specs), 409 (conflicto de disponibilidad) o 429 (exportación
+SIRE). Ningún spec usa 404. El diccionario prohíbe 500 y cualquier 2xx o 3xx para un error.
 
 ## Project Structure
 
