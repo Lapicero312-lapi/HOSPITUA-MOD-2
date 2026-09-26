@@ -94,7 +94,7 @@ valida que el estado cambie a `COMPLETED` sin afectar la disponibilidad que gest
   cuando una notificación no puede aplicarse (definida en "Registrar Check-In"). Atributos
   relevantes: `origin` `CHECK_OUT`, `reservationRef`, `reason` y `resolutionStatus`.
 - **Room**: Habitación física controlada por el Módulo 1, que la libera en el Check-Out. Atributos:
-  `roomId`, `status` (`AVAILABLE` | `RESERVED` | `OCCUPIED`).
+  `id`, `status` (`Available` | `Reserved` | `Occupied`).
 
 ## Success Criteria *(mandatory)*
 
