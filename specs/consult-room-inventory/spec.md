@@ -1,127 +1,142 @@
 # Feature Specification: Consultar Inventario de Habitaciones
 
-**Created**: 2026-09-23
+**Created**: 2026-09-25
 
-## Use Case (Caso de Uso)
+## 1. Caso de Uso
 
 ### Descripción del problema
 
-Para saber si una habitación puede reservarse, el Módulo 2 necesita conocer su estado físico real en
-ese instante: si está libre (`AVAILABLE`), apartada por otra reserva (`RESERVED`) o con un huésped
-adentro (`OCCUPIED`). Ese estado es propiedad exclusiva del Módulo 1, que es quien opera el hotel en
-persona. Si el Módulo 2 guardara una copia propia, o asumiera valores por su cuenta, aparecerían
-sobreventas o reservas rechazadas sobre habitaciones que en realidad están libres. El negocio
-necesita una consulta de solo lectura, en tiempo real, contra el inventario del Módulo 1, que sirva
-de insumo a "Verificar disponibilidades" antes de crear o modificar cualquier reserva.
+Durante la fase de reserva, el Módulo 2 nunca asigna un `roomId` ni un `numberRoom` físico
+individual al huésped: esa asignación ocurre de forma operativa recién en el Check-In, dentro del
+Módulo 1. Sin embargo, para calcular cuánto cupo de aforo puede ofrecer, el Módulo 2 necesita
+conocer, en tiempo real, cuántas habitaciones físicas de una `categoryRoom` se encuentran realmente
+en estado `Available` según el inventario operativo que administra el Módulo 1.
+
+Ese estado físico es propiedad exclusiva del Módulo 1, que es quien opera el hotel en persona. Si el
+Módulo 2 guardara una copia propia del inventario físico, o asumiera un valor por su cuenta ante la
+falta de respuesta, aparecerían sobreventas de cupo o rechazos de reservas sobre categorías que en
+realidad sí tienen habitaciones disponibles. El negocio necesita una consulta de solo lectura, en
+tiempo real, contra el inventario físico del Módulo 1, que sirva de insumo directo al cálculo de
+aforo de "Verificar disponibilidades" antes de confirmar cualquier reserva.
 
 ### Flujo de Usuario de Alto Nivel
 
 1. El caso de uso "Verificar disponibilidades" invoca "Consultar inventario de habitaciones"
-   enviando un `roomId` puntual o una categoría (`categoryRoom`) junto con el rango de fechas.
-2. El sistema consulta de forma síncrona el inventario del **Módulo 1**, fuente de verdad exclusiva
-   del estado físico de la `Room`. Cuando la `Room` está `RESERVED`, el Módulo 1 también informa qué
-   reserva la mantiene apartada (`reservedByReservationRef`).
-3. Si la consulta es puntual, el sistema retorna el `status` actual de esa `Room` y, si está
-   `RESERVED`, la `reservationRef` que la mantiene apartada, para que quien consulta pueda
-   distinguir un apartado ajeno del propio.
-4. Si la consulta es por categoría, el sistema retorna únicamente las habitaciones en `AVAILABLE`,
-   con sus atributos (`roomId`, `numberRoom`, `categoryRoom`).
-5. Si el Módulo 1 no responde o el identificador consultado no existe, el sistema informa el
-   fallo con un error de negocio controlado **HTTP 400 (Bad Request)**.
+   enviando la `categoryRoom` a validar.
+2. El sistema realiza una petición síncrona de solo lectura a la API del Módulo 1.
+3. El Módulo 1 retorna el conteo y el listado de las habitaciones de esa `categoryRoom` que se
+   encuentran actualmente en estado físico `Available`.
+4. El sistema integra ese dato al cálculo del aforo lógico de "Verificar disponibilidades".
+5. Si ocurre un timeout, una falla de red o la `categoryRoom` no existe, el sistema interrumpe la
+   consulta y responde con un error controlado **HTTP 400 (Bad Request)**.
 
-## User Scenarios & Testing *(mandatory)*
+## 2. Escenarios de Usuario y Pruebas
 
-### User Story 1 - Consulta del Inventario Físico en Tiempo Real (Priority: P1)
+### User Story 1 - Consulta de Inventario Físico por Categoría (Priority: P1)
 
-Al verificar la disponibilidad, el sistema consulta el inventario del Módulo 1 para una habitación
-puntual o para una categoría completa, y obtiene el estado físico vigente. Por tratarse de una única
-consulta de lectura reutilizada por varios flujos (crear, actualizar y verificar reservas), el
-camino
-de éxito puntual, el listado por categoría y los fallos de integración se consolidan en esta misma
-historia de usuario.
+**Plain Language**: Consulta de solo lectura, en tiempo real, al inventario físico del Módulo 1 que
+retorna cuántas habitaciones de una `categoryRoom` están actualmente en estado `Available`, como
+insumo directo del cálculo de aforo de "Verificar disponibilidades".
 
-**Why this priority**: Es la base de la verificación de disponibilidad. Sin conocer el estado real
-de la `Room` en el Módulo 1, el hotel no puede evitar reservar habitaciones que ya están apartadas u
-ocupadas.
+Al verificar la disponibilidad, el sistema consulta el inventario físico del Módulo 1 para una
+`categoryRoom` completa y obtiene el conteo vigente de habitaciones en `Available`. Por tratarse de
+una única consulta de lectura reutilizada por "Verificar disponibilidades", el camino de éxito con
+habitaciones disponibles, el caso sin ninguna habitación disponible y los fallos de integración con
+el Módulo 1 se consolidan en esta misma historia de usuario, para evitar la sobre-atomización.
 
-**Independent Test**: Se consulta una `Room` conocida en `AVAILABLE` y se verifica que se retorne
-ese estado; se repite con una en `RESERVED` y otra en `OCCUPIED`; se consulta una categoría con
-varias habitaciones y se comprueba que el listado solo incluya las `AVAILABLE`.
+**Why this priority**: Es la base del cálculo de aforo. Sin conocer el inventario físico real
+administrado por el Módulo 1, el hotel no puede evitar ofrecer cupo de una `categoryRoom` por
+encima de las habitaciones que realmente están operativas y libres.
+
+**Independent Test**: Se consulta una `categoryRoom` con habitaciones en `Available` y se verifica
+que el conteo y el listado retornado sean exactos; se consulta una `categoryRoom` cuyas habitaciones
+están todas en otro estado físico (`Occupied`, `PendingCleaning`, `InCleaning`,
+`DisabledForRepairs`, `TechnicalBlock` o `Inactive`) y se verifica que se retorne un listado vacío; y
+se simula una falla de comunicación con el Módulo 1, confirmando la respuesta controlada **HTTP
+400**.
 
 **Acceptance Scenarios**:
 
-1. **Scenario**: Consulta puntual de una habitación disponible (Happy Path)
-   - **Given** el `roomId` de una `Room` en `AVAILABLE` en el Módulo 1
-   - **When** el sistema consulta su estado mediante "Consultar inventario de habitaciones"
-   - **Then** el Módulo 1 retorna `AVAILABLE` y el sistema lo reporta a "Verificar
-     disponibilidades" sin modificar ningún dato
+1. **Escenario 1**: Consulta exitosa de inventario disponible por `categoryRoom` (Happy Path)
 
-2. **Scenario**: Consulta puntual de una habitación no disponible
-   - **Given** el `roomId` de una `Room` en `RESERVED` u `OCCUPIED`
-   - **When** el sistema consulta su estado
-   - **Then** el sistema retorna ese estado indicando que la habitación no está disponible
+   ```gherkin
+   Given una categoryRoom con una o más habitaciones en estado físico Available en el Módulo 1
+   When "Verificar disponibilidades" consulta el inventario enviando la categoryRoom
+   Then el sistema realiza la petición síncrona de solo lectura al Módulo 1
+   And retorna el conteo y el listado exacto de habitaciones en Available de esa categoryRoom
+   ```
 
-3. **Scenario**: Listado de habitaciones disponibles por categoría
-   - **Given** una categoría con varias habitaciones en distintos estados
-   - **When** el sistema consulta el inventario por `categoryRoom`
-   - **Then** el sistema retorna únicamente las habitaciones en `AVAILABLE`, con `roomId`,
-     `numberRoom` y `categoryRoom`
+2. **Escenario 2**: Consulta de categoría sin habitaciones disponibles en estado `Available`
 
-4. **Scenario**: Categoría sin habitaciones disponibles
-   - **Given** una categoría cuyas habitaciones están todas en `RESERVED` u `OCCUPIED`
-   - **When** el sistema consulta el inventario por `categoryRoom`
-   - **Then** el sistema retorna un listado vacío indicando que no hay habitaciones disponibles
+   ```gherkin
+   Given una categoryRoom cuyas habitaciones se encuentran todas en un estado físico distinto de Available
+   When "Verificar disponibilidades" consulta el inventario enviando la categoryRoom
+   Then el sistema retorna un listado vacío y un conteo de cero habitaciones disponibles
+   ```
 
-### Casos Borde
+3. **Escenario 3**: Fallo de integración o timeout con el Módulo 1 (Error)
 
-- ¿Qué sucede si el Módulo 1 no responde o agota el tiempo de espera? El sistema intercepta la
-  falla, evita que se propague como un error de servidor y retorna **HTTP 400 (Bad Request)** con el
-  mensaje "No se pudo consultar el inventario de habitaciones en este momento. Intente de nuevo."
-- ¿Qué sucede si se consulta un `roomId` inexistente o con caracteres inválidos? El sistema detecta
-  el identificador inválido y retorna **HTTP 400** con el mensaje "El identificador de la
-  habitación es inválido."
-- ¿Qué sucede si el estado de la habitación cambia entre la consulta y la creación de la reserva?
-  Esta consulta no reserva la habitación; la confirmación final se valida de nuevo al crear la
-  reserva, y si ya cambió, el sistema responde con **HTTP 400** indicando que ya no está disponible.
+   ```gherkin
+   Given una consulta de inventario en curso hacia el Módulo 1
+   When el Módulo 1 no responde o la conexión agota el tiempo de espera
+   Then el sistema interrumpe la consulta sin asumir disponibilidad por defecto
+   And responde con un error controlado HTTP 400 (Bad Request) indicando: "Error 400: No se pudo consultar el inventario de habitaciones en este momento"
+   And prohíbe estrictamente la propagación de una excepción HTTP 500
+   ```
 
-## Requirements *(mandatory)*
+## 3. Casos Borde
 
-### Functional Requirements
+- **Caso Borde 1**: Consulta con parámetro `categoryRoom` vacío o nulo. El sistema intercepta la
+  solicitud antes de tocar la lógica de negocio y responde con un error controlado **HTTP 400 (Bad
+  Request)**.
+- **Caso Borde 2**: Consulta sobre una `categoryRoom` inexistente en el catálogo del hotel. El
+  sistema responde con un error controlado **HTTP 400 (Bad Request)**, sin intentar consultar el
+  inventario del Módulo 1.
+- **Caso Borde 3**: Caída o lentitud de red con el Módulo 1. El sistema intercepta la falla de forma
+  limpia y responde con **HTTP 400 (Bad Request)**, sin propagar en ningún caso una excepción **HTTP
+  500**.
 
-- **FR-001**: El sistema debe consultar el `status` de una `Room` por su `roomId` directamente en el
-  inventario del Módulo 1 y, cuando esté `RESERVED`, retornar también la reserva que la mantiene
-  apartada (`reservedByReservationRef`).
-- **FR-002**: El sistema debe permitir consultar el inventario por `categoryRoom` y retornar
-  únicamente las habitaciones en `AVAILABLE`.
-- **FR-003**: El sistema debe ser de solo lectura: no debe modificar el `status` de ninguna `Room`.
-- **FR-004**: El sistema debe entregar el resultado a "Verificar disponibilidades" como insumo de la
-  validación previa a cualquier reserva.
-- **FR-005**: El sistema debe interceptar los fallos de integración con el Módulo 1 y los
-  identificadores inválidos, respondiendo con **HTTP 400 (Bad Request)** y prohibiendo que escalen a
-  **HTTP 500**.
+## 4. Requisitos
 
-### Non-Functional Requirements
+### Requisitos Funcionales
 
-- **NFR-001**: La consulta puntual al inventario del Módulo 1 debe completarse en menos de 1
-  segundo.
+- **FR-001**: El sistema debe permitir la consulta del inventario de habitaciones por `categoryRoom`
+  directamente contra el Módulo 1.
+- **FR-002**: El sistema debe retornar únicamente las habitaciones que se encuentran en estado
+  físico `Available`, descartando explícitamente las que estén en `Occupied`, `PendingCleaning`,
+  `InCleaning`, `DisabledForRepairs`, `TechnicalBlock` o `Inactive`.
+- **FR-003**: El sistema debe garantizar que la consulta sea estrictamente de solo lectura, sin
+  alterar el estado físico de ninguna `Room` en el Módulo 1.
+- **FR-004**: El sistema debe entregar el resultado como insumo directo para el cálculo de aforo de
+  "Verificar disponibilidades".
+- **FR-005**: El sistema debe capturar cualquier error de integración con el Módulo 1 y responder
+  obligatoriamente con **HTTP 400 (Bad Request)**, quedando estrictamente prohibida la propagación de
+  excepciones de infraestructura **HTTP 500**.
 
-### Key Entities *(include if feature involves data)*
+### Requisitos No Funcionales
 
-- **Room**: Unidad física provista por el Módulo 1. Atributos: `roomId`, `numberRoom`,
-  `categoryRoom`, `status` (`AVAILABLE` | `RESERVED` | `OCCUPIED`) y `reservedByReservationRef`
-  (reserva que la mantiene apartada; solo presente cuando el `status` es `RESERVED`). Su estado es
-  propiedad
-  exclusiva del Módulo 1; esta funcionalidad solo lo consulta.
-- **Reservation**: Se referencia de forma informativa. Atributos: `reservationRef`, `roomId` y
-  `status` (`PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`).
+- **NFR-001**: El tiempo de respuesta de la consulta debe ser inferior a 1 segundo en condiciones
+  normales.
+- **NFR-002**: La operación debe ser idempotente, sin efectos colaterales sobre el inventario del
+  Módulo 1 entre ejecuciones sucesivas.
 
-## Success Criteria *(mandatory)*
+## 5. Entidades Clave
 
-### Measurable Outcomes
+- **Room**: Unidad física administrada por el Módulo 1. Atributos: `roomId`, `numberRoom` y
+  `categoryRoom`. Su estado físico es propiedad exclusiva del Módulo 1 (`Available`, `Occupied`,
+  `PendingCleaning`, `InCleaning`, `DisabledForRepairs`, `TechnicalBlock` e `Inactive`; el Módulo 1
+  no cuenta con un estado `RESERVED`); esta funcionalidad solo lo consulta.
+- **Reservation**: Se referencia de forma informativa como la reserva u operación que origina la
+  consulta de aforo. Atributo de ciclo de vida: `Reservation.state` (`PENDING`, `ACTIVE`,
+  `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`).
 
-- **SC-001**: El 100% de las verificaciones de disponibilidad se apoyan en el estado real de la
-  `Room` obtenido del Módulo 1 en el momento de la consulta.
+## 6. Criterios de Éxito
+
+### Resultados Medibles
+
+- **SC-001**: El 100% de las verificaciones de aforo descuentan el inventario real en estado
+  `Available` provisto por el Módulo 1.
 - **SC-002**: El 100% de las consultas retornan el resultado en menos de 1 segundo en condiciones
   normales.
-- **SC-003**: Cero errores **HTTP 500** por fallos del Módulo 1 o identificadores inválidos; el 100%
-  se responde con **HTTP 400**.
+- **SC-003**: Cero errores **HTTP 500** por fallos de integración con el Módulo 1; el 100% se
+  responde con **HTTP 400**.
