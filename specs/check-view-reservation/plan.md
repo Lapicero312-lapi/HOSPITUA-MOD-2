@@ -1,8 +1,8 @@
 # Implementation Plan: Consultar Reservas
 
-**Date**: 2026-09-26
-**Spec**: [spec.md](./spec.md)
-**Plan base**: [../base/plan.md](../base/plan.md)
+**Date**: 2026-09-26  
+**Spec**: [spec.md](./spec.md)  
+**Plan base**: [../base/plan.md](../base/plan.md)  
 
 ## Summary
 
@@ -16,11 +16,11 @@ JPA parametrizadas; validación estricta de entrada; respuestas siempre 200 o 40
 
 Hereda todo de `../base/plan.md`. Solo lo específico de esta feature:
 
-**Storage**: PostgreSQL, tablas `reservation` y `guest` (definidas en la Fase 2 del plan base). No llama a otros módulos.
-**Testing**: Spring Boot Test + Testcontainers (PostgreSQL); pruebas unitarias del validador.
-**Performance Goals**: consulta por `reservationRef` < 500 ms (NFR-001, SC-001).
-**Constraints**: solo lectura e idempotente (FR-004); cero HTTP 500 (FR-005).
-**Scale/Scope**: NEEDS CLARIFICATION (volumen de reservas y huéspedes).
+- **Storage**: PostgreSQL, tablas `reservation` y `guest` (definidas en la Fase 2 del plan base). No llama a otros módulos.
+- **Testing**: Spring Boot Test + Testcontainers (PostgreSQL); pruebas unitarias del validador.
+- **Performance Goals**: consulta por `reservationRef` < 500 ms (NFR-001, SC-001).
+- **Constraints**: solo lectura e idempotente (FR-004); cero HTTP 500 (FR-005).
+- **Scale/Scope**: NEEDS CLARIFICATION (volumen de reservas y huéspedes).
 
 ## Diseño técnico
 
@@ -117,7 +117,7 @@ backend/src/test/java/com/hospitua/reservas/
 
 ## Phase 3: User Story 1 - Búsqueda y consulta de reservas (Priority: P1)
 
-**Goal**: localizar una reserva por referencia, documento o nombre, sin modificar nada.
+**Goal**: localizar una reserva por referencia, documento o nombre, sin modificar nada.  
 **Independent Test**: los escenarios 1 a 3 del spec contra PostgreSQL real.
 
 ### Tests

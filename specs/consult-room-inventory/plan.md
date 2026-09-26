@@ -1,8 +1,8 @@
 # Implementation Plan: Consultar Inventario de Habitaciones
 
-**Date**: 2026-09-26
-**Spec**: [spec.md](./spec.md)
-**Plan base**: [../base/plan.md](../base/plan.md)
+**Date**: 2026-09-26  
+**Spec**: [spec.md](./spec.md)  
+**Plan base**: [../base/plan.md](../base/plan.md)  
 
 ## Summary
 
@@ -16,11 +16,11 @@ categoría. Ante cualquier fallo del Módulo 1, responde un error controlado (HT
 
 Hereda todo de `../base/plan.md`. Solo lo específico de esta feature:
 
-**Storage**: ninguno. No persiste el estado de las habitaciones (propiedad del Módulo 1).
-**Testing**: JUnit 5 + Mockito; `MockRestServiceServer` (Spring Test) para simular al Módulo 1.
-**Performance Goals**: consulta puntual < 1 s (NFR-001, SC-002).
-**Constraints**: solo lectura; sin reintentos automáticos para no exceder 1 s; nunca asumir disponibilidad.
-**Scale/Scope**: NEEDS CLARIFICATION.
+- **Storage**: ninguno. No persiste el estado de las habitaciones (propiedad del Módulo 1).
+- **Testing**: JUnit 5 + Mockito; `MockRestServiceServer` (Spring Test) para simular al Módulo 1.
+- **Performance Goals**: consulta puntual < 1 s (NFR-001, SC-002).
+- **Constraints**: solo lectura; sin reintentos automáticos para no exceder 1 s; nunca asumir disponibilidad.
+- **Scale/Scope**: NEEDS CLARIFICATION.
 
 ## Diseño técnico
 
@@ -97,7 +97,7 @@ backend/src/test/java/com/hospitua/reservas/
 
 ## Phase 3: User Story 1 - Consulta del inventario físico (Priority: P1)
 
-**Goal**: obtener el estado físico vigente de una habitación o las libres de una categoría.
+**Goal**: obtener el estado físico vigente de una habitación o las libres de una categoría.  
 **Independent Test**: los cuatro escenarios del spec con el Módulo 1 simulado.
 
 ### Tests

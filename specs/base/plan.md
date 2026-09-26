@@ -1,7 +1,7 @@
 # Implementation Plan: Base del Módulo 2 (plataforma compartida)
 
-**Date**: 2026-09-26
-**Spec**: [diccionario.md](../diccionario.md) (contrato de integración) y los `spec.md` de las 13 features
+**Date**: 2026-09-26  
+**Spec**: [diccionario.md](../diccionario.md) (contrato de integración) y los `spec.md` de las 13 features  
 en `specs/*/`. Este plan no implementa una feature: deja lista la base que todos los planes de
 feature reutilizan.
 
@@ -20,22 +20,22 @@ pruebas. Cada plan de feature (`specs/[feature]/plan.md`) depende de este y solo
 
 ## Technical Context
 
-**Language/Version**: Java 21
-**Primary Dependencies**: Spring Boot, Spring Web, Spring Data JPA, Bean Validation, Lombok, Spring AMQP, Spring Security, Flyway
-**Storage**: PostgreSQL
-**Build**: Maven
-**Messaging**: RabbitMQ
-**Testing**: JUnit 5, Mockito, Spring Boot Test, Testcontainers
-**Target Platform**: servidor Linux/Windows + navegador web
-**Project Type**: web application (`backend/` + `frontend/`)
-**API**: REST
-**Frontend**: React + Vite
-**Version Control**: Git + GitHub (Gitflow)
-**Performance Goals**: NEEDS CLARIFICATION (las specs fijan tiempos por operación: cancelación local
+- **Language/Version**: Java 21
+- **Primary Dependencies**: Spring Boot, Spring Web, Spring Data JPA, Bean Validation, Lombok, Spring AMQP, Spring Security, Flyway
+- **Storage**: PostgreSQL
+- **Build**: Maven
+- **Messaging**: RabbitMQ
+- **Testing**: JUnit 5, Mockito, Spring Boot Test, Testcontainers
+- **Target Platform**: servidor Linux/Windows + navegador web
+- **Project Type**: web application (`backend/` + `frontend/`)
+- **API**: REST
+- **Frontend**: React + Vite
+- **Version Control**: Git + GitHub (Gitflow)
+- **Performance Goals**: NEEDS CLARIFICATION (las specs fijan tiempos por operación: cancelación local
 < 200 ms, Check-In/Check-Out < 500 ms, recotización < 3 s, exportación SIRE < 2 s para 500 huéspedes,
 cierre del día < 1 min para 1000 reservas; falta un objetivo global de carga)
-**Constraints**: NEEDS CLARIFICATION
-**Scale/Scope**: NEEDS CLARIFICATION
+- **Constraints**: NEEDS CLARIFICATION
+- **Scale/Scope**: NEEDS CLARIFICATION
 
 ### Dependencias y herramientas adicionales a la lista original (aprobadas)
 

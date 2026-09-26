@@ -1,8 +1,8 @@
 # Implementation Plan: Consultar Calendario de Mantenimientos
 
-**Date**: 2026-09-26
-**Spec**: [spec.md](./spec.md)
-**Plan base**: [../base/plan.md](../base/plan.md)
+**Date**: 2026-09-26  
+**Spec**: [spec.md](./spec.md)  
+**Plan base**: [../base/plan.md](../base/plan.md)  
 
 ## Summary
 
@@ -16,11 +16,11 @@ que la habitación esté libre.
 
 Hereda todo de `../base/plan.md`. Solo lo específico de esta feature:
 
-**Storage**: ninguno.
-**Testing**: JUnit 5; `MockRestServiceServer` para el Módulo 1; pruebas unitarias del cálculo de solapamiento.
-**Performance Goals**: consulta < 1 s (NFR-001).
-**Constraints**: solo lectura; sin reintentos; nunca asumir disponibilidad.
-**Scale/Scope**: NEEDS CLARIFICATION.
+- **Storage**: ninguno.
+- **Testing**: JUnit 5; `MockRestServiceServer` para el Módulo 1; pruebas unitarias del cálculo de solapamiento.
+- **Performance Goals**: consulta < 1 s (NFR-001).
+- **Constraints**: solo lectura; sin reintentos; nunca asumir disponibilidad.
+- **Scale/Scope**: NEEDS CLARIFICATION.
 
 ## Diseño técnico
 
@@ -95,7 +95,7 @@ backend/src/test/java/com/hospitua/reservas/
 
 ## Phase 3: User Story 1 - Detección de mantenimientos que cruzan una estadía (Priority: P1)
 
-**Goal**: saber si una habitación estará inhabilitada durante la estadía y cuándo.
+**Goal**: saber si una habitación estará inhabilitada durante la estadía y cuándo.  
 **Independent Test**: los tres escenarios del spec con el Módulo 1 simulado.
 
 ### Tests

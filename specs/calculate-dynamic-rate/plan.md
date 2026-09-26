@@ -1,8 +1,8 @@
 # Implementation Plan: Calcular Tarifa Dinámica
 
-**Date**: 2026-09-26
-**Spec**: [spec.md](./spec.md)
-**Plan base**: [../base/plan.md](../base/plan.md)
+**Date**: 2026-09-26  
+**Spec**: [spec.md](./spec.md)  
+**Plan base**: [../base/plan.md](../base/plan.md)  
 
 ## Summary
 
@@ -16,11 +16,11 @@ precios, impuestos ni comisiones. Es un servicio interno (`RateQuoteService`) co
 
 Hereda todo de `../base/plan.md`. Solo lo específico de esta feature:
 
-**Storage**: ninguno propio; el `grossAmount` se guarda en `reservation.gross_amount` (lo escriben las features invocadoras). La `RateQuote` no se persiste (spec).
-**Testing**: JUnit 5; `MockRestServiceServer` para el Módulo 3.
-**Performance Goals**: llamada e integración < 1,5 s (NFR-001).
-**Constraints**: precisión decimal exacta, sin redondeos propios (NFR-002); sin reintentos; nunca tarifa por defecto ni a cero.
-**Scale/Scope**: NEEDS CLARIFICATION.
+- **Storage**: ninguno propio; el `grossAmount` se guarda en `reservation.gross_amount` (lo escriben las features invocadoras). La `RateQuote` no se persiste (spec).
+- **Testing**: JUnit 5; `MockRestServiceServer` para el Módulo 3.
+- **Performance Goals**: llamada e integración < 1,5 s (NFR-001).
+- **Constraints**: precisión decimal exacta, sin redondeos propios (NFR-002); sin reintentos; nunca tarifa por defecto ni a cero.
+- **Scale/Scope**: NEEDS CLARIFICATION.
 
 ## Diseño técnico
 
@@ -107,7 +107,7 @@ backend/src/test/java/com/hospitua/reservas/
 
 ## Phase 3: User Story 1 - Consumo de cotización para reservas nuevas (Priority: P1)
 
-**Goal**: obtener el `grossAmount` informativo de una estadía nueva.
+**Goal**: obtener el `grossAmount` informativo de una estadía nueva.  
 **Independent Test**: escenarios 1 y 2 de la Historia 1 con el Módulo 3 simulado.
 
 ### Tests
@@ -127,7 +127,7 @@ backend/src/test/java/com/hospitua/reservas/
 
 ## Phase 4: User Story 2 - Recotización por modificación de estadía (Priority: P1)
 
-**Goal**: recotizar con `previousGrossAmount` y devolver la diferencia.
+**Goal**: recotizar con `previousGrossAmount` y devolver la diferencia.  
 **Independent Test**: escenarios 1 y 2 de la Historia 2.
 
 ### Tests

@@ -1,8 +1,8 @@
 # Implementation Plan: Verificar Disponibilidades
 
-**Date**: 2026-09-26
-**Spec**: [spec.md](./spec.md)
-**Plan base**: [../base/plan.md](../base/plan.md)
+**Date**: 2026-09-26  
+**Spec**: [spec.md](./spec.md)  
+**Plan base**: [../base/plan.md](../base/plan.md)  
 
 ## Summary
 
@@ -17,11 +17,11 @@ curso, el inventario físico (Módulo 1). Admite consulta por habitación (`room
 
 Hereda todo de `../base/plan.md`. Solo lo específico de esta feature:
 
-**Storage**: PostgreSQL, tabla `reservation` (consulta de solapamiento con índice `(room_id, start_date, end_date)`).
-**Testing**: JUnit 5 + Mockito para la orquestación; Testcontainers (PostgreSQL) para la consulta de solapamiento.
-**Performance Goals**: verificación completa < 2 s (NFR-001).
-**Constraints**: solo lectura; no bloquea habitaciones; nunca asume disponibilidad si el Módulo 1 falla.
-**Scale/Scope**: NEEDS CLARIFICATION (número de habitaciones por categoría).
+- **Storage**: PostgreSQL, tabla `reservation` (consulta de solapamiento con índice `(room_id, start_date, end_date)`).
+- **Testing**: JUnit 5 + Mockito para la orquestación; Testcontainers (PostgreSQL) para la consulta de solapamiento.
+- **Performance Goals**: verificación completa < 2 s (NFR-001).
+- **Constraints**: solo lectura; no bloquea habitaciones; nunca asume disponibilidad si el Módulo 1 falla.
+- **Scale/Scope**: NEEDS CLARIFICATION (número de habitaciones por categoría).
 
 ## Diseño técnico
 
@@ -116,7 +116,7 @@ backend/src/test/java/com/hospitua/reservas/
 
 ## Phase 3: User Story 1 - Consulta y validación de disponibilidad (Priority: P1)
 
-**Goal**: saber si hay una habitación asignable para el rango, con la triple validación.
+**Goal**: saber si hay una habitación asignable para el rango, con la triple validación.  
 **Independent Test**: los siete escenarios del spec con el Módulo 1 simulado y PostgreSQL real.
 
 ### Tests

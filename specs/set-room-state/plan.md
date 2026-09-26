@@ -1,8 +1,8 @@
 # Implementation Plan: Establecer Estado de Habitación
 
-**Date**: 2026-09-26
-**Spec**: [spec.md](./spec.md)
-**Plan base**: [../base/plan.md](../base/plan.md)
+**Date**: 2026-09-26  
+**Spec**: [spec.md](./spec.md)  
+**Plan base**: [../base/plan.md](../base/plan.md)  
 
 ## Summary
 
@@ -17,11 +17,11 @@ servicio interno (`RoomStateOrderService`) más tres procesos programados; sin e
 
 Hereda todo de `../base/plan.md`. Solo lo específico de esta feature:
 
-**Storage**: PostgreSQL, tablas `room_state_request` y `room_sequence` (esquema base). Reutiliza `reconciliation_incident`.
-**Testing**: JUnit 5, Mockito, `MockRestServiceServer` y Testcontainers (concurrencia de secuencias).
-**Performance Goals**: procesamiento local < 1 s (NFR-001); al menos 99% de las órdenes `Reserved` en `COMPLETED` en 60 s (SC-001); 95% de `PENDING` sincronizadas en el primer reintento (SC-005).
-**Constraints**: nada de llamadas al Módulo 1 dentro de una transacción de base de datos abierta; nunca liberar una habitación `Occupied`.
-**Scale/Scope**: NEEDS CLARIFICATION.
+- **Storage**: PostgreSQL, tablas `room_state_request` y `room_sequence` (esquema base). Reutiliza `reconciliation_incident`.
+- **Testing**: JUnit 5, Mockito, `MockRestServiceServer` y Testcontainers (concurrencia de secuencias).
+- **Performance Goals**: procesamiento local < 1 s (NFR-001); al menos 99% de las órdenes `Reserved` en `COMPLETED` en 60 s (SC-001); 95% de `PENDING` sincronizadas en el primer reintento (SC-005).
+- **Constraints**: nada de llamadas al Módulo 1 dentro de una transacción de base de datos abierta; nunca liberar una habitación `Occupied`.
+- **Scale/Scope**: NEEDS CLARIFICATION.
 
 ## Diseño técnico
 
@@ -122,7 +122,7 @@ backend/src/test/java/com/hospitua/reservas/
 
 ## Phase 3: User Story 1 - Orden de cambio de estado por reserva del día o cancelación (Priority: P1)
 
-**Goal**: que el Módulo 1 tenga apartadas las habitaciones de las reservas de hoy y las libere al cancelarse.
+**Goal**: que el Módulo 1 tenga apartadas las habitaciones de las reservas de hoy y las libere al cancelarse.  
 **Independent Test**: escenarios 1 a 8 con el Módulo 1 simulado.
 
 ### Tests
@@ -145,7 +145,7 @@ backend/src/test/java/com/hospitua/reservas/
 
 ## Phase 4: User Story 2 - Reintento por fallo de comunicación con el Módulo 1 (Priority: P2)
 
-**Goal**: que un fallo de red no impida cancelar y que las órdenes lleguen en orden.
+**Goal**: que un fallo de red no impida cancelar y que las órdenes lleguen en orden.  
 **Independent Test**: escenarios 1 a 5 de la Historia 2.
 
 ### Tests
