@@ -239,8 +239,8 @@ respuesta es un **HTTP 400** controlado.
   como registro propio: extrae sus valores hacia la `Reservation` y hacia la vista de confirmación
   de diferencia.
 - **Room**: Se referencia únicamente a través de su categoría (`categoryRoom`) para construir el
-  contrato de entrada del servicio de tarificación. Sus estados en el Módulo 1 son `AVAILABLE`,
-  `RESERVED` y `OCCUPIED`. Este caso de uso no consulta ni modifica el `status` de ninguna `Room`:
+  contrato de entrada del servicio de tarificación. Sus estados en el Módulo 1 son `Available`,
+  `Reserved` y `Occupied`. Este caso de uso no consulta ni modifica el `status` de ninguna `Room`:
   la tarificación opera sobre la categoría y la disponibilidad se verifica antes mediante
   "Verificar disponibilidades".
 
