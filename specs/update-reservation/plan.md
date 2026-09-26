@@ -155,6 +155,7 @@ backend/src/test/java/com/hospitua/reservas/
 - [ ] T-UPD-06 [US1] Implementar `ReservationUpdateService` (depende de T-CRA-07, T-CDR-10, T-RSS-08 y T-UPD-04)
 - [ ] T-UPD-07 [US1] Implementar `ReservationModificationController` con preview y confirmación, roles y propiedad de la Ota (depende de T018)
 - [ ] T-UPD-08 [US1] Aplicar la confirmación revalidada (D1)
+- [ ] T-UPD-16 [P] [US1] Crear `ModifyReservationPage` en el frontend (edición, vista previa con la diferencia, aviso de llegada tardía y confirmación)
 
 **Checkpoint**: la Recepcionista y la Ota modifican reservas con la diferencia visible antes de confirmar.
 
@@ -200,9 +201,9 @@ backend/src/test/java/com/hospitua/reservas/
 
 ## Preguntas abiertas (NEEDS CLARIFICATION)
 
-1. **Motivo de las transiciones** (`ROOM_REJECTED`, `ROOM_UNCONFIRMED`): se propone la columna `status_reason`; falta agregarla al diccionario.
+1. **Motivo de las transiciones** (decidido: D6) (`ROOM_REJECTED`, `ROOM_UNCONFIRMED`): se propone la columna `status_reason`; falta agregarla al diccionario.
 2. **Identidad de la Ota**: cómo se autentica y cómo se asocia a `ota_id` para restringirla a sus reservas.
 3. **Campos que puede editar la Ota**: el spec dice que la Recepcionista o la Ota modifican; falta precisar si la Ota puede cambiar datos del huésped.
-4. **Forma de la API de modificación** (preview y confirmación con `PATCH`): propuesta propia, no viene en el spec.
+4. **Forma de la API de modificación** (decidido: D8) (preview y confirmación con `PATCH`): propuesta propia, no viene en el spec.
 5. **Hora del cierre del día operativo** y del inicio del día: configurables, sin valor definido.
 6. **Reintentos de los consumidores** (cuántos y con qué espera): NEEDS CLARIFICATION.

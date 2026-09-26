@@ -137,6 +137,7 @@ backend/src/test/java/com/hospitua/reservas/
 - [ ] T-CVR-10 [US1] Implementar `ReservationController` con `GET /api/reservations` (depende de T-CVR-07 a T-CVR-09)
 - [ ] T-CVR-11 [US1] Configurar la autorización de la ruta para `RECEPTIONIST` y `MODULE1` (depende de T018 del plan base)
 - [ ] T-CVR-12 [US1] Verificar que el `GlobalExceptionHandler` devuelva los `errorCode` y mensajes de la tabla
+- [ ] T-CVR-13 [P] [US1] Crear `ReservationSearchPage` en el frontend (búsqueda por referencia, documento o nombre, y detalle), reutilizada por cancelar y modificar
 
 **Checkpoint**: el servicio responde a Recepción y al Módulo 1 y es reutilizable por las demás features.
 

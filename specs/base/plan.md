@@ -107,7 +107,7 @@ Contenido propuesto del `payload` (según las specs):
 | `PATCH /api/reservations/{reservationRef}` | Recepcionista, Ota | `update-reservation` |
 | `POST /api/reservations/{reservationRef}/cancellation` | Recepcionista, Ota | `cancel-reservation` |
 | `POST /api/ota/reservations` y confirmación de pago/garantía | Ota | `generate-ota-reservation` |
-| `GET /api/sire/exports?startDate=&endDate=` (devuelve `.TXT` y cabecera `Export-Id`) | Migración | `export-sire-file` |
+| `POST /api/sire/exports` con cuerpo `startDate` y `endDate` (devuelve `.TXT` y cabecera `Export-Id`; es `POST` porque registra un `SireExport`, decisión D9) | Migración | `export-sire-file` |
 | `GET /api/sire/exports/{exportId}/exclusions` | Migración | `export-sire-file` |
 | `GET /api/otas/{otaId}` (devuelve `id`, `name`, `commissionPercentage`) | Módulo 3 | `register-ota-information-commission` |
 
@@ -244,6 +244,11 @@ guarda como texto. `Room`, `ForeignGuestData`, `MaintenanceCalendar` y `RateQuot
 | D2 | **`Reservation` guarda la moneda del importe:** columna `gross_amount_currency` junto a `gross_amount`, porque FR-002 pide conservar la `currency` y el diccionario no la lista. Pendiente agregarla al diccionario. | `calculate-dynamic-rate` |
 | D3 | **Restricción de exclusión en PostgreSQL** sobre `reservation`: `EXCLUDE USING gist (room_id WITH =, daterange(start_date, end_date) WITH &&) WHERE (status IN ('PENDING','ACTIVE','IN_PROGRESS'))`, con la extensión `btree_gist` creada en la migración base (T007). Impide dos reservas activas solapadas en la misma habitación aun con concurrencia; una violación se traduce en 409 `NO_AVAILABILITY` (o en probar la siguiente habitación candidata). | `check-room-availability` |
 | D4 | **El spec `consult-room-inventory` se ajustó**: la consulta por categoría admite listado completo o filtrado por estado, porque las estadías futuras necesitan todas las habitaciones de la categoría. Pendiente acordar con el Módulo 1 que su API permita ambos modos. | `check-room-availability` |
+| D5 | **Extranjero sin datos migratorios:** si llega el Check-In de un huésped `FOREIGN` sin `foreignGuestData`, se registra el `MigratoryMovement` como `INCOMPLETE` con `missingFields = [movementType, movementDate]`. | `process-foreign-guest-data` |
+| D6 | **Motivo de las transiciones:** columna `status_reason` en `reservation` (`ROOM_REJECTED`, `ROOM_UNCONFIRMED`). Pendiente agregarla al diccionario. | `update-reservation` |
+| D7 | **Periodo de la exportación SIRE:** se filtra por la `movementDate` del movimiento migratorio. | `process-foreign-guest-data`, `export-sire-file` |
+| D8 | **API de modificación en dos pasos:** `POST .../modification-preview` (no persiste) y `PATCH` (confirma, con `version` y `expectedGrossAmount`). Propuesta de los planes; el spec no define su forma. | `update-reservation` |
+| D9 | **La exportación SIRE es `POST`**, no `GET`, porque crea un registro `SireExport` (un `GET` no debe tener efectos). | `export-sire-file` |
 
 ## Estrategia de testing base
 
@@ -301,8 +306,8 @@ guarda como texto. `Room`, `ForeignGuestData`, `MaintenanceCalendar` y `RateQuot
 4. **Datos migratorios y punto de estado**: primero `process-foreign-guest-data`, y después `update-reservation`
    (modificación, Check-In, Check-Out y cierre del día; depende de disponibilidad, tarifa, `set-room-state`
    y del registro del movimiento migratorio).
-5. **Creación de reservas**: `generate-direct-reservation`, `generate-ota-reservation` y
-   `register-ota-information-commission`.
+5. **Creación de reservas y comisión**: `generate-direct-reservation`, `register-ota-information-commission` (antes que la de OTA) y
+   `generate-ota-reservation`.
 6. **Cancelación**: `cancel-reservation`.
 7. **Cumplimiento legal**: `export-sire-file` (depende de `process-foreign-guest-data`).
 
@@ -344,6 +349,8 @@ Estos ajustes **no** están hechos; los specs y los diagramas son del equipo y s
 | `DIAGRAMA.drawio` (casos de uso) | Quitar la línea "Generar reservación por OTA" → "Calcular tarifa dinámica" | C5 |
 | Equipo del Módulo 1 | Agregar el estado `Reserved`; confirmar que los datos migratorios viajan dentro de `habitacion.checkin`; confirmar el origen del tipo y la fecha del movimiento migratorio | C8, C2 |
 | Equipo del Módulo 3 | Confirmar cómo expresa el porcentaje de comisión (0 a 100) | C7 |
+| `diccionario.md` | Agregar `gross_amount_currency` (moneda del importe) y `status_reason` (motivo de la transición) a `Reservation`; agregar el modo de consulta del inventario por categoría con o sin filtro | D2, D6, D4 |
+| `export-sire-file/spec.md` | Cambiar `GET` a `POST` en la generación (registra un `SireExport`) y definir el formato oficial del archivo | D9 |
 
 ## Notes
 

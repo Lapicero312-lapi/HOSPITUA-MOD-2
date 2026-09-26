@@ -148,6 +148,6 @@ backend/src/test/java/com/hospitua/reservas/
 ## Preguntas abiertas (NEEDS CLARIFICATION)
 
 1. **Contrato del mensaje**: nombres y formato de `movementType` y `movementDate` dentro de `habitacion.checkin`; el diccionario no los lista en `ForeignGuestData`.
-2. **Filtro del periodo de la exportación**: si `findForPeriod` filtra por la fecha del movimiento o por las fechas de la estadía; el spec de exportación dice "reservas del periodo". Se propone la fecha del movimiento.
-3. **Extranjero sin datos**: si hay Check-In de un huésped `FOREIGN` y el mensaje no trae `foreignGuestData`, se propone registrar el movimiento `INCOMPLETE` con `missingFields = [movementType, movementDate]` (el spec solo define datos "ausentes" dentro de un mensaje que sí los trae).
+2. **Filtro del periodo de la exportación** (decidido: D7, por la fecha del movimiento): si `findForPeriod` filtra por la fecha del movimiento o por las fechas de la estadía; el spec de exportación dice "reservas del periodo". Se propone la fecha del movimiento.
+3. **Extranjero sin datos** (decidido: D5): si hay Check-In de un huésped `FOREIGN` y el mensaje no trae `foreignGuestData`, se propone registrar el movimiento `INCOMPLETE` con `missingFields = [movementType, movementDate]` (el spec solo define datos "ausentes" dentro de un mensaje que sí los trae).
 4. **Conflicto entre `Guest.type` y el mensaje**: si el mensaje trae datos migratorios de un huésped `NATIONAL`, se propone ignorarlos y registrar una incidencia.
