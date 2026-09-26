@@ -100,10 +100,11 @@ se informe como inhabilitada, indicando las fechas del cruce.
 
 ### Key Entities *(include if feature involves data)*
 
-- **MaintenanceSchedule**: Programación de mantenimiento, propiedad del Módulo 1. Atributos:
+- **MaintenanceCalendar**: Calendario de mantenimientos, propiedad del Módulo 1, con las
+  programaciones por habitación. Atributos:
   `roomId`, `maintenanceStart`, `maintenanceEnd` y `reason`. Esta funcionalidad solo la consulta.
-- **Room**: Habitación física. Atributos: `roomId`, `roomNumber`, `categoryRoom` y `status`
-  (`AVAILABLE` | `RESERVED` | `OCCUPIED`).
+- **Room**: Habitación física. Atributos: `id`, `roomNumber`, `categoryRoom` y `status`
+  (`Available` | `Reserved` | `Occupied`).
 - **Reservation**: Se referencia de forma informativa: es la reserva que se intenta crear o
   modificar. Atributos: `roomId`, `startDate`, `endDate`.
 
