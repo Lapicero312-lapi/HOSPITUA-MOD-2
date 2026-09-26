@@ -58,12 +58,11 @@ Regla: **proactiva** (el módulo avisa un evento y no espera respuesta) → **co
 | Notificación de check-in | M1 → M2 | Cola | Proactiva | `update-reservation` |
 | Notificación de check-out | M1 → M2 | Cola | Proactiva | `update-reservation` |
 | Datos de huéspedes extranjeros | M1 → M2 | Cola: dentro del mensaje `habitacion.checkin` | Proactiva | `process-foreign-guest-data` (decisión C2) |
-| Error de huésped no encontrado | M1 → M2 | Cola | Proactiva | sin spec (ver C3) |
 | Consultar reservas | M1 → M2 | REST GET | Reactiva | `check-view-reservation` |
 | Consultar inventario de habitaciones | M2 → M1 | REST GET | Reactiva | `consult-room-inventory` |
 | Consultar calendario de mantenimientos | M2 → M1 | REST GET | Reactiva | `consult-maintenance-calendar` (ver C4) |
 | Marcar habitación como reservada / liberar | M2 → M1 | REST POST/PUT | Reactiva | `set-room-state` |
-| Consultar estado de canales OTA | M3 → M2 | REST | Reactiva | sin spec (ver C3) |
+| Consultar % de comisión OTA | M3 → M2 | REST GET | Reactiva | `register-ota-information-commission` (decisión C3a) |
 | Consultar tarifa dinámica | M2 → M3 | REST POST (cuerpo JSON) | Reactiva | `calculate-dynamic-rate` |
 
 Las interacciones M1 ↔ M3 (liquidación, tarifa base, registrar check-out) no involucran al Módulo 2.
@@ -71,7 +70,7 @@ Las interacciones M1 ↔ M3 (liquidación, tarifa base, registrar check-out) no 
 ### Convenciones de colas
 
 - Exchange compartido: `hospitua.events` (tipo topic).
-- Routing keys: `habitacion.checkin`, `habitacion.checkout`, `huesped.no-encontrado`.
+- Routing keys: `habitacion.checkin`, `habitacion.checkout`. (`huesped.no-encontrado` queda fuera del plan: ver C3b.)
 - Mensaje JSON con: `eventId`, `eventType`, `occurredAt`, `sourceModule`, `payload`.
 - Consumidores idempotentes (se ignoran los `eventId` repetidos), con reintentos y dead-letter queue.
 
@@ -109,6 +108,7 @@ Contenido propuesto del `payload` (según las specs):
 | `POST /api/ota/reservations` y confirmación de pago/garantía | Ota | `generate-ota-reservation` |
 | `GET /api/sire/exports?startDate=&endDate=` (devuelve `.TXT` y cabecera `Export-Id`) | Migración | `export-sire-file` |
 | `GET /api/sire/exports/{exportId}/exclusions` | Migración | `export-sire-file` |
+| `GET /api/otas/{otaId}` (devuelve `id`, `name`, `commissionPercentage`) | Módulo 3 | `register-ota-information-commission` |
 
 **El Módulo 2 consume** (a través de `Module1Client` y `Module3Client`):
 
@@ -311,7 +311,7 @@ Cada una tiene una suposición provisional para poder avanzar; se confirma o se 
 |---|---|---|
 | C1 | Los specs dicen que el Módulo 1 "envía a la API del Módulo 2" el Check-In y el Check-Out y que este "responde HTTP 200/400". La especificación técnica y el diagrama de integración los definen como **cola**, donde no hay respuesta HTTP al Módulo 1. | **DECIDIDO: solo cola.** Reglas en "Traducción de respuestas HTTP a cola". Los specs se ajustarán después. |
 | C2 | El diagrama de integración muestra "Datos de huéspedes extranjeros" como **cola separada**; la especificación técnica no la incluye entre las routing keys y los specs los reciben **dentro** de la notificación de Check-In. | **DECIDIDO: dentro de `habitacion.checkin`** (según los specs, sin routing key nueva). Pendiente acordar con el Módulo 1 y actualizar `mod-1-2-3.drawio` (quitar la flecha aparte y anotar los datos en la del check-in). |
-| C3 | "Error de huésped no encontrado" (M1 → M2) y "Consultar estado de canales OTA" (M3 → M2) están en tu tabla pero **no** en los specs, el diccionario ni los diagramas. | Fuera de estos planes hasta que exista spec (o se retiren de la tabla). |
+| C3 | (a) "Consultar estado de canales OTA" (M3 → M2) no existe en los specs; el diagrama de integración tiene "Consultar % de comisión OTA" (M3 → M2, REST GET). (b) "Error de huésped no encontrado" (M1 → M2) no aparece en ningún spec, diccionario ni diagrama. | **DECIDIDO (a): se adopta como "Consultar % de comisión OTA"**, REST GET; el Módulo 2 expone `GET /api/otas/{otaId}`; falta agregar esa línea al spec de comisión OTA. **DECIDIDO (b): fuera del plan** hasta que el Módulo 1 confirme su función y exista un spec. |
 | C4 | "Consultar calendario de mantenimientos" no está en tu tabla ni en el diagrama de integración, pero sí en los specs, el diccionario y el diagrama de casos de uso. | REST GET reactivo, igual que el inventario. |
 | C5 | El diagrama de casos de uso muestra que "Generar reservación por OTA" incluye "Calcular tarifa dinámica"; el spec (FR-005) y el diccionario dicen que **no** se recalcula: usa el valor bruto que envía la OTA. | Según el spec: la OTA envía `totalAmount` y no se llama al Módulo 3. |
 | C6 | El diccionario nombra `grossAmount` en `Reservation`; el spec de OTA y el de comisión usan `totalAmount`. | Una sola columna `gross_amount`; el campo `totalAmount` del payload OTA se guarda en ella. |
