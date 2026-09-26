@@ -42,7 +42,9 @@ notificaciones para actualizar la reserva (`IN_PROGRESS` y `COMPLETED`).
    futura y su `Room` nunca se apartó, no emite ninguna orden. Cuando una modificación cambia la
    habitación de una reserva
    (`ROOM_CHANGED`) en una reserva que ya está apartada, envía primero `Reserved` para la nueva
-   `Room` y, tras su confirmación, `Available` para la anterior.
+   `Room` y, tras su confirmación, `Available` para la anterior. Cuando una modificación de fechas
+   hace que la llegada sea hoy (`DATES_CHANGED`), envía `Reserved`; si la llegada era hoy y deja de
+   serlo, envía `Available`.
 3. El sistema transmite la solicitud al **Módulo 1**.
 4. Si el Módulo 1 confirma el cambio, la solicitud local se marca como `COMPLETED`.
 5. Si la comunicación con el Módulo 1 falla en una orden `Reserved` de una reserva recién creada
@@ -315,7 +317,8 @@ de apartado.
 - **RoomStateRequest**: Orden de actualización de estado enviada al Módulo 1. Atributos:
   `requestId`, `roomId`, `requestedStatus` (`Reserved` | `Available`), `previousStatus`,
   `originEvent` (`RESERVATION_CREATED` | `RESERVATION_DUE_TODAY` | `RESERVATION_CANCELLED` |
-  `RESERVATION_NO_SHOW` | `ROOM_CHANGED`), `reservationRef`, `sequenceNumber` (secuencia creciente y
+  `RESERVATION_NO_SHOW` | `ROOM_CHANGED` | `DATES_CHANGED`), `reservationRef`, `sequenceNumber`
+  (secuencia creciente y
   única por `Room`,
   asignada de forma atómica),
   `requestedAt`, `requestedBy` (Recepcionista, Ota o sistema) y `requestStatus` (`PENDING` |
