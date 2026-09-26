@@ -32,35 +32,37 @@
     <h1>Guía y Flujo de Gestión de Reservas (Módulo 2)</h1>
     <div class="header-meta">
         <strong>Fecha de actualización:</strong> Septiembre 2026<br>
-        <strong>Versión:</strong> 1.0 (Alineada a Metodología SDD)
+        <strong>Versión:</strong> 1.1 (Alineada a Metodología SDD, al diagrama de 13 casos de uso y al diccionario del proyecto)
     </div>
-    
+
     <h2>1. Introducción</h2>
-    <p>Este documento formaliza el nuevo ciclo de vida de las reservas para el <strong>Módulo 2</strong>. Detalla la separación de responsabilidades y la integración con el <strong>Módulo 1</strong> (Gestión de Habitaciones físicas). Se ha unificado la nomenclatura de estados en inglés para garantizar la coherencia arquitectónica y de negocio.</p>
-    
+    <p>Este documento formaliza el ciclo de vida de las reservas para el <strong>Módulo 2</strong>. Detalla la separación de responsabilidades y la integración con el <strong>Módulo 1</strong> (Gestión de Habitaciones físicas) y el <strong>Módulo 3</strong> (tarifas y facturación). Se ha unificado la nomenclatura para garantizar la coherencia arquitectónica y de negocio: los estados de la reserva son los seis oficiales del Módulo 2 y los estados de la habitación son los que define el <code>diccionario.md</code> del Módulo 1.</p>
+    <p>Cada caso de uso del diagrama <code>DIAGRAMA.png</code> corresponde a exactamente un SPEC (relación 1 a 1). Los procesos de Check-In, Check-Out y No-Show no tienen caso de uso propio: se documentan dentro del SPEC de "Actualizar reservación" (ver la sección 5).</p>
+
     <h2>2. Diagrama de Flujo de Estados (Reserva)</h2>
-    <p>El siguiente diagrama de máquina de estados ilustra las transiciones posibles de una <code>Reservation</code> y qué actor o evento dispara dicho cambio en el Módulo 2.</p>
-    
+    <p>El siguiente diagrama de máquina de estados ilustra las transiciones posibles de una <code>Reservation</code> y qué actor o evento dispara dicho cambio en el Módulo 2. Los cambios de estado los aplica "Actualizar reservación", salvo la cancelación explícita, que "Cancelar reservación" ejecuta directamente de forma atómica.</p>
+
     <div class="mermaid">
     stateDiagram-v2
         %% Estados Base
         [*] --> PENDING : Generación OTA (Pendiente)
         [*] --> ACTIVE : Generación Directa Confirmada
-        
+
         PENDING --> ACTIVE : Pago/Garantía Confirmada
-        
+
         %% Flujo de Operación (Notificado por Módulo 1)
         ACTIVE --> IN_PROGRESS : Notificación Check-In (Módulo 1)
         IN_PROGRESS --> COMPLETED : Notificación Check-Out (Módulo 1)
-        
+
         %% Flujos de Anulación
         ACTIVE --> CANCELLED : Cancelación Manual / OTA
         PENDING --> CANCELLED : Cancelación Manual / OTA
-        
-        %% Validación Automática
-        ACTIVE --> NO_SHOW : Proceso Cron (Fin de Día)
-        PENDING --> NO_SHOW : Proceso Cron (Fin de Día)
-        
+
+        %% Validación Automática de Fin de Día (según el canal)
+        ACTIVE --> NO_SHOW : Fin de Día sin ingreso (canal OTA)
+        PENDING --> NO_SHOW : Fin de Día sin ingreso (canal OTA)
+        ACTIVE --> CANCELLED : Fin de Día sin ingreso (canal directo)
+
         %% Fin de ciclo
         CANCELLED --> [*]
         COMPLETED --> [*]
@@ -68,9 +70,13 @@
     </div>
 
     <h2>3. Matriz de Integración y Responsabilidades</h2>
-    
+
     <div class="alert alert-info">
-        <strong>💡 Regla de Arquitectura:</strong> El <strong>Módulo 2</strong> es el orquestador que controla el estado <strong>lógico</strong> y financiero del hospedaje. El <strong>Módulo 1</strong> controla exclusivamente el estado <strong>físico</strong> (limpieza y ocupación real) de la habitación.
+        <strong>💡 Regla de Arquitectura:</strong> El <strong>Módulo 2</strong> es el orquestador que controla el estado <strong>lógico</strong> y financiero del hospedaje. El <strong>Módulo 1</strong> controla exclusivamente el estado <strong>físico</strong> (limpieza y ocupación real) de la habitación. Para todo lo que pertenece al Módulo 1 y al Módulo 3 (nombres, atributos y estados), manda el diccionario del proyecto: la habitación se identifica con <code>Room.id</code> y sus estados son <code>Available</code>, <code>Reserved</code>, <code>Occupied</code>, etc.
+    </div>
+
+    <div class="alert alert-info">
+        <strong>💡 Regla del día de llegada:</strong> El Módulo 1 aparta físicamente la habitación (<code>Reserved</code>) <strong>únicamente</strong> cuando la reserva es para el día operativo en curso: al crearse una reserva para hoy o al iniciar el día operativo. Las reservas con llegada futura no modifican el inventario físico; su disponibilidad se controla con las reservas locales del Módulo 2.
     </div>
 
     <table>
@@ -84,23 +90,33 @@
         <tbody>
             <tr>
                 <td><strong>Previo a Reservar</strong></td>
-                <td>Cruza fechas con registros locales.</td>
+                <td>"Verificar disponibilidades": cruza fechas con registros locales (excluyendo la propia reserva por <code>reservationRef</code> al modificar) y cotiza la tarifa con el Módulo 3 (<code>REST POST</code>, valor bruto solo informativo).</td>
                 <td><strong>Consulta a M1:</strong> Lee el Calendario de Mantenimientos y el Inventario en tiempo real.</td>
             </tr>
             <tr>
-                <td><strong>Creación</strong></td>
+                <td><strong>Creación (llegada futura)</strong></td>
                 <td>Crea entidad <code>Reservation</code>: <code>ACTIVE</code> si es directa, <code>PENDING</code> si es de OTA (pasa a <code>ACTIVE</code> cuando la agencia confirma el pago o la garantía).</td>
-                <td><strong>M2 notifica a M1:</strong> Envía detalles y ordena marcar la <code>Room</code> como <code>RESERVED</code>.</td>
+                <td>No hay orden a M1: la habitación no se aparta todavía.</td>
+            </tr>
+            <tr>
+                <td><strong>Creación (llegada hoy) e inicio del día operativo</strong></td>
+                <td>Igual que la anterior. Al iniciar cada día, el sistema recorre las reservas <code>ACTIVE</code> o <code>PENDING</code> con llegada hoy.</td>
+                <td><strong>M2 notifica a M1:</strong> Envía detalles y ordena marcar la <code>Room</code> como <code>Reserved</code>, para evitar que Recepción la asigne a un cliente sin reserva (<em>walk-in</em>). Si el Módulo 1 no confirma una reserva creada hoy, la creación se revierte (todo o nada).</td>
+            </tr>
+            <tr>
+                <td><strong>Modificación de fechas o habitación</strong></td>
+                <td>"Actualizar reservación": valida disponibilidad, recotiza con el Módulo 3 y persiste tras la confirmación del solicitante.</td>
+                <td>Solo si la modificación involucra el día actual: ordena <code>Reserved</code> o <code>Available</code> (cambio de habitación o cambio de fechas que hace que la llegada sea hoy o deje de serlo).</td>
             </tr>
             <tr>
                 <td><strong>Cancelación</strong></td>
-                <td>Actualiza reserva a <code>CANCELLED</code>.</td>
-                <td><strong>M2 notifica a M1:</strong> Ordena revertir la <code>Room</code> a estado <code>AVAILABLE</code> (Libre).</td>
+                <td>Actualiza reserva a <code>CANCELLED</code> y registra la <code>Cancellation</code>.</td>
+                <td><strong>M2 notifica a M1:</strong> Si se cancela el mismo día y la <code>Room</code> estaba <code>Reserved</code>, ordena de inmediato revertirla a <code>Available</code> (Libre). Si la llegada es futura, no hay orden.</td>
             </tr>
             <tr>
                 <td><strong>Check-In</strong></td>
-                <td>Pasa a <code>IN_PROGRESS</code>. Integra datos migratorios para SIRE.</td>
-                <td><strong>M1 notifica a M2:</strong> M1 ejecuta el ingreso (cambia a <code>OCCUPIED</code>) y avisa a M2.</td>
+                <td>Pasa a <code>IN_PROGRESS</code>. Integra datos migratorios (<code>ForeignGuestData</code>) para SIRE en un <code>MigratoryMovement</code>.</td>
+                <td><strong>M1 notifica a M2:</strong> M1 ejecuta el ingreso (cambia a <code>Occupied</code>) y avisa a M2.</td>
             </tr>
             <tr>
                 <td><strong>Check-Out</strong></td>
@@ -108,20 +124,20 @@
                 <td><strong>M1 notifica a M2:</strong> M1 procesa la salida (libera cuarto) y avisa a M2.</td>
             </tr>
             <tr>
-                <td><strong>Fin de Día</strong></td>
-                <td>Cron automático marca reserva como <code>NO_SHOW</code> si no hay ingreso.</td>
-                <td><strong>M2 notifica a M1:</strong> Ordena devolver la <code>Room</code> a <code>AVAILABLE</code>, solo si sigue apartada por esa reserva (nunca si M1 la reporta <code>OCCUPIED</code>).</td>
+                <td><strong>Fin de Día (No-Show)</strong></td>
+                <td>Proceso automático sobre las reservas de hoy sin ingreso y sin llegada tardía avisada (<code>lateArrivalNotice</code>): canal OTA pasa a <code>NO_SHOW</code> y se conserva para conciliar comisiones con la agencia; canal directo pasa a <code>CANCELLED</code>.</td>
+                <td><strong>M2 notifica a M1:</strong> En ambos canales ordena devolver la <code>Room</code> a <code>Available</code>, solo si sigue apartada por esa reserva (nunca si M1 la reporta <code>Occupied</code>).</td>
             </tr>
             <tr>
                 <td><strong>Exportación SIRE</strong></td>
-                <td>Genera archivo oficial para Migración.</td>
-                <td>M2 exporta los datos migratorios que M1 adjuntó durante la notificación del Check-in.</td>
+                <td>El actor Migración accede al portal de autogestión, indica un rango de fechas (<code>startDate</code>, <code>endDate</code>) y descarga el archivo <code>.TXT</code>. Los registros con datos incompletos se omiten y quedan en <code>SireExportExclusion</code>.</td>
+                <td>M2 exporta los datos migratorios que M1 adjuntó durante la notificación del Check-In. Recepción no envía archivos a mano.</td>
             </tr>
         </tbody>
     </table>
 
     <h2>4. Lineamientos de Control y Excepciones</h2>
-    
+
     <div class="alert alert-warning">
         <strong>⚠️ Estándar de Respuesta de Errores</strong><br>
         Las integraciones entre módulos cuentan con un estricto blindaje de excepciones lógicas. Ante timeouts, identificadores inválidos, desajuste de datos o fechas pasadas, el sistema debe interceptar la falla y retornar invariablemente un código de error de la <strong>familia HTTP 4xx</strong> estructurado con un mensaje amigable: <strong>HTTP 400 (Bad Request)</strong> por defecto, y códigos más específicos cuando corresponda (por ejemplo, <strong>HTTP 409</strong> para un conflicto de disponibilidad de una reserva OTA o <strong>HTTP 429</strong> para el límite de solicitudes). Nunca se usa un código 2xx o 3xx para representar un error. <br><br><strong>Queda completamente prohibida la propagación de fallos que deriven en errores de infraestructura HTTP 500 (Internal Server Error).</strong>
@@ -134,6 +150,34 @@
         <li>Interfaz para Check-out físico de la habitación.</li>
         <li>Formularios paralelos de procesamiento migratorio de extranjeros (ahora se capturan en el M1 y viajan en el payload de notificación).</li>
     </ul>
+    <p>Tampoco existe una pantalla de Recepción para enviar el reporte SIRE: el archivo lo descarga el actor Migración desde su portal.</p>
+
+    <h2>5. Correspondencia entre Casos de Uso y SPECs</h2>
+    <p>La carpeta <code>specs/</code> mantiene una relación 1 a 1 con los casos de uso del diagrama <code>DIAGRAMA.png</code>: 13 casos de uso, 13 SPECs.</p>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Caso de uso (diagrama)</th>
+                <th>SPEC</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr><td>Generar reservación directa</td><td><code>generate-direct-reservation</code></td></tr>
+            <tr><td>Generar reservación por ota</td><td><code>generate-ota-reservation</code></td></tr>
+            <tr><td>Registrar confirmación y comisión de ota</td><td><code>register-ota-information-commission</code></td></tr>
+            <tr><td>Actualizar reservación</td><td><code>update-reservation</code> (incluye Check-In, Check-Out y No-Show)</td></tr>
+            <tr><td>Cancelar reservación</td><td><code>cancel-reservation</code></td></tr>
+            <tr><td>Consultar reservas</td><td><code>check-view-reservation</code></td></tr>
+            <tr><td>Verificar disponibilidades</td><td><code>check-room-availability</code></td></tr>
+            <tr><td>Consultar inventario de habitaciones</td><td><code>consult-room-inventory</code></td></tr>
+            <tr><td>Consultar calendario de mantenimientos</td><td><code>consult-maintenance-calendar</code></td></tr>
+            <tr><td>Calcular tarifa dinámica</td><td><code>calculate-dynamic-rate</code></td></tr>
+            <tr><td>Establecer estado de habitación</td><td><code>set-room-state</code></td></tr>
+            <tr><td>Procesar datos de huéspedes extranjeros</td><td><code>process-foreign-guest-data</code></td></tr>
+            <tr><td>Exportar archivo SIRE</td><td><code>export-sire-file</code></td></tr>
+        </tbody>
+    </table>
 
 </body>
 </html>

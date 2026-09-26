@@ -16,7 +16,9 @@ figurando como libre y puede venderse dos veces. El segundo es el descuadre fina
 cada agencia cobra una comisión pactada sobre el valor del hospedaje, y si esa comisión no se
 calcula y se asienta al registrar la reserva, la conciliación posterior se vuelve imprecisa. El
 negocio necesita un endpoint de integración que reciba la reserva, valide la disponibilidad,
-registre la comisión del intermediario y avise al Módulo 1 para apartar la habitación.
+registre la comisión del intermediario y avise al Módulo 1 para apartar la habitación cuando la
+llegada es el mismo día; si la llegada es futura, el Módulo 1 la aparta al iniciar el día operativo
+de la llegada.
 
 ### Flujo de Usuario de Alto Nivel
 
@@ -35,9 +37,11 @@ registre la comisión del intermediario y avise al Módulo 1 para apartar la hab
    interviene "Calcular tarifa dinámica".
 6. El sistema persiste la `Reservation` en estado `PENDING`, a la espera de la confirmación de pago
    o garantía de la agencia.
-7. El sistema ejecuta "Establecer estado de habitación" para ordenar al Módulo 1 marcar la `Room`
-   como `RESERVED`, adjuntando el detalle de la reserva. Si el Módulo 1 rechaza la orden porque la
-   `Room` ya está `OCCUPIED`, el sistema cancela la reserva recién creada y responde **HTTP 409
+7. Si la llegada (`startDate`) es hoy, el sistema ejecuta "Establecer estado de habitación" para
+   ordenar al Módulo 1 marcar la `Room` como `Reserved`, adjuntando el detalle de la reserva. Si la
+   llegada es futura, no emite ninguna orden y la reserva no depende del Módulo 1. Si el Módulo 1
+   rechaza la orden porque la
+   `Room` ya está `Occupied`, el sistema cancela la reserva recién creada y responde **HTTP 409
    (Conflict)** con `errorCode` `NO_AVAILABILITY`; si no responde o falla la comunicación, la
    cancela y responde **HTTP 400** con `errorCode` `ROOM_UNCONFIRMED`. En ambos casos la creación es
    todo o nada y la agencia puede reintentar sin duplicar.
@@ -53,7 +57,8 @@ Una **Ota** confirma una reserva en su plataforma y la transmite a la API del M�
 webhook. El sistema procesa la solicitud de forma transaccional y asíncrona, sin intervención humana
 ni pantalla: valida la estructura y el `externalConfirmationCode`, verifica la disponibilidad de la
 habitación, calcula y registra la comisión pactada, persiste la `Reservation` en `PENDING` con el
-valor bruto enviado por la OTA y ordena al Módulo 1 apartar la `Room`. Cuando la agencia confirma el
+valor bruto enviado por la OTA y ordena al Módulo 1 apartar la `Room` si la llegada es hoy. Cuando
+la agencia confirma el
 pago o la garantía, la reserva pasa a `ACTIVE`. Por tratarse de un único flujo de integración, el
 camino de éxito, la confirmación y los rechazos controlados (sin disponibilidad, código de
 confirmación ausente, fechas mal formadas, concurrencia por la última habitación) se consolidan en
@@ -66,8 +71,9 @@ registro, deja la información financiera lista para la conciliación con cada a
 **Independent Test**: Se envía a la API un payload JSON simulando a la OTA, con una habitación
 disponible. Se verifica que la `Reservation` se crea en `PENDING`, que se persiste el
 `externalConfirmationCode`, que el `commissionAmount` es exactamente `totalAmount ×
-commissionPercentage`, que se emite la orden `RESERVED` al Módulo 1, y que al recibir la
-confirmación de la agencia pasa a `ACTIVE`. La prueba se completa reenviando payloads sin
+commissionPercentage`, que, si la llegada es hoy, se emite la orden `Reserved` al Módulo 1 (con
+llegada futura no se emite ninguna), y que al recibir la confirmación de la agencia pasa a `ACTIVE`.
+La prueba se completa reenviando payloads sin
 disponibilidad, sin `externalConfirmationCode` y con fechas incoherentes, confirmando que ninguno
 crea una reserva y que todos devuelven una respuesta JSON de error estructurada.
 
@@ -79,8 +85,8 @@ crea una reserva y que todos devuelven una respuesta JSON de error estructurada.
    - **When** la **Ota** envía un payload JSON válido con todos los datos requeridos, incluyendo el
      `externalConfirmationCode` y el valor bruto de la estadía
    - **Then** el sistema ejecuta "Registrar confirmación y comisión de ota", persiste la
-     `Reservation` en `PENDING`, ordena al Módulo 1 marcar la `Room` como `RESERVED`, y retorna un
-     código HTTP 201 (Created) con el ID interno generado
+     `Reservation` en `PENDING`, si la llegada es hoy ordena al Módulo 1 marcar la `Room` como
+     `Reserved`, y retorna un código HTTP 201 (Created) con el ID interno generado
 
 2. **Scenario**: Confirmación de pago o garantía por la agencia
    - **Given** una `Reservation` de canal OTA en estado `PENDING`
@@ -103,6 +109,13 @@ crea una reserva y que todos devuelven una respuesta JSON de error estructurada.
    - **Then** el sistema rechaza el registro con un error controlado HTTP 400 (Bad Request) que
      detalla la obligatoriedad del campo
 
+5. **Scenario**: Reserva por OTA con llegada futura no aparta la habitación (Happy Path)
+   - **Given** que la `Room` está disponible y la llegada es dentro de varias semanas
+   - **When** la **Ota** envía un payload JSON válido
+   - **Then** el sistema persiste la `Reservation` en `PENDING`, retorna HTTP 201 (Created) sin
+     enviar ninguna orden al Módulo 1, y la `Room` se aparta recién al iniciar el día operativo de
+     la llegada
+
 ### Casos Borde
 
 - ¿Qué sucede si una OTA envía una reserva con un formato de fecha inválido o incoherente (por
@@ -116,12 +129,14 @@ crea una reserva y que todos devuelven una respuesta JSON de error estructurada.
   habitación? La creación se realiza en una transacción con bloqueo, de modo que solo una obtiene la
   habitación y se registra; la otra recibe **HTTP 409 (Conflict)** con `errorCode`
   `NO_AVAILABILITY`.
-- ¿Qué sucede si el Módulo 1 no responde o falla al recibir la orden `RESERVED`? El sistema cancela
+- ¿Qué sucede si el Módulo 1 no responde o falla al recibir la orden `Reserved` de una reserva con
+  llegada hoy? El sistema cancela
   la reserva recién creada mediante "Actualizar reservación" con el motivo `ROOM_UNCONFIRMED`, emite
-  una orden `AVAILABLE` con un `sequenceNumber` mayor para neutralizar cualquier apartado aplicado
+  una orden `Available` con un `sequenceNumber` mayor para neutralizar cualquier apartado aplicado
   sin confirmar, y responde **HTTP 400** con `errorCode` `ROOM_UNCONFIRMED`. Como no queda ninguna
   reserva, la agencia puede reintentar sin duplicar.
-- ¿Qué sucede si el Módulo 1 rechaza la orden `RESERVED` porque la `Room` ya está `OCCUPIED`? El
+- ¿Qué sucede si el Módulo 1 rechaza la orden `Reserved` de una reserva con llegada hoy porque la
+  `Room` ya está `Occupied`? El
   sistema cancela la reserva recién creada mediante "Actualizar reservación" con el motivo
   `ROOM_REJECTED` y responde **HTTP 409 (Conflict)** con `errorCode` `NO_AVAILABILITY`.
 - ¿Qué sucede si la agencia nunca confirma el pago o la garantía de una reserva `PENDING`? La
@@ -147,11 +162,14 @@ crea una reserva y que todos devuelven una respuesta JSON de error estructurada.
   mediante "Actualizar reservación", cuando la agencia confirme el pago o la garantía; esta
   funcionalidad no debe modificar el `status` por su cuenta después de la creación.
 - **FR-007**: El sistema debe ordenar al Módulo 1, mediante "Establecer estado de habitación",
-  marcar la `Room` como `RESERVED` con el detalle de la reserva, y solo debe responder 201 (Created)
-  cuando el Módulo 1 confirme. La creación debe ser todo o nada.
-- **FR-008**: El sistema debe compensar el rechazo del Módulo 1 (`Room` ya `OCCUPIED`) o su falta de
+  marcar la `Room` como `Reserved` con el detalle de la reserva cuando la llegada es hoy, y en ese
+  caso solo debe responder 201 (Created) cuando el Módulo 1 confirme. La creación debe ser todo o
+  nada. Para reservas con llegada futura no debe emitir la orden: el Módulo 1 aparta la habitación
+  al iniciar el día operativo de la llegada.
+- **FR-008**: El sistema debe, en reservas con llegada hoy, compensar el rechazo del Módulo 1
+  (`Room` ya `Occupied`) o su falta de
   respuesta, cancelando la reserva creada con el motivo `ROOM_REJECTED` o `ROOM_UNCONFIRMED`,
-  neutralizando cualquier apartado con una orden `AVAILABLE` de mayor `sequenceNumber`, y
+  neutralizando cualquier apartado con una orden `Available` de mayor `sequenceNumber`, y
   respondiendo HTTP 409 con `errorCode` `NO_AVAILABILITY` si el Módulo 1 rechazó la orden, o HTTP
   400 con `errorCode` `ROOM_UNCONFIRMED` si no respondió.
 - **FR-009**: El sistema debe interceptar cualquier inconsistencia o fallo de validación y retornar
@@ -166,7 +184,8 @@ crea una reserva y que todos devuelven una respuesta JSON de error estructurada.
 
 ### Key Entities *(include if feature involves data)*
 
-- **Reservation**: Contrato de reserva registrado desde el canal externo. Atributos: `id`,
+- **Reservation**: Contrato de reserva registrado desde el canal externo. Atributos:
+  `reservationRef`,
   `guestRef`, `roomId`, `categoryRoom`, `startDate`, `endDate`, `totalAmount` (valor bruto enviado
   por la OTA), `commissionAmount`, `externalConfirmationCode`, `source` (`OTA`), `createdAt`,
   y `status` con estados permitidos: `PENDING`, `ACTIVE`,
@@ -176,8 +195,8 @@ crea una reserva y que todos devuelven una respuesta JSON de error estructurada.
   `contactPhone`, `contactEmail`, extraídos del payload de la OTA.
 - **Ota**: Intermediario externo que origina la reserva. Atributos: `id`, `name` y
   `commissionPercentage`.
-- **Room**: Habitación física, cuyo estado es propiedad del Módulo 1. Atributos: `roomId`,
-  `numberRoom`, `categoryRoom` y `status` (`AVAILABLE` | `RESERVED` | `OCCUPIED`).
+- **Room**: Habitación física, cuyo estado es propiedad del Módulo 1. Atributos: `id`,
+  `roomNumber`, `categoryRoom` y `status` (`Available` | `Reserved` | `Occupied`).
 
 ## Success Criteria *(mandatory)*
 
@@ -187,4 +206,5 @@ crea una reserva y que todos devuelven una respuesta JSON de error estructurada.
   `externalConfirmationCode` y con la comisión calculada y almacenada de forma exacta.
 - **SC-002**: El 100% de los rechazos por falta de disponibilidad o formato inválido devuelven
   payloads JSON estructurados con un código 4xx (HTTP 400 o HTTP 409), con cero errores HTTP 500.
-- **SC-003**: El 100% de las reservas OTA generan la orden `RESERVED` hacia el Módulo 1.
+- **SC-003**: El 100% de las reservas OTA con llegada hoy generan la orden `Reserved` hacia el
+  Módulo 1, y ninguna reserva con llegada futura genera una.

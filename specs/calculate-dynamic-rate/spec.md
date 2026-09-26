@@ -27,10 +27,13 @@ un precio bruto.
 
 Reglas de la integración que enmarcan este caso de uso:
 
-- **Contrato de entrada (lo que el Módulo 2 envía de forma síncrona)**: el identificador de
-  categoría de habitación (`categoryRoom`), la fecha de llegada (`startDate`) y la fecha de
-  salida (`endDate`). De forma opcional, y solo para flujos de actualización, el Módulo 2 envía
-  además el monto bruto anterior de la reserva (`previousGrossAmount`) como valor de referencia.
+- **Contrato de entrada (lo que el Módulo 2 envía de forma síncrona)**: la invocación se realiza
+  mediante una petición **REST con el método HTTP POST** al servicio del Módulo 3, con un cuerpo en
+  formato JSON (JSON Body) que contiene el identificador de categoría de habitación
+  (`categoryRoom`), la fecha de llegada (`startDate`) y la fecha de salida (`endDate`). De forma
+  opcional, y solo para flujos de actualización, el cuerpo incluye además el monto bruto anterior de
+  la reserva (`previousGrossAmount`) como valor de referencia. Se utiliza `POST` para poder
+  transmitir ese cuerpo JSON con la estructura completa de parámetros de la estadía.
 - **Contrato de salida (lo que el Módulo 2 recibe del Módulo 3)**: una entidad de cotización
   `RateQuote` con el monto total calculado (`grossAmount`), la moneda (`currency`) y —únicamente
   cuando la solicitud incluyó un `previousGrossAmount`— la diferencia financiera calculada
@@ -180,9 +183,11 @@ respuesta es un **HTTP 400** controlado.
 ### Functional Requirements
 
 - **FR-001**: El sistema (Módulo 2) debe invocar de forma síncrona el servicio externo "Calcular
-  tarifa dinámica" del Módulo 3 enviando como parámetros obligatorios `categoryRoom`,
-  `startDate` y `endDate`, y agregando `previousGrossAmount` cuando la invocación proviene de un
-  flujo de actualización de reservación.
+  tarifa dinámica" del Módulo 3 mediante una petición REST con el método HTTP `POST`, enviando en el
+  cuerpo JSON (JSON Body) los parámetros obligatorios `categoryRoom`, `startDate` y `endDate`, y
+  agregando `previousGrossAmount` cuando la invocación proviene de un flujo de actualización de
+  reservación. Se usa `POST` para poder transmitir el cuerpo JSON con la estructura completa de
+  parámetros de la estadía.
 - **FR-002**: El sistema debe mapear el objeto `RateQuote` retornado por el Módulo 3 e incorporar su
   `grossAmount` de forma estrictamente informativa en el atributo `grossAmount` de la reserva local
   del Módulo 2, conservando además la `currency` y, cuando exista, el `amountDifference`.
@@ -234,8 +239,8 @@ respuesta es un **HTTP 400** controlado.
   como registro propio: extrae sus valores hacia la `Reservation` y hacia la vista de confirmación
   de diferencia.
 - **Room**: Se referencia únicamente a través de su categoría (`categoryRoom`) para construir el
-  contrato de entrada del servicio de tarificación. Sus estados en el Módulo 1 son `AVAILABLE`,
-  `RESERVED` y `OCCUPIED`. Este caso de uso no consulta ni modifica el `status` de ninguna `Room`:
+  contrato de entrada del servicio de tarificación. Sus estados en el Módulo 1 son `Available`,
+  `Reserved` y `Occupied`. Este caso de uso no consulta ni modifica el `status` de ninguna `Room`:
   la tarificación opera sobre la categoría y la disponibilidad se verifica antes mediante
   "Verificar disponibilidades".
 

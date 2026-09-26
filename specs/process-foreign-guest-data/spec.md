@@ -11,13 +11,16 @@ migratorios se capturan en persona, durante el Check-In, y por eso los recoge el
 quien opera la recepción física. El Módulo 2 no tiene una pantalla propia para pedirlos: los recibe
 dentro de la notificación de Check-In. Si esos datos llegan incompletos o con formato inválido, el
 reporte a Migración sale defectuoso y el hotel se expone a sanciones. El negocio necesita un
-procesamiento que reciba los datos migratorios del Módulo 1, los valide, los registre en un
+procesamiento que reciba los datos migratorios del Módulo 1 (`ForeignGuestData`), los valide, los
+registre en un
 `MigratoryMovement` asociado a la estadía y los deje listos para "Exportar archivo SIRE".
 
 ### Flujo de Usuario de Alto Nivel
 
 1. El **Módulo 1** notifica el Check-In de una reserva cuyo huésped es extranjero (`Guest.type`
-   `FOREIGN`) e incluye en la misma notificación el tipo de movimiento migratorio y su fecha.
+   `FOREIGN`) e incluye en la misma notificación sus `ForeignGuestData`, de los que el sistema toma
+   el tipo de movimiento migratorio y su fecha. El cambio de estado de la reserva a `IN_PROGRESS` lo
+   ejecuta "Actualizar reservación".
 2. El sistema valida que los datos migratorios estén presentes, tengan formato correcto y sean
    coherentes (por ejemplo, que la fecha de movimiento no sea futura).
 3. Si son válidos, el sistema los registra en un `MigratoryMovement` asociado a esa `Reservation`
@@ -75,6 +78,12 @@ advertencia.
    - **When** el sistema recibe la notificación de Check-In
    - **Then** el sistema omite el procesamiento migratorio y no exige ningún dato migratorio
 
+4. **Scenario**: Corrección de datos migratorios por reenvío del Módulo 1
+   - **Given** una `Reservation` en `IN_PROGRESS` cuyo `MigratoryMovement` está `INCOMPLETE`
+   - **When** el Módulo 1 reenvía la notificación de Check-In con los datos migratorios completos
+   - **Then** el sistema no cambia el estado de la reserva, actualiza únicamente ese
+     `MigratoryMovement` a `COMPLETE` y responde 200
+
 ---
 
 ### User Story 2 - Entrega de Registros Migratorios para la Exportación SIRE (Priority: P2)
@@ -125,8 +134,9 @@ señale el incompleto.
 
 ### Functional Requirements
 
-- **FR-001**: El sistema debe recibir los datos migratorios (tipo de movimiento y fecha) dentro de
-  la notificación de Check-In del Módulo 1 para huéspedes con `type` `FOREIGN`.
+- **FR-001**: El sistema debe recibir los datos migratorios (`ForeignGuestData`, de los que toma el
+  tipo de movimiento y la fecha) dentro de la notificación de Check-In del Módulo 1 para huéspedes
+  con `type` `FOREIGN`.
 - **FR-002**: El sistema no debe exigir ni procesar datos migratorios para huéspedes `NATIONAL`.
 - **FR-003**: El sistema debe validar que los datos migratorios estén presentes, con formato
   correcto y con una fecha no futura antes de consolidarlos.
@@ -156,6 +166,10 @@ señale el incompleto.
 
 - **Guest**: Huésped cuyos datos se procesan. Atributos: `id`, `fullName`, `documentNumber`,
   `nationality` y `type` (`NATIONAL` | `FOREIGN`).
+- **ForeignGuestData**: Datos migratorios del huésped extranjero, capturados por el Módulo 1 en el
+  Check-In y enviados con la notificación (pasaporte, visa, nacionalidad, fecha de nacimiento y
+  procedencia, según el diccionario). De ellos el Módulo 2 toma el tipo y la fecha del movimiento
+  migratorio. Es propiedad del Módulo 1 y esta funcionalidad no lo modifica.
 - **MigratoryMovement**: Movimiento migratorio de una estadía de un huésped `FOREIGN`. Atributos:
   `movementId`, `reservationRef`, `guestRef`, `movementType` (`ENTRY` | `DEPARTURE`), `movementDate`
   `validationStatus` (`COMPLETE` | `INCOMPLETE`), `missingFields` (lista de campos faltantes o
@@ -164,8 +178,8 @@ señale el incompleto.
   un mismo huésped no se sobrescriben.
 - **Reservation**: Estadía asociada al huésped. Atributos: `reservationRef`, `guestRef` y `status`
   (`PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`).
-- **Room**: Se referencia solo como contexto de la notificación del Módulo 1. Atributos: `roomId`,
-  `status` (`AVAILABLE` | `RESERVED` | `OCCUPIED`). Esta funcionalidad no modifica su estado.
+- **Room**: Se referencia solo como contexto de la notificación del Módulo 1. Atributos: `id`,
+  `status` (`Available` | `Reserved` | `Occupied`). Esta funcionalidad no modifica su estado.
 
 ## Success Criteria *(mandatory)*
 
