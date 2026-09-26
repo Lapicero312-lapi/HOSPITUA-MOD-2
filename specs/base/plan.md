@@ -57,7 +57,7 @@ Regla: **proactiva** (el módulo avisa un evento y no espera respuesta) → **co
 |---|---|---|---|---|
 | Notificación de check-in | M1 → M2 | Cola | Proactiva | `update-reservation` |
 | Notificación de check-out | M1 → M2 | Cola | Proactiva | `update-reservation` |
-| Datos de huéspedes extranjeros | M1 → M2 | Cola | Proactiva | `process-foreign-guest-data` (ver C2) |
+| Datos de huéspedes extranjeros | M1 → M2 | Cola: dentro del mensaje `habitacion.checkin` | Proactiva | `process-foreign-guest-data` (decisión C2) |
 | Error de huésped no encontrado | M1 → M2 | Cola | Proactiva | sin spec (ver C3) |
 | Consultar reservas | M1 → M2 | REST GET | Reactiva | `check-view-reservation` |
 | Consultar inventario de habitaciones | M2 → M1 | REST GET | Reactiva | `consult-room-inventory` |
@@ -74,6 +74,20 @@ Las interacciones M1 ↔ M3 (liquidación, tarifa base, registrar check-out) no 
 - Routing keys: `habitacion.checkin`, `habitacion.checkout`, `huesped.no-encontrado`.
 - Mensaje JSON con: `eventId`, `eventType`, `occurredAt`, `sourceModule`, `payload`.
 - Consumidores idempotentes (se ignoran los `eventId` repetidos), con reintentos y dead-letter queue.
+
+### Traducción de respuestas HTTP a cola (decisión C1)
+
+Los specs describen "responde 200/400" para el Check-In y el Check-Out. Como el Módulo 1 los emite
+por cola y no espera respuesta, el consumidor del Módulo 2 aplica estas reglas:
+
+| Caso en el spec | Comportamiento del consumidor |
+|---|---|
+| Notificación válida | Procesa el cambio y confirma el mensaje |
+| Duplicado (mismo `eventId`, o Check-Out sobre una reserva ya `COMPLETED`, o Check-In sobre una `IN_PROGRESS` sin datos migratorios nuevos) | Confirma sin efectos (el "200 idempotente") |
+| Reserva inexistente o en un estado que no admite el evento | Registra un `ReconciliationIncident` (`CHECK_IN` o `CHECK_OUT`) y confirma el mensaje, sin reintentar (el "400 + incidencia") |
+| Payload ilegible, sin `reservationRef` o con caracteres maliciosos | Envía el mensaje a la dead-letter queue, sin procesar (el "400" de payload inválido) |
+| Datos migratorios inválidos con reserva válida | Cambia el estado, registra el `MigratoryMovement` como `INCOMPLETE` y confirma (el "200 + `INCOMPLETE`") |
+| Fallo temporal (base de datos caída, por ejemplo) | Reintenta con espera creciente y, agotados los reintentos, a la dead-letter queue |
 
 Contenido propuesto del `payload` (según las specs):
 
@@ -295,8 +309,8 @@ Cada una tiene una suposición provisional para poder avanzar; se confirma o se 
 
 | # | Contradicción | Suposición provisional |
 |---|---|---|
-| C1 | Los specs dicen que el Módulo 1 "envía a la API del Módulo 2" el Check-In y el Check-Out y que este "responde HTTP 200/400". Tu tabla y el diagrama de integración los definen como **cola**, donde no hay respuesta HTTP al Módulo 1. | Solo cola. 200 se traduce a confirmar el mensaje; 400 a confirmar, registrar `ReconciliationIncident` y no reintentar (payload inválido a la dead-letter queue). Los specs se ajustan después. |
-| C2 | El diagrama de integración muestra "Datos de huéspedes extranjeros" como **cola separada**; tus routing keys no la incluyen y los specs los reciben **dentro** de la notificación de Check-In. | Dentro de `habitacion.checkin`. Si va aparte, se agrega `huesped.extranjero`. |
+| C1 | Los specs dicen que el Módulo 1 "envía a la API del Módulo 2" el Check-In y el Check-Out y que este "responde HTTP 200/400". La especificación técnica y el diagrama de integración los definen como **cola**, donde no hay respuesta HTTP al Módulo 1. | **DECIDIDO: solo cola.** Reglas en "Traducción de respuestas HTTP a cola". Los specs se ajustarán después. |
+| C2 | El diagrama de integración muestra "Datos de huéspedes extranjeros" como **cola separada**; la especificación técnica no la incluye entre las routing keys y los specs los reciben **dentro** de la notificación de Check-In. | **DECIDIDO: dentro de `habitacion.checkin`** (según los specs, sin routing key nueva). Pendiente acordar con el Módulo 1 y actualizar `mod-1-2-3.drawio` (quitar la flecha aparte y anotar los datos en la del check-in). |
 | C3 | "Error de huésped no encontrado" (M1 → M2) y "Consultar estado de canales OTA" (M3 → M2) están en tu tabla pero **no** en los specs, el diccionario ni los diagramas. | Fuera de estos planes hasta que exista spec (o se retiren de la tabla). |
 | C4 | "Consultar calendario de mantenimientos" no está en tu tabla ni en el diagrama de integración, pero sí en los specs, el diccionario y el diagrama de casos de uso. | REST GET reactivo, igual que el inventario. |
 | C5 | El diagrama de casos de uso muestra que "Generar reservación por OTA" incluye "Calcular tarifa dinámica"; el spec (FR-005) y el diccionario dicen que **no** se recalcula: usa el valor bruto que envía la OTA. | Según el spec: la OTA envía `totalAmount` y no se llama al Módulo 3. |
