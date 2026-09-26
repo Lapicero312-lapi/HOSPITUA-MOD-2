@@ -25,8 +25,10 @@ de insumo a "Verificar disponibilidades" antes de crear o modificar cualquier re
 3. Si la consulta es puntual, el sistema retorna el `status` actual de esa `Room` y, si está
    `Reserved`, la `reservationRef` que la mantiene apartada, para que quien consulta pueda
    distinguir un apartado ajeno del propio.
-4. Si la consulta es por categoría, el sistema retorna únicamente las habitaciones en `Available`,
-   con sus atributos (`id`, `roomNumber`, `categoryRoom`).
+4. Si la consulta es por categoría, el sistema retorna las habitaciones de esa categoría con sus
+   atributos (`id`, `roomNumber`, `categoryRoom`) y su `status`. El solicitante puede pedir solo las
+   que estén en `Available` (estadías que incluyen hoy) o el listado completo sin filtrar por estado
+   (estadías futuras, donde una habitación `Occupied` hoy puede estar libre en las fechas pedidas).
 5. Si el Módulo 1 no responde o el identificador consultado no existe, el sistema informa el
    fallo con un error de negocio controlado **HTTP 400 (Bad Request)**.
 
@@ -47,7 +49,8 @@ ocupadas.
 
 **Independent Test**: Se consulta una `Room` conocida en `Available` y se verifica que se retorne
 ese estado; se repite con una en `Reserved` y otra en `Occupied`; se consulta una categoría con
-varias habitaciones y se comprueba que el listado solo incluya las `Available`.
+varias habitaciones sin filtro y se comprueba que el listado incluya todas con su `status`; y se
+repite pidiendo solo las `Available` y se comprueba que el listado solo incluya esas.
 
 **Acceptance Scenarios**:
 
@@ -62,15 +65,21 @@ varias habitaciones y se comprueba que el listado solo incluya las `Available`.
    - **When** el sistema consulta su estado
    - **Then** el sistema retorna ese estado indicando que la habitación no está disponible
 
-3. **Scenario**: Listado de habitaciones disponibles por categoría
+3. **Scenario**: Listado completo de una categoría, sin filtrar por estado
    - **Given** una categoría con varias habitaciones en distintos estados
-   - **When** el sistema consulta el inventario por `categoryRoom`
+   - **When** el sistema consulta el inventario por `categoryRoom` sin filtro de estado
+   - **Then** el sistema retorna todas las habitaciones de la categoría, con `id`, `roomNumber`,
+     `categoryRoom` y `status`
+
+4. **Scenario**: Listado de habitaciones disponibles por categoría
+   - **Given** una categoría con varias habitaciones en distintos estados
+   - **When** el sistema consulta el inventario por `categoryRoom` pidiendo solo las `Available`
    - **Then** el sistema retorna únicamente las habitaciones en `Available`, con `id`,
      `roomNumber` y `categoryRoom`
 
-4. **Scenario**: Categoría sin habitaciones disponibles
+5. **Scenario**: Categoría sin habitaciones disponibles
    - **Given** una categoría cuyas habitaciones están todas en `Reserved` u `Occupied`
-   - **When** el sistema consulta el inventario por `categoryRoom`
+   - **When** el sistema consulta el inventario por `categoryRoom` pidiendo solo las `Available`
    - **Then** el sistema retorna un listado vacío indicando que no hay habitaciones disponibles
 
 ### Casos Borde
@@ -92,8 +101,9 @@ varias habitaciones y se comprueba que el listado solo incluya las `Available`.
 - **FR-001**: El sistema debe consultar el `status` de una `Room` por su `roomId` directamente en el
   inventario del Módulo 1 y, cuando esté `Reserved`, retornar también la reserva que la mantiene
   apartada (`reservedByReservationRef`).
-- **FR-002**: El sistema debe permitir consultar el inventario por `categoryRoom` y retornar
-  únicamente las habitaciones en `Available`.
+- **FR-002**: El sistema debe permitir consultar el inventario por `categoryRoom` y retornar las
+  habitaciones de la categoría con su `status`, con un filtro opcional por estado: cuando se pide
+  solo `Available` debe retornar únicamente esas, y sin filtro debe retornar todas.
 - **FR-003**: El sistema debe ser de solo lectura: no debe modificar el `status` de ninguna `Room`.
 - **FR-004**: El sistema debe entregar el resultado a "Verificar disponibilidades" como insumo de la
   validación previa a cualquier reserva.
