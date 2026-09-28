@@ -36,6 +36,7 @@
 
       <!-- ================= RESERVAS: LISTADO ================= -->
       <section class="screen" id="scr-reservas">
+        <p class="note" style="margin-bottom:8px"><span class="assume">SUPUESTO VISUAL</span> Panel de indicadores de apoyo; ningún spec lo exige como parte de la interfaz, aunque cada número sale de datos que sí están definidos.</p>
         <div class="statrow" id="statRow"></div>
         <div class="panel">
           <h2 style="border:none;margin:0;display:flex;justify-content:space-between;width:100%">
@@ -72,8 +73,7 @@
             <div>
               <div class="row"><div class="field" style="flex:1"><label class="req">Nombre completo</label><input id="ndNombre" placeholder="Ej. Laura Fernández Gómez"></div></div>
               <div class="row">
-                <div class="field"><label class="req">Tipo doc.</label><select id="ndTipoDoc"><option>CC</option><option>CE</option><option>Pasaporte</option></select></div>
-                <div class="field"><label class="req">Número de documento</label><input id="ndDoc" placeholder="1.014.223.980"></div>
+                <div class="field" style="flex:1"><label class="req">Documento</label><input id="ndDoc" placeholder="Ej. CC 1.014.223.980"><span class="note">El spec solo define <span class="code">documentNumber</span> como un único texto; no separa un tipo de documento (ver <span class="code">decisiones-pendientes.md</span>, D9).</span></div>
               </div>
               <div class="row">
                 <div class="field"><label>Teléfono</label><input id="ndTel" placeholder="+57 300 000 0000"></div>
@@ -211,6 +211,7 @@
   <div class="modal narrow">
     <h3>Cancelar reserva</h3>
     <p class="sub" id="cxTexto"></p>
+    <div class="field"><label>Motivo (opcional) <span class="code">Cancellation.reason</span></label><textarea id="cxReason" rows="2" placeholder="Ej. el huésped canceló su viaje"></textarea></div>
     <div class="acts">
       <button class="btn" onclick="closeModal('m-cancelar')">Volver</button>
       <button class="btn danger" onclick="confirmCancel()">Confirmar cancelación</button>
@@ -333,7 +334,7 @@ function renderStatRow(){
     <div class="statcard"><div class="lbl">Ocupación actual</div><div class="val">${pct}%</div><div class="sub">${occupied} de ${rooms.length} habitaciones</div></div>
     <div class="statcard"><div class="lbl">Llegadas esperadas hoy</div><div class="val">${llegadasHoy.length}</div><div class="sub">pendientes de Check-In (M1)</div></div>
     <div class="statcard"><div class="lbl">Salidas esperadas hoy</div><div class="val">${salidasHoy.length}</div><div class="sub">IN_PROGRESS con salida hoy</div></div>
-    <div class="statcard ${enRiesgo.length ? 'warn' : ''}"><div class="lbl">Reservas en riesgo</div><div class="val">${enRiesgo.length}</div><div class="sub">llegan hoy sin aviso de tardía · riesgo NO_SHOW al cierre</div></div>`;
+    <div class="statcard ${enRiesgo.length ? 'warn' : ''}"><div class="lbl">Reservas en riesgo</div><div class="val">${enRiesgo.length}</div><div class="sub">llegan hoy sin aviso de tardía · OTA → NO_SHOW, Directo → CANCELLED al cierre</div></div>`;
 }
 
 // ---------- Render: habitaciones ----------
@@ -538,11 +539,13 @@ function openCancelModal(){
   } else {
     txt.textContent = `¿Confirma la cancelación de ${r.ref}? La llegada es futura, así que la habitación aún no está apartada: no se enviará ninguna orden al Módulo 1.`;
   }
+  document.getElementById('cxReason').value = '';
   openModal('m-cancelar');
 }
 function confirmCancel(){
   const r = reservations.find(x => x.ref === currentRef);
   r.status = 'CANCELLED';
+  r.cancellationReason = document.getElementById('cxReason').value.trim() || null;
   closeModal('m-cancelar');
   closeModal('m-detalle');
   renderReservas(); renderRooms(); renderStatRow();
