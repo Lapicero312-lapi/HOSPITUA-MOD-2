@@ -1,5 +1,4 @@
-/* HOSPITUA — Wireframes Módulo 2 · estilos compartidos entre las dos vistas
-   (Control de Reservas y Portal SIRE). Ver specs/wireframes/README.md.
+/* HOSPITUA — Wireframe Módulo 2 · vista única de la Recepcionista.
    Identidad visual: acento índigo, tarjetas redondeadas, badges tipo píldora. */
 :root{
   --bg:#f3f4fb; --panel:#ffffff; --ink:#1c2033; --sub:#6b7085; --line:#c7cad9;
@@ -153,3 +152,27 @@ tbody tr:hover{background:var(--accent-soft)}
 .crumbnav:hover{text-decoration:underline}
 .code{font-family:var(--mono);font-size:12px;background:var(--neutral-bg);border-radius:5px;padding:1px 6px}
 .pre{font-family:var(--mono);font-size:12px;background:#11151f;color:#c9d1d9;border-radius:10px;padding:14px;overflow:auto;white-space:pre}
+
+/* Canal OTA */
+.badge.ota{background:var(--accent-soft);color:var(--accent)}
+
+/* Acciones por fila de la tabla */
+.rowacts{display:flex;gap:6px;flex-wrap:nowrap;justify-content:flex-end}
+.btn.danger-solid{background:var(--err);border-color:var(--err);color:#fff}
+
+/* Fila recién cambiada: se resalta unos segundos */
+@keyframes rowflash{0%,40%{background:var(--warn-bg)}100%{background:transparent}}
+tr.flash td{animation:rowflash 2.6s ease}
+
+/* Cabecera de las pantallas de una reserva */
+.pagehead{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;margin:10px 0 14px}
+.pagehead h2{font-size:20px;margin:0 0 6px;font-weight:800;font-family:var(--mono);letter-spacing:-.01em}
+.pagehead .badges{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+
+/* Pares etiqueta-valor */
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px 18px}
+.kv .k{font-size:11px;color:var(--sub);font-weight:700;text-transform:uppercase;letter-spacing:.03em}
+.kv .v{font-size:13.5px;font-weight:600;margin-top:2px;word-break:break-word}
+
+.check{display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer}
+.missing{display:block;margin-top:4px;font-size:11.5px;color:var(--warn)}

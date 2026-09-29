@@ -22,9 +22,9 @@ C (equipo del Módulo 3), D (equipo del Módulo 2) y E (ajustes a documentos).
 | A5 | **Estructura del proyecto**: `src/` en la raíz (esqueleto) o `backend/` + `frontend/` (plan) | `backend/` + `frontend/`, moviendo el esqueleto | [ ] | El paquete `com.hospitua.reservas` es compatible con el actual `com.hospitua` |
 | A6 | **Contraseña de MySQL commiteada** en `application-mysql.properties` | Sacarla del repositorio y usar variables de entorno | [ ] | Riesgo de seguridad; no se ha modificado |
 | A7 | **Autenticación (Spring Security)**: mecanismo para la Ota (clave de API u OAuth2 de cliente) y cómo se liga a `ota_id`; credenciales de servicio del Módulo 1 y del Módulo 3; sesión y expiración de la Recepcionista | Definir un mecanismo por tipo de actor | [ ] | Bloquea la tarea T018 y cinco planes |
-| A8 | **Roles `FINANCE` y `ADMIN`**: el spec de comisión nombra un "analista financiero" y un "Administrador" | Crearlos como roles del Módulo 2 | [ ] | No son actores del Módulo 2 en el diccionario ni en el diagrama (ver E) |
-| A9 | **Formato oficial del archivo SIRE**: columnas, anchos, delimitadores, orden y juego de caracteres | Obtener la especificación de Migración Colombia | [ ] | Bloquea `T-SIR-06` y el archivo de referencia de pruebas |
-| A10 | **Mapeo de `movementType`** (`ENTRY`, `DEPARTURE`) a los códigos que exige Migración Colombia | Igual que A9 | [ ] | |
+| A8 | **Roles `FINANCE` y `ADMIN`**: el spec de comisión nombraba un "analista financiero" y un "Administrador" | **No se crean.** La conciliación de comisiones la hace el Módulo 3 (finanzas); la Recepcionista es el único usuario humano del Módulo 2 | [x] | Decidido por el negocio el 2026-09-29 (`register-ota-information-commission` US2 y FR-006) |
+| A9 | **Formato oficial del archivo SIRE**: columnas, anchos, delimitadores, orden y juego de caracteres | **Orden de los 12 campos definido** en `export-sire-file` FR-005 (2026-09-29). El separador, el formato de fecha y las tablas de códigos (documento, nacionalidad, lugares) quedan en configuración y se cargan desde el manual de cargue de SIRE | [ ] | Único paso restante: descargar el manual desde el portal de SIRE con la cuenta del hotel y llenar la configuración. Ya no bloquea el diseño; bloquea el archivo de referencia de pruebas de `T-SIR-06` |
+| A10 | **Mapeo de `movementType`** (`ENTRY`, `DEPARTURE`) a los códigos que exige Migración Colombia | `ENTRY` → `E`, `DEPARTURE` → `S` | [x] | Resuelto el 2026-09-29 (`export-sire-file` FR-005) |
 
 ## B. Con el equipo del Módulo 1
 
@@ -41,7 +41,7 @@ C (equipo del Módulo 3), D (equipo del Módulo 2) y E (ajustes a documentos).
 | B9 | **Mensajes `habitacion.checkin` y `habitacion.checkout`**: confirmar que traen dentro la lista `foreignGuests` con los datos migratorios de cada huésped extranjero de la habitación, incluidos `movementType` (`ENTRY` en el Check-In, `DEPARTURE` en el Check-Out) y `movementDate` | Dentro de cada mensaje (C2), actualizado el 2026-09-28: el Check-Out también los trae | [ ] | El Módulo 1 procesa los datos y los envía (2026-09-28) |
 | B15 | **Campos de `ForeignGuestData`**: confirmar que el Módulo 1 envía, por huésped, `firstName`, `lastName`, `documentType`, `documentNumber`, `birthDate`, `nationality`, `movementType` y `movementDate` | Esa lista, según la especificación del Módulo 1 y lo pedido por el negocio el 2026-09-28 | [ ] | Los obligatorios están en `process-foreign-guest-data` FR-003 |
 | B10 | **Diagrama `mod-1-2-3.drawio`**: quitar la flecha "Datos de huéspedes extranjeros" y agregar la del calendario | Actualizarlo | [ ] | C2 y C4 |
-| B11 | **Hora de inicio del día operativo** y zona horaria del hotel | Configurables; falta el valor | [ ] | También lo usa el cierre del día y el envío de la lista del día |
+| B11 | **Hora de inicio del día operativo** y zona horaria del hotel | **Fijas:** el día operativo es el día calendario de Colombia, de las 00:00 a las 23:59 (UTC-5). La lista del día se envía a las 00:00 | [x] | Decidido por el negocio el 2026-09-29 (`check-view-reservation` FR-012, `update-reservation` FR-018). Ya no son configurables |
 | B12 | **`maxCapacity` en el inventario**: que el Módulo 1 devuelva la capacidad máxima de cada habitación | Agregarlo a la consulta puntual y por categoría | [ ] | Sin él no se puede validar `guestCount` (2026-09-28) |
 | B13 | **Check-In y Check-Out por habitación**: que `habitacion.checkin` y `habitacion.checkout` traigan el `roomId` además de la `reservationRef` | Obligatorio en ambos mensajes | [ ] | Reservas con varias habitaciones (2026-09-28) |
 | B14 | **Lista de reservas del día**: que el Módulo 1 consuma por cola la lista (`DailyReservationList`) y sus actualizaciones (`ADDED`, `UPDATED`, `REMOVED`) y deje de consultar `GET /api/reservations` | Routing keys propuestas: `reserva.lista-del-dia` y `reserva.lista-del-dia.actualizacion` | [ ] | Spec `check-view-reservation`, historias 4 y 5 (2026-09-28) |
@@ -79,7 +79,7 @@ C (equipo del Módulo 3), D (equipo del Módulo 2) y E (ajustes a documentos).
 | D11 | **Reintento tras un timeout**: el spec rechaza el código repetido con 400 | Alternativa: devolver la reserva ya creada | [ ] | Hoy se sigue el spec |
 | D12 | **Cómo notifica la agencia el pago o la garantía** | `POST /api/ota/reservations/{reservationRef}/confirmation` | [ ] | No está en el spec |
 | D13 | **Campos que puede editar la Ota**, y si puede cambiar datos del huésped | Definir según el negocio | [ ] | |
-| D14 | **Estado de la comisión al cancelar** | Importe en cero al cancelar y `RECONCILED` en la conciliación | [ ] | El spec dice ambas cosas |
+| D14 | **Estado de la comisión al cancelar** | **No se toca.** Solo la Ota cancela sus reservas y solo cambia el `status` a `CANCELLED`; la comisión y su estado quedan como estaban, porque la agencia ya sabe que no la cobrará | [x] | Decidido por el negocio el 2026-09-29 (`register-ota-information-commission` FR-007 y `cancel-reservation` FR-006). Los `plan.md` todavía dicen "importe en cero" (E14) |
 | D15 | **Estado `DISPUTED`** | Dejarlo fuera | [ ] | Ningún escenario lo usa |
 
 ### Cancelación y ciclo de vida
@@ -89,7 +89,7 @@ C (equipo del Módulo 3), D (equipo del Módulo 2) y E (ajustes a documentos).
 | D16 | **Formato de `processedBy`** en las cancelaciones | Usuario autenticado (Recepcionista) o identificador de la agencia | [ ] | |
 | D17 | **Cancelar una reserva OTA en `PENDING`** | Igual que `ACTIVE` | [ ] | El spec lo admite |
 | D18 | **400 cuando la cancelación sí se aplicó** (`ROOM_RELEASE_PENDING`) | Mantener lo que pide el spec; el cliente distingue por `errorCode` | [ ] | |
-| D19 | **Hora de cierre del día operativo** | Configurable; falta el valor | [ ] | |
+| D19 | **Hora de cierre del día operativo** | **Fija:** al terminar las 23:59, hora de Colombia | [x] | Decidido por el negocio el 2026-09-29 (ver B11) |
 | D20 | **Reintentos de los consumidores de colas** | Definir cantidad y espera | [ ] | |
 | D21 | ~~Check-In de un huésped `NATIONAL` con datos migratorios~~ | **Resuelto 2026-09-28**: se registran los huéspedes extranjeros que envíe el Módulo 1 aunque el titular sea nacional | [x] | Los acompañantes pueden ser extranjeros |
 
@@ -97,7 +97,7 @@ C (equipo del Módulo 3), D (equipo del Módulo 2) y E (ajustes a documentos).
 
 | # | Decisión | Propuesta | Decisión | Notas |
 |---|---|---|---|---|
-| D22 | **Doble reporte** al mismo huésped en periodos que se solapan | **Propuesto 2026-09-28**: cada movimiento guarda `reportedInExportId`; la exportación excluye lo ya reportado salvo `includeAlreadyReported` | [ ] | Confirmar con el negocio si Migración acepta reenvíos |
+| D22 | **Doble reporte** al mismo huésped en periodos que se solapan | Cada movimiento guarda `reportedInExportId`; la exportación excluye lo ya reportado salvo que la Recepcionista marque `includeAlreadyReported` | [x] | Confirmado por el negocio el 2026-09-29 |
 | D23 | **Límite de exportaciones simultáneas** y su alcance por instancia | Empezar con 2 por instancia | [ ] | Responde 429 al exceder |
 
 ### Generales
@@ -113,12 +113,15 @@ C (equipo del Módulo 3), D (equipo del Módulo 2) y E (ajustes a documentos).
 | # | Decisión | Propuesta | Decisión | Notas |
 |---|---|---|---|---|
 | D27 | **Máximo de habitaciones por reserva** | 10 | [ ] | Usado en generar directa, generar OTA y actualizar |
-| D28 | **Vigencia del aviso de llegada tardía** | Protege la reserva hasta el cierre del día siguiente a la llegada | [ ] | Antes quedaba sin límite y la reserva podía quedar `ACTIVE` para siempre |
+| D28 | **Vigencia del aviso de llegada tardía** | Protege la reserva hasta el cierre del día siguiente a la llegada | [x] | Confirmado por el negocio el 2026-09-29; ya está en `update-reservation` |
 | D29 | **Reservas `PENDING` en la lista del día** | No se envían; viajan como `ADDED` si la OTA las confirma ese día | [ ] | El negocio pidió "reservas activas" |
 | D30 | **Largo máximo de `notes`** (observaciones) | 500 caracteres | [ ] | |
 | D32 | **Archivo SIRE por Recepcionista** | La Recepcionista genera el `.TXT` y lo envía a Migración fuera del sistema; Migración no es actor del sistema | [ ] | Cambio del 2026-09-28: antes Migración descargaba el archivo |
-| D33 | **Campos obligatorios de cada huésped extranjero** | Los ocho de B15 son obligatorios (sin pasaporte, visa ni procedencia, que se quitaron el 2026-09-28) | [ ] | Confirmar con la especificación de Migración (A9); `nationality` no estaba en la lista del negocio, pero el Módulo 1 la envía |
+| D37 | **Datos migratorios incompletos** | No existe el estado `INCOMPLETE`. El Módulo 1 envía los huéspedes extranjeros ya procesados; si a uno le falta un dato, el Módulo 2 no registra su movimiento y **se lo devuelve al Módulo 1** (`MigratoryDataReturned`), que debe reenviarlo completo. El Check-In o Check-Out físico se conserva | [x] | Decidido por el negocio el 2026-09-29 (`process-foreign-guest-data` FR-005, `export-sire-file`, `check-view-reservation` FR-005b, `update-reservation` FR-016). Se quitó el reporte de exclusiones de SIRE. Al listado de reservas se agregó el estado migratorio `PENDING_RESEND`. Pendiente con el Módulo 1: aceptar la devolución y reenviar (B9, B15) |
+| D33 | **Campos obligatorios de cada huésped extranjero** | Los ocho de B15 más `originPlace` y `destinationPlace` (diez en total), porque SIRE los exige y rechaza el registro si vienen vacíos | [ ] | Cambio del 2026-09-29: la procedencia se había quitado el 2026-09-28, pero SIRE la exige. Hay que avisar al Módulo 1 que debe capturar procedencia y destino en el Check-In |
 | D34 | **Persona que ingresa y sale en distintas habitaciones o fechas** | Un solo `ENTRY` y un solo `DEPARTURE` por huésped y reserva | [ ] | |
+| D35 | **Descarga individual de SIRE por movimiento** | La Recepcionista puede previsualizar y descargar un movimiento solo; cada descarga crea una `SireExport` de un registro y marca el movimiento como reportado | [x] | Decidido por el negocio el 2026-09-29 (`export-sire-file`, FR-010). Un archivo de una línea usa el mismo formato que el del periodo. Falta actualizar `export-sire-file/plan.md` |
+| D36 | **La información de las OTA no se edita en el hotel** | La `Ota` se registra sola al vincular la cuenta del hotel, con los datos que envía por su API (`name`, `hotelAccountId`, `commissionPercentage`); la Recepcionista solo la consulta. Las reservas `OTA` solo las modifica o cancela la Ota por su API | [ ] | Cambio del 2026-09-29 en `register-ota-information-commission` (US3, FR-008), `update-reservation` (FR-001a) y `cancel-reservation` (FR-002a). Pendiente: quitar `POST /api/otas` y `PUT /api/otas/{otaId}` de la Recepcionista y el Administrador en `base/plan.md`, definir el endpoint de registro de la Ota, y actualizar A8 y E11 |
 | D31 | **Llegada parcial de un grupo**: habitaciones sin Check-In al cierre del día | `NOT_ARRIVED` y se liberan; la reserva sigue `IN_PROGRESS` | [ ] | Sin efecto financiero en el Módulo 2; el ajuste del cobro es del Módulo 3 |
 
 ## E. Ajustes a documentos del equipo
@@ -137,7 +140,7 @@ Ninguno de estos cambios está hecho.
 | E8 | `export-sire-file/spec.md` | Cambiar `GET` a `POST` en la generación y definir el formato del archivo | D9 y A9 |
 | E9 | `update-reservation` y `process-foreign-guest-data` | Cambiar "responde 200/400" por las reglas de cola | Decisión C1 |
 | E10 | `register-ota-information-commission/spec.md` y `generate-ota-reservation/spec.md` | Usar `grossAmount` en la entidad; exponer `GET /api/otas/{otaId}` | Decisiones C3a y C6 |
-| E11 | Actores de `register-ota-information-commission` | Definir si "Administrador" y "analista financiero" son actores del Módulo 2 | No aparecen en el diccionario ni en el diagrama |
+| E11 | ~~Actores de `register-ota-information-commission`~~ | **Resuelto 2026-09-29**: no son actores del Módulo 2; la conciliación la hace el Módulo 3 (A8) | Spec actualizado |
 | E12 | `template/sdd-guide.MD` | Corregir la ruta `specs/templates/` a `specs/template/` | Carpeta real |
 | E13 | Disponibilidad agotada | Confirmar que responder 400 (directa y actualizar) y 409 (OTA) es intencional | Cada spec lo define distinto |
 | E14 | Todos los `plan.md` y `base/plan.md` | Actualizar a los specs del 2026-09-28: varias habitaciones por reserva (`ReservationRoom`, `stayStatus`), `guestCount`, `notes`, Check-In/Out por habitación, nueva historia de envío diario al Módulo 1 dentro de `check-view-reservation`, y quitar al Módulo 1 como consumidor de `GET /api/reservations` | Los planes quedaron desactualizados; los números de FR de `generate-direct-reservation` y `update-reservation` cambiaron |

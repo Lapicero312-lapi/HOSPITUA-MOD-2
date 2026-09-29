@@ -1,4 +1,4 @@
-// Utilidades compartidas por las dos vistas del wireframe.
+// Utilidades del wireframe de la Recepcionista.
 function toast(msg, isErr){
   const t = document.getElementById('toast');
   if(!t) return;
@@ -31,6 +31,17 @@ function avatarHTML(name){
 function toggleSide(){
   document.getElementById('side').classList.toggle('open');
   document.getElementById('sideBackdrop').hidden = !document.getElementById('side').classList.contains('open');
+}
+// Descarga un texto como archivo .TXT.
+function downloadTxt(filename, text){
+  const blob = new Blob([text], {type: 'text/plain;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 function closeSide(){
   const side = document.getElementById('side');

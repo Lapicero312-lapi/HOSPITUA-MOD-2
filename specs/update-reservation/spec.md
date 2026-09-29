@@ -1,6 +1,7 @@
 # Feature Specification: Actualizar Reservación
 
 **Created**: 2026-09-19
+**Updated**: 2026-09-29
 
 ## Use Case (Caso de Uso)
 
@@ -31,7 +32,9 @@ las mismas reglas de transición y de concurrencia.
 ### Flujo de Usuario de Alto Nivel
 
 1. La **Recepcionista** o la **Ota** localiza la reserva mediante "Consultar
-   reservas" y valida que esté en `ACTIVE` o `PENDING`.
+   reservas" y valida que esté en `ACTIVE` o `PENDING`. La Recepcionista solo modifica reservas de
+   canal `DIRECT`; una reserva de canal `OTA` solo la modifica la Ota por su API, porque sus datos
+   los envía la agencia y no se editan en el hotel.
 2. El solicitante edita uno o varios de estos datos:
    - Las fechas de la estadía (`startDate`, `endDate`), comunes a todas las habitaciones.
    - Las habitaciones de la reserva: agregar una habitación, quitar una habitación (la reserva
@@ -108,8 +111,9 @@ El Check-Out también se notifica **por habitación**.
 
 **Cierre automático del día (No-Show)**
 
-1. El sistema ejecuta un proceso automático al cierre del día operativo, según la zona horaria del
-   hotel.
+1. El sistema ejecuta un proceso automático al cierre del día operativo. El día operativo es el día
+   calendario de Colombia, fijo: va de las 00:00 a las 23:59 (zona horaria de Colombia, UTC-5) y el
+   cierre ocurre al terminar las 23:59.
 2. El sistema recorre las `Reservation` cuya `startDate` corresponde al día procesado y, además,
    las del día anterior con `lateArrivalNotice` activo: el aviso de llegada tardía protege la
    reserva solo hasta el cierre del día siguiente a su llegada, y a esas reservas ya no se les
@@ -133,8 +137,8 @@ El Check-Out también se notifica **por habitación**.
 
 ### User Story 1 - Modificación de Datos de Reservación (Priority: P1)
 
-Un solicitante —la Recepcionista o la Ota— modifica una reserva que aún no ha
-iniciado su estadía. Puede cambiar fechas, agregar, quitar o cambiar habitaciones, cambiar la
+Un solicitante —la Recepcionista para las reservas directas, o la Ota por su API para las suyas—
+modifica una reserva que aún no ha iniciado su estadía. Puede cambiar fechas, agregar, quitar o cambiar habitaciones, cambiar la
 cantidad de personas, corregir datos personales, o editar las observaciones y el aviso de llegada
 tardía. Cuando el cambio afecta fechas o habitaciones, el sistema valida disponibilidad y delega el
 recálculo en el Módulo 3, mostrando la diferencia antes de confirmar; cuando solo toca datos que no
@@ -287,7 +291,8 @@ pase a `COMPLETED`, sin afectar el estado de las `Room`, que gestiona el Módulo
    - **Given** una habitación de la reserva ya en `CHECKED_IN`
    - **When** el sistema recibe de nuevo la notificación de Check-In de esa habitación
    - **Then** el sistema responde 200 sin cambiar estados; solo si trae datos migratorios completos
-     y algún `MigratoryMovement` de esos huéspedes está `INCOMPLETE`, lo actualiza a `COMPLETE`
+     de huéspedes que el Módulo 2 había devuelto al Módulo 1, registra sus movimientos y resuelve la
+     devolución
 
 5. **Scenario**: Rechazo de Check-In con estado inválido (Error)
    - **Given** una `Reservation` en `PENDING`, `COMPLETED`, `CANCELLED` o `NO_SHOW`
@@ -468,12 +473,11 @@ libere las habitaciones correspondientes.
   sin el `roomId`? El sistema intercepta el error de inmediato y responde **HTTP 400** con el
   mensaje: "El payload de notificación es inválido. Falta el identificador de la reserva o de la
   habitación.", sin producir errores **HTTP 500**.
-- ¿Qué sucede si los datos migratorios del Check-In o del Check-Out tienen formato inválido o fechas
-  futuras? El Check-In o Check-Out físico ya ocurrió en el Módulo 1, así que el sistema no lo
-  rechaza: aplica el cambio de la habitación, registra el `MigratoryMovement` de ese huésped como
-  `INCOMPLETE` y responde 200. Ese movimiento queda excluido de la exportación SIRE hasta que el
-  Módulo 1 reenvíe los datos completos. Los demás huéspedes de la notificación se registran
-  normalmente.
+- ¿Qué sucede si los datos migratorios del Check-In o del Check-Out están incompletos, tienen formato
+  inválido o fechas futuras? El Check-In o Check-Out físico ya ocurrió en el Módulo 1, así que el
+  sistema no lo rechaza: aplica el cambio de la habitación, no registra el movimiento de ese huésped,
+  se lo devuelve al Módulo 1 para que lo reenvíe completo y responde 200. Los demás huéspedes de la
+  notificación se registran normalmente.
 - ¿Qué sucede en una reserva con varias habitaciones? Cada notificación trae solo los huéspedes de
   su habitación; los movimientos se identifican por reserva, huésped y tipo de movimiento, según
   "Procesar datos de huéspedes extranjeros".
@@ -504,8 +508,8 @@ libere las habitaciones correspondientes.
 - ¿Qué sucede si el proceso de cierre del día se ejecuta dos veces el mismo día? El sistema es
   idempotente: ignora las reservas que ya no están en `ACTIVE` o `PENDING` y las habitaciones que ya
   no están en `EXPECTED`, y responde exitosamente, sin errores.
-- ¿Qué sucede si la zona horaria del servidor difiere de la del hotel? El sistema usa siempre la
-  zona horaria configurada del hotel, evitando marcar como no presentadas reservas cuyo día aún no
+- ¿Qué sucede si la zona horaria del servidor difiere de la de Colombia? El sistema usa siempre la
+  zona horaria de Colombia (UTC-5), evitando marcar como no presentadas reservas cuyo día aún no
   termina, y emite una alerta de negocio si las zonas son inconsistentes.
 - ¿Qué ocurre si la base de datos pierde conexión durante el procesamiento masivo del cierre del
   día? El sistema detiene el proceso de forma transaccional, sin marcar reservas a medias, y emite
@@ -521,6 +525,8 @@ libere las habitaciones correspondientes.
 - **FR-001**: El sistema debe permitir, sobre una `Reservation` en `ACTIVE` o `PENDING`, editar las
   fechas, agregar, quitar o cambiar habitaciones, cambiar `guestCount`, corregir los datos
   personales del `Guest` titular, y editar `notes` (máximo 500 caracteres) y `lateArrivalNotice`.
+- **FR-001a**: El sistema debe rechazar con **HTTP 400** que la Recepcionista modifique una reserva
+  de canal `OTA`: esas reservas solo las modifica la Ota que las originó, por su API.
 - **FR-002**: El sistema debe validar la disponibilidad mediante "Verificar disponibilidades" de
   cada habitación que quedaría en la reserva cuando cambien las fechas, y de cada habitación nueva
   cuando se agregue o cambie una habitación, enviando la `reservationRef` de la reserva editada para
@@ -573,23 +579,24 @@ libere las habitaciones correspondientes.
 - **FR-015**: Al procesar un Check-In, el sistema debe validar que la `Reservation` esté en
   `ACTIVE` o `IN_PROGRESS` y que la habitación esté en `EXPECTED`; debe cambiar la habitación a
   `CHECKED_IN` y, si es la primera en ingresar, la reserva a `IN_PROGRESS`. Si la habitación ya está
-  en `CHECKED_IN`, la notificación es un duplicado idempotente (200 sin efectos, salvo completar un
-  movimiento migratorio `INCOMPLETE`). En cualquier otro caso (reserva inexistente o en otro
+  en `CHECKED_IN`, la notificación es un duplicado idempotente (200 sin efectos, salvo registrar los
+  movimientos migratorios que el Módulo 2 había devuelto al Módulo 1 y este reenvía completos). En cualquier otro caso (reserva inexistente o en otro
   estado, habitación ajena o `NOT_ARRIVED`) debe responder **HTTP 400** sin cambiar estados y
   registrar una incidencia de conciliación con el Módulo 1, porque el efecto físico ya ocurrió allá.
 - **FR-016**: El sistema debe recibir y validar, en la misma notificación de Check-In y de
   Check-Out, los datos migratorios de cada huésped extranjero de la habitación (`ENTRY` en el
   Check-In, `DEPARTURE` en el Check-Out), registrándolos mediante "Procesar datos de huéspedes
-  extranjeros"; si son inválidos, debe conservar el Check-In o el Check-Out y marcar el movimiento
-  como `INCOMPLETE`, respondiendo 200 sin advertencias mezcladas.
+  extranjeros"; si están incompletos o son inválidos, debe conservar el Check-In o el Check-Out y
+  devolver los datos de ese huésped al Módulo 1 para que los reenvíe completos, respondiendo 200 sin
+  advertencias mezcladas.
 - **FR-017**: Al procesar un Check-Out, el sistema debe validar que la `Reservation` esté en
   `IN_PROGRESS` y la habitación en `CHECKED_IN`; debe cambiar la habitación a `CHECKED_OUT` y, si ya
   no queda ninguna habitación en `CHECKED_IN` ni en `EXPECTED`, la reserva a `COMPLETED`. Si la
   habitación ya está en `CHECKED_OUT` debe responder 200 sin efectos (idempotencia), y en cualquier
   otro caso debe responder **HTTP 400** y registrar una incidencia de conciliación. No debe
   modificar el estado de la `Room`, que gestiona el Módulo 1.
-- **FR-018**: El sistema debe ejecutar un proceso automático al cierre del día operativo, usando la
-  zona horaria del hotel, que recorra las `Reservation` cuya `startDate` corresponda al día
+- **FR-018**: El sistema debe ejecutar un proceso automático al cierre del día operativo (día
+  calendario de Colombia, 00:00 a 23:59, UTC-5), que recorra las `Reservation` cuya `startDate` corresponda al día
   procesado y las del día anterior con `lateArrivalNotice` activo, excluyendo las del día procesado
   cuyo huésped avisó una llegada tardía.
 - **FR-019**: En ese proceso, para cada reserva en `ACTIVE` o `PENDING`, el sistema debe cambiar el
@@ -638,9 +645,8 @@ libere las habitaciones correspondientes.
 - **MigratoryMovement**: Movimiento migratorio de entrada o salida de un huésped extranjero,
   registrado en el Check-In y en el Check-Out mediante "Procesar datos de huéspedes extranjeros".
   Atributos: `movementId`, `reservationRef`, `movementType` (`ENTRY` | `DEPARTURE`), `movementDate`,
-  los datos migratorios del huésped, `validationStatus` (`COMPLETE` | `INCOMPLETE`),
-  `missingFields` y `validationReason` (estos dos últimos, solo cuando es `INCOMPLETE`). El detalle
-  de sus atributos está en "Procesar datos de huéspedes extranjeros".
+  los datos migratorios del huésped. Siempre está completo: lo incompleto se devuelve al Módulo 1. El
+  detalle de sus atributos está en "Procesar datos de huéspedes extranjeros".
 - **ReconciliationIncident**: Registro de una discrepancia entre el Módulo 1 y el Módulo 2 que una
   persona debe resolver (por ejemplo, una habitación ocupada sin una reserva vigente). Atributos:
   `incidentId`, `origin` (`CHECK_IN` | `CHECK_OUT` | `ROOM_STATE`), `reservationRef`, `roomId`,
@@ -660,8 +666,8 @@ libere las habitaciones correspondientes.
   exitosas.
 - **SC-005**: El 100% de las notificaciones de Check-In y de Check-Out válidas del Módulo 1
   actualizan la habitación y la reserva según FR-015 y FR-017, y el 100% de la información
-  migratoria enviada en el Check-In y en el Check-Out se registra en `MigratoryMovement` sin
-  intervención manual, o queda marcada como `INCOMPLETE`.
+  migratoria completa enviada en el Check-In y en el Check-Out se registra en `MigratoryMovement` sin
+  intervención manual, y la incompleta se devuelve al Módulo 1.
 - **SC-006**: El 100% de las notificaciones que no pueden aplicarse dejan una incidencia de
   conciliación registrada, con cero errores **HTTP 500** ante payloads mal formados o reservas
   inexistentes.

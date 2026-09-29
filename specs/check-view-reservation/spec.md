@@ -1,7 +1,7 @@
 # Feature Specification: Consultar Reservas
 
 **Created**: 2026-09-19
-**Updated**: 2026-09-28
+**Updated**: 2026-09-29
 
 ## Use Case (Caso de Uso)
 
@@ -75,8 +75,8 @@ completo (ver FR-006), incluidas todas sus habitaciones y la cantidad de persona
 
 **Envío de la lista del día al Módulo 1**
 
-1. A la hora de inicio del día operativo (configurable, en la zona horaria del hotel), el sistema
-   ejecuta un proceso automático.
+1. Al iniciar el día operativo (00:00, hora de Colombia, UTC-5; el día operativo es el día calendario
+   y va de las 00:00 a las 23:59, fijo), el sistema ejecuta un proceso automático.
 2. El sistema localiza las `Reservation` con `startDate` igual al día operativo y `status` `ACTIVE`,
    con los mismos criterios de este servicio.
 3. El sistema arma la lista del día (`DailyReservationList`) con una cabecera (fecha operativa, fecha
@@ -477,12 +477,33 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
     `endDate` > `dateFrom`).
 - **FR-004**: El sistema debe permitir filtrar por titular (`documentNumber` con coincidencia exacta,
   o `fullName` con coincidencia parcial sin distinguir mayúsculas ni tildes y con mínimo 3
-  caracteres) y por canal (`source`: `DIRECT` | `OTA`), y combinar todos los filtros con la regla
-  "Y".
-- **FR-005**: Cada fila del listado debe mostrar: `reservationRef`, `status`, `source`,
-  `startDate`, `endDate`, número de noches, `guestCount`, cantidad de habitaciones, los
-  `roomNumber` o `roomId` de sus habitaciones, el `fullName` y el `documentNumber` del titular, y si
-  tiene aviso de llegada tardía (`lateArrivalNotice`).
+  caracteres), por canal (`source`: `DIRECT` | `OTA`) y, cuando el canal es `OTA`, por agencia
+  (`otaId`), y combinar todos los filtros con la regla "Y".
+- **FR-005**: Cada fila del listado debe mostrar: `reservationRef`, `status`, `source` (y, si es
+  `OTA`, el `name` de la agencia y el `externalConfirmationCode`), `startDate`, `endDate`, número de
+  noches, `guestCount`, cantidad de habitaciones, los `roomNumber` o `roomId` de sus habitaciones, el
+  `fullName` y el `documentNumber` del titular, si tiene aviso de llegada tardía
+  (`lateArrivalNotice`) y su estado migratorio (`migrationStatus`, FR-005b).
+- **FR-005a**: Encima del listado, el sistema debe mostrar a la Recepcionista un resumen del día
+  operativo, calculado solo con datos del Módulo 2:
+  - Llegadas esperadas hoy: reservas `ACTIVE` o `PENDING` con `startDate` igual a hoy.
+  - Salidas esperadas hoy: reservas `IN_PROGRESS` con `endDate` igual a hoy.
+  - Reservas en riesgo de No-Show: llegadas esperadas hoy sin `lateArrivalNotice`; al cierre del
+    día pasan a `NO_SHOW` (canal `OTA`) o a `CANCELLED` (canal `DIRECT`) si no hay Check-In.
+  La ocupación física no se muestra aquí: es un dato del Módulo 1.
+- **FR-005b**: El `migrationStatus` de cada reserva se deriva de sus `MigratoryMovement` y nunca se
+  muestra vacío ni como "N/A":
+  - `AWAITING_CHECK_IN` ("Pendiente de Check-In"): reserva `ACTIVE` o `PENDING`. Aún no se conoce
+    la nacionalidad de todos los huéspedes; los datos migratorios llegan con el Check-In del Módulo 1.
+  - `COMPLETE`: tiene movimientos migratorios registrados y ninguna devolución abierta.
+  - `PENDING_RESEND` ("Reenvío pendiente del Módulo 1"): el Módulo 2 devolvió al Módulo 1 los datos de
+    algún huésped por estar incompletos y el Módulo 1 aún no los reenvía completos
+    (`ReconciliationIncident` `OPEN` de esa reserva). No existe un estado "incompleto": un movimiento
+    registrado siempre está completo.
+  - `NOT_REQUIRED` ("Sin extranjeros"): reserva `IN_PROGRESS` o `COMPLETED` sin huéspedes
+    extranjeros, por lo que no entra al reporte SIRE.
+  - `NO_CHECK_IN` ("Sin Check-In"): reserva `CANCELLED` o `NO_SHOW`; nunca tuvo ingreso ni
+    movimientos que reportar.
 - **FR-006**: El sistema debe permitir buscar una reserva por código, con coincidencia exacta
   primero sobre `reservationRef` y después sobre `externalConfirmationCode`, ignorando los demás
   filtros, y mostrar su detalle completo:
@@ -520,8 +541,8 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
   son válidos pero ninguna reserva los cumple.
 - **FR-011**: El sistema debe restringir la vista y la búsqueda a la Recepcionista y a los procesos
   internos del Módulo 2. Ni la Ota ni el Módulo 1 tienen acceso a la vista ni a la búsqueda.
-- **FR-012**: El sistema debe ejecutar, una vez por día operativo, a la hora de inicio configurada y
-  en la zona horaria del hotel, un proceso automático que envíe al Módulo 1 la lista de las
+- **FR-012**: El sistema debe ejecutar, una vez por día operativo, a las 00:00 de Colombia (UTC-5),
+  un proceso automático que envíe al Módulo 1 la lista de las
   `Reservation` con `startDate` igual al día operativo y `status` `ACTIVE`.
 - **FR-013**: La lista debe tener una cabecera con `operationalDate`, `generatedAt`,
   `totalReservations`, `totalRooms` y `totalGuests` (suma de `guestCount`), y debe enviarse aunque no
@@ -561,8 +582,8 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
 - **NFR-002**: Una página del listado, con cualquier combinación de filtros, debe responder en menos
   de 1 segundo con hasta 50 000 reservas registradas.
 - **NFR-003**: Los datos personales del titular no deben escribirse en los registros de log.
-- **NFR-004**: La lista del día debe quedar publicada en menos de 1 minuto desde la hora de inicio
-  del día operativo, con hasta 500 reservas.
+- **NFR-004**: La lista del día debe quedar publicada en menos de 1 minuto desde las 00:00 del día
+  operativo, con hasta 500 reservas.
 - **NFR-005**: Cada actualización debe quedar publicada en menos de 5 segundos desde que se confirma
   el cambio que la origina, en condiciones normales.
 

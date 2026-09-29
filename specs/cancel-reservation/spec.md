@@ -1,6 +1,7 @@
 # Feature Specification: Cancelación de Reservación
 
 **Created**: 2026-09-19
+**Updated**: 2026-09-29
 
 ## Use Case (Caso de Uso)
 
@@ -21,7 +22,8 @@ en curso.
 ### Flujo de Usuario de Alto Nivel
 
 1. El solicitante (la **Recepcionista** o la **Ota** desde su API) localiza la reserva mediante
-   "Consultar reservas".
+   "Consultar reservas". La Recepcionista solo cancela reservas de canal `DIRECT`; una reserva de
+   canal `OTA` solo la cancela la Ota por su API (canal `OTA_API`).
 2. El sistema valida que la `Reservation` esté en estado `ACTIVE` o `PENDING`.
 3. El solicitante confirma la cancelación: en pantalla para la Recepcionista, o mediante el JSON
    recibido para la Ota.
@@ -96,6 +98,12 @@ se bloquea con un error controlado.
    - **Then** el sistema cambia la reserva a `CANCELLED`, ordena `Available` para la 101 y para la
      102, registra una sola `Cancellation` y avisa `REMOVED` en la lista del día
 
+6. **Scenario**: La Recepcionista intenta cancelar una reserva OTA (Error)
+   - **Given** una `Reservation` con `source` `OTA` en `ACTIVE` o `PENDING`
+   - **When** la Recepcionista intenta cancelarla
+   - **Then** el sistema la rechaza con **HTTP 400** indicando que la cancelación debe llegar por la
+     API de la agencia, y no registra ninguna `Cancellation`
+
 ### Casos Borde
 
 - ¿Qué sucede si el Módulo 1 no responde al enviar la orden de liberación de la habitación? La
@@ -125,6 +133,9 @@ se bloquea con un error controlado.
   cancelación.
 - **FR-002**: El sistema debe autorizar la cancelación únicamente si la `Reservation` está en
   `ACTIVE` o `PENDING`.
+- **FR-002a**: El sistema debe permitir a la Recepcionista cancelar solo reservas de canal `DIRECT`
+  (canal `RECEPTION`); las reservas de canal `OTA` solo las cancela la Ota por su API (canal
+  `OTA_API`).
 - **FR-003**: El sistema debe cambiar el atributo `Reservation.status` directamente a `CANCELLED` al
   confirmarse la solicitud, de forma atómica dentro de la transacción de cancelación y aplicando las
   transiciones `ACTIVE` o `PENDING` → `CANCELLED` y el control de concurrencia, sin requerir la
@@ -139,7 +150,8 @@ se bloquea con un error controlado.
 - **FR-005**: El sistema debe registrar cada cancelación en `Cancellation` con la referencia de la
   reserva, la fecha, el canal (`RECEPTION` u `OTA_API`) y quién la procesó.
 - **FR-006**: El sistema no debe cobrar penalidades ni invocar la liquidación del Módulo 3 al
-  cancelar.
+  cancelar, ni modificar la comisión de una reserva OTA cancelada por la Ota (ver
+  `register-ota-information-commission` FR-007).
 - **FR-007**: El sistema debe interceptar errores de validación, estado incorrecto o concurrencia y
   responder con **HTTP 400 (Bad Request)** amigable, prohibiendo errores **HTTP 500**.
 
