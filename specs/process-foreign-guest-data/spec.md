@@ -1,183 +1,277 @@
-# Feature Specification: Procesar Datos de Huésped Extranjero
+# Feature Specification: Procesar Datos de Huéspedes Extranjeros
 
-**Created**: 2026-09-08
+**Created**: 2026-09-23
+**Updated**: 2026-09-28
 
 ## Use Case (Caso de Uso)
 
 ### Descripción del problema
 
-Cuando un huésped extranjero llega al hotel, la ley exige verificar y conservar ciertos datos
-migratorios (pasaporte, nacionalidad, tipo de visa y fechas de estadía) antes de admitirlo, para
-poder reportarlos después a Migración mediante "Exportar archivo SIRE". Si el Check-In avanza sin
-validar estos datos, el hotel queda expuesto a sanciones legales y a un reporte SIRE incompleto o
-inexacto. Al mismo tiempo, la verificación no puede convertirse en un trámite lento que retrase el
-ingreso del huésped en el mostrador, ni en un dato que quede congelado sin poder corregirse cuando
-el recepcionista comete un error de tipeo. El negocio necesita un procesamiento local, obligatorio
-solo para huéspedes `FOREIGN`, que valide los campos mínimos exigidos y deje los datos disponibles
-para corrección posterior mientras la estadía siga vigente.
+La ley exige reportar a Migración Colombia los huéspedes extranjeros que aloja el hotel, con su
+información migratoria completa y el tipo de movimiento: **entrada** (cuando ingresan al hotel) y
+**salida** (cuando lo dejan). Esos datos se capturan en persona, en el Check-In y en el Check-Out, y
+por eso los procesa el Módulo 1, que es quien opera la recepción física. El Módulo 1 los envía al
+Módulo 2 dentro de las notificaciones de Check-In y de Check-Out; el Módulo 2 no tiene una pantalla
+propia para pedirlos. La Recepcionista luego genera con esos datos el archivo `.TXT` y lo envía a
+Migración (ver "Exportar archivo SIRE").
 
-Este procesamiento es puramente local y lógico dentro del Módulo 2: no interactúa bajo ninguna
-circunstancia con el Módulo 1. Es el propio caso de uso de Check-In quien, una vez que verifica que
-el `MigratoryValidation.result` resultante es `PASSED`, invoca de forma síncrona "Establecer el
-estado de la habitación" para solicitar el cambio de la `Habitation` física a `Occupied`; esa
-interacción física con el Módulo 1 no forma parte del alcance de esta funcionalidad.
+Una reserva puede alojar a varios huéspedes extranjeros (un grupo o una familia), y todos deben
+reportarse, no solo el titular de la reserva. Si los datos llegan incompletos o con formato inválido,
+el reporte sale defectuoso y el hotel se expone a sanciones. El negocio necesita un procesamiento que
+reciba los datos migratorios de cada huésped extranjero (`ForeignGuestData`), los valide, y registre
+un movimiento migratorio (`MigratoryMovement`) de entrada o de salida por cada huésped, dejándolos
+listos para "Exportar archivo SIRE".
+
+**Qué hace el Módulo 1 y qué hace el Módulo 2**: el Módulo 1 identifica a los ocupantes extranjeros
+(nacionalidad distinta de Colombia) y asigna por su cuenta el tipo de movimiento y su fecha, sin
+pedírselos a la Recepcionista: `ENTRY` con la fecha de llegada (`checkInDate`) en el Check-In, y
+`DEPARTURE` con la fecha de salida (`checkOutDate`) en el Check-Out, ambas solo fecha, sin hora. El
+Módulo 1 no arma ni envía el paquete si no tiene la fecha del movimiento. El Módulo 2 no captura ni
+completa nada: recibe los datos de cada huésped (tipo y número de documento, fecha de nacimiento,
+nombre, apellido, nacionalidad y tipo de movimiento), los valida, los guarda y luego los empaqueta en
+el archivo `.TXT`.
 
 ### Flujo de Usuario de Alto Nivel
 
-1. Durante el registro de Check-In, cuando el `Guest` a admitir tiene `type` igual a `FOREIGN`, el
-   sistema exige y presenta el formulario de datos migratorios (`MigratoryValidation`).
-2. El **Recepcionista** ingresa el pasaporte, la nacionalidad, el tipo de visa y las fechas de
-   estadía del huésped.
-3. El sistema valida localmente que los cuatro campos estén presentes, tengan un formato correcto y
-   sean lógicamente coherentes (por ejemplo, que la fecha de ingreso al país no sea futura).
-4. Si la validación es exitosa, el sistema registra el `MigratoryValidation` con resultado `PASSED`
-   y permite que el Check-In continúe hacia su confirmación.
-5. Si faltan datos o son inválidos, el sistema bloquea la confirmación del Check-In, marca el
-   `MigratoryValidation` como `FAILED` y detalla los `missingFields` que deben corregirse.
-6. Una vez que la reserva del huésped está `CHECKED_IN`, el Recepcionista puede corregir los datos
-   migratorios ya registrados desde el resumen de la reserva, sin necesidad de repetir el Check-In.
+1. El **Módulo 1** notifica el **Check-In** de una habitación de una reserva e incluye en la misma
+   notificación la lista de los huéspedes extranjeros que ingresaron a esa habitación
+   (`foreignGuests`), cada uno con sus `ForeignGuestData` y con `movementType` `ENTRY` y su
+   `movementDate`. El cambio de estado de la habitación y de la reserva lo ejecuta "Actualizar
+   reservación".
+2. El Módulo 1 notifica el **Check-Out** de una habitación e incluye la lista de los huéspedes
+   extranjeros que salieron de esa habitación, cada uno con `movementType` `DEPARTURE` y su
+   `movementDate`.
+3. Por cada huésped de la lista, el sistema valida que sus datos estén presentes, tengan formato
+   correcto y sean coherentes (por ejemplo, que la fecha del movimiento no sea futura).
+4. Si son válidos, el sistema registra un `MigratoryMovement` con `validationStatus` `COMPLETE`. Hay
+   un movimiento por cada combinación de reserva, huésped y tipo de movimiento: un huésped que
+   ingresa y sale tiene dos, uno `ENTRY` y uno `DEPARTURE`.
+5. Si faltan datos o son inválidos, el sistema igualmente registra el `MigratoryMovement` con
+   `validationStatus` `INCOMPLETE` —porque el Check-In o el Check-Out físico ya ocurrió en el Módulo
+   1— y responde 200 sin advertencias mezcladas; los campos que requieren corrección quedan
+   identificados en el propio movimiento. Un reenvío posterior del Módulo 1 con los datos completos
+   de ese huésped y tipo de movimiento actualiza únicamente ese movimiento a `COMPLETE`. Solo un
+   payload inutilizable (sin identificador de reserva o con caracteres maliciosos) se rechaza con
+   **HTTP 400 (Bad Request)** sin registrar nada.
+6. Si el titular de la reserva es extranjero (`Guest.type` `FOREIGN`) y la notificación llega sin
+   ningún dato migratorio suyo, el sistema registra un movimiento `INCOMPLETE` del titular con todos
+   los campos faltantes, para que la Recepcionista lo vea en el reporte de exclusiones.
+7. Cuando "Exportar archivo SIRE" (ejecutado por la Recepcionista) necesita los datos, invoca este
+   caso de uso para obtener los movimientos completos del periodo e identificar los incompletos para
+   no exportarlos.
 
 ## User Scenarios & Testing *(mandatory)*
 
-### User Story 1 - Captura y Validación de Datos Migratorios en el Check-In (Priority: P1)
+### User Story 1 - Recepción y Validación de Datos Migratorios del Módulo 1 (Priority: P1)
 
-El Recepcionista ingresa los datos migratorios de un `Guest` `FOREIGN` (pasaporte, nacionalidad,
-tipo de visa y fechas de estadía) en la misma pantalla de Check-In. El sistema valida que los
-cuatro campos estén completos y sean coherentes antes de permitir que el Check-In se confirme. Por
-tratarse de un único paso dentro del flujo de admisión, el camino exitoso y el bloqueo por datos
-incompletos o inválidos se consolidan en esta misma historia de usuario y no se modelan como
-pantallas separadas.
+El sistema recibe, dentro de las notificaciones de Check-In y de Check-Out del Módulo 1, los datos
+migratorios de cada huésped extranjero, los valida y los registra como `MigratoryMovement` de
+entrada o de salida. Por tratarse de un único paso integrado con esas notificaciones, el camino
+exitoso, los grupos, los datos incompletos, los reenvíos y los huéspedes nacionales se consolidan en
+esta misma historia de usuario.
 
-**Why this priority**: Es el camino crítico que asegura el cumplimiento legal del reporte SIRE
-antes de alojar al huésped. Sin esta validación, el Check-In podría completarse con datos
-migratorios incompletos, exponiendo al hotel a sanciones y a un reporte SIRE defectuoso.
+**Why this priority**: Sin estos datos consolidados, el hotel no puede cumplir con el reporte
+migratorio obligatorio. Recibirlos en las mismas notificaciones evita duplicar pantallas de captura
+en el Módulo 2.
 
-**Independent Test**: Se puede probar de forma independiente ingresando los datos migratorios
-completos de un `Guest` `FOREIGN` durante un Check-In y verificando que el `MigratoryValidation`
-quede en `PASSED` y que el Check-In continúe. Se completa dejando el pasaporte vacío y confirmando
-que el sistema bloquea la confirmación con `MigratoryValidation` en `FAILED`.
+**Independent Test**: Se envía una notificación simulada de Check-In con dos huéspedes extranjeros
+completos y se verifica que queden dos movimientos `ENTRY` `COMPLETE`. Se envía el Check-Out y se
+verifica que queden dos movimientos `DEPARTURE`. Se repite omitiendo un dato de uno de ellos y se
+confirma que queda `INCOMPLETE` con el campo faltante identificado.
 
 **Acceptance Scenarios**:
 
-1. **Scenario**: Registro exitoso de datos migratorios para huésped extranjero (Happy Path)
-   - **Given** una reserva en estado `ACTIVE` asignada a un `Guest` con `type` `FOREIGN`
-   - **When** el Recepcionista ingresa el pasaporte, la nacionalidad, el tipo de visa y las fechas
-     de estadía completos y válidos
-   - **Then** el sistema registra el `MigratoryValidation` con resultado `PASSED` y permite que el
-     Check-In continúe hacia su confirmación
+1. **Scenario**: Movimiento de entrada de un huésped (Happy Path)
+   - **Given** una `Reservation` cuyo titular es extranjero, en Check-In
+   - **When** el sistema recibe la notificación del Módulo 1 con un huésped con todos sus datos
+     migratorios válidos y `movementType` `ENTRY`
+   - **Then** el sistema registra un `MigratoryMovement` `ENTRY` con `validationStatus` `COMPLETE`,
+     disponible para "Exportar archivo SIRE"
 
-2. **Scenario**: Bloqueo por dato migratorio obligatorio faltante (Error)
-   - **Given** una reserva en estado `ACTIVE` asignada a un `Guest` `FOREIGN`
-   - **When** el Recepcionista intenta confirmar el Check-In dejando el número de pasaporte vacío
-   - **Then** el sistema registra el `MigratoryValidation` con resultado `FAILED`, detalla en
-     `missingFields` el dato faltante, y no permite completar el Check-In
+2. **Scenario**: Grupo de extranjeros en una misma reserva
+   - **Given** una `Reservation` con 3 personas, de las cuales 2 son extranjeras
+   - **When** la notificación de Check-In trae a los 2 huéspedes extranjeros
+   - **Then** el sistema registra dos `MigratoryMovement` `ENTRY`, uno por cada huésped, y no registra
+     ninguno para la persona nacional
+
+3. **Scenario**: Movimiento de salida (Happy Path)
+   - **Given** un huésped con su movimiento `ENTRY` registrado
+   - **When** la notificación de Check-Out trae a ese huésped con `movementType` `DEPARTURE` y su
+     fecha
+   - **Then** el sistema registra un `MigratoryMovement` `DEPARTURE` `COMPLETE` sin modificar el
+     `ENTRY`; el huésped queda con dos movimientos
+
+4. **Scenario**: Huésped con datos migratorios incompletos
+   - **Given** una notificación de Check-In con un huésped sin fecha de nacimiento
+   - **When** el sistema la procesa
+   - **Then** el sistema registra su movimiento como `INCOMPLETE` con `missingFields`
+     `["birthDate"]`, conserva el cambio de estado del Check-In y responde 200; los demás
+     huéspedes de la misma notificación se registran normalmente
+
+5. **Scenario**: Titular extranjero sin ningún dato migratorio
+   - **Given** una `Reservation` cuyo titular es `FOREIGN`
+   - **When** la notificación de Check-In llega sin `foreignGuests`
+   - **Then** el sistema registra un movimiento `ENTRY` `INCOMPLETE` del titular con todos los
+     campos faltantes, conserva el Check-In y responde 200
+
+6. **Scenario**: Reserva de huéspedes nacionales
+   - **Given** una `Reservation` cuyo titular es `NATIONAL`
+   - **When** la notificación de Check-In llega sin `foreignGuests`
+   - **Then** el sistema omite el procesamiento migratorio y no exige ningún dato
+
+7. **Scenario**: Corrección por reenvío del Módulo 1
+   - **Given** un `MigratoryMovement` `INCOMPLETE` de un huésped
+   - **When** el Módulo 1 reenvía la notificación con los datos completos de ese huésped y tipo de
+     movimiento
+   - **Then** el sistema no cambia el estado de la reserva ni de la habitación, actualiza únicamente
+     ese movimiento a `COMPLETE` y responde 200
+
+8. **Scenario**: Reenvío de un movimiento ya completo (idempotente)
+   - **Given** un `MigratoryMovement` `COMPLETE`
+   - **When** el Módulo 1 envía de nuevo los mismos datos
+   - **Then** el sistema responde 200 sin duplicar ni modificar el movimiento
 
 ---
 
-### User Story 2 - Corrección de Datos Migratorios sobre una Estadía en Curso (Priority: P2)
+### User Story 2 - Entrega de Registros Migratorios para la Exportación SIRE (Priority: P2)
 
-El Recepcionista corrige la información migratoria de un `Guest` `FOREIGN` que ya tiene el
-Check-In realizado, desde la vista de resumen de la reserva, cuando detecta un error de tipeo en el
-registro original.
+Cuando la Recepcionista solicita "Exportar archivo SIRE", el sistema recupera los movimientos
+migratorios del periodo, entrega los completos con toda la información de cada huésped y señala
+cuáles están incompletos para excluirlos del archivo.
 
-**Why this priority**: Es un flujo alternativo importante para resolver errores humanos de captura
-sin obligar a deshacer el Check-In ya confirmado, pero no bloquea la admisión inicial del huésped.
+**Why this priority**: Es el consumo final de los datos procesados. No bloquea la operación diaria,
+pero es necesario para cumplir el reporte periódico.
 
-**Independent Test**: Se puede probar editando un `MigratoryValidation` existente de un `Guest` con
-Check-In ya realizado y comprobando que los cambios se guardan correctamente en la base de datos
-local.
+**Independent Test**: Se solicitan los movimientos de un periodo con tres huéspedes extranjeros, dos
+con entrada y salida completas y uno con la fecha ausente, y se verifica que se entreguen los
+completos y se señale el incompleto.
 
 **Acceptance Scenarios**:
 
-1. **Scenario**: Corrección exitosa de un dato migratorio
-   - **Given** una reserva en estado `CHECKED_IN` con `MigratoryValidation` en `PASSED`
-   - **When** el Recepcionista corrige la fecha de ingreso al país del huésped desde el resumen de
-     la reserva
-   - **Then** el sistema guarda la modificación exitosamente y refleja el nuevo dato en la interfaz
-     sin alterar el estado del Check-In
+1. **Scenario**: Entrega de registros completos
+   - **Given** `MigratoryMovement` `COMPLETE`, de tipo `ENTRY` y `DEPARTURE`, con `movementDate` en
+     el periodo solicitado
+   - **When** "Exportar archivo SIRE" invoca este caso de uso
+   - **Then** el sistema entrega los movimientos completos con todos los `ForeignGuestData` del
+     huésped, el tipo de movimiento y su fecha
 
-2. **Scenario**: Rechazo de corrección con formato de fecha inválido (Error)
-   - **Given** una reserva en estado `CHECKED_IN`
-   - **When** el Recepcionista intenta actualizar la fecha de ingreso colocando un formato no
-     reconocido
-   - **Then** el sistema rechaza la actualización y notifica que el formato de fecha no es válido,
-     conservando el dato previamente validado
+2. **Scenario**: Señalamiento de registros incompletos
+   - **Given** un `MigratoryMovement` `INCOMPLETE` del periodo
+   - **When** "Exportar archivo SIRE" invoca este caso de uso
+   - **Then** el sistema excluye ese movimiento de la entrega y lo informa, indicando la reserva, el
+     huésped, el tipo de movimiento y los campos que requieren corrección
 
 ### Casos Borde
 
-- ¿Qué sucede si el pasaporte o la nacionalidad se envían vacíos de forma maliciosa a través de la
-  red? El sistema intercepta la falla antes de que alcance la base de datos y retorna un código
-  **HTTP 400 (Bad Request)** controlado con el mensaje "El pasaporte y la nacionalidad son
-  obligatorios".
-- ¿Qué sucede si la fecha de ingreso al país proporcionada es futura? El sistema valida que es
-  lógicamente imposible y rechaza la petición con **HTTP 400** y el mensaje "La fecha de ingreso al
-  país no puede ser futura", sin dejar que el error se propague como **HTTP 500**.
+- ¿Qué sucede si la fecha del movimiento es futura? El sistema registra el `MigratoryMovement` como
+  `INCOMPLETE` (con el motivo "La fecha de movimiento migratorio no puede ser futura") y responde
+  200.
+- ¿Qué sucede si el `movementType` de la notificación no corresponde al evento (un `DEPARTURE` en un
+  Check-In, o un `ENTRY` en un Check-Out)? El movimiento se registra como `INCOMPLETE` con el campo
+  `movementType` como faltante o inválido, y responde 200.
+- ¿Qué sucede si llega un `DEPARTURE` de un huésped sin `ENTRY` registrado? Se registra normalmente:
+  el Check-In pudo haber ocurrido antes de que existiera el reporte o haberse perdido. Queda
+  disponible para el reporte y no bloquea nada.
+- ¿Qué sucede si la fecha de salida es anterior a la de entrada del mismo huésped? El movimiento
+  `DEPARTURE` se registra como `INCOMPLETE` con el motivo "La fecha de salida no puede ser anterior a
+  la de entrada".
+- ¿Qué sucede si la notificación trae más huéspedes extranjeros que el `guestCount` de la reserva? Se
+  registran todos y se crea una `ReconciliationIncident` (`CHECK_IN` o `CHECK_OUT`) para que una
+  persona revise la discrepancia con el Módulo 1.
+- ¿Qué sucede si el mismo huésped viene repetido en la misma notificación? Se procesa una sola vez,
+  por su `documentNumber`.
 - ¿Qué sucede si los datos migratorios contienen caracteres no soportados o patrones maliciosos? El
-  sistema sanitiza e intercepta la anomalía y retorna **HTTP 400** indicando "Caracteres no válidos
-  en el formulario migratorio".
-- ¿Qué sucede si se intenta procesar datos migratorios para un `Guest` cuyo `type` es `NATIONAL`?
-  El sistema omite el procesamiento por completo: `MigratoryValidation` no se genera y el Check-In
-  continúa sin exigir estos campos.
+  sistema sanea la entrada, la rechaza con **HTTP 400** y el mensaje "Caracteres no válidos en los
+  datos migratorios."
+- ¿Qué sucede si la notificación llega vacía o sin el identificador de la reserva? El sistema
+  responde con **HTTP 400** indicando que el payload es inválido, sin producir errores de
+  infraestructura **HTTP 500**.
+- ¿Qué sucede si el mismo huésped tiene más de una estadía? Cada estadía tiene sus propios
+  movimientos: una notificación nueva nunca sobrescribe los movimientos de una estadía anterior.
+- ¿Qué sucede si un huésped extranjero se hospeda en dos habitaciones de la misma reserva
+  (cambio de habitación dentro de la estadía)? Sigue teniendo un solo `ENTRY` y un solo `DEPARTURE`
+  por reserva: el movimiento es del huésped y la estadía, no de la habitación.
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **FR-001**: El sistema debe exigir la captura de los datos migratorios (pasaporte, nacionalidad,
-  tipo de visa y fechas de estadía) únicamente cuando el `Guest` a admitir tenga `type` igual a
-  `FOREIGN`.
-- **FR-002**: El sistema no debe ejecutar ni exigir el procesamiento de datos migratorios para
-  huéspedes con `type` igual a `NATIONAL`.
-- **FR-003**: El sistema debe validar que la fecha de ingreso al país sea anterior o igual a la
-  fecha actual del sistema.
-- **FR-004**: El sistema debe bloquear la confirmación del Check-In hasta que los cuatro campos
-  migratorios obligatorios estén presentes y sean válidos, registrando el `MigratoryValidation`
-  con resultado `PASSED` únicamente en ese caso.
-- **FR-005**: El sistema debe registrar el `MigratoryValidation` con resultado `FAILED` y detallar
-  en `missingFields` cada campo faltante o inválido cuando la validación no se supere.
-- **FR-006**: El sistema debe permitir corregir los datos migratorios ya registrados desde el
-  resumen de la reserva mientras esta se encuentre en estado `CHECKED_IN`, sin alterar dicho estado.
-- **FR-007**: El sistema debe retornar errores estructurados **HTTP 400 (Bad Request)** ante fallos
-  de formato o datos incompletos, prohibiendo que se propaguen como fallas de infraestructura
-  **HTTP 500**.
+- **FR-001**: El sistema debe recibir los datos migratorios dentro de las notificaciones de Check-In
+  y de Check-Out del Módulo 1, como una lista de huéspedes extranjeros (`foreignGuests`), cada uno
+  con sus `ForeignGuestData`, su `movementType` (`ENTRY` en el Check-In, `DEPARTURE` en el Check-Out)
+  y su `movementDate`.
+- **FR-002**: El sistema no debe exigir datos migratorios cuando la reserva tiene titular `NATIONAL`
+  y la notificación no trae huéspedes extranjeros; sí debe registrar los huéspedes extranjeros que la
+  notificación traiga aunque el titular sea nacional.
+- **FR-003**: El sistema debe validar, por cada huésped, que los datos obligatorios estén presentes
+  (`firstName`, `lastName`, `documentType`, `documentNumber`, `birthDate`, `nationality`,
+  `movementType`, `movementDate`), con formato correcto, con una fecha de nacimiento pasada y con una
+  fecha de movimiento no futura.
+- **FR-004**: El sistema debe registrar un `MigratoryMovement` por cada combinación de reserva,
+  huésped (`documentNumber`) y `movementType`, sin sobrescribir los de otras estadías ni los del
+  otro tipo de movimiento del mismo huésped.
+- **FR-005**: El sistema debe registrar como `INCOMPLETE`, indicando los campos faltantes o
+  inválidos, el movimiento cuyos datos falten o sean inválidos, conservando el Check-In o el
+  Check-Out, y excluirlo de la exportación SIRE hasta que se corrija; la corrección se hace con un
+  reenvío del Módulo 1 con los datos completos, que debe actualizar únicamente ese movimiento a
+  `COMPLETE` de forma idempotente.
+- **FR-006**: El sistema debe procesar cada huésped de la lista de forma independiente: el error de
+  un huésped no debe impedir registrar a los demás de la misma notificación.
+- **FR-007**: El sistema debe registrar un movimiento `ENTRY` `INCOMPLETE` del titular cuando este es
+  `FOREIGN` y el Check-In llega sin datos migratorios, y un movimiento `DEPARTURE` `INCOMPLETE` del
+  titular cuando el Check-Out llega sin ellos.
+- **FR-008**: El sistema debe entregar a "Exportar archivo SIRE" los movimientos completos del
+  periodo, con toda la información de cada huésped, y señalar los incompletos.
+- **FR-009**: El sistema no debe capturar datos migratorios desde una pantalla propia del Módulo 2:
+  la captura presencial es responsabilidad del Módulo 1.
+- **FR-010**: El sistema debe interceptar los errores lógicos, estructurales o de seguridad del
+  payload (sin identificador de reserva, formato de payload inválido, caracteres maliciosos) y
+  responder con **HTTP 400 (Bad Request)**, prohibiendo que escalen a **HTTP 500**. Los datos
+  migratorios faltantes o inválidos de una reserva válida no son un error del payload: se rigen por
+  FR-005 (200 y movimiento `INCOMPLETE`).
 
 ### Non-Functional Requirements
 
-- **NFR-001**: El procesamiento de datos migratorios no debe añadir más de 1 minuto adicional al
-  tiempo total de Check-In del huésped en recepción.
+- **NFR-001**: La validación y consolidación de los datos migratorios no debe superar los 500
+  milisegundos por notificación, con hasta 10 huéspedes extranjeros por notificación.
+- **NFR-002**: Los datos migratorios (documento y fecha de nacimiento) no deben escribirse en los
+  registros de log.
 
 ### Key Entities *(include if feature involves data)*
 
-- **MigratoryValidation**: Representa el procesamiento local de datos migratorios de un `Guest`
-  `FOREIGN`. Atributos: `guestRef`, `submittedData` (pasaporte, nacionalidad, tipo de visa, fechas
-  de estadía), `result` (`PASSED` | `FAILED`), `missingFields` (lista de campos faltantes o
-  inválidos), y `sireExportStatus` (`PENDING` | `EXPORTED`), que esta funcionalidad inicializa en
-  `PENDING` al validar con éxito y que "Exportar archivo SIRE" consume y actualiza después. Los
-  datos validados quedan almacenados localmente; su exportación hacia Migración mediante "Exportar
-  archivo SIRE" es un caso de uso independiente y desacoplado de esta funcionalidad. Es obligatoria
-  para cada `Guest` `FOREIGN` antes de que su `CheckIn` pueda completarse.
-- **Guest**: Representa al huésped cuyos datos se procesan. Atributos: `id`, `fullName`,
-  `documentNumber`, `nationality`, `contactPhone`, `contactEmail`, y `type` (`NATIONAL` |
-  `FOREIGN`), clasificación que determina si esta funcionalidad se activa.
-- **Reservation**: Representa la estadía asociada al huésped. Atributos: `reservationRef` y
-  `state` con estados permitidos: `ACTIVE`, `CHECKED_IN`, `CHECKED_OUT`, `CANCELLED`. El estado
-  `PENDING` queda inhabilitado en los flujos estándar: toda reserva nace directamente en `ACTIVE`.
-- **CheckIn**: Representa la admisión del huésped, referenciada únicamente como contexto: el
-  `MigratoryValidation` de un `Guest` `FOREIGN` es obligatorio antes de que su `CheckIn` pueda
-  completarse.
-- **Habitation**: Se referencia únicamente de forma informativa, como contexto del Check-In al que
-  pertenece esta validación. Atributos: `habitationId` y `stateHabitation` con los siete estados
-  oficiales del glosario: `Available`, `Occupied`, `PendingCleaning`, `InCleaning`,
-  `DisabledForRepairs`, `TechnicalBlock`, `Inactive`. Esta funcionalidad no interactúa con el
-  Módulo 1 ni modifica el `stateHabitation`.
+- **ForeignGuestData**: Datos migratorios de un huésped extranjero, capturados por el Módulo 1 y
+  enviados con la notificación. Atributos: `firstName`, `lastName`, `documentType`,
+  `documentNumber`, `birthDate`, `nationality`, `movementType` (`ENTRY` | `DEPARTURE`) y
+  `movementDate` (fecha sin hora: `checkInDate` en la entrada, `checkOutDate` en la salida).
+  Es propiedad del Módulo 1 y esta funcionalidad no lo modifica; el Módulo 2 guarda una copia en cada
+  `MigratoryMovement`.
+- **MigratoryMovement**: Movimiento migratorio de un huésped extranjero en una estadía. Atributos:
+  `movementId`, `reservationRef`, `guestRef` (solo si el huésped es el titular; los acompañantes no
+  son `Guest` del Módulo 2), `movementType` (`ENTRY` | `DEPARTURE`), `movementDate`, los datos
+  migratorios copiados de `ForeignGuestData` (`firstName`, `lastName`, `documentType`,
+  `documentNumber`, `birthDate`, `nationality`), `validationStatus` (`COMPLETE` | `INCOMPLETE`),
+  `missingFields` (lista de campos faltantes o inválidos, solo cuando es `INCOMPLETE`),
+  `validationReason` (motivo legible de la invalidez, solo cuando es `INCOMPLETE`) y
+  `reportedInExportId` (exportación SIRE en la que se incluyó; nulo mientras no se reporte).
+  Identidad única: (`reservationRef`, `documentNumber`, `movementType`).
+- **Guest**: Titular de la reserva. Atributos: `id`, `fullName`, `documentNumber`, `nationality` y
+  `type` (`NATIONAL` | `FOREIGN`).
+- **Reservation**: Estadía asociada a los huéspedes. Atributos: `reservationRef`, `guestRef`,
+  `guestCount` y `status` (`PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`).
+- **Room**: Se referencia solo como contexto de la notificación del Módulo 1 (`roomId` de la
+  habitación del Check-In o del Check-Out). Atributos: `id`, `status` (`Available` | `Reserved` |
+  `Occupied`). Esta funcionalidad no modifica su estado.
 
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
-- **SC-001**: El 100% de los Check-In de huéspedes `FOREIGN` cuentan con un `MigratoryValidation`
-  en `PASSED` con sus cuatro campos obligatorios completos.
-- **SC-002**: Cero caídas del servidor (**HTTP 500**) son causadas por fechas ilógicas o campos
-  vacíos en el proceso migratorio; el 100% se resuelve con **HTTP 400**.
-- **SC-003**: El procesamiento de datos migratorios añade como máximo 1 minuto adicional al tiempo
-  total de Check-In del huésped en recepción.
+- **SC-001**: El 100% de los huéspedes extranjeros notificados por el Módulo 1 quedan con su
+  movimiento de entrada o de salida registrado, `COMPLETE` o `INCOMPLETE` con el campo a corregir
+  identificado.
+- **SC-002**: El 100% de los registros entregados a "Exportar archivo SIRE" tienen todos los datos
+  obligatorios, tipo de movimiento y fecha válidos.
+- **SC-003**: Cero errores **HTTP 500** por payloads mal formados o datos ilógicos; el 100% se
+  responde con **HTTP 400**.
+- **SC-004**: Ningún huésped extranjero de un grupo queda sin reportar por el error de otro huésped
+  de la misma notificación.
