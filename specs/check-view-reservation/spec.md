@@ -18,10 +18,12 @@ los criterios serían inconsistentes.
 
 El negocio necesita un único servicio de consulta, de solo lectura, que:
 
-- Liste **todas** las reservas, paginadas.
-- Permita **filtrar por estado** (`status`).
-- Permita **filtrar por fecha** (de llegada, de salida o de estadía) con un rango de fechas.
-- Permita **buscar por código de reserva** y ver el detalle completo de una reserva.
+- Liste **todas** las reservas, paginadas de a 10.
+- Permita **filtrar por estado** (`status`), por canal, por agencia (en las reservas OTA) y por fecha
+  (de llegada, de salida o de estadía) con un rango de fechas.
+- Permita **ordenar** el listado por fecha de llegada.
+- Permita **buscar** por código de reserva, código de la OTA, documento o nombre del titular, y ver el
+  detalle completo de una reserva.
 - Sea reutilizado internamente por las demás funcionalidades del Módulo 2.
 - **Envíe cada día al Módulo 1** la lista de reservas `ACTIVE` que llegan ese día, con toda la
   información que necesita para recibir a los huéspedes, y le avise cada cambio posterior.
@@ -45,19 +47,23 @@ habitación") ni cambia el estado de ninguna reserva.
 **Listado y filtros**
 
 1. La **Recepcionista** abre la vista de reservas. Sin filtros, el sistema muestra todas las
-   reservas, paginadas y ordenadas por fecha de llegada (`startDate`) de la más reciente a la más
-   antigua.
+   reservas, de a 10 por página y ordenadas por fecha de llegada (`startDate`) de la más reciente a
+   la más antigua.
 2. La Recepcionista aplica, en cualquier combinación, los filtros disponibles:
-   - **Estado**: uno o varios de `PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y
-     `NO_SHOW`.
+   - **Búsqueda**: `reservationRef`, `externalConfirmationCode` (código de la OTA), `documentNumber`
+     o `fullName` del `Guest` titular.
+   - **Estado**: uno de `PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
+   - **Canal**: `DIRECT` u `OTA`.
+   - **Agencia**: solo cuando el canal es `OTA`.
    - **Fecha**: un tipo de fecha (`ARRIVAL`, `DEPARTURE` o `STAY`) y un rango (`dateFrom` y
      `dateTo`, ambos inclusivos). Para un solo día, `dateFrom` y `dateTo` son iguales.
-   - **Titular**: el `documentNumber` o el `fullName` del `Guest` titular.
-   - **Canal**: `DIRECT` u `OTA`.
 3. El sistema combina todos los filtros aplicados con la regla "Y" (una reserva aparece solo si
-   cumple todos) y devuelve la página solicitada, con el total de reservas que cumplen los filtros.
-4. La Recepcionista puede cambiar el orden (ascendente o descendente por `startDate`) y el tamaño de
-   la página.
+   cumple todos) y devuelve la página solicitada (10 reservas), con el total de reservas que cumplen
+   los filtros y el total de páginas.
+4. La Recepcionista puede cambiar el orden (ascendente o descendente por `startDate`) y moverse entre
+   páginas.
+5. Desde cada fila, la Recepcionista puede **ver el detalle**, **modificar** o **cancelar** la
+   reserva (las dos últimas solo en reservas directas `ACTIVE` o `PENDING`).
 
 **Búsqueda por código**
 
@@ -116,42 +122,41 @@ localizan reservas mediante este mismo servicio, con los mismos criterios.
 
 ## User Scenarios & Testing *(mandatory)*
 
-### User Story 1 - Listado de Todas las Reservas con Filtros por Estado y Fecha (Priority: P1)
+### User Story 1 - Listado de Todas las Reservas con Filtros, Orden y Paginación (Priority: P1)
 
-La Recepcionista necesita ver todas las reservas del hotel y acotarlas por estado y por fecha para
-preparar el día (por ejemplo, las llegadas de hoy en `ACTIVE`), revisar las reservas OTA que siguen
-en `PENDING` o consultar las salidas de mañana. Por tratarse de una única vista, el listado sin
-filtros, cada filtro, sus combinaciones y los rechazos por filtros inválidos se consolidan en esta
-historia.
+La Recepcionista necesita ver todas las reservas del hotel, de a 10 por página, y acotarlas por
+estado, canal, agencia y fecha para preparar el día (por ejemplo, las llegadas de hoy en `ACTIVE`),
+revisar las reservas OTA que siguen en `PENDING` o consultar las salidas de mañana. Por tratarse de
+una única vista, el listado sin filtros, cada filtro, el orden, la paginación y los rechazos por
+filtros inválidos se consolidan en esta historia.
 
 **Why this priority**: Es la herramienta diaria de la Recepcionista para operar el front-desk y el
 punto de partida para cancelar o modificar una reserva.
 
-**Independent Test**: Con un conjunto de reservas de prueba en los seis estados y en distintas
-fechas, se consulta el listado sin filtros, por cada estado, por cada tipo de fecha y con filtros
-combinados, y se verifica que cada resultado contenga exactamente las reservas esperadas, con el
-total correcto y la paginación correcta. Luego se envían filtros inválidos y se confirma el
-**HTTP 400**.
+**Independent Test**: Con un conjunto de reservas de prueba en los seis estados, de ambos canales y en
+distintas fechas, se consulta el listado sin filtros, por cada estado, por canal, por agencia, por
+cada tipo de fecha y con filtros combinados, y se verifica que cada resultado contenga exactamente las
+reservas esperadas, con el total correcto y la paginación de a 10 correcta. Luego se cambia el orden y
+se envían filtros inválidos y se confirma el **HTTP 400**.
 
 **Acceptance Scenarios**:
 
 1. **Scenario**: Listado de todas las reservas sin filtros (Happy Path)
    - **Given** 45 reservas registradas en distintos estados
-   - **When** la Recepcionista abre la vista de reservas sin filtros, con el tamaño de página por
-     defecto (20)
-   - **Then** el sistema muestra la página 1 con 20 reservas ordenadas por `startDate` descendente,
-     informa un total de 45 y 3 páginas, y cada fila muestra los datos de FR-005
+   - **When** la Recepcionista abre la vista de reservas sin filtros
+   - **Then** el sistema muestra la página 1 con 10 reservas ordenadas por `startDate` descendente,
+     informa un total de 45 y 5 páginas, y cada fila muestra los datos de FR-005
 
 2. **Scenario**: Filtro por un estado
    - **Given** reservas en `ACTIVE`, `PENDING` y `CANCELLED`
    - **When** la Recepcionista filtra por `PENDING`
-   - **Then** el sistema muestra únicamente las reservas en `PENDING`, con su total
+   - **Then** el sistema muestra únicamente las reservas en `PENDING`
 
-3. **Scenario**: Filtro por varios estados
-   - **Given** reservas en los seis estados
-   - **When** la Recepcionista filtra por `ACTIVE` e `IN_PROGRESS`
-   - **Then** el sistema muestra las reservas que están en cualquiera de esos dos estados y ninguna
-     otra
+3. **Scenario**: Filtro por canal y agencia
+   - **Given** reservas directas y reservas OTA de dos agencias
+   - **When** la Recepcionista filtra por canal `OTA` y elige una agencia
+   - **Then** el sistema muestra solo las reservas OTA de esa agencia, con el nombre de la agencia y
+     su código de confirmación en cada fila
 
 4. **Scenario**: Llegadas de un día (filtro por fecha de llegada)
    - **Given** reservas con `startDate` el 2026-10-01 y otras con `startDate` en otros días
@@ -173,20 +178,33 @@ total correcto y la paginación correcta. Luego se envían filtros inválidos y 
      (`startDate` ≤ `dateTo` y `endDate` > `dateFrom`), y excluye la tercera
 
 7. **Scenario**: Filtros combinados
-   - **Given** reservas `ACTIVE` y `CANCELLED` con llegada el 2026-10-01
-   - **When** la Recepcionista filtra por estado `ACTIVE` y tipo de fecha `ARRIVAL` el 2026-10-01
-   - **Then** el sistema muestra solo las reservas `ACTIVE` con llegada ese día
+   - **Given** reservas `ACTIVE` y `CANCELLED`, directas y OTA, con llegada el 2026-10-01
+   - **When** la Recepcionista filtra por estado `ACTIVE`, canal `DIRECT` y tipo de fecha `ARRIVAL` el
+     2026-10-01
+   - **Then** el sistema muestra solo las reservas directas en `ACTIVE` con llegada ese día
 
-8. **Scenario**: Filtros sin resultados
-   - **Given** que ninguna reserva cumple los filtros aplicados
-   - **When** la Recepcionista consulta el listado
-   - **Then** el sistema responde 200 con una lista vacía, total 0 y el mensaje "No se encontraron
-     reservas con los filtros aplicados." (no es un error)
+8. **Scenario**: Cambio de orden
+   - **Given** el listado ordenado por `startDate` descendente
+   - **When** la Recepcionista cambia el orden a ascendente
+   - **Then** el sistema muestra las mismas reservas de la página 1 ordenadas de la llegada más
+     antigua a la más reciente, sin alterar los filtros aplicados
 
-9. **Scenario**: Filtro con valores inválidos (Error)
-   - **Given** un filtro con un estado que no existe, una fecha mal formada, `dateFrom` posterior a
-     `dateTo`, un tipo de fecha sin rango o un rango sin tipo de fecha
-   - **When** la Recepcionista consulta el listado
+9. **Scenario**: Navegación entre páginas
+   - **Given** 25 reservas que cumplen los filtros aplicados
+   - **When** la Recepcionista pasa a la página 3
+   - **Then** el sistema muestra las 5 últimas reservas e informa el total de 25 y 3 páginas, con los
+     mismos filtros y el mismo orden
+
+10. **Scenario**: Filtros sin resultados
+    - **Given** que ninguna reserva cumple los filtros aplicados
+    - **When** la Recepcionista consulta el listado
+    - **Then** el sistema responde 200 con una lista vacía, total 0 y el mensaje "No se encontraron
+      reservas con los filtros aplicados." (no es un error)
+
+11. **Scenario**: Filtro con valores inválidos (Error)
+    - **Given** un filtro con un estado o un canal que no existe, una fecha mal formada, `dateFrom`
+      posterior a `dateTo`, un tipo de fecha sin rango o un rango sin tipo de fecha
+    - **When** la Recepcionista consulta el listado
    - **Then** el sistema responde **HTTP 400** con el mensaje correspondiente de la tabla de
      validaciones (FR-009) y no ejecuta la consulta
 
@@ -248,7 +266,7 @@ busca un código inexistente y uno con caracteres inválidos confirmando el **HT
 ### User Story 3 - Búsqueda por Titular (Priority: P2)
 
 Cuando el huésped no tiene a mano el código, la Recepcionista busca sus reservas por número de
-documento o por nombre, y combina esa búsqueda con los filtros de estado y fecha.
+documento o por nombre, y combina esa búsqueda con los filtros de estado, canal y fecha.
 
 **Why this priority**: Complementa la búsqueda por código en la atención telefónica y presencial,
 pero la operación puede avanzar con el listado filtrado y la búsqueda por código.
@@ -412,13 +430,13 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
 - ¿Qué sucede si se pide una página que no existe (por ejemplo, la página 10 cuando solo hay 3)?
   El sistema responde 200 con una lista vacía y el total real, para que la vista pueda volver a la
   última página.
-- ¿Qué sucede si se pide un tamaño de página mayor a 100 o menor a 1? El sistema responde **HTTP
-  400** con el mensaje "El tamaño de página debe estar entre 1 y 100."
 - ¿Qué sucede si el rango de fechas supera los 366 días? El sistema responde **HTTP 400** con el
   mensaje "El rango de fechas no puede superar 366 días."
-- ¿Qué sucede con los filtros de fecha y los estados sin fechas reales, como `NO_SHOW` o
+- ¿Qué sucede con los filtros de fecha y las reservas sin fechas reales, como `NO_SHOW` o
   `CANCELLED`? Se filtran por sus fechas planeadas (`startDate` y `endDate`), que se conservan
   aunque la reserva no se haya usado.
+- ¿Qué sucede si cambian las reservas mientras la Recepcionista navega las páginas? Cada página se
+  calcula al pedirla; una reserva nueva puede desplazar a otra a la página siguiente o anterior.
 - ¿Qué sucede si una reserva tiene varias habitaciones? Aparece una sola vez en el listado, con la
   cantidad de habitaciones y sus números de habitación; nunca se repite por habitación.
 - ¿Qué sucede si se envían caracteres especiales o intentos de inyección en cualquier filtro? El
@@ -464,26 +482,31 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
 ### Functional Requirements
 
 - **FR-001**: El sistema debe permitir a la Recepcionista listar todas las `Reservation`
-  registradas, en páginas, con un tamaño por defecto de 20 y un máximo de 100 por página,
-  informando el total de reservas que cumplen los filtros y el total de páginas.
-- **FR-002**: El sistema debe permitir filtrar el listado por uno o varios `status` (`PENDING`,
-  `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`). Sin filtro de estado, debe incluir
-  todos los estados.
+  registradas, en páginas de **10 reservas** (tamaño fijo), informando el total de reservas que
+  cumplen los filtros y el total de páginas.
+- **FR-002**: El sistema debe permitir filtrar el listado por `status` (`PENDING`, `ACTIVE`,
+  `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`). Sin filtro de estado, debe incluir todos los
+  estados.
 - **FR-003**: El sistema debe permitir filtrar el listado por fecha, con un tipo de fecha y un rango
-  inclusivo (`dateFrom` y `dateTo`, formato `AAAA-MM-DD`, en la zona horaria del hotel):
+  inclusivo (`dateFrom` y `dateTo`, formato `AAAA-MM-DD`, hora de Colombia):
   - `ARRIVAL`: reservas cuya `startDate` está dentro del rango.
   - `DEPARTURE`: reservas cuya `endDate` está dentro del rango.
   - `STAY`: reservas cuya estadía se cruza con el rango (`startDate` ≤ `dateTo` y
     `endDate` > `dateFrom`).
+- **FR-003a**: El sistema debe permitir ordenar el listado por `startDate`, ascendente o descendente.
+  Por defecto, descendente (la llegada más reciente primero). El orden y los filtros se conservan al
+  cambiar de página.
 - **FR-004**: El sistema debe permitir filtrar por titular (`documentNumber` con coincidencia exacta,
   o `fullName` con coincidencia parcial sin distinguir mayúsculas ni tildes y con mínimo 3
   caracteres), por canal (`source`: `DIRECT` | `OTA`) y, cuando el canal es `OTA`, por agencia
   (`otaId`), y combinar todos los filtros con la regla "Y".
-- **FR-005**: Cada fila del listado debe mostrar: `reservationRef`, `status`, `source` (y, si es
-  `OTA`, el `name` de la agencia y el `externalConfirmationCode`), `startDate`, `endDate`, número de
-  noches, `guestCount`, cantidad de habitaciones, los `roomNumber` o `roomId` de sus habitaciones, el
-  `fullName` y el `documentNumber` del titular, si tiene aviso de llegada tardía
-  (`lateArrivalNotice`) y su estado migratorio (`migrationStatus`, FR-005b).
+- **FR-005**: Cada fila del listado debe mostrar: `reservationRef` (y, si es `OTA`, el
+  `externalConfirmationCode`), el `fullName` y el `documentNumber` del titular, los `roomNumber` y la
+  `categoryRoom` de sus habitaciones, el canal (`source` y, si es `OTA`, el `name` de la agencia),
+  `startDate` y `endDate`, `status`, su estado migratorio (`migrationStatus`, FR-005b) y las acciones
+  Ver detalle, Modificar y Cancelar. Modificar y Cancelar solo se habilitan en reservas directas
+  `ACTIVE` o `PENDING`. El número de noches, `guestCount` y `lateArrivalNotice` se ven en el detalle
+  (FR-006).
 - **FR-005a**: Encima del listado, el sistema debe mostrar a la Recepcionista un resumen del día
   operativo, calculado solo con datos del Módulo 2:
   - Llegadas esperadas hoy: reservas `ACTIVE` o `PENDING` con `startDate` igual a hoy.
@@ -529,13 +552,15 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
   | Código vacío, solo espacios o con caracteres distintos de letras, dígitos y guion, o de más de 40 caracteres | "Debe proveer un código de reserva válido para la consulta." |
   | Código sin coincidencias | "La reserva no existe." |
   | Estado inexistente | "El estado indicado no es válido." |
+  | Canal inexistente | "El canal indicado no es válido." |
   | Fecha con formato distinto de `AAAA-MM-DD` o inexistente | "La fecha indicada no es válida." |
   | Tipo de fecha sin rango, o rango sin tipo de fecha | "Debe indicar el tipo de fecha y el rango completo." |
   | `dateFrom` posterior a `dateTo` | "La fecha inicial no puede ser posterior a la fecha final." |
   | Rango de más de 366 días | "El rango de fechas no puede superar 366 días." |
+  | Orden distinto de ascendente o descendente | "El orden indicado no es válido." |
+  | Página menor a 1 | "El número de página debe ser 1 o mayor." |
   | `documentNumber` y `fullName` a la vez | "Busque por documento o por nombre, no por ambos." |
   | `fullName` de menos de 3 caracteres | "La búsqueda por nombre requiere al menos 3 caracteres." |
-  | Tamaño de página fuera de 1 a 100, o página menor a 1 | "El tamaño de página debe estar entre 1 y 100." |
 
 - **FR-010**: El sistema debe responder 200 con una lista vacía, y no un error, cuando los filtros
   son válidos pero ninguna reserva los cumple.
@@ -579,8 +604,8 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
 ### Non-Functional Requirements
 
 - **NFR-001**: La búsqueda por código debe responder en menos de 500 milisegundos.
-- **NFR-002**: Una página del listado, con cualquier combinación de filtros, debe responder en menos
-  de 1 segundo con hasta 50 000 reservas registradas.
+- **NFR-002**: Una página del listado, con cualquier combinación de filtros y cualquier orden, debe
+  responder en menos de 1 segundo con hasta 50 000 reservas registradas.
 - **NFR-003**: Los datos personales del titular no deben escribirse en los registros de log.
 - **NFR-004**: La lista del día debe quedar publicada en menos de 1 minuto desde las 00:00 del día
   operativo, con hasta 500 reservas.
@@ -615,7 +640,8 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
 ### Measurable Outcomes
 
 - **SC-001**: La Recepcionista obtiene las llegadas del día (filtro `ARRIVAL` de hoy y estado
-  `ACTIVE`) en una sola consulta y en menos de 1 segundo.
+  `ACTIVE`) en una sola consulta y en menos de 1 segundo, y ve el resumen del día operativo (FR-005a)
+  encima del listado.
 - **SC-002**: El 100% de las búsquedas por código existente retornan el detalle completo en menos de
   500 milisegundos.
 - **SC-003**: El 100% de los listados filtrados contienen exactamente las reservas que cumplen todos

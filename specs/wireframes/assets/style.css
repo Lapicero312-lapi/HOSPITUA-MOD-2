@@ -156,6 +156,10 @@ tbody tr:hover{background:var(--accent-soft)}
 /* Canal OTA */
 .badge.ota{background:var(--accent-soft);color:var(--accent)}
 
+/* Paginación del listado */
+.pager{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px}
+.pagerbtns{display:flex;gap:4px;flex-wrap:wrap}
+
 /* Acciones por fila de la tabla */
 .rowacts{display:flex;gap:6px;flex-wrap:nowrap;justify-content:flex-end}
 .btn.danger-solid{background:var(--err);border-color:var(--err);color:#fff}

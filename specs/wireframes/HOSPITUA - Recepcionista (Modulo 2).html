@@ -59,10 +59,30 @@
               <select id="fAgencia"><option value="">Todas</option></select>
             </div>
           </div>
+          <div class="row">
+            <div class="field"><label>Tipo de fecha</label>
+              <select id="fFechaTipo">
+                <option value="">Sin filtro de fecha</option>
+                <option value="ARRIVAL">Llegada</option>
+                <option value="DEPARTURE">Salida</option>
+                <option value="STAY">Estadía (en el hotel)</option>
+              </select>
+            </div>
+            <div class="field"><label>Desde</label><input type="date" id="fDesde"></div>
+            <div class="field"><label>Hasta</label><input type="date" id="fHasta"></div>
+            <div class="field"><label>Orden</label>
+              <select id="fOrden">
+                <option value="desc">Llegada: más reciente primero</option>
+                <option value="asc">Llegada: más antigua primero</option>
+              </select>
+            </div>
+          </div>
+          <div id="fErr"></div>
           <div class="tablewrap"><table>
             <thead><tr><th>Ref. reserva</th><th>Huésped</th><th>Habitaciones</th><th>Canal</th><th>Fechas (in → out)</th><th>Estado</th><th>Migración</th><th style="text-align:right">Acciones</th></tr></thead>
             <tbody id="tblReservas"></tbody>
           </table></div>
+          <div class="pager" id="pager"></div>
           <p class="note" style="margin-top:10px">Modificar y Cancelar solo se habilitan en reservas <b>directas</b> en <span class="code">ACTIVE</span> o <span class="code">PENDING</span>. Pase el cursor sobre un botón deshabilitado para ver el motivo.</p>
         </div>
       </section>
@@ -112,10 +132,23 @@
               <div class="field"><label class="req">Fecha de salida</label><input type="date" id="mdSalida"></div>
             </div>
             <div id="mdFechaErr" class="field" hidden><span class="err">La fecha de salida debe ser posterior a la de entrada.</span></div>
-            <div class="tablewrap" style="margin-bottom:12px"><table>
-              <thead><tr><th>Habitación actual</th><th>Categoría</th><th><span class="tag-mod m1">MÓDULO 1</span> Disponibilidad</th></tr></thead>
+            <p class="note" style="margin-bottom:6px">Habitaciones de la reserva (entre 1 y 10). Puede cambiar una por otra, de la misma o de otra categoría, agregar o quitar.</p>
+            <div class="tablewrap" style="margin-bottom:8px"><table>
+              <thead><tr><th>Habitación</th><th>Categoría</th><th><span class="tag-mod m1">MÓDULO 1</span> Disponibilidad</th><th></th></tr></thead>
               <tbody id="mdRooms"></tbody>
             </table></div>
+            <div class="row" style="margin-bottom:14px"><button class="btn sm" id="mdAddRoom">+ Agregar habitación</button></div>
+            <div class="row">
+              <div class="field" style="min-width:140px"><label class="req">Personas <span class="code">guestCount</span></label><input type="number" id="mdPersonas" min="1"></div>
+            </div>
+            <div id="mdPersErr" class="field" hidden style="margin-bottom:10px"><span class="err"></span></div>
+            <h2 style="margin-top:6px">Titular</h2>
+            <div class="row"><div class="field" style="flex:1"><label class="req">Nombre completo</label><input id="mdNombre"></div></div>
+            <div class="row"><div class="field" style="flex:1"><label class="req">Documento <span class="code">documentNumber</span></label><input id="mdDoc"></div></div>
+            <div class="row">
+              <div class="field"><label>Teléfono</label><input id="mdTel" placeholder="+57 300 000 0000"></div>
+              <div class="field"><label>Email</label><input id="mdEmail" placeholder="nombre@correo.com"></div>
+            </div>
             <label class="check" style="margin-bottom:12px"><input type="checkbox" id="mdTardia"> Aviso de llegada tardía <span class="code">lateArrivalNotice</span></label>
             <div class="field"><label>Observaciones <span class="code">notes</span></label>
               <textarea id="mdNotes" rows="3" maxlength="500"></textarea>
@@ -541,6 +574,12 @@ document.addEventListener('click', e => {
 function backToList(ref, msg){
   renderAll();
   showScreen('reservas');
+  // Si la reserva quedó en otra página, se muestra la página donde está.
+  const res = filteredReservas();
+  if (!res.error){
+    const idx = res.list.findIndex(r => r.ref === ref);
+    if (idx >= 0 && Math.floor(idx / PAGE_SIZE) + 1 !== listPage){ listPage = Math.floor(idx / PAGE_SIZE) + 1; renderReservas(); }
+  }
   const row = document.getElementById('row-' + ref);
   if (row){
     row.classList.remove('flash'); void row.offsetWidth; row.classList.add('flash');
@@ -556,23 +595,60 @@ function fillAgencias(){
   sel.innerHTML = '<option value="">Todas</option>' + otas.map(o => `<option>${o.name}</option>`).join('');
   sel.value = cur;
 }
-function renderReservas(){
+// Listado (check-view-reservation): filtros por búsqueda, estado, canal, agencia y fecha;
+// orden por fecha de llegada y paginación de a 10.
+const PAGE_SIZE = 10;
+let listPage = 1;
+function filteredReservas(){
   const q = (document.getElementById('fSearch').value || '').toLowerCase();
   const fe = document.getElementById('fEstado').value;
   const fc = document.getElementById('fCanal').value;
   document.getElementById('fAgenciaWrap').hidden = fc !== 'OTA';
   const fa = fc === 'OTA' ? document.getElementById('fAgencia').value : '';
+  const ft = document.getElementById('fFechaTipo').value;
+  const from = document.getElementById('fDesde').value;
+  const to = document.getElementById('fHasta').value;
+  const order = document.getElementById('fOrden').value;
+  if ((ft && !(from && to)) || (!ft && (from || to))) return {error: 'Debe indicar el tipo de fecha y el rango completo.'};
+  if (ft && from > to) return {error: 'La fecha inicial no puede ser posterior a la fecha final.'};
+  if (ft && nightsBetween(from, to) > 366) return {error: 'El rango de fechas no puede superar 366 días.'};
   const list = reservations
     .filter(r => !fe || r.status === fe)
     .filter(r => !fc || r.source === fc)
     .filter(r => !fa || r.ota === fa)
-    .filter(r => !q || (r.ref + ' ' + (r.ext || '') + ' ' + r.guest + ' ' + r.doc).toLowerCase().includes(q));
+    .filter(r => !q || (r.ref + ' ' + (r.ext || '') + ' ' + r.guest + ' ' + r.doc).toLowerCase().includes(q))
+    .filter(r => {
+      if (!ft) return true;
+      if (ft === 'ARRIVAL') return r.start >= from && r.start <= to;
+      if (ft === 'DEPARTURE') return r.end >= from && r.end <= to;
+      return r.start <= to && r.end > from;            // STAY: la estadía se cruza con el rango
+    })
+    .sort((a, b) => (order === 'asc' ? a.start.localeCompare(b.start) : b.start.localeCompare(a.start)) || a.ref.localeCompare(b.ref));
+  return {list};
+}
+function renderReservas(){
   const tbl = document.getElementById('tblReservas');
-  if (!list.length){
-    tbl.innerHTML = '<tr><td colspan="8" class="note" style="text-align:center;padding:24px">No hay reservas que coincidan con la búsqueda.</td></tr>';
+  const errBox = document.getElementById('fErr');
+  const pager = document.getElementById('pager');
+  const res = filteredReservas();
+  if (res.error){
+    errBox.innerHTML = `<p class="field" style="margin-bottom:10px"><span class="err">${res.error}</span></p>`;
+    tbl.innerHTML = '';
+    pager.innerHTML = '';
     return;
   }
-  tbl.innerHTML = list.map(r => {
+  errBox.innerHTML = '';
+  const list = res.list;
+  const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+  if (listPage > pages) listPage = pages;
+  if (!list.length){
+    tbl.innerHTML = '<tr><td colspan="8" class="note" style="text-align:center;padding:24px">No se encontraron reservas con los filtros aplicados.</td></tr>';
+    pager.innerHTML = '<span class="note">0 reservas</span>';
+    return;
+  }
+  const from = (listPage - 1) * PAGE_SIZE;
+  const slice = list.slice(from, from + PAGE_SIZE);
+  tbl.innerHTML = slice.map(r => {
     const dis = canChange(r) ? '' : `disabled title="${changeBlockReason(r)}"`;
     const ext = r.ext ? `<br><span class="note">Cód. OTA ${r.ext}</span>` : '';
     const cats = [...new Set(r.rooms.map(x => x.cat))].join(', ');
@@ -590,8 +666,19 @@ function renderReservas(){
         <button class="btn sm danger" ${dis} onclick="goCancelar('${r.ref}')">Cancelar</button>
       </div></td></tr>`;
   }).join('');
+  let nums = '';
+  for (let p = 1; p <= pages; p++) nums += `<button class="btn sm ${p === listPage ? 'primary' : ''}" onclick="setListPage(${p})">${p}</button>`;
+  pager.innerHTML = `<span class="note">Mostrando ${from + 1}–${from + slice.length} de ${list.length} reservas · página ${listPage} de ${pages}</span>
+    <div class="pagerbtns">
+      <button class="btn sm" ${listPage === 1 ? 'disabled' : ''} onclick="setListPage(${listPage - 1})">← Anterior</button>
+      ${nums}
+      <button class="btn sm" ${listPage === pages ? 'disabled' : ''} onclick="setListPage(${listPage + 1})">Siguiente →</button>
+    </div>`;
 }
-['fSearch', 'fEstado', 'fCanal', 'fAgencia'].forEach(id => document.getElementById(id).addEventListener('input', renderReservas));
+function setListPage(p){ listPage = p; renderReservas(); }
+// Cambiar cualquier filtro o el orden vuelve a la página 1.
+['fSearch', 'fEstado', 'fCanal', 'fAgencia', 'fFechaTipo', 'fDesde', 'fHasta', 'fOrden']
+  .forEach(id => document.getElementById(id).addEventListener('input', () => { listPage = 1; renderReservas(); }));
 
 // Resumen del día operativo (check-view-reservation FR-005a): solo datos del Módulo 2.
 function renderStatRow(){
@@ -698,80 +785,131 @@ function renderMigTab(r){
 }
 
 // ================= Modificar =================
+// Se puede cambiar: fechas, habitaciones (agregar, quitar o cambiar una por otra, de la misma o de otra
+// categoría), cantidad de personas, datos del titular, observaciones y aviso de llegada tardía.
+let mdRows = [];   // habitaciones que quedarían en la reserva: {n, cat, orig}
 let mdPlan = null;
+function mdDates(){
+  const s = document.getElementById('mdEntrada').value, e = document.getElementById('mdSalida').value;
+  return {s, e, valid: !!(s && e && e > s)};
+}
 function renderModificar(){
   const r = findRes(currentRef);
   document.getElementById('mdRef').textContent = 'Modificar ' + r.ref;
   document.getElementById('mdBadges').innerHTML = headerBadges(r);
   document.getElementById('mdEntrada').value = r.start;
   document.getElementById('mdSalida').value = r.end;
+  document.getElementById('mdPersonas').value = r.guestCount;
+  document.getElementById('mdNombre').value = r.guest;
+  document.getElementById('mdDoc').value = r.doc;
+  document.getElementById('mdTel').value = r.phone || '';
+  document.getElementById('mdEmail').value = r.email || '';
   document.getElementById('mdTardia').checked = !!r.lateArrivalNotice;
   document.getElementById('mdNotes').value = r.notes || '';
-  document.getElementById('mdRooms').innerHTML = r.rooms.map((x, i) => `<tr>
-    <td>Hab. ${x.n}</td>
-    <td><div class="field" style="min-width:120px"><select id="mdCat-${i}">${Object.keys(rateTable).map(c => `<option ${c === x.cat ? 'selected' : ''}>${c}</option>`).join('')}</select></div></td>
-    <td id="mdRes-${i}"></td></tr>`).join('');
-  r.rooms.forEach((x, i) => document.getElementById('mdCat-' + i).addEventListener('input', refreshModificar));
+  mdRows = r.rooms.map(x => ({n: x.n, cat: x.cat, orig: x.n, origCat: x.cat}));
   refreshModificar();
 }
+function mdAddRoom(){
+  if (mdRows.length >= 10) return toast('Una reserva lleva entre 1 y 10 habitaciones.', true);
+  mdRows.push({n: null, cat: 'Estándar', orig: null, origCat: null});
+  refreshModificar();
+}
+function mdRemoveRoom(i){
+  if (mdRows.length <= 1) return;
+  mdRows.splice(i, 1);
+  refreshModificar();
+}
+function mdSetCat(i, cat){ mdRows[i].cat = cat; mdRows[i].n = null; refreshModificar(); }
+function mdSetRoom(i, n){ mdRows[i].n = n || null; refreshModificar(); }
+
 function refreshModificar(){
   const r = findRes(currentRef);
-  const s = document.getElementById('mdEntrada').value;
-  const e = document.getElementById('mdSalida').value;
-  const valid = s && e && e > s;
+  const {s, e, valid} = mdDates();
   document.getElementById('mdFechaErr').hidden = valid;
-  const taken = [];
-  mdPlan = r.rooms.map((x, i) => {
-    const cat = document.getElementById('mdCat-' + i).value;
-    const cell = document.getElementById('mdRes-' + i);
-    if (!valid){ cell.innerHTML = '<span class="badge neutral">Sin verificar</span>'; return null; }
-    const free = roomsFreeFor(cat, s, e, r.ref).filter(rm => !taken.includes(rm.n));
-    let pick = null;
-    if (cat === x.cat && free.some(rm => rm.n === x.n)){
-      pick = x.n; cell.innerHTML = `<span class="badge ok">Se mantiene</span> Hab. ${x.n}`;
-    } else if (free.length){
-      pick = free[0].n; cell.innerHTML = `<span class="badge warn">Se reasigna</span> Hab. ${pick}`;
-    } else {
-      cell.innerHTML = `<span class="badge err">Sin disponibilidad</span> en ${cat}`;
-    }
-    if (pick) taken.push(pick);
-    return pick ? {n: pick, cat, stay: 'EXPECTED'} : null;
+
+  // Cada fila queda con una habitación libre de su categoría (la actual si sigue libre).
+  const chosen = [];
+  const options = mdRows.map(() => []);
+  mdRows.forEach((row, i) => {
+    if (!valid){ options[i] = row.n ? [row.n] : []; if (row.n) chosen.push(row.n); return; }
+    const free = roomsFreeFor(row.cat, s, e, r.ref).map(x => x.n).filter(n => !chosen.includes(n));
+    if (!row.n || !free.includes(row.n)) row.n = free[0] || null;
+    options[i] = free;
+    if (row.n) chosen.push(row.n);
+  });
+  // Las opciones de cada fila excluyen las elegidas en las otras filas.
+  mdRows.forEach((row, i) => {
+    if (!valid) return;
+    const others = mdRows.filter((_, j) => j !== i).map(x => x.n);
+    options[i] = roomsFreeFor(row.cat, s, e, r.ref).map(x => x.n).filter(n => !others.includes(n));
   });
 
+  document.getElementById('mdRooms').innerHTML = mdRows.map((row, i) => {
+    let estado;
+    if (!valid) estado = '<span class="badge neutral">Sin verificar</span>';
+    else if (!row.n) estado = `<span class="badge err">Sin disponibilidad</span> en ${row.cat}`;
+    else if (row.orig === null) estado = '<span class="badge warn">Se agrega</span>';
+    else if (row.n === row.orig && row.cat === row.origCat) estado = '<span class="badge ok">Se mantiene</span>';
+    else estado = '<span class="badge warn">Se cambia</span>';
+    const roomSel = `<select onchange="mdSetRoom(${i}, this.value)">${options[i].length ? '' : '<option value="">—</option>'}${options[i].map(n => `<option ${n === row.n ? 'selected' : ''}>${n}</option>`).join('')}</select>`;
+    const catSel = `<select onchange="mdSetCat(${i}, this.value)">${Object.keys(rateTable).map(c => `<option ${c === row.cat ? 'selected' : ''}>${c}</option>`).join('')}</select>`;
+    return `<tr><td><div class="field" style="min-width:100px">${roomSel}</div></td><td><div class="field" style="min-width:120px">${catSel}</div></td><td>${estado}</td>
+      <td><button class="btn sm danger" ${mdRows.length <= 1 ? 'disabled title="La reserva debe conservar al menos una habitación"' : ''} onclick="mdRemoveRoom(${i})">Quitar</button></td></tr>`;
+  }).join('');
+  document.getElementById('mdAddRoom').disabled = mdRows.length >= 10;
+
+  // Cantidad de personas: al menos una por habitación y no más que la capacidad de las habitaciones.
+  const personas = parseInt(document.getElementById('mdPersonas').value, 10) || 0;
+  const maxPers = mdRows.reduce((a, row) => a + capacity[row.cat], 0);
+  let persErr = '';
+  if (personas < mdRows.length) persErr = `Debe haber al menos ${mdRows.length} persona(s): una por habitación.`;
+  else if (personas > maxPers) persErr = `Máximo ${maxPers} personas para las habitaciones elegidas.`;
+  document.getElementById('mdPersErr').hidden = !persErr;
+  document.getElementById('mdPersErr').firstElementChild.textContent = persErr;
+
   const tarifa = document.getElementById('mdTarifa');
+  mdPlan = mdRows.map(row => row.n ? {n: row.n, cat: row.cat, stay: 'EXPECTED'} : null);
   if (!valid){
     tarifa.innerHTML = '<p class="note">Ingrese fechas válidas para cotizar.</p>';
   } else {
     let total = 0, lines = '';
-    r.rooms.forEach((x, i) => {
-      const cat = document.getElementById('mdCat-' + i).value;
-      const q = quoteFor(cat, s, e);
+    mdRows.forEach(row => {
+      const q = quoteFor(row.cat, s, e);
       total += q.gross;
-      lines += `<div class="line"><span>${cat} · ${q.nights} noche(s) + temporada</span><span>${money(q.gross)}</span></div>`;
+      lines += `<div class="line"><span>${row.n ? 'Hab. ' + row.n + ' · ' : ''}${row.cat} · ${q.nights} noche(s) + temporada</span><span>${money(q.gross)}</span></div>`;
     });
     const diff = total - r.gross;
     mdPlan.total = total;
     tarifa.innerHTML = lines + `<div class="total"><span>grossAmount recalculado</span><span>${money(total)}</span></div>
-      <p class="note" style="margin-top:6px">Antes: ${money(r.gross)} · diferencia ${diff >= 0 ? '+' : '−'}${money(Math.abs(diff))}. Informativo: sin IVA ni comisión.</p>`;
+      <p class="note" style="margin-top:6px">Antes: ${money(r.gross)} · diferencia ${diff >= 0 ? '+' : '−'}${money(Math.abs(diff))}. Informativo: sin IVA ni comisión. Solo cambiar las personas, los datos del titular o las observaciones no recotiza.</p>`;
   }
 
-  const changed = valid && (s !== r.start || e !== r.end || mdPlan.some((p, i) => !p || p.n !== r.rooms[i].n));
+  const origRooms = r.rooms.map(x => x.n).sort().join();
+  const changed = valid && (s !== r.start || e !== r.end || mdRows.map(x => x.n).sort().join() !== origRooms);
   const note = document.getElementById('mdOrderNote');
   if (!changed) note.innerHTML = '';
-  else if (s === TODAY || r.start === TODAY) note.innerHTML = '🔔 El cambio toca el día de hoy: el Módulo 2 ordenará <span class="code">Reserved</span> o <span class="code">Available</span> al Módulo 1 según corresponda.';
+  else if (s === TODAY || r.start === TODAY) note.innerHTML = '🔔 El cambio toca el día de hoy: el Módulo 2 ordenará <span class="code">Reserved</span> o <span class="code">Available</span> al Módulo 1 para las habitaciones agregadas, quitadas o cambiadas.';
   else note.innerHTML = '📅 Cambio sobre una llegada futura: no se envía ninguna orden al Módulo 1.';
 
   const notes = document.getElementById('mdNotes').value;
   document.getElementById('mdNotesCount').textContent = notes.length + ' / 500 caracteres';
-  document.getElementById('mdSave').disabled = !valid || mdPlan.some(p => !p);
+  const titularOk = document.getElementById('mdNombre').value.trim() && document.getElementById('mdDoc').value.trim();
+  document.getElementById('mdSave').disabled = !valid || mdRows.some(row => !row.n) || !!persErr || !titularOk;
 }
-['mdEntrada', 'mdSalida', 'mdNotes', 'mdTardia'].forEach(id => document.getElementById(id).addEventListener('input', refreshModificar));
+['mdEntrada', 'mdSalida', 'mdPersonas', 'mdNombre', 'mdDoc', 'mdTel', 'mdEmail', 'mdNotes', 'mdTardia']
+  .forEach(id => document.getElementById(id).addEventListener('input', refreshModificar));
+document.getElementById('mdAddRoom').addEventListener('click', mdAddRoom);
 document.getElementById('mdSave').addEventListener('click', () => {
   const r = findRes(currentRef);
   r.start = document.getElementById('mdEntrada').value;
   r.end = document.getElementById('mdSalida').value;
   r.rooms = mdPlan.map(p => ({n: p.n, cat: p.cat, stay: 'EXPECTED', gross: quoteFor(p.cat, r.start, r.end).gross}));
   r.gross = mdPlan.total;
+  r.guestCount = parseInt(document.getElementById('mdPersonas').value, 10);
+  r.guest = document.getElementById('mdNombre').value.trim();
+  r.doc = document.getElementById('mdDoc').value.trim();
+  r.phone = document.getElementById('mdTel').value.trim();
+  r.email = document.getElementById('mdEmail').value.trim();
   r.lateArrivalNotice = document.getElementById('mdTardia').checked;
   r.notes = document.getElementById('mdNotes').value.trim();
   backToList(r.ref, 'Reserva ' + r.ref + ' modificada correctamente.');

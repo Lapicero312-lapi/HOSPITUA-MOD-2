@@ -138,7 +138,10 @@ la `Ota`.
 
 4. **Scenario**: La Recepcionista no edita la OTA
    - **Given** la pantalla de agencias de la Recepcionista
-   - **Then** los datos de cada `Ota` se muestran solo para consulta, sin opción de crear ni editar
+   - **Then** los datos de cada `Ota` se muestran solo para consulta, sin opción de crear ni editar:
+     nombre, cuenta del hotel vinculada, fecha de vinculación, porcentaje de comisión, estado de la
+     conexión (`connectionStatus`), fecha y hora de la última sincronización (`lastSyncAt`) y cantidad
+     de reservas activas de esa agencia
 
 ### Casos Borde
 
@@ -177,8 +180,10 @@ la `Ota`.
   sabe que no cobrará comisión por esa reserva.
 - **FR-008**: El sistema debe registrar y actualizar cada `Ota` únicamente con los datos que la
   propia OTA envía por su API al vincular la cuenta del hotel (`name`, `hotelAccountId`,
-  `commissionPercentage`) o cuando los cambia. La Recepcionista solo los consulta: el sistema no debe
-  ofrecer operaciones para crear o editar una `Ota` desde el hotel.
+  `commissionPercentage`) o cuando los cambia. El sistema guarda además el estado de la conexión
+  (`connectionStatus`) y la fecha y hora del último mensaje recibido de la OTA (`lastSyncAt`). La
+  Recepcionista solo los consulta: el sistema no debe ofrecer operaciones para crear o editar una
+  `Ota` desde el hotel.
 - **FR-009**: El sistema debe interceptar cualquier error de validación de entrada o integración y
   responder con **HTTP 400 (Bad Request)**, prohibiendo que se propaguen como fallas **HTTP 500**.
 - **FR-010**: El sistema debe mantener un registro auditable de cada comisión calculada o
@@ -205,8 +210,11 @@ la `Ota`.
   calcula desde el momento de su registro.
 - **Ota**: Representa al intermediario externo que origina la reserva. Se registra sola al vincular
   la cuenta del hotel y sus datos no se editan en el hotel. Atributos: `id`, `name`,
-  `hotelAccountId` (cuenta del hotel en la OTA), `linkedAt` (fecha de vinculación) y
-  `commissionPercentage` (porcentaje de comisión pactado por defecto).
+  `hotelAccountId` (cuenta del hotel en la OTA), `linkedAt` (fecha de vinculación),
+  `commissionPercentage` (porcentaje de comisión pactado por defecto), `connectionStatus`
+  (`CONNECTED` | `DISCONNECTED`: `CONNECTED` mientras la cuenta del hotel siga vinculada y
+  `DISCONNECTED` cuando la OTA informa que se desvinculó) y `lastSyncAt` (fecha y hora del último
+  mensaje que la OTA envió por su API).
 - **Guest**: Representa al huésped titular de la reserva. Atributos: `id`, `fullName`,
   `documentNumber`, `nationality`.
 

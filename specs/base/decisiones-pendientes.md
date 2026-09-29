@@ -31,18 +31,22 @@ C (equipo del Módulo 3), D (equipo del Módulo 2) y E (ajustes a documentos).
 | # | Decisión | Propuesta | Decisión | Notas |
 |---|---|---|---|---|
 | B1 | **Agregar el estado `Reserved`** a `Room.status` | Que lo aprueben y lo incorporen | [ ] | C8: sin él, las reservas con llegada hoy fallan y se cancelan |
-| B2 | **Contrato REST del inventario**: rutas, campos y si acepta rango de fechas | No enviar fechas (el estado físico es del instante actual) | [ ] | Plan `consult-room-inventory` |
-| B3 | **Listado por categoría**: completo o filtrado por estado | Que ofrezca ambos modos (D4) | [ ] | Necesario para estadías futuras |
-| B4 | **Categoría inexistente** en el inventario | Devolver lista vacía, no error | [ ] | |
+| B2 | **Contrato REST del inventario**: rutas, campos y si acepta rango de fechas | No enviar fechas (el estado físico es del instante actual) | [ ] | Plan `consult-room-inventory`. Su spec (2026-09-07) no filtra por fechas, como se propuso; faltan rutas y nombres de campos (B17) |
+| B3 | **Listado por categoría**: completo o filtrado por estado | Que ofrezca ambos modos (D4) | [x] | Cubierto por su spec (2026-09-07): filtra por tipo y por estado, combinables |
+| B4 | **Categoría inexistente** en el inventario | Devolver lista vacía, no error | [x] | Cubierto por su spec (2026-09-07): sin resultados devuelve lista vacía |
 | B5 | **Calendario de mantenimientos**: si las fechas son fecha o fecha y hora, y si el fin es inclusivo | Fecha, con fin inclusivo | [ ] | La regla de cruce depende de esto |
 | B6 | **Calendario por categoría**: que acepte `categoryRoom` o varios `roomId` | Sí, para evitar una llamada por habitación | [ ] | |
 | B7 | **Órdenes de estado de habitación**: ruta, idempotencia por `requestId`, consulta del resultado por `requestId` y campos del "detalle de la reserva" | Proponer `PUT /rooms/{roomId}/state` con `Idempotency-Key` | [ ] | Plan `set-room-state` |
 | B8 | **Valores de reintento** de las órdenes | Cada 15 s y 3 intentos de resolución en 2 minutos | [ ] | |
 | B9 | **Mensajes `habitacion.checkin` y `habitacion.checkout`**: confirmar que traen dentro la lista `foreignGuests` con los datos migratorios de cada huésped extranjero de la habitación, incluidos `movementType` (`ENTRY` en el Check-In, `DEPARTURE` en el Check-Out) y `movementDate` | Dentro de cada mensaje (C2), actualizado el 2026-09-28: el Check-Out también los trae | [ ] | El Módulo 1 procesa los datos y los envía (2026-09-28) |
 | B15 | **Campos de `ForeignGuestData`**: confirmar que el Módulo 1 envía, por huésped, `firstName`, `lastName`, `documentType`, `documentNumber`, `birthDate`, `nationality`, `movementType` y `movementDate` | Esa lista, según la especificación del Módulo 1 y lo pedido por el negocio el 2026-09-28 | [ ] | Los obligatorios están en `process-foreign-guest-data` FR-003 |
+| B16 | **`reservedByReservationRef` en el inventario**: el spec de inventario del Módulo 1 (2026-09-07) no lo trae | Que lo agreguen, solo cuando el estado es `Reserved` | [ ] | Sin él no se distingue el apartado propio de una reserva de uno ajeno, ni se libera solo lo apartado por ella (`check-room-availability`, `set-room-state` FR-010) |
+| B17 | **Nombres de los campos del inventario**: su spec dice ID (UUID), número, tipo y capacidad máxima; el diccionario dice `id`, `roomNumber`, `categoryRoom`, `maxCapacity` | Confirmar los nombres exactos | [ ] | |
+| B18 | **Excluir habitaciones `Inactive`**: su listado las incluye por defecto | Poder excluirlas al filtrar y filtrar por varios estados | [ ] | Ver D6 (excluirlas siempre) |
+| B19 | **Estados que impiden reservar** una estadía futura, ahora que hay 8 | `PendingCleaning` e `InCleaning` **no bloquean** (decidido por el negocio el 2026-09-29). Falta confirmar cuáles de los demás bloquean: `Occupied`, `DisabledForRepairs`, `TechnicalBlock`, `Inactive` | [ ] | Relacionada con E3 y E4 |
 | B10 | **Diagrama `mod-1-2-3.drawio`**: quitar la flecha "Datos de huéspedes extranjeros" y agregar la del calendario | Actualizarlo | [ ] | C2 y C4 |
 | B11 | **Hora de inicio del día operativo** y zona horaria del hotel | **Fijas:** el día operativo es el día calendario de Colombia, de las 00:00 a las 23:59 (UTC-5). La lista del día se envía a las 00:00 | [x] | Decidido por el negocio el 2026-09-29 (`check-view-reservation` FR-012, `update-reservation` FR-018). Ya no son configurables |
-| B12 | **`maxCapacity` en el inventario**: que el Módulo 1 devuelva la capacidad máxima de cada habitación | Agregarlo a la consulta puntual y por categoría | [ ] | Sin él no se puede validar `guestCount` (2026-09-28) |
+| B12 | **`maxCapacity` en el inventario**: que el Módulo 1 devuelva la capacidad máxima de cada habitación | Agregarlo a la consulta puntual y por categoría | [x] | Cubierto por su spec (2026-09-07): incluye la capacidad máxima de personas |
 | B13 | **Check-In y Check-Out por habitación**: que `habitacion.checkin` y `habitacion.checkout` traigan el `roomId` además de la `reservationRef` | Obligatorio en ambos mensajes | [ ] | Reservas con varias habitaciones (2026-09-28) |
 | B14 | **Lista de reservas del día**: que el Módulo 1 consuma por cola la lista (`DailyReservationList`) y sus actualizaciones (`ADDED`, `UPDATED`, `REMOVED`) y deje de consultar `GET /api/reservations` | Routing keys propuestas: `reserva.lista-del-dia` y `reserva.lista-del-dia.actualizacion` | [ ] | Spec `check-view-reservation`, historias 4 y 5 (2026-09-28) |
 
@@ -135,7 +139,7 @@ Ninguno de estos cambios está hecho.
 | E3 | `diccionario.md` y `guia_flujo_reservas.html` | Aclarar que el inventario se consulta siempre solo para elegir habitaciones y el estado físico solo si la estadía incluye hoy | El spec de disponibilidad dice esto último |
 | E4 | Specs de disponibilidad, inventario y otros | Listar los 8 estados de `Room` del diccionario, no solo 3 | Inconsistencia |
 | E5 | `diccionario.md` | ~~Corregir "descarga asíncronamente" de Migración~~ (resuelto 2026-09-28: Migración ya no es actor); agregar `gross_amount_currency` y `status_reason`; unificar `totalAmount` con `grossAmount` | Inconsistencias y D2, D6, C6 |
-| E6 | `check-view-reservation/spec.md` | ~~Quitar o definir la "búsqueda por rango de fechas"~~ | **Resuelto 2026-09-28**: el spec define filtros por estado y por fecha (`ARRIVAL`, `DEPARTURE`, `STAY`) con paginación |
+| E6 | `check-view-reservation/spec.md` | ~~Quitar o definir la "búsqueda por rango de fechas"~~ | **Resuelto 2026-09-29**: el listado filtra por estado, canal, agencia y fecha (`ARRIVAL`, `DEPARTURE`, `STAY`), con una búsqueda por código, documento o nombre; se ordena por `startDate` (ascendente o descendente) y se **pagina de a 10** |
 | E7 | `process-foreign-guest-data/spec.md` | Unificar "con una advertencia" y "200 sin advertencias mezcladas" | Se contradice |
 | E8 | `export-sire-file/spec.md` | Cambiar `GET` a `POST` en la generación y definir el formato del archivo | D9 y A9 |
 | E9 | `update-reservation` y `process-foreign-guest-data` | Cambiar "responde 200/400" por las reglas de cola | Decisión C1 |
