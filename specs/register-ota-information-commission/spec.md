@@ -216,7 +216,7 @@ la `Ota`.
   `DISCONNECTED` cuando la OTA informa que se desvinculó) y `lastSyncAt` (fecha y hora del último
   mensaje que la OTA envió por su API).
 - **Guest**: Representa al huésped titular de la reserva. Atributos: `id`, `fullName`,
-  `documentNumber`, `nationality`.
+  `documentType`, `documentNumber`, `nationality`.
 
 ## Success Criteria *(mandatory)*
 

@@ -245,8 +245,7 @@ verifica que se entreguen los tres, con su tipo de movimiento y su fecha.
   completo. Atributos: `movementId`, `reservationRef`, `guestRef` (solo si el huésped es el titular;
   los acompañantes no son `Guest` del Módulo 2), `movementType` (`ENTRY` | `DEPARTURE`),
   `movementDate`, los datos migratorios copiados de `ForeignGuestData` (`firstName`, `lastName`,
-  `documentType`, `documentNumber`, `birthDate`, `nationality`, `originPlace`, `destinationPlace`) y
-  `reportedInExportId` (exportación SIRE en la que se incluyó; nulo mientras no se reporte).
+  `documentType`, `documentNumber`, `birthDate`, `nationality`, `originPlace`, `destinationPlace`).
   Identidad única: (`reservationRef`, `documentNumber`, `movementType`).
 - **ReconciliationIncident**: Registro de una discrepancia con el Módulo 1. Aquí se crea cuando los
   datos de un huésped se devuelven al Módulo 1 por estar incompletos (o falta el titular extranjero) y
