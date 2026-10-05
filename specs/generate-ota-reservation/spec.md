@@ -25,7 +25,7 @@ de la llegada.
 1. La **Ota** envía a la API del Módulo 2 una solicitud de reserva en JSON, que incluye las fechas
    de estadía (comunes a toda la reserva), la cantidad de personas (`guestCount`), una lista de
    entre 1 y 10 habitaciones (cada una con un `roomId` específico o solo con la `categoryRoom`
-   deseada), los datos del `Guest` titular, las observaciones opcionales (`notes`), el valor bruto
+   deseada), los datos del `Guest` titular (incluido el tipo de documento, `documentType`), las observaciones opcionales (`notes`), el valor bruto
    total del hospedaje (`totalAmount`, de todas las habitaciones) y el `externalConfirmationCode` de
    la agencia.
 2. El sistema valida la estructura JSON y que estén presentes todos los campos obligatorios,
@@ -238,14 +238,15 @@ crea una reserva y que todos devuelven una respuesta JSON de error estructurada.
   `reservationRef`,
   `guestRef`, `guestCount`, `startDate`, `endDate`, `totalAmount` (valor bruto total de todas las
   habitaciones enviado por la OTA), `commissionAmount`, `externalConfirmationCode`, `notes`,
-  `lateArrivalNotice` (`false` al crear), `source` (`OTA`), `createdAt`,
+  `source` (`OTA`), `createdAt`,
   y `status` con estados permitidos: `PENDING`, `ACTIVE`,
   `IN_PROGRESS`, `COMPLETED`, `CANCELLED`,
   `NO_SHOW`. En este flujo se crea en `PENDING` y pasa a `ACTIVE` con la confirmación de la agencia.
 - **ReservationRoom**: Cada habitación de la reserva. Atributos: `reservationRef`, `roomId`,
   `roomNumber`, `categoryRoom` y `stayStatus` (nace en `EXPECTED`). En canal OTA no tiene valor por
   habitación: el valor es el `totalAmount` de la reserva.
-- **Guest**: Huésped titular. Atributos: `id`, `fullName`, `documentNumber`, `nationality`, `type`,
+- **Guest**: Huésped titular. Atributos: `id`, `fullName`, `documentType` (`CC`, `CE`, `PASSPORT` u `OTHER`), `documentNumber`,
+  `nationality`, `type`,
   `contactPhone`, `contactEmail`, extraídos del payload de la OTA.
 - **Ota**: Intermediario externo que origina la reserva. Atributos: `id`, `name` y
   `commissionPercentage`.

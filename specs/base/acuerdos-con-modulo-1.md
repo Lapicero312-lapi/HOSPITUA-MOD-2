@@ -103,10 +103,10 @@ Cuando el Módulo 2 ordena `Reserved` o `Available` (ver 4.2), el Módulo 1 debe
   - `REMOVED`: sale, con motivo `CANCELLED`, `DATE_CHANGED` o `NO_SHOW`.
   - Llevan `messageId` y `sequenceNumber` creciente dentro del día.
 - **Por cada reserva**: `reservationRef`, `status`, `source`, `externalConfirmationCode` (solo OTA),
-  `startDate`, `endDate`, noches, `guestCount`, `lateArrivalNotice`, `notes` y `version`; por cada
+  `startDate`, `endDate`, noches, `guestCount`, `notes` y `updatedAt`; por cada
   habitación `roomId`, `roomNumber` y `categoryRoom`; y el titular con `guestRef`, `fullName`,
-  `documentNumber`, `nationality`, `type`, `contactPhone` y `contactEmail`.
-- **Sin datos financieros** (ni `grossAmount` ni comisión). Es **informativa**: no aparta ni libera
+  `documentType`, `documentNumber`, `nationality`, `type`, `contactPhone` y `contactEmail`.
+- **Sin datos financieros** (ni tarifas ni comisión). Es **informativa**: no aparta ni libera
   habitaciones y no cambia estados.
 - No se envían actualizaciones por el Check-In, el Check-Out ni por cambios de reservas cuya llegada no es
   hoy.
@@ -278,8 +278,8 @@ favor respondan con datos concretos (nombres, valores, ejemplos); si algo no exi
 27. ¿Pueden recibir por cola la lista de reservas del día y sus actualizaciones (alta, cambio, baja)?
     ¿Cuál es el nombre de la cola o del canal?
 28. La lista trae, por reserva: referencia, estado, canal, código de la agencia (si es OTA), fechas,
-    noches, personas, aviso de llegada tardía, observaciones, versión, habitaciones (identificador,
-    número y categoría) y datos del titular (nombre, documento, nacionalidad, tipo, teléfono, correo).
+    noches, personas, observaciones, fecha de última actualización, habitaciones (identificador,
+    número y categoría) y datos del titular (nombre, tipo y número de documento, nacionalidad, tipo, teléfono, correo).
     ¿Les falta algún dato? ¿Sobra alguno?
 29. ¿Cómo manejan un mensaje repetido o fuera de orden? (Cada mensaje lleva identificador y número de
     secuencia.)

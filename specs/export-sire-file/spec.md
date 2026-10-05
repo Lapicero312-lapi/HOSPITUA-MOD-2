@@ -25,20 +25,19 @@ no es un actor del sistema.
 3. El sistema ejecuta "Procesar datos de huéspedes extranjeros" para obtener los movimientos
    migratorios del periodo, tanto de entrada (`ENTRY`) como de salida (`DEPARTURE`). Todos están
    completos, porque el Módulo 1 los envía ya procesados y el Módulo 2 devuelve al Módulo 1 los que
-   llegan incompletos. Por defecto solo incluye los movimientos que aún no se han reportado en otra
-   exportación; la Recepcionista puede pedir incluirlos (`includeAlreadyReported`).
+   llegan incompletos. El sistema no lleva
+   cuenta de lo que ya se descargó: el mismo periodo se puede descargar las veces que haga falta.
 4. El sistema genera el archivo de texto plano (`.TXT`) con las columnas, anchos y delimitadores de
    Migración Colombia. El archivo tiene una línea por cada movimiento de cada huésped, con toda su
    información migratoria (ver FR-005).
-5. El sistema registra la exportación en `SireExport`, marca los movimientos incluidos como
-   reportados (`reportedInExportId`) y entrega el archivo para su descarga; la respuesta contiene
+5. El sistema registra la exportación en `SireExport` (histórico de descargas) y entrega el archivo
+   para su descarga; la respuesta contiene
    únicamente el archivo `.TXT` y lleva el identificador de la exportación (`exportId`) en la
    cabecera `Export-Id`.
-   La pantalla lista cada movimiento del periodo (uno por huésped y tipo) con su estado de reporte, y
-   permite previsualizar la línea de cada uno sin registrar nada y descargar un archivo `.TXT` solo
-   con ese movimiento (descarga individual). La descarga individual registra su propia `SireExport`
-   (con un solo registro) y marca ese movimiento como reportado, igual que la exportación de todo el
-   periodo.
+   La pantalla lista cada movimiento del periodo (uno por huésped y tipo), y permite previsualizar la
+   línea de cada uno sin registrar nada y descargar un archivo `.TXT` solo con ese movimiento
+   (descarga individual). La descarga individual registra su propia `SireExport` (con un solo
+   registro), igual que la exportación de todo el periodo.
 6. La Recepcionista envía el archivo descargado a Migración por los medios que esta disponga, fuera
    del sistema.
 
@@ -51,7 +50,7 @@ Módulo 2.
 
 La Recepcionista define un periodo y descarga el archivo de huéspedes extranjeros para enviarlo a
 Migración. En una sola pantalla se resuelven la exportación normal, las entradas y salidas, la
-reexportación, la descarga individual y el periodo sin extranjeros, por lo que se consolidan en esta
+descarga repetida, la descarga individual y el periodo sin extranjeros, por lo que se consolidan en esta
 misma historia de usuario.
 
 **Why this priority**: Es una funcionalidad de cumplimiento legal. Aunque no bloquea la operación
@@ -93,41 +92,28 @@ controlado.
    - **Then** el archivo incluye ese movimiento como cualquier otro; los datos que se devolvieron
      nunca formaron parte de un movimiento y por eso no aparecen antes del reenvío
 
-5. **Scenario**: Los movimientos ya reportados no se repiten
-   - **Given** movimientos ya incluidos en una exportación anterior
-   - **When** la Recepcionista exporta el mismo periodo sin `includeAlreadyReported`
-   - **Then** el sistema no los incluye; si no queda ningún movimiento nuevo, responde **HTTP 400**
-     indicando que no hay movimientos nuevos por reportar en ese periodo
+5. **Scenario**: Descarga repetida del mismo periodo
+   - **Given** un periodo que la Recepcionista ya descargó antes
+   - **When** vuelve a exportarlo
+   - **Then** el archivo incluye de nuevo todos los movimientos del periodo, sin ninguna restricción,
+     y la descarga queda registrada como una nueva `SireExport`
 
-6. **Scenario**: Reexportación intencional
-   - **Given** movimientos ya reportados en la exportación 12
-   - **When** la Recepcionista exporta el periodo con `includeAlreadyReported` verdadero
-   - **Then** el archivo los incluye de nuevo, la exportación queda registrada como una nueva
-     `SireExport`, y los movimientos conservan su `reportedInExportId` original
-
-7. **Scenario**: Periodo sin huéspedes extranjeros (Error)
+6. **Scenario**: Periodo sin huéspedes extranjeros (Error)
    - **Given** un periodo con solo huéspedes nacionales o sin ocupación
    - **When** se ejecuta la exportación
    - **Then** el sistema no genera archivo y responde **HTTP 400** indicando que no hay movimientos
      migratorios que reportar en ese periodo, sin generar errores de infraestructura
 
-8. **Scenario**: Previsualización de un movimiento
+7. **Scenario**: Previsualización de un movimiento
    - **Given** un movimiento del periodo
    - **When** la Recepcionista pide previsualizarlo
    - **Then** el sistema muestra la línea tal como saldría en el archivo, sin crear una `SireExport`
-     ni marcar el movimiento como reportado
 
-9. **Scenario**: Descarga individual de un movimiento
-   - **Given** un movimiento que aún no se ha reportado
-   - **When** la Recepcionista descarga solo ese movimiento
-   - **Then** el sistema entrega un `.TXT` con una sola línea, registra una `SireExport` con un
-     registro incluido y marca el movimiento como reportado (`reportedInExportId`)
-
-10. **Scenario**: Descarga individual de un movimiento ya reportado (Error)
-    - **Given** un movimiento ya reportado
-    - **When** la Recepcionista intenta descargarlo solo
-    - **Then** el sistema responde **HTTP 400** indicando que ya fue reportado, salvo que pida
-      `includeAlreadyReported`; en ese caso lo entrega y conserva su `reportedInExportId` original
+8. **Scenario**: Descarga individual de un movimiento
+   - **Given** un movimiento del periodo
+   - **When** la Recepcionista descarga solo ese movimiento, las veces que quiera
+   - **Then** el sistema entrega un `.TXT` con una sola línea y registra una `SireExport` con un
+     registro incluido
 
 ### Casos Borde
 
@@ -142,12 +128,8 @@ controlado.
 - ¿Qué sucede si la exportación se solicita simultáneamente más veces de las permitidas? El sistema
   aplica un límite de solicitudes y responde **HTTP 429 (Too Many Requests)**, evitando un **HTTP
   500** por falta de memoria.
-- ¿Qué sucede si dos Recepcionistas exportan el mismo periodo al mismo tiempo? Cada movimiento se
-  marca como reportado dentro de la misma transacción de la exportación: solo una de las dos lo
-  incluye, y la otra recibe los movimientos restantes o el **HTTP 400** de "no hay movimientos
-  nuevos".
-- ¿Qué sucede si falla la generación del archivo a mitad del proceso? La transacción se revierte: no
-  queda registro en `SireExport` ni movimientos marcados como reportados.
+- ¿Qué sucede si falla la generación del archivo a mitad del proceso? No queda registro en
+  `SireExport`.
 - ¿Qué sucede con las reservas `CANCELLED` o `NO_SHOW`? No tienen movimientos migratorios, porque
   nunca hubo Check-In, así que no aparecen en el archivo.
 - ¿Qué sucede si el mismo huésped ingresó y salió dentro del periodo? Aparece con dos líneas, una de
@@ -184,21 +166,18 @@ controlado.
   El separador de campos, el formato de fecha y las tablas de códigos de documento, nacionalidad y
   lugares son los del manual de cargue de SIRE, disponible en el portal de SIRE con la cuenta del
   hotel; el sistema los toma de configuración para no fijarlos en el código.
-- **FR-006**: El sistema debe excluir por defecto los movimientos ya reportados en otra exportación
-  (`reportedInExportId` no nulo) y permitir incluirlos con `includeAlreadyReported`, sin cambiar su
-  `reportedInExportId` original.
+- **FR-006**: El sistema no debe llevar cuenta de los movimientos ya descargados: cualquier
+  periodo o movimiento se puede descargar las veces que haga falta, sin restricciones.
 - **FR-007**: El sistema debe registrar cada exportación en `SireExport` con la fecha, el periodo, la
-  cantidad de movimientos incluidos y la Recepcionista que la ejecutó, y marcar los movimientos
-  incluidos como reportados dentro de la misma transacción.
+  cantidad de movimientos incluidos y la Recepcionista que la ejecutó. No marca los movimientos.
 - **FR-008**: El sistema debe entregar la respuesta 200 con únicamente el archivo `.TXT` y el
   `exportId` en la cabecera `Export-Id`, sin mezclar advertencias en esa respuesta.
 - **FR-010**: El sistema debe listar los movimientos del periodo (uno por huésped y tipo de
   movimiento) y permitir a la Recepcionista previsualizar la línea de cada uno sin efectos, y
   descargar un `.TXT` de un solo movimiento. Cada descarga individual se registra como una
-  `SireExport` de un registro y marca el movimiento como reportado en la misma transacción (FR-006 y
-  FR-007 aplican igual).
+  `SireExport` de un registro (FR-006 y FR-007 aplican igual).
 - **FR-009**: El sistema debe interceptar los errores de validación de entrada (periodo inválido,
-  sin movimientos, sin movimientos nuevos, movimiento ya reportado) y de consulta, respondiendo **HTTP 400 (Bad Request)** sin archivo y prohibiendo errores **HTTP 500**.
+  sin movimientos) y de consulta, respondiendo **HTTP 400 (Bad Request)** sin archivo y prohibiendo errores **HTTP 500**.
 
 ### Non-Functional Requirements
 
@@ -210,14 +189,13 @@ controlado.
 ### Key Entities *(include if feature involves data)*
 
 - **SireExport**: Histórico de exportaciones. Atributos: `id` (identificador único de la
-  exportación; es el valor que `MigratoryMovement.reportedInExportId` referencia), `exportDate`,
-  `exportKind` (`PERIOD` | `SINGLE_MOVEMENT`), `recordsCount`, `dateRangeStart`, `dateRangeEnd`,
-  `includeAlreadyReported` y `processedBy` (la Recepcionista).
+  exportación), `exportDate`,
+  `exportKind` (`PERIOD` | `SINGLE_MOVEMENT`), `recordsCount`, `dateRangeStart`, `dateRangeEnd`
+  y `processedBy` (la Recepcionista).
 - **MigratoryMovement**: Movimiento migratorio de un huésped extranjero en una estadía, del que se
   toman todos los campos de cada línea del archivo. Siempre está completo. Atributos: `movementId`,
   `reservationRef`, `movementType` (`ENTRY` | `DEPARTURE`), `movementDate`, `firstName`, `lastName`,
-  `documentType`, `documentNumber`, `birthDate`, `nationality`, `originPlace`, `destinationPlace` y
-  `reportedInExportId`.
+  `documentType`, `documentNumber`, `birthDate`, `nationality`, `originPlace`, y `destinationPlace`.
 
 ## Success Criteria *(mandatory)*
 
@@ -225,8 +203,6 @@ controlado.
 
 - **SC-001**: El 100% de los archivos exportados contienen la información migratoria obligatoria de
   cada huésped y su tipo de movimiento en el formato exacto requerido.
-- **SC-002**: El 100% de los periodos inválidos, sin extranjeros o sin movimientos nuevos responden
+- **SC-002**: El 100% de los periodos inválidos o sin extranjeros responden
   **HTTP 400**, con cero errores **HTTP 500**.
 - **SC-003**: El 100% de las exportaciones generan un registro auditable en `SireExport`.
-- **SC-004**: Ningún movimiento completo se reporta dos veces por accidente: solo se repite cuando la
-  Recepcionista lo pide con `includeAlreadyReported`.

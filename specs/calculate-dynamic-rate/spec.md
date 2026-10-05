@@ -7,39 +7,31 @@
 ### Descripción del problema
 
 Para captar una reserva de canal directo o para procesar la modificación de una estadía ya
-existente, el Módulo 2 (Operación de Reservas) necesita conocer el valor exacto del hospedaje. Ese
-valor no lo calcula el Módulo 2: lo produce el motor oficial de precios del hotel, expuesto por el
+existente, el Módulo 2 (Operación de Reservas) necesita conocer la tarifa de cada habitación. Esa
+tarifa no la calcula el Módulo 2: la produce el motor oficial de precios del hotel, expuesto por el
 Módulo 3 (Pricing) mediante el servicio "Calcular tarifa dinámica", que concentra las reglas de
 temporada, ocupación, anticipación y larga estadía. Si el Módulo 2 intentara replicar esa lógica de
-forma local, el hotel terminaría con dos motores de tarificación que se contradicen entre sí: el
-huésped recibiría un monto en la reserva y otro distinto en cualquier recálculo posterior, y se
-vendería por encima o por debajo de la demanda real.
+forma local, el hotel terminaría con dos motores de tarificación que se contradicen entre sí.
 
 Esta especificación describe el caso de uso desde el punto de vista del **cliente que consume el
-servicio**: el Módulo 2 actúa como orquestador. Reúne los parámetros de la estadía, verifica la
-disponibilidad mediante "Verificar disponibilidades", invoca de forma síncrona el servicio externo
-del Módulo 3,
-recibe una cotización (`RateQuote`) y **congela el `grossAmount` retornado de manera estrictamente
-informativa** en su reserva local. El Módulo 2 no asume ninguna responsabilidad financiera propia
-sobre ese importe: no le agrega impuestos, no le aplica comisiones y no lo recalcula. El IVA lo fija
-el Módulo 3 más adelante, al facturar; en esta etapa el número que viaja y se almacena es siempre
-un precio bruto.
+servicio**: el Módulo 2 verifica la disponibilidad mediante "Verificar disponibilidades", invoca de
+forma síncrona el servicio externo del Módulo 3, recibe una cotización (`RateQuote`) y
+**relaciona la tarifa recibida con la habitación de la reserva** (`ReservationRoom.roomGrossAmount`),
+de manera estrictamente informativa. El Módulo 2 **no calcula nada** con ese importe: no suma las
+tarifas de las habitaciones, no calcula diferencias, no agrega impuestos y no aplica comisiones.
+Lo único que hace con la tarifa es guardarla junto a su habitación. El IVA lo fija el Módulo 3 más adelante, al facturar.
 
 Reglas de la integración que enmarcan este caso de uso:
 
 - **Contrato de entrada (lo que el Módulo 2 envía de forma síncrona)**: la invocación se realiza
   mediante una petición **REST con el método HTTP POST** al servicio del Módulo 3, con un cuerpo en
   formato JSON (JSON Body) que contiene el identificador de categoría de habitación
-  (`categoryRoom`), la fecha de llegada (`startDate`) y la fecha de salida (`endDate`). De forma
-  opcional, y solo para flujos de actualización, el cuerpo incluye además el monto bruto anterior de
-  la reserva (`previousGrossAmount`) como valor de referencia. Se utiliza `POST` para poder
-  transmitir ese cuerpo JSON con la estructura completa de parámetros de la estadía.
+  (`categoryRoom`), la fecha de llegada (`startDate`) y la fecha de salida (`endDate`).
 - **Contrato de salida (lo que el Módulo 2 recibe del Módulo 3)**: una entidad de cotización
-  `RateQuote` con el monto total calculado (`grossAmount`), la moneda (`currency`) y —únicamente
-  cuando la solicitud incluyó un `previousGrossAmount`— la diferencia financiera calculada
-  (`amountDifference`).
-- **Sin impuestos ni comisiones en esta etapa**: el motor dinámico del Módulo 3 retorna el precio
-  bruto y el Módulo 2 lo almacena tal cual en `Reservation.grossAmount`, sin transformarlo.
+  `RateQuote` con la tarifa de la habitación (`grossAmount`), la moneda (`currency`) y la marca de
+  tiempo del cálculo (`calculatedAt`).
+- **Sin cálculos en el Módulo 2**: el Módulo 2 almacena la tarifa tal cual la recibe, sin
+  transformarla, sin sumarla y sin compararla con tarifas anteriores.
 - **Separación de responsabilidades**: la disponibilidad de la habitación se verifica **antes** de
   invocar al Módulo 3 mediante "Verificar disponibilidades" (reservas locales y calendario del
   Módulo 1). El Módulo 3 calcula el precio sobre la categoría y nunca verifica ni modifica el estado
@@ -53,25 +45,22 @@ Reglas de la integración que enmarcan este caso de uso:
 2. El flujo invocador ya verificó la disponibilidad mediante "Verificar disponibilidades"; esa
    verificación no forma parte de este caso de uso.
 3. Con la disponibilidad confirmada, el Módulo 2 invoca de forma síncrona el servicio "Calcular
-   tarifa dinámica" del Módulo 3, transmitiendo los parámetros obligatorios de la estadía y, en los
-   flujos de actualización, el `previousGrossAmount`.
-4. El Módulo 2 recibe la `RateQuote` calculada, la mapea a su modelo local y almacena el
-   `grossAmount` de forma informativa en el atributo `grossAmount` de la reserva. En los flujos de
-   actualización, presenta primero el `amountDifference` al solicitante y solo persiste el cambio
-   tras su confirmación.
+   tarifa dinámica" del Módulo 3, transmitiendo los parámetros de la estadía.
+4. El Módulo 2 recibe la `RateQuote`, la mapea a su modelo local y guarda su `grossAmount` en el
+   `roomGrossAmount` de la habitación cotizada. En los flujos de actualización, muestra primero al
+   solicitante la tarifa nueva de cada habitación afectada y solo persiste el cambio tras su
+   confirmación.
 
 Este caso de uso nunca realiza llamadas al Módulo 1 ni verifica disponibilidad: su única integración
 saliente es la llamada síncrona al servicio de tarificación del Módulo 3.
 
 **Reservas con varias habitaciones**: el servicio del Módulo 3 cotiza una categoría para un rango de
 fechas. Por eso el Módulo 2 lo invoca **una vez por cada habitación** de la reserva (con la
-`categoryRoom` de esa habitación y las fechas comunes de la reserva), guarda cada resultado en el
-`roomGrossAmount` de su `ReservationRoom` y guarda la suma en `Reservation.grossAmount`. En una
-recotización, solo invoca al Módulo 3 por las habitaciones afectadas (todas si cambian las fechas;
-solo las nuevas o cambiadas si cambian las habitaciones), enviando como `previousGrossAmount` el
-`roomGrossAmount` anterior de cada una (o `0` para una habitación agregada); una habitación quitada
-resta su `roomGrossAmount` sin invocar al Módulo 3. La diferencia total que se presenta al
-solicitante es la suma de las diferencias. Si falla la cotización de una sola habitación, no se
+`categoryRoom` de esa habitación y las fechas comunes de la reserva) y guarda cada resultado en el
+`roomGrossAmount` de su `ReservationRoom`. La reserva no tiene un total: cada habitación lleva su
+tarifa. En una recotización, solo invoca al Módulo 3 por las habitaciones afectadas (todas si
+cambian las fechas; solo las nuevas o cambiadas si cambian las habitaciones); una habitación quitada
+se va con su tarifa, sin invocar al Módulo 3. Si falla la cotización de una sola habitación, no se
 aplica nada. La cantidad de personas (`guestCount`) no se envía al Módulo 3: el precio depende de la
 categoría y de las fechas.
 
@@ -79,37 +68,33 @@ categoría y de las fechas.
 
 ### User Story 1 - Consumo de Cotización para Reservas Nuevas (Priority: P1)
 
-Durante la creación de una reserva directa, una vez que el Módulo 2 ha
-confirmado que la habitación está disponible para las fechas solicitadas, necesita
-obtener el valor de la estadía. El Módulo 2 invoca de forma síncrona el servicio "Calcular tarifa
-dinámica" del Módulo 3 enviando `categoryRoom`, `startDate` y `endDate`; recibe la `RateQuote`
-con el `grossAmount` y la `currency`; y asocia ese monto de forma informativa a la reserva que nace
-en estado `ACTIVE`. Si el Módulo 3 no responde, la creación de la reserva no puede completarse.
+Durante la creación de una reserva directa, una vez que el Módulo 2 ha confirmado que la habitación
+está disponible para las fechas solicitadas, necesita obtener la tarifa. El Módulo 2 invoca de forma
+síncrona el servicio "Calcular tarifa dinámica" del Módulo 3 enviando `categoryRoom`, `startDate` y
+`endDate`; recibe la `RateQuote` con el `grossAmount` y la `currency`; y relaciona esa tarifa, de
+forma informativa, con la habitación de la reserva que nace en estado `ACTIVE`. Si el Módulo 3 no
+responde, la creación de la reserva no puede completarse.
 
 **Why this priority**: Sin este consumo no es posible cotizar ninguna reserva directa nueva. Es el
 flujo de mayor frecuencia del caso de uso y la condición sin la cual el Módulo 2 no puede cerrar una
 venta directa con un precio consistente con el motor oficial del hotel.
 
 **Independent Test**: Se toma una categoría con cupo local disponible y un rango de fechas
-coherente,
-se ejecuta el flujo de reserva directa y se verifica que el Módulo 2 realiza exactamente una llamada
-síncrona al Módulo 3 con los tres parámetros obligatorios, que mapea la `RateQuote` recibida y que
-`Reservation.grossAmount` queda igual al `grossAmount` retornado. La prueba se completa simulando un
-Módulo 3 no disponible y confirmando que la reserva no se crea y que la respuesta es un **HTTP 400
-(Bad Request)** controlado, sin tarifas asumidas.
+coherente, se ejecuta el flujo de reserva directa y se verifica que el Módulo 2 realiza exactamente
+una llamada síncrona al Módulo 3 por habitación con los tres parámetros, que mapea la `RateQuote`
+recibida y que `ReservationRoom.roomGrossAmount` queda igual al `grossAmount` retornado. La prueba se
+completa simulando un Módulo 3 no disponible y confirmando que la reserva no se crea y que la
+respuesta es un **HTTP 400 (Bad Request)** controlado, sin tarifas asumidas.
 
 **Acceptance Scenarios**:
 
 1. **Scenario**: Cotización exitosa de una reserva directa nueva
-   - **Given** que "Verificar disponibilidades" confirmó que la `Room` de la
-     `categoryRoom` solicitada está disponible en el rango `startDate`–`endDate`, con fechas
-     coherentes
+   - **Given** que "Verificar disponibilidades" confirmó que la `Room` de la `categoryRoom`
+     solicitada está disponible en el rango `startDate`–`endDate`, con fechas coherentes
    - **When** el Módulo 2 invoca de forma síncrona el servicio "Calcular tarifa dinámica" del
      Módulo 3 con `categoryRoom`, `startDate` y `endDate`
    - **Then** el Módulo 2 recibe una `RateQuote` con `grossAmount` y `currency`, la mapea a su
-     modelo
-     local, almacena el `grossAmount` de forma informativa en `Reservation.grossAmount`, y la
-     reserva
+     modelo local, guarda el `grossAmount` en el `roomGrossAmount` de la habitación, y la reserva
      queda registrada en estado `ACTIVE`
 
 2. **Scenario**: El servicio de Pricing del Módulo 3 no responde durante la cotización
@@ -131,47 +116,37 @@ Módulo 3 no disponible y confirmando que la reserva no se crea y que la respues
 
 ### User Story 2 - Recotización por Modificación de Estadía (Priority: P1)
 
-Cuando la recepcionista modifica las fechas o la categoría
-de una reserva `ACTIVE`, el Módulo 2 debe volver a consultar el valor de la estadía. En este flujo
-el Módulo 2 consume el mismo servicio del Módulo 3 pero añade el `previousGrossAmount` de la reserva
-como referencia. El Módulo 3 retorna la nueva `RateQuote` incluyendo el `amountDifference` (monto a
-cobrar si es positivo, o a reembolsar si es negativo). El Módulo 2 presenta esa diferencia al
-solicitante y solo persiste el cambio localmente tras la confirmación.
+Cuando la recepcionista modifica las fechas o la categoría de una reserva `ACTIVE`, el Módulo 2 debe
+volver a consultar la tarifa de las habitaciones afectadas. Consume el mismo servicio del Módulo 3,
+con los mismos tres parámetros, y recibe la nueva `RateQuote` de cada habitación. El Módulo 2
+muestra al solicitante la tarifa nueva de cada habitación (junto a la vigente, sin calcular la
+diferencia entre ambas) y solo persiste el cambio localmente tras la confirmación.
 
 **Why this priority**: Las modificaciones de estadía son frecuentes y tienen impacto económico
-directo. Recotizar contra el motor oficial y mostrar la diferencia antes de guardar evita que el
+directo. Recotizar contra el motor oficial y mostrar la tarifa nueva antes de guardar evita que el
 hotel absorba cambios de tarifa no informados o que el huésped sea sorprendido con un cargo.
 
-**Independent Test**: Se toma una reserva `ACTIVE` con un `grossAmount` conocido, se modifican sus
-fechas, y se verifica que el Módulo 2 invoca el servicio del Módulo 3 enviando también el
-`previousGrossAmount`, que la `RateQuote` recibida contiene `amountDifference`, y que el nuevo
-`grossAmount` solo se persiste en la reserva local tras la confirmación explícita del solicitante.
-La prueba se completa con el Módulo 3 no disponible, verificando que el cambio no se aplica y que la
-respuesta es un **HTTP 400** controlado.
+**Independent Test**: Se toma una reserva `ACTIVE` con tarifas conocidas, se modifican sus fechas, y
+se verifica que el Módulo 2 invoca el servicio del Módulo 3 por cada habitación, que muestra la
+tarifa nueva de cada una, y que los nuevos `roomGrossAmount` solo se persisten tras la confirmación
+explícita del solicitante. La prueba se completa con el Módulo 3 no disponible, verificando que el
+cambio no se aplica y que la respuesta es un **HTTP 400** controlado.
 
 **Acceptance Scenarios**:
 
-1. **Scenario**: Recotización exitosa con diferencia a pagar
-   - **Given** una reserva en estado `ACTIVE` con un `grossAmount` vigente, cuyas fechas se amplían
-     a
-     un rango más caro
-   - **When** el Módulo 2 invoca "Calcular tarifa dinámica" del Módulo 3 enviando
-     `categoryRoom`, las nuevas `startDate` y `endDate`, y el `previousGrossAmount`
-   - **Then** el Módulo 2 recibe una `RateQuote` con el nuevo `grossAmount` y un `amountDifference`
-     positivo, presenta la diferencia a pagar a la recepcionista, y solo tras la
-     confirmación persiste el nuevo `grossAmount` en la reserva local, incrementando su `version`
+1. **Scenario**: Recotización exitosa por cambio de fechas
+   - **Given** una reserva en estado `ACTIVE` con dos habitaciones y tarifas vigentes, cuyas fechas
+     se amplían
+   - **When** el Módulo 2 invoca "Calcular tarifa dinámica" del Módulo 3 una vez por habitación,
+     enviando `categoryRoom` y las nuevas `startDate` y `endDate`
+   - **Then** el Módulo 2 recibe una `RateQuote` por habitación, muestra a la recepcionista la tarifa
+     nueva de cada una, y solo tras la confirmación persiste los nuevos `roomGrossAmount`,
+     actualizando el `updatedAt` de la reserva
 
-2. **Scenario**: Recotización exitosa con diferencia a reembolsar
-   - **Given** una reserva en estado `ACTIVE` cuyas fechas se reducen a un rango más económico
-   - **When** el Módulo 2 recotiza contra el Módulo 3 enviando el `previousGrossAmount`
-   - **Then** el Módulo 2 recibe una `RateQuote` con un `amountDifference` negativo, presenta el
-     monto a reembolsar, y persiste el nuevo `grossAmount` en la reserva local únicamente tras la
-     confirmación del solicitante
-
-3. **Scenario**: El solicitante no confirma la diferencia
-   - **Given** una `RateQuote` de recálculo ya recibida con un `amountDifference` distinto de cero
+2. **Scenario**: El solicitante no confirma
+   - **Given** las `RateQuote` de recálculo ya recibidas
    - **When** la recepcionista no confirma el cambio
-   - **Then** el Módulo 2 descarta la cotización, no modifica el `grossAmount` ni las fechas de la
+   - **Then** el Módulo 2 descarta las cotizaciones, no modifica las tarifas ni las fechas de la
      reserva, y la reserva permanece exactamente en su estado anterior
 
 ### Casos Borde
@@ -182,9 +157,9 @@ respuesta es un **HTTP 400** controlado.
   servicio de cotización de tarifas no se encuentra disponible". No se permite crear la reserva con
   una tarifa por defecto, estimada, heredada ni a cero.
 - ¿Qué sucede si el Módulo 3 no responde mientras se recotiza una reserva `ACTIVE`? El sistema
-  detiene la recotización: no aplica ningún cambio de fechas ni de categoría, conserva el
-  `grossAmount` vigente, y responde **HTTP 400 (Bad Request)** con el mensaje "No se pudo calcular
-  la nueva tarifa en este momento. Intente más tarde.". Es el mismo comportamiento que "Actualizar
+  detiene la recotización: no aplica ningún cambio de fechas ni de categoría, conserva las tarifas
+  vigentes, y responde **HTTP 400 (Bad Request)** con el mensaje "No se pudo calcular la nueva
+  tarifa en este momento. Intente más tarde.". Es el mismo comportamiento que "Actualizar
   reservación".
 - ¿Qué sucede si se intenta cotizar una `categoryRoom` que no existe en el catálogo? El sistema
   intercepta la petición o mapea el error del Módulo 3, y devuelve **HTTP 400** indicando que la
@@ -196,35 +171,32 @@ respuesta es un **HTTP 400** controlado.
 
 - **FR-001**: El sistema (Módulo 2) debe invocar de forma síncrona el servicio externo "Calcular
   tarifa dinámica" del Módulo 3 mediante una petición REST con el método HTTP `POST`, enviando en el
-  cuerpo JSON (JSON Body) los parámetros obligatorios `categoryRoom`, `startDate` y `endDate`, y
-  agregando `previousGrossAmount` cuando la invocación proviene de un flujo de actualización de
-  reservación. Se usa `POST` para poder transmitir el cuerpo JSON con la estructura completa de
-  parámetros de la estadía.
-- **FR-002**: El sistema debe mapear el objeto `RateQuote` retornado por el Módulo 3 e incorporar su
-  `grossAmount` de forma estrictamente informativa en el `roomGrossAmount` de la habitación
-  cotizada, y guardar en el `grossAmount` de la reserva la suma de los `roomGrossAmount` de todas sus
-  habitaciones, conservando además la `currency` y, cuando exista, el `amountDifference`.
+  cuerpo JSON (JSON Body) los parámetros `categoryRoom`, `startDate` y `endDate`.
+- **FR-002**: El sistema debe mapear el objeto `RateQuote` retornado por el Módulo 3 y guardar su
+  `grossAmount` y su `currency`, de forma estrictamente informativa, en el `roomGrossAmount` de la
+  habitación cotizada. El sistema no debe sumar las tarifas de las habitaciones ni guardar un total
+  en la reserva.
 - **FR-002a**: El sistema debe invocar el servicio una vez por cada habitación que necesite
   cotización (todas en una reserva nueva o en un cambio de fechas; las nuevas o cambiadas en un
   cambio de habitaciones) y tratar la cotización de la reserva como todo o nada: si una sola
-  invocación falla, no debe persistir ningún monto.
+  invocación falla, no debe persistir ninguna tarifa.
 - **FR-003**: El sistema debe interrumpir la creación de una reserva directa cuando el servicio del
   Módulo 3 no responde, agota el tiempo de espera o retorna un error de disponibilidad, devolviendo
   un error controlado **HTTP 400 (Bad Request)** y sin persistir ninguna reserva ni asumir tarifas
   por defecto o a cero.
 - **FR-004**: El sistema debe detener la recotización de una actualización de fechas o categoría
-  cuando el servicio de Pricing no responde, sin aplicar ningún cambio, conservando el `grossAmount`
-  vigente y respondiendo **HTTP 400 (Bad Request)**.
-- **FR-005**: El sistema debe garantizar que no se calcule IVA ni comisiones sobre el `grossAmount`
-  bruto retornado por la `RateQuote` en esta etapa; el IVA lo fija exclusivamente el Módulo 3 al
-  facturar.
+  cuando el servicio de Pricing no responde, sin aplicar ningún cambio, conservando las tarifas
+  vigentes y respondiendo **HTTP 400 (Bad Request)**.
+- **FR-005**: El sistema no debe realizar ningún cálculo con la tarifa recibida: ni sumas, ni
+  diferencias, ni IVA, ni comisiones. Los cálculos que se necesiten con la tarifa no son
+  del Módulo 2; el IVA lo fija exclusivamente el Módulo 3 al facturar.
 - **FR-006**: El sistema no debe verificar disponibilidad ni realizar llamadas al Módulo 1 dentro de
   este caso de uso: el flujo invocador (generar reservación directa o actualizar reservación)
   ejecuta "Verificar disponibilidades" antes de solicitar la cotización, y este caso solo consume el
   servicio de Pricing del Módulo 3.
-- **FR-007**: El sistema debe presentar el `amountDifference` a la recepcionista en los flujos de
-  recotización y persistir el nuevo `grossAmount` en la reserva local únicamente tras la
-  confirmación explícita del solicitante, incrementando la `version` de la reserva.
+- **FR-007**: El sistema debe mostrar a la recepcionista, en los flujos de recotización, la tarifa
+  nueva de cada habitación afectada y persistir los nuevos `roomGrossAmount` únicamente tras la
+  confirmación explícita del solicitante, actualizando el `updatedAt` de la reserva.
 - **FR-008**: El sistema debe interceptar los errores de validación de entrada y las respuestas de
   error del Módulo 3 (rango de fechas incoherente, categoría inexistente, parámetros ausentes) y
   mapearlos a respuestas **HTTP 400 (Bad Request)** estructuradas, quedando prohibida la propagación
@@ -235,28 +207,24 @@ respuesta es un **HTTP 400** controlado.
 - **NFR-001**: El tiempo de procesamiento de la llamada e integración síncrona con el Módulo 3,
   medido desde que el Módulo 2 emite la solicitud hasta que persiste la `RateQuote` mapeada, debe
   ser inferior a 1.5 segundos.
-- **NFR-002**: El Módulo 2 debe manejar el `grossAmount` y el `amountDifference` recibidos con
-  precisión decimal exacta, sin redondeos propios que alteren el valor calculado por el Módulo 3.
+- **NFR-002**: El Módulo 2 debe manejar el `grossAmount` recibido con precisión decimal exacta, sin
+  redondeos propios que alteren el valor calculado por el Módulo 3.
 
 ### Key Entities *(include if feature involves data)*
 
-- **Reservation** (entidad local del Módulo 2): Representa la reserva sobre la que se congela el
-  valor informativo de la estadía. Atributos: `reservationRef`, `guestRef`, `startDate`, `endDate`,
-  `grossAmount` (suma de los `roomGrossAmount` de sus habitaciones), `version` (control de
-  concurrencia optimista), `source` (`DIRECT` | `OTA`), y `status` con estados permitidos:
-  `PENDING`,
-  `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`. Las reservas directas nacen en
-  `ACTIVE` y las de OTA en `PENDING`.
+- **Reservation** (entidad local del Módulo 2): Reserva cuyas habitaciones llevan la tarifa
+  informativa. Atributos: `reservationRef`, `guestRef`, `startDate`, `endDate`, `updatedAt` (control
+  de concurrencia optimista), `source` (`DIRECT` | `OTA`), y `status` con estados permitidos:
+  `PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`. Las reservas directas
+  nacen en `ACTIVE` y las de OTA en `PENDING`. No guarda un total de las tarifas de sus habitaciones.
 - **ReservationRoom** (entidad local del Módulo 2): Habitación de la reserva. Atributos relevantes:
-  `roomId`, `categoryRoom` (se envía al Módulo 3) y `roomGrossAmount` (valor retornado por la
-  `RateQuote` de esa habitación).
+  `roomId`, `categoryRoom` (se envía al Módulo 3), `roomGrossAmount` (tarifa retornada por la
+  `RateQuote` de esa habitación) y `currency`.
 - **RateQuote** (entidad de paso / contrato consumido del Módulo 3): Representa la cotización que el
-  Módulo 2 recibe y mapea, sin ser su propietario. Atributos: `grossAmount` (precio bruto total
-  calculado por el motor dinámico), `amountDifference` (diferencia respecto al `previousGrossAmount`
-  enviado; presente solo en recotizaciones), `currency` (moneda del importe), y `calculatedAt`
+  Módulo 2 recibe y mapea, sin ser su propietario. Atributos: `grossAmount` (tarifa bruta de la
+  habitación calculada por el motor dinámico), `currency` (moneda del importe) y `calculatedAt`
   (marca temporal en la que el Módulo 3 calculó la tarifa). El Módulo 2 no persiste esta entidad
-  como registro propio: extrae sus valores hacia la `Reservation` y hacia la vista de confirmación
-  de diferencia.
+  como registro propio: extrae sus valores hacia la `ReservationRoom`.
 - **Room**: Se referencia únicamente a través de su categoría (`categoryRoom`) para construir el
   contrato de entrada del servicio de tarificación. Sus estados en el Módulo 1 son `Available`,
   `Reserved` y `Occupied`. Este caso de uso no consulta ni modifica el `status` de ninguna `Room`:
@@ -267,12 +235,12 @@ respuesta es un **HTTP 400** controlado.
 
 ### Measurable Outcomes
 
-- **SC-001**: El 100% de las cotizaciones informativas de reservas directas del Módulo 2
-  corresponden exactamente al monto bruto (`grossAmount`) retornado por la `RateQuote` del Módulo 3,
-  sin diferencias introducidas por el Módulo 2.
+- **SC-001**: El 100% de las tarifas guardadas en las habitaciones corresponden exactamente al
+  `grossAmount` retornado por la `RateQuote` del Módulo 3, sin diferencias introducidas por el
+  Módulo 2.
 - **SC-002**: El 100% de las caídas del servicio de Pricing durante la cotización de reservas nuevas
   resultan en respuestas controladas **HTTP 400 (Bad Request)**, con cero excepciones **HTTP 500**
   propagadas en producción y cero reservas creadas con tarifa asumida.
 - **SC-003**: El 100% de las caídas del servicio de Pricing durante modificaciones de reservas
   activas se resuelven sin aplicar cambios y con respuestas controladas **HTTP 400**, sin dejar
-  montos desactualizados.
+  tarifas desactualizadas.

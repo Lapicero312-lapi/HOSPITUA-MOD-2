@@ -138,12 +138,11 @@
             <div id="mdPersErr" class="field" hidden style="margin-bottom:10px"><span class="err"></span></div>
             <h2 style="margin-top:6px">Titular</h2>
             <div class="row"><div class="field" style="flex:1"><label class="req">Nombre completo</label><input id="mdNombre"></div></div>
-            <div class="row"><div class="field" style="flex:1"><label class="req">Documento <span class="code">documentNumber</span></label><input id="mdDoc"></div></div>
+            <div class="row"><div class="field" style="flex:1"><label class="req">Tipo de documento <span class="code">documentType</span></label><select id="mdDocType"><option value="CC">Cédula de ciudadanía</option><option value="CE">Cédula de extranjería</option><option value="PASSPORT">Pasaporte</option><option value="OTHER">Otro</option></select></div><div class="field" style="flex:1"><label class="req">Documento <span class="code">documentNumber</span></label><input id="mdDoc"></div></div>
             <div class="row">
               <div class="field"><label>Teléfono</label><input id="mdTel" placeholder="+57 300 000 0000"></div>
               <div class="field"><label>Email</label><input id="mdEmail" placeholder="nombre@correo.com"></div>
             </div>
-            <label class="check" style="margin-bottom:12px"><input type="checkbox" id="mdTardia"> Aviso de llegada tardía <span class="code">lateArrivalNotice</span></label>
             <div class="field"><label>Observaciones <span class="code">notes</span></label>
               <textarea id="mdNotes" rows="3" maxlength="500"></textarea>
               <span class="note" id="mdNotesCount"></span>
@@ -198,7 +197,7 @@
           <div class="grid2">
             <div>
               <div class="row"><div class="field" style="flex:1"><label class="req">Nombre completo del titular</label><input id="ndNombre" placeholder="Ej. Laura Fernández Gómez"></div></div>
-              <div class="row"><div class="field" style="flex:1"><label class="req">Documento <span class="code">documentNumber</span></label><input id="ndDoc" placeholder="Ej. CC 1.014.223.980"></div></div>
+              <div class="row"><div class="field" style="flex:1"><label class="req">Tipo de documento <span class="code">documentType</span></label><select id="ndDocType"><option value="CC">Cédula de ciudadanía</option><option value="CE">Cédula de extranjería</option><option value="PASSPORT">Pasaporte</option><option value="OTHER">Otro</option></select></div><div class="field" style="flex:1"><label class="req">Documento <span class="code">documentNumber</span></label><input id="ndDoc" placeholder="Ej. 1.014.223.980"></div></div>
               <div class="row">
                 <div class="field"><label>Teléfono</label><input id="ndTel" placeholder="+57 300 000 0000"></div>
                 <div class="field"><label>Email</label><input id="ndEmail" placeholder="nombre@correo.com"></div>
@@ -254,11 +253,11 @@
             <button class="btn sm" onclick="sireQuick(30)">Últimos 30 días</button>
           </div>
           <div class="row" style="justify-content:space-between;align-items:center">
-            <label class="check"><input type="checkbox" id="sInclude"> Incluir movimientos ya reportados <span class="code">includeAlreadyReported</span></label>
+            <span class="note">Se puede descargar las veces que haga falta.</span>
             <button class="btn primary" id="sAll" onclick="sireDownloadAll()">Descargar todo el periodo (.TXT)</button>
           </div>
           <div id="sErr"></div>
-          <p class="note">El periodo se compara con la fecha de cada movimiento (<span class="code">movementDate</span>), máximo 1 año. Cada descarga, sea del periodo o de un solo movimiento, queda registrada en el histórico y marca como reportados los movimientos incluidos.</p>
+          <p class="note">El periodo se compara con la fecha de cada movimiento (<span class="code">movementDate</span>), máximo 1 año. Cada descarga, sea del periodo o de un solo movimiento, queda registrada en el histórico.</p>
         </div>
 
         <div class="statrow" id="sStats"></div>
@@ -266,7 +265,7 @@
         <div class="panel">
           <h2>Movimientos del periodo</h2>
           <div class="tablewrap"><table>
-            <thead><tr><th>Reserva</th><th>Huésped</th><th>Nacionalidad</th><th>Movimiento</th><th>Reporte</th><th style="text-align:right">Acciones</th></tr></thead>
+            <thead><tr><th>Reserva</th><th>Huésped</th><th>Nacionalidad</th><th>Movimiento</th><th style="text-align:right">Acciones</th></tr></thead>
             <tbody id="sTable"></tbody>
           </table></div>
         </div>
@@ -289,7 +288,7 @@
       <section class="screen" id="scr-tarifas" hidden>
         <div class="panel">
           <h2>Tarifas <span class="badge m3">Solo lectura · sincronizado con Módulo 3</span></h2>
-          <p class="note" style="margin-bottom:12px">Tarifas vigentes por categoría, usadas por "Calcular tarifa dinámica" para congelar <span class="code">grossAmount</span>. El Módulo 2 no calcula IVA, no aplica comisiones y no edita estas tarifas.</p>
+          <p class="note" style="margin-bottom:12px">Tarifas vigentes por categoría, usadas por "Calcular tarifa dinámica" para relacionar la tarifa con cada habitación (<span class="code">roomGrossAmount</span>). El Módulo 2 no calcula IVA, no aplica comisiones y no edita estas tarifas.</p>
           <div class="tablewrap"><table>
             <thead><tr><th>Categoría</th><th>Capacidad</th><th>Tarifa base</th><th>Ajuste de temporada</th><th>Tarifa efectiva / noche</th></tr></thead>
             <tbody id="tblTarifas"></tbody>
@@ -337,7 +336,7 @@
 <div class="overlay" id="m-linea" hidden>
   <div class="modal">
     <h3>Previsualizar movimiento</h3>
-    <p class="sub">Así saldría la línea en el archivo <span class="code">.TXT</span>. Previsualizar no registra nada ni marca el movimiento como reportado.</p>
+    <p class="sub">Así saldría la línea en el archivo <span class="code">.TXT</span>. Previsualizar no registra nada.</p>
     <div class="kv" id="lnMeta" style="margin-bottom:14px"></div>
     <div class="tablewrap" style="margin-bottom:12px"><table>
       <thead><tr><th>#</th><th>Campo SIRE</th><th>Valor</th></tr></thead>
@@ -345,7 +344,6 @@
     </table></div>
     <p class="note" style="margin-bottom:6px">Línea del archivo (el separador se muestra como →):</p>
     <div class="pre" id="lnPre"></div>
-    <div id="lnWarn" style="margin-top:12px"></div>
     <div class="acts">
       <button class="btn" onclick="closeModal('m-linea')">Cerrar</button>
       <button class="btn primary" id="lnDownload">Descargar este movimiento (.TXT)</button>
@@ -382,51 +380,51 @@ const otas = [
 const reservations = [
   {ref:'RSV-2026-00420', guest:'Andrés Molina', doc:'CC 80.221.334', pais:'Colombia', tipo:'NATIONAL', source:'DIRECT',
     start:'2026-09-28', end:'2026-09-29', status:'ACTIVE', guestCount:1, rooms:[{n:'102',cat:'Estándar',stay:'EXPECTED'}],
-    lateArrivalNotice:true, notes:'Llega en el último vuelo, 23:30.'},
+    notes:'Llega en el último vuelo, 23:30.'},
   {ref:'RSV-2026-00418', guest:'Camila Restrepo', doc:'CC 1.020.456.789', pais:'Colombia', tipo:'NATIONAL', source:'DIRECT',
     start:'2026-09-28', end:'2026-10-01', status:'ACTIVE', guestCount:2, rooms:[{n:'104',cat:'Estándar',stay:'EXPECTED'}],
-    lateArrivalNotice:false, notes:''},
+    notes:''},
   {ref:'RSV-2026-00421', guest:'Valentina Ospina', doc:'CC 1.144.093.552', pais:'Colombia', tipo:'NATIONAL', source:'DIRECT',
     start:'2026-10-15', end:'2026-10-17', status:'ACTIVE', guestCount:3, rooms:[{n:'204',cat:'Superior',stay:'EXPECTED'}],
-    lateArrivalNotice:false, notes:'Aniversario, solicita decoración.'},
+    notes:'Aniversario, solicita decoración.'},
   {ref:'RSV-2026-00427', guest:'Marta Kowalski', doc:'Pasaporte PL7730215', pais:'Polonia', tipo:'FOREIGN', source:'OTA', ota:'Airbnb', ext:'HMX4Q8Z2TA',
     start:'2026-10-05', end:'2026-10-08', status:'ACTIVE', guestCount:2, rooms:[{n:'303',cat:'Suite',stay:'EXPECTED'}],
-    gross:1656000, commissionPct:12, commissionStatus:'CALCULATED', lateArrivalNotice:false, notes:''},
+    gross:1656000, commissionPct:12, commissionStatus:'CALCULATED', notes:''},
   {ref:'RSV-2026-00425', guest:'John Miller', doc:'Pasaporte US5519302', pais:'Estados Unidos', tipo:'FOREIGN', source:'OTA', ota:'Booking.com', ext:'4417829013',
     start:'2026-10-12', end:'2026-10-14', status:'PENDING', guestCount:1, rooms:[{n:'105',cat:'Estándar',stay:'EXPECTED'}],
-    gross:506000, commissionPct:15, commissionStatus:'CALCULATED', lateArrivalNotice:false, notes:''},
+    gross:506000, commissionPct:15, commissionStatus:'CALCULATED', notes:''},
   {ref:'RSV-2026-00412', guest:'Lukas Becker', doc:'Pasaporte C4X8R21K', pais:'Alemania', tipo:'FOREIGN', source:'OTA', ota:'Booking.com', ext:'4409921557',
     start:'2026-09-26', end:'2026-09-30', status:'IN_PROGRESS', guestCount:1, rooms:[{n:'201',cat:'Superior',stay:'CHECKED_IN'}],
-    gross:1426000, commissionPct:15, commissionStatus:'CALCULATED', lateArrivalNotice:false, notes:''},
+    gross:1426000, commissionPct:15, commissionStatus:'CALCULATED', notes:''},
   {ref:'RSV-2026-00410', guest:'Isabela Santos Rocha', doc:'Pasaporte BR552104', pais:'Brasil', tipo:'FOREIGN', source:'DIRECT',
     start:'2026-09-26', end:'2026-09-30', status:'IN_PROGRESS', guestCount:3, rooms:[{n:'202',cat:'Superior',stay:'CHECKED_IN'},{n:'301',cat:'Suite',stay:'CHECKED_IN'}],
-    lateArrivalNotice:false, notes:'Grupo familiar: titular y dos acompañantes.'},
+    notes:'Grupo familiar: titular y dos acompañantes.'},
   {ref:'RSV-2026-00415', guest:'Lucía Fernández Gil', doc:'Pasaporte', pais:'España', tipo:'FOREIGN', source:'OTA', ota:'Booking.com', ext:'4410038871',
     start:'2026-09-27', end:'2026-10-01', status:'IN_PROGRESS', guestCount:1, rooms:[{n:'101',cat:'Estándar',stay:'CHECKED_IN'}],
-    gross:1012000, commissionPct:15, commissionStatus:'CALCULATED', lateArrivalNotice:false, notes:''},
+    gross:1012000, commissionPct:15, commissionStatus:'CALCULATED', notes:''},
   {ref:'RSV-2026-00413', guest:'Hiroshi Tanaka', doc:'Pasaporte JP0098231', pais:'Japón', tipo:'FOREIGN', source:'OTA', ota:'Expedia', ext:'EXP-72201934',
     start:'2026-09-20', end:'2026-09-24', status:'COMPLETED', guestCount:1, rooms:[{n:'302',cat:'Suite',stay:'CHECKED_OUT'}],
-    gross:2208000, commissionPct:18, commissionStatus:'RECONCILED', lateArrivalNotice:false, notes:''},
+    gross:2208000, commissionPct:18, commissionStatus:'RECONCILED', notes:''},
   {ref:'RSV-2026-00407', guest:'Emma Dubois', doc:'Pasaporte FR19XK442', pais:'Francia', tipo:'FOREIGN', source:'OTA', ota:'Airbnb', ext:'HMB77PQ1RD',
     start:'2026-09-22', end:'2026-09-24', status:'NO_SHOW', guestCount:2, rooms:[{n:'203',cat:'Superior',stay:'NOT_ARRIVED'}],
-    gross:713000, commissionPct:12, commissionStatus:'CALCULATED', lateArrivalNotice:false, notes:''},
+    gross:713000, commissionPct:12, commissionStatus:'CALCULATED', notes:''},
   {ref:'RSV-2026-00402', guest:'Ricardo Peña Salas', doc:'CC 79.554.120', pais:'Colombia', tipo:'NATIONAL', source:'DIRECT',
     start:'2026-09-15', end:'2026-09-16', status:'CANCELLED', guestCount:1, rooms:[{n:'103',cat:'Estándar',stay:'NOT_ARRIVED'}],
-    lateArrivalNotice:false, notes:'', cancellation:{date:'2026-09-15', reason:'No-Show de canal directo al cierre del día', channel:'SYSTEM', processedBy:'Cierre automático'}},
+    notes:'', cancellation:{date:'2026-09-15', reason:'No-Show de canal directo al cierre del día', channel:'SYSTEM', processedBy:'Cierre automático'}},
 ];
 
 // Movimientos migratorios: uno por huésped extranjero y por tipo (ENTRY / DEPARTURE).
 const movements = [
   {id:'MM-0101', ref:'RSV-2026-00413', room:'302', firstName:'Hiroshi', lastName:'Tanaka', docType:'PA', docNumber:'JP0098231', birthDate:'1984-03-11', nat:'JAPÓN',
-    origin:'TOKIO', dest:'CARTAGENA', type:'ENTRY', date:'2026-09-20', status:'COMPLETE', reportedIn:'EXP-20260921-02'},
+    origin:'TOKIO', dest:'CARTAGENA', type:'ENTRY', date:'2026-09-20', status:'COMPLETE'},
   {id:'MM-0102', ref:'RSV-2026-00413', room:'302', firstName:'Hiroshi', lastName:'Tanaka', docType:'PA', docNumber:'JP0098231', birthDate:'1984-03-11', nat:'JAPÓN',
-    origin:'TOKIO', dest:'CARTAGENA', type:'DEPARTURE', date:'2026-09-24', status:'COMPLETE', reportedIn:null},
+    origin:'TOKIO', dest:'CARTAGENA', type:'DEPARTURE', date:'2026-09-24', status:'COMPLETE'},
   {id:'MM-0110', ref:'RSV-2026-00412', room:'201', firstName:'Lukas', lastName:'Becker', docType:'PA', docNumber:'C4X8R21K', birthDate:'1991-07-02', nat:'ALEMANIA',
-    origin:'BERLÍN', dest:'MEDELLÍN', type:'ENTRY', date:'2026-09-26', status:'COMPLETE', reportedIn:'EXP-20260927-01'},
+    origin:'BERLÍN', dest:'MEDELLÍN', type:'ENTRY', date:'2026-09-26', status:'COMPLETE'},
   {id:'MM-0111', ref:'RSV-2026-00410', room:'202', firstName:'Isabela', lastName:'Santos Rocha', docType:'PA', docNumber:'BR552104', birthDate:'1988-12-19', nat:'BRASIL',
-    origin:'SÃO PAULO', dest:'SANTA MARTA', type:'ENTRY', date:'2026-09-26', status:'COMPLETE', reportedIn:null},
+    origin:'SÃO PAULO', dest:'SANTA MARTA', type:'ENTRY', date:'2026-09-26', status:'COMPLETE'},
   {id:'MM-0112', ref:'RSV-2026-00410', room:'202', firstName:'Pedro', lastName:'Santos Rocha', docType:'PA', docNumber:'BR552187', birthDate:'2014-05-30', nat:'BRASIL',
-    origin:'SÃO PAULO', dest:'SANTA MARTA', type:'ENTRY', date:'2026-09-26', status:'COMPLETE', reportedIn:null},
+    origin:'SÃO PAULO', dest:'SANTA MARTA', type:'ENTRY', date:'2026-09-26', status:'COMPLETE'},
 ];
 
 // Datos que el Módulo 2 devolvió al Módulo 1 por venir incompletos. No son movimientos: el Módulo 1
@@ -463,11 +461,14 @@ function quoteFor(cat, s, e){
   const season = subtotal * SEASON_PCT;
   return {nights, base, subtotal, season, gross: subtotal + season};
 }
-// Montos de las reservas directas: los calcula el Módulo 3 al crearlas.
+// Tarifas de las reservas directas: las entrega el Módulo 3 por habitación; el Módulo 2 no las suma.
+const DOC_PREFIX = {CC: 'CC', CE: 'CE', PASSPORT: 'Pasaporte', OTHER: ''};
+const docNumberOf = doc => (doc || '').replace(/^(CC|CE|Pasaporte)s*/, '');
+const docLabel = (type, num) => (DOC_PREFIX[type] ? DOC_PREFIX[type] + ' ' : '') + num;
 reservations.forEach(r => {
+  r.docType = /^Pasaporte/.test(r.doc) ? 'PASSPORT' : /^CE/.test(r.doc) ? 'CE' : 'CC';
   r.rooms.forEach(rm => { if (r.source === 'DIRECT') rm.gross = quoteFor(rm.cat, r.start, r.end).gross; });
-  if (r.source === 'DIRECT') r.gross = r.rooms.reduce((a, rm) => a + rm.gross, 0);
-  else r.commissionAmount = Math.round(r.gross * r.commissionPct / 100);
+  if (r.source === 'OTA') r.commissionAmount = Math.round(r.gross * r.commissionPct / 100);
 });
 
 const LIVE = ['ACTIVE', 'PENDING', 'IN_PROGRESS'];
@@ -681,11 +682,9 @@ document.getElementById('fClear').addEventListener('click', () => {
 function renderStatRow(){
   const llegadas = reservations.filter(r => r.start === TODAY && isEditable(r));
   const salidas = reservations.filter(r => r.end === TODAY && r.status === 'IN_PROGRESS');
-  const riesgo = llegadas.filter(r => !r.lateArrivalNotice);
   document.getElementById('statRow').innerHTML = `
     <div class="statcard"><div class="lbl">Llegadas esperadas hoy</div><div class="val">${llegadas.length}</div></div>
-    <div class="statcard"><div class="lbl">Salidas esperadas hoy</div><div class="val">${salidas.length}</div></div>
-    <div class="statcard ${riesgo.length ? 'warn' : ''}"><div class="lbl">Reservas en riesgo</div><div class="val">${riesgo.length}</div></div>`;
+    <div class="statcard"><div class="lbl">Salidas esperadas hoy</div><div class="val">${salidas.length}</div></div>`;
 }
 
 // ================= Detalle =================
@@ -718,8 +717,7 @@ function renderDetalle(){
   const nights = nightsBetween(r.start, r.end);
   document.getElementById('dtStay').innerHTML =
     kv('Entrada', r.start) + kv('Salida', r.end) + kv('Noches', nights) + kv('Personas', r.guestCount) +
-    kv('Valor bruto <span class="code">grossAmount</span>', money(r.gross)) +
-    kv('Aviso de llegada tardía', r.lateArrivalNotice ? 'Sí' : 'No') +
+    (r.source === 'OTA' ? kv('Valor bruto <span class="code">totalAmount</span>', money(r.gross)) : '') +
     kv('Observaciones', r.notes || '<span class="note">—</span>');
   document.getElementById('dtRooms').innerHTML = r.rooms.map(x => `<tr><td>Hab. ${x.n}</td><td>${x.cat}</td>
     <td>${x.gross ? money(x.gross) : '<span class="note">lo informa la OTA</span>'}</td><td>${stayBadge(x.stay)}</td></tr>`).join('');
@@ -767,7 +765,7 @@ function renderMigTab(r){
   }
   box.innerHTML = retBox + `
     <div class="tablewrap"><table>
-      <thead><tr><th>Huésped</th><th>Documento</th><th>Nacimiento</th><th>Nacionalidad</th><th>Procedencia → Destino</th><th>Movimiento</th><th>Reporte SIRE</th></tr></thead>
+      <thead><tr><th>Huésped</th><th>Documento</th><th>Nacimiento</th><th>Nacionalidad</th><th>Procedencia → Destino</th><th>Movimiento</th></tr></thead>
       <tbody>${ms.map(m => `<tr>
         <td>${m.firstName} ${m.lastName}<br><span class="note">Hab. ${m.room}</span></td>
         <td>${m.docType} ${m.docNumber}</td>
@@ -775,7 +773,6 @@ function renderMigTab(r){
         <td>${m.nat}</td>
         <td>${m.origin} → ${m.dest}</td>
         <td><span class="badge neutral">${m.type}</span><br><span class="note">${m.date}</span></td>
-        <td>${m.reportedIn ? `<span class="badge ok">Reportado</span><br><span class="note">${m.reportedIn}</span>` : '<span class="badge neutral">Pendiente</span>'}</td>
       </tr>`).join('')}</tbody>
     </table></div>
     <p class="note" style="margin-top:10px">Solo lectura: el Módulo 1 envía los datos ya procesados en el Check-In y el Check-Out; el Módulo 2 no los completa ni los corrige.</p>`;
@@ -783,7 +780,7 @@ function renderMigTab(r){
 
 // ================= Modificar =================
 // Se puede cambiar: fechas, habitaciones (agregar, quitar o cambiar una por otra, de la misma o de otra
-// categoría), cantidad de personas, datos del titular, observaciones y aviso de llegada tardía.
+// categoría), cantidad de personas, datos del titular, observaciones.
 let mdRows = [];   // habitaciones que quedarían en la reserva: {n, cat, orig}
 let mdPlan = null;
 function mdDates(){
@@ -798,10 +795,10 @@ function renderModificar(){
   document.getElementById('mdSalida').value = r.end;
   document.getElementById('mdPersonas').value = r.guestCount;
   document.getElementById('mdNombre').value = r.guest;
-  document.getElementById('mdDoc').value = r.doc;
+  document.getElementById('mdDocType').value = r.docType;
+  document.getElementById('mdDoc').value = docNumberOf(r.doc);
   document.getElementById('mdTel').value = r.phone || '';
   document.getElementById('mdEmail').value = r.email || '';
-  document.getElementById('mdTardia').checked = !!r.lateArrivalNotice;
   document.getElementById('mdNotes').value = r.notes || '';
   mdRows = r.rooms.map(x => ({n: x.n, cat: x.cat, orig: x.n, origCat: x.cat}));
   refreshModificar();
@@ -869,16 +866,13 @@ function refreshModificar(){
   if (!valid){
     tarifa.innerHTML = '<p class="note">Ingrese fechas válidas para cotizar.</p>';
   } else {
-    let total = 0, lines = '';
+    let lines = '';
     mdRows.forEach(row => {
       const q = quoteFor(row.cat, s, e);
-      total += q.gross;
       lines += `<div class="line"><span>${row.n ? 'Hab. ' + row.n + ' · ' : ''}${row.cat} · ${q.nights} noche(s) + temporada</span><span>${money(q.gross)}</span></div>`;
     });
-    const diff = total - r.gross;
-    mdPlan.total = total;
-    tarifa.innerHTML = lines + `<div class="total"><span>grossAmount recalculado</span><span>${money(total)}</span></div>
-      <p class="note" style="margin-top:6px">Antes: ${money(r.gross)} · diferencia ${diff >= 0 ? '+' : '−'}${money(Math.abs(diff))}. Informativo: sin IVA ni comisión. Solo cambiar las personas, los datos del titular o las observaciones no recotiza.</p>`;
+    tarifa.innerHTML = lines + `
+      <p class="note" style="margin-top:6px">Tarifa de cada habitación, tal como la entrega el Módulo 3 (<span class="code">roomGrossAmount</span>). Informativa: el Módulo 2 no suma ni calcula diferencias, IVA ni comisión. Solo cambiar las personas, los datos del titular o las observaciones no recotiza.</p>`;
   }
 
   const origRooms = r.rooms.map(x => x.n).sort().join();
@@ -893,7 +887,7 @@ function refreshModificar(){
   const titularOk = document.getElementById('mdNombre').value.trim() && document.getElementById('mdDoc').value.trim();
   document.getElementById('mdSave').disabled = !valid || mdRows.some(row => !row.n) || !!persErr || !titularOk;
 }
-['mdEntrada', 'mdSalida', 'mdPersonas', 'mdNombre', 'mdDoc', 'mdTel', 'mdEmail', 'mdNotes', 'mdTardia']
+['mdEntrada', 'mdSalida', 'mdPersonas', 'mdNombre', 'mdDoc', 'mdTel', 'mdEmail', 'mdNotes']
   .forEach(id => document.getElementById(id).addEventListener('input', refreshModificar));
 document.getElementById('mdAddRoom').addEventListener('click', mdAddRoom);
 document.getElementById('mdSave').addEventListener('click', () => {
@@ -901,13 +895,12 @@ document.getElementById('mdSave').addEventListener('click', () => {
   r.start = document.getElementById('mdEntrada').value;
   r.end = document.getElementById('mdSalida').value;
   r.rooms = mdPlan.map(p => ({n: p.n, cat: p.cat, stay: 'EXPECTED', gross: quoteFor(p.cat, r.start, r.end).gross}));
-  r.gross = mdPlan.total;
   r.guestCount = parseInt(document.getElementById('mdPersonas').value, 10);
   r.guest = document.getElementById('mdNombre').value.trim();
-  r.doc = document.getElementById('mdDoc').value.trim();
+  r.docType = document.getElementById('mdDocType').value;
+  r.doc = docLabel(r.docType, document.getElementById('mdDoc').value.trim());
   r.phone = document.getElementById('mdTel').value.trim();
   r.email = document.getElementById('mdEmail').value.trim();
-  r.lateArrivalNotice = document.getElementById('mdTardia').checked;
   r.notes = document.getElementById('mdNotes').value.trim();
   backToList(r.ref, 'Reserva ' + r.ref + ' modificada correctamente.');
 });
@@ -922,7 +915,7 @@ function renderCancelar(){
   document.getElementById('cxSummary').innerHTML =
     kv('Titular', `${r.guest}<br><span class="note">${r.doc}</span>`) + kv('Canal', channelBadge(r)) +
     kv('Entrada', r.start) + kv('Salida', r.end) + kv('Habitaciones', roomsText(r)) + kv('Personas', r.guestCount) +
-    kv('Valor bruto', money(r.gross)) + (r.ext ? kv('Código OTA', r.ext) : '');
+    (r.source === 'OTA' ? kv('Valor bruto', money(r.gross)) : '') + (r.ext ? kv('Código OTA', r.ext) : '');
   document.getElementById('cxImpact').innerHTML = roomIsReservedToday(r)
     ? `🔔 La llegada es <b>hoy</b> y ${roomsText(r)} ya está <span class="code">Reserved</span>: al confirmar se notificará de inmediato al Módulo 1 para devolverla a <span class="code">Available</span>.`
     : `📅 La llegada es futura (${r.start}): la habitación aún no está apartada, así que no se enviará ninguna orden al Módulo 1.`;
@@ -967,10 +960,10 @@ function refreshNuevaDirecta(){
   if (dateOk && qty > 0){
     const q = quoteFor(cat, s, e);
     tarifa.innerHTML = `
-      <div class="line"><span>${q.nights} noche(s) × ${money(q.base)} × ${qty} hab.</span><span>${money(q.subtotal * qty)}</span></div>
-      <div class="line"><span>Ajuste de temporada (+${SEASON_PCT * 100}%)</span><span>${money(q.season * qty)}</span></div>
-      <div class="total"><span>Valor hospedaje bruto <span class="code">grossAmount</span></span><span>${money(q.gross * qty)}</span></div>
-      <p class="note" style="margin-top:6px">Informativo: no incluye IVA ni comisión. El Módulo 2 no los calcula.</p>`;
+      <div class="line"><span>${q.nights} noche(s) × ${money(q.base)}</span><span>${money(q.subtotal)}</span></div>
+      <div class="line"><span>Ajuste de temporada (+${SEASON_PCT * 100}%)</span><span>${money(q.season)}</span></div>
+      <div class="total"><span>Tarifa por habitación <span class="code">roomGrossAmount</span></span><span>${money(q.gross)}</span></div>
+      <p class="note" style="margin-top:6px">Se guarda en cada una de las ${qty} habitación(es), tal como la entrega el Módulo 3. Informativa: el Módulo 2 no suma un total ni calcula IVA o comisión.</p>`;
   } else {
     tarifa.innerHTML = '<p class="note">Ingrese fechas válidas para cotizar.</p>';
   }
@@ -992,12 +985,11 @@ document.getElementById('ndSubmit').addEventListener('click', () => {
   const pais = document.getElementById('ndPais').value;
   const picked = roomsFreeFor(cat, s, e).slice(0, qty);
   const ref = 'RSV-2026-00' + (nextRefNum++);
-  const r = {ref, guest: document.getElementById('ndNombre').value.trim(), doc: document.getElementById('ndDoc').value.trim(), pais,
+  const r = {ref, guest: document.getElementById('ndNombre').value.trim(), docType: document.getElementById('ndDocType').value, doc: docLabel(document.getElementById('ndDocType').value, document.getElementById('ndDoc').value.trim()), pais,
     tipo: pais === 'Colombia' ? 'NATIONAL' : 'FOREIGN', source: 'DIRECT', start: s, end: e, status: 'ACTIVE',
     guestCount: parseInt(document.getElementById('ndPersonas').value, 10),
     rooms: picked.map(x => ({n: x.n, cat, stay: 'EXPECTED', gross: quoteFor(cat, s, e).gross})),
-    lateArrivalNotice: false, notes: document.getElementById('ndNotes').value.trim()};
-  r.gross = r.rooms.reduce((a, x) => a + x.gross, 0);
+    notes: document.getElementById('ndNotes').value.trim()};
   reservations.unshift(r);
   ['ndNombre', 'ndDoc', 'ndTel', 'ndEmail', 'ndNotes'].forEach(id => document.getElementById(id).value = '');
   refreshNuevaDirecta();
@@ -1017,7 +1009,7 @@ function sirePeriod(){
   if (!s || !e) return {error: 'Debe indicar ambas fechas.'};
   if (e < s) return {error: 'El rango de fechas está invertido: la fecha final es anterior a la inicial.'};
   if (nightsBetween(s, e) > 365) return {error: 'El periodo solicitado excede el límite permitido. Por favor exporte periodos más cortos.'};
-  return {s, e, include: document.getElementById('sInclude').checked};
+  return {s, e};
 }
 // Los 12 campos de la línea SIRE, en el orden de export-sire-file FR-005.
 function sireFields(m){
@@ -1037,10 +1029,6 @@ function sireFields(m){
   ];
 }
 function sireLine(m){ return sireFields(m).map(f => f[1]).join(SIRE_CONFIG.separator); }
-function canDownload(m, include){
-  if (m.reportedIn && !include) return {ok: false, why: 'Ya se reportó en ' + m.reportedIn + '. Marque "Incluir movimientos ya reportados" para descargarlo de nuevo.'};
-  return {ok: true};
-}
 function renderSire(){
   const p = sirePeriod();
   const errBox = document.getElementById('sErr');
@@ -1054,51 +1042,42 @@ function renderSire(){
   }
   errBox.innerHTML = '';
   const inRange = movements.filter(m => m.date >= p.s && m.date <= p.e).sort((a, b) => a.date.localeCompare(b.date));
-  const ready = inRange.filter(m => canDownload(m, p.include).ok);
-  const reported = inRange.filter(m => m.reportedIn);
   document.getElementById('sStats').innerHTML = `
     <div class="statcard"><div class="lbl">Movimientos en el periodo</div><div class="val">${inRange.length}</div></div>
-    <div class="statcard"><div class="lbl">Listos para descargar</div><div class="val">${ready.length}</div></div>
-    <div class="statcard"><div class="lbl">Ya reportados</div><div class="val">${reported.length}</div></div>
     <div class="statcard ${returnsOpen.length ? 'warn' : ''}"><div class="lbl">Devueltos al Módulo 1</div><div class="val">${returnsOpen.length}</div></div>`;
-  document.getElementById('sAll').disabled = !ready.length;
-  document.getElementById('sAll').title = ready.length ? '' : 'No hay movimientos para descargar en este periodo';
+  document.getElementById('sAll').disabled = !inRange.length;
+  document.getElementById('sAll').title = inRange.length ? '' : 'No hay movimientos para descargar en este periodo';
 
   if (!inRange.length){
-    tbl.innerHTML = '<tr><td colspan="6" class="note" style="text-align:center;padding:24px">No hay movimientos migratorios que reportar en ese periodo.</td></tr>';
+    tbl.innerHTML = '<tr><td colspan="5" class="note" style="text-align:center;padding:24px">No hay movimientos migratorios que reportar en ese periodo.</td></tr>';
   } else {
     tbl.innerHTML = inRange.map(m => {
-      const d = canDownload(m, p.include);
       const name = m.firstName + ' ' + m.lastName;
       return `<tr>
         <td><span style="font-family:var(--mono);font-size:12px">${m.ref}</span><br><span class="note">Hab. ${m.room}</span></td>
         <td><div class="person">${avatarHTML(name)}<div>${name}<br><span class="note">${m.docType} ${m.docNumber || '—'}</span></div></div></td>
         <td>${m.nat}</td>
         <td><span class="badge neutral">${m.type}</span><br><span class="note">${m.date}</span></td>
-        <td>${m.reportedIn ? `<span class="badge ok">Reportado</span><br><span class="note">${m.reportedIn}</span>` : '<span class="badge neutral">Pendiente</span>'}</td>
-        <td><div class="rowacts">
           <button class="btn sm" onclick="sirePreview('${m.id}')">Previsualizar</button>
-          <button class="btn sm primary" ${d.ok ? '' : `disabled title="${d.why}"`} onclick="sireDownloadOne('${m.id}')">Descargar</button>
+          <button class="btn sm primary" onclick="sireDownloadOne('${m.id}')">Descargar</button>
         </div></td></tr>`;
     }).join('');
   }
 }
-['sStart', 'sEnd', 'sInclude'].forEach(id => document.getElementById(id).addEventListener('input', renderSire));
+['sStart', 'sEnd'].forEach(id => document.getElementById(id).addEventListener('input', renderSire));
 
-// Registra la exportación y marca como reportados los incluidos (sin cambiar el reportedInExportId original).
+// Registra la exportación en el histórico (no marca los movimientos).
 function registerExport(kind, s, e, included){
   const id = 'EXP-' + TODAY.replace(/-/g, '') + '-' + String(exportSeq++).padStart(2, '0');
   exportsHist.unshift({id, kind, start: s, end: e, ok: included.length, by: USER, date: TODAY + ' ' + new Date().toTimeString().slice(0, 5)});
-  included.forEach(m => { if (!m.reportedIn) m.reportedIn = id; });
   return id;
 }
 function sireDownloadAll(){
   const p = sirePeriod();
   if (p.error) return renderSire();
   const inRange = movements.filter(m => m.date >= p.s && m.date <= p.e);
-  const included = inRange.filter(m => canDownload(m, p.include).ok);
+  const included = inRange;
   if (!inRange.length) return toast('No hay movimientos migratorios que reportar en ese periodo.', true);
-  if (!included.length) return toast('No hay movimientos nuevos por reportar en ese periodo.', true);
   const lines = included.map(sireLine);
   const id = registerExport('Periodo', p.s, p.e, included);
   downloadTxt('SIRE_' + id + '.txt', lines.join('\r\n') + '\r\n');
@@ -1107,27 +1086,21 @@ function sireDownloadAll(){
 }
 function sireDownloadOne(mid){
   const m = movements.find(x => x.id === mid);
-  const d = canDownload(m, document.getElementById('sInclude').checked);
-  if (!d.ok) return toast(d.why, true);
   const line = sireLine(m);
   const id = registerExport('Individual', m.date, m.date, [m]);
   downloadTxt('SIRE_' + id + '_' + m.lastName.replace(/\s+/g, '_') + '.txt', line + '\r\n');
   closeModal('m-linea');
   renderAll();
-  toast(`Movimiento de ${m.firstName} ${m.lastName} descargado (${id}) y marcado como reportado.`);
+  toast(`Movimiento de ${m.firstName} ${m.lastName} descargado (${id}).`);
 }
 function sirePreview(mid){
   const m = movements.find(x => x.id === mid);
-  const d = canDownload(m, document.getElementById('sInclude').checked);
   document.getElementById('lnMeta').innerHTML =
-    kv('Reserva', m.ref) + kv('Huésped', m.firstName + ' ' + m.lastName) + kv('Movimiento', m.type + ' · ' + m.date) +
-    kv('Reporte', m.reportedIn ? 'Reportado en ' + m.reportedIn : 'Pendiente');
+    kv('Reserva', m.ref) + kv('Huésped', m.firstName + ' ' + m.lastName) + kv('Movimiento', m.type + ' · ' + m.date);
   document.getElementById('lnFields').innerHTML = sireFields(m).map((f, i) =>
     `<tr><td class="note">${i + 1}</td><td>${f[0]}</td><td>${f[1] ? `<b>${f[1]}</b>` : '<span class="badge warn">Falta</span>'}</td></tr>`).join('');
   document.getElementById('lnPre').textContent = sireLine(m).split(SIRE_CONFIG.separator).join(SIRE_CONFIG.separator === '\t' ? '  →  ' : SIRE_CONFIG.separator);
-  document.getElementById('lnWarn').innerHTML = d.ok ? '' : `<div class="lockbox" style="margin:0">${d.why}</div>`;
   const btn = document.getElementById('lnDownload');
-  btn.disabled = !d.ok;
   btn.onclick = () => sireDownloadOne(mid);
   openModal('m-linea');
 }

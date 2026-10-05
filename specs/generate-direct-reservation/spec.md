@@ -35,8 +35,7 @@ operativo de la llegada.
    igual a la suma de la capacidad máxima (`maxCapacity`) de las habitaciones elegidas.
 4. Si todas las habitaciones están disponibles, el sistema solicita al Módulo 3 el cálculo del
    valor de hospedaje bruto de cada habitación mediante "Calcular tarifa dinámica", obtiene un
-   `RateQuote` por habitación y muestra al huésped, de forma informativa, el valor de cada una y el
-   total.
+   `RateQuote` por habitación y muestra al huésped, de forma informativa, la tarifa de cada una.
 5. El solicitante ingresa los datos de identidad del `Guest` titular y, opcionalmente, las
    observaciones de la reserva (`notes`, máximo 500 caracteres), y confirma la reserva.
 6. El sistema crea la `Reservation` directamente en estado `ACTIVE`, sin ningún paso de cobro, con
@@ -52,10 +51,9 @@ operativo de la llegada.
    la creación es todo o nada y el solicitante puede reintentar sin duplicar. Si la llegada es
    futura, el sistema responde 201 (Created) al crear la reserva, sin depender del Módulo 1.
 
-El sistema guarda en cada `ReservationRoom` el monto devuelto por el Módulo 3 para esa habitación
-(`roomGrossAmount`) y en la reserva la suma (`grossAmount`: valor de hospedaje bruto, suma de las
-tarifas dinámicas de todas las noches de todas las habitaciones, antes de comisión e impuestos), con
-carácter informativo; registra `source` como `DIRECT`, la comisión (`commissionPercentage` y
+El sistema guarda en cada `ReservationRoom` la tarifa devuelta por el Módulo 3 para esa habitación
+(`roomGrossAmount`: tarifa bruta de hospedaje de esa habitación, antes de comisión e impuestos), con
+carácter informativo, y no calcula ni guarda un total de la reserva; registra `source` como `DIRECT`, la comisión (`commissionPercentage` y
 `commissionAmount`) en `0` y el `externalConfirmationCode` como `null`. No se calcula ni se almacena
 IVA en esta etapa: se fija al facturar en el Check-Out.
 
@@ -80,7 +78,7 @@ bruto cotizado por el Módulo 3, sin impuestos, entrega al huésped un precio co
 
 **Independent Test**: Se puede probar seleccionando una habitación disponible para un rango de
 fechas y simulando la respuesta del Módulo 3 con un valor bruto válido. Se verifica que la
-`Reservation` se persiste en `ACTIVE` con `grossAmount` asignado, `commissionAmount` en `0`,
+`Reservation` se persiste en `ACTIVE` con el `roomGrossAmount` de cada habitación asignado, `commissionAmount` en `0`,
 `externalConfirmationCode` en `null` y `source` en `DIRECT`, y que, si la llegada es hoy, se emite
 al Módulo 1 la orden `Reserved` con el detalle de la reserva; con llegada futura no se emite ninguna
 orden. La prueba se completa intentando reservar una habitación
@@ -94,8 +92,8 @@ reserva y se devuelve un error controlado.
      disponibilidades"
    - **When** la Recepcionista ingresa los datos del huésped titular, cotiza el valor bruto con el
      Módulo 3 y confirma la reserva
-   - **Then** el sistema persiste la `Reservation` directamente en `ACTIVE` con `grossAmount`
-     asignado, comisión `0` y `externalConfirmationCode` `null`, asocia el `RateQuote` de forma
+   - **Then** el sistema persiste la `Reservation` directamente en `ACTIVE` con el `roomGrossAmount`
+     de cada habitación asignado, comisión `0` y `externalConfirmationCode` `null`, asocia el `RateQuote` de forma
      informativa, y, si la llegada es hoy, ordena al Módulo 1 marcar la `Room` como `Reserved` con
      el detalle de la reserva
 
@@ -128,7 +126,7 @@ reserva y se devuelve un error controlado.
    - **When** la Recepcionista registra una reserva con las dos habitaciones y `guestCount` 4,
      cotiza y confirma
    - **Then** el sistema persiste una sola `Reservation` en `ACTIVE` con dos `ReservationRoom` en
-     `EXPECTED`, cada una con su `roomGrossAmount`, y `grossAmount` igual a la suma de ambas
+     `EXPECTED`, cada una con su `roomGrossAmount`, sin total en la reserva
 
 6. **Scenario**: Una de las habitaciones del grupo no está disponible (Error)
    - **Given** que la `Room` 101 está disponible y la `Room` 102 tiene un mantenimiento en las fechas
@@ -203,7 +201,7 @@ reserva y se devuelve un error controlado.
 - **FR-005**: El sistema debe crear y almacenar la reserva directamente en estado `ACTIVE`, sin
   ningún paso de cobro ni estado intermedio, con una `ReservationRoom` en `EXPECTED` por habitación.
 - **FR-006**: El sistema debe registrar `source` como `DIRECT`, `roomGrossAmount` en cada habitación
-  con la tarifa bruta devuelta por el Módulo 3 para ella, `grossAmount` con la suma,
+  con la tarifa bruta devuelta por el Módulo 3 para ella, sin total en la reserva,
   `commissionPercentage` y `commissionAmount` con valor `0` y `externalConfirmationCode` como
   `null`; no debe calcular ni almacenar IVA en esta etapa.
 - **FR-007**: El sistema debe ordenar al Módulo 1, mediante "Establecer estado de habitación",
@@ -229,15 +227,16 @@ reserva y se devuelve un error controlado.
 ### Key Entities *(include if feature involves data)*
 
 - **Reservation**: Contrato de reserva de canal directo. Atributos: `reservationRef`, `guestRef`,
-  `guestCount`, `startDate`, `endDate`, `grossAmount` (suma de los valores brutos de sus
-  habitaciones calculados por el Módulo 3, informativo), `notes`, `lateArrivalNotice` (`false` al
-  crear), `commissionPercentage` (`0`), `commissionAmount` (`0`), `externalConfirmationCode`
+  `guestCount`, `startDate`, `endDate`, `notes`,
+  `commissionPercentage` (`0`), `commissionAmount` (`0`), `externalConfirmationCode`
   (`null`), `source` (`DIRECT`), `createdAt`, y `status` con estados permitidos:
   `PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`. En este flujo se crea
   siempre en `ACTIVE`.
 - **ReservationRoom**: Cada habitación de la reserva. Atributos: `reservationRef`, `roomId`,
-  `roomNumber`, `categoryRoom`, `roomGrossAmount` y `stayStatus` (nace en `EXPECTED`).
-- **Guest**: Huésped titular. Atributos: `id`, `fullName`, `documentNumber`, `nationality`, `type`,
+  `roomNumber`, `categoryRoom`, `roomGrossAmount` (tarifa de la habitación calculada por el Módulo 3,
+  informativa), `currency` y `stayStatus` (nace en `EXPECTED`).
+- **Guest**: Huésped titular. Atributos: `id`, `fullName`, `documentType` (`CC`, `CE`, `PASSPORT` u `OTHER`), `documentNumber`,
+  `nationality`, `type`,
   `contactPhone`, `contactEmail`.
 - **RateQuote**: Cotización del valor bruto de una habitación calculada por el Módulo 3, con
   carácter informativo. Atributos: `reservationRef`, `roomId`, `grossAmount`, `currency`,

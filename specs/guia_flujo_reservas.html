@@ -125,7 +125,7 @@
             </tr>
             <tr>
                 <td><strong>Fin de Día (No-Show)</strong></td>
-                <td>Proceso automático sobre las reservas de hoy sin ingreso y sin llegada tardía avisada (<code>lateArrivalNotice</code>): canal OTA pasa a <code>NO_SHOW</code> y se conserva para conciliar comisiones con la agencia; canal directo pasa a <code>CANCELLED</code>.</td>
+                <td>Proceso automático sobre las reservas de hoy sin ingreso: canal OTA pasa a <code>NO_SHOW</code> y se conserva para conciliar comisiones con la agencia; canal directo pasa a <code>CANCELLED</code>.</td>
                 <td><strong>M2 notifica a M1:</strong> En ambos canales ordena devolver la <code>Room</code> a <code>Available</code>, solo si sigue apartada por esa reserva (nunca si M1 la reporta <code>Occupied</code>).</td>
             </tr>
             <tr>
