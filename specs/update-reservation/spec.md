@@ -566,10 +566,10 @@ ingreso, y libere las habitaciones correspondientes.
 - **FR-003**: El sistema debe invocar "Calcular tarifa dinámica" del Módulo 3 por cada habitación
   afectada cuando cambien las fechas, se agregue una habitación o una habitación cambie de categoría,
   mostrar de cada una su tarifa anterior (si la tenía) y su nueva tarifa con el mismo detalle de la
-  cotización que al crear la reserva (en un cambio de categoría, también la categoría nueva con su tarifa
-  base por noche), mostrar al final el resumen de tarifa de toda la reserva (total anterior, total nuevo
-  y diferencia, contando las habitaciones sin cambio, las agregadas y las quitadas), y exigir la
-  confirmación del solicitante antes de persistir. El resumen es solo informativo y no se guarda. Cambiar una habitación por otra de la misma categoría, sin cambiar
+  cotización que al crear la reserva (en un cambio de categoría, también la categoría nueva con su
+  tarifa base por noche), mostrar las habitaciones quitadas con su tarifa anterior, sin sumarlas, sin
+  mostrar ningún total ni calcular la diferencia (el Módulo 2 no calcula nada financiero), y exigir la
+  confirmación del solicitante antes de persistir. Cambiar una habitación por otra de la misma categoría, sin cambiar
   las fechas, no recotiza ni muestra tarifa.
 - **FR-004**: El sistema debe permitir modificar `guestCount`, los datos personales del `Guest`,
   `notes` y `lateArrivalNotice` sin invocar al Módulo 3 ni exigir disponibilidad.

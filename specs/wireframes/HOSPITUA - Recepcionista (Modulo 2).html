@@ -939,7 +939,6 @@ function refreshModificar(){
   const removed = valid ? r.rooms.filter(x => !mdRows.some(row => row.orig === x.n)) : [];
   const show = valid && (affected.length || removed.length);
   document.getElementById('mdTarifaPanel').hidden = !show;
-  const signed = n => (n > 0 ? '+' : n < 0 ? '−' : '') + money(Math.abs(n));
   if (show){
     const prevOf = row => row.orig === null ? null : r.rooms.find(x => x.n === row.orig);
     const cards = affected.map(row => {
@@ -955,14 +954,11 @@ function refreshModificar(){
         <div class="total"><span>Su nueva tarifa es</span><span>${money(q.gross)}</span></div>
       </div>`;
     }).join('');
-    const quitadas = removed.map(x => `<div class="line"><span>Se quita Hab. ${x.n} · ${x.cat}</span><span>−${money(x.gross)}</span></div>`).join('');
-    const totalBefore = r.rooms.reduce((acc, x) => acc + x.gross, 0);
-    const totalNow = mdRows.reduce((acc, row) => acc + (affected.includes(row) ? quoteFor(row.cat, s, e).gross : prevOf(row).gross), 0);
-    const diff = totalNow - totalBefore;
-    tarifa.innerHTML = cards + (quitadas ? `<div style="padding-bottom:10px;margin-bottom:10px;border-bottom:1px solid var(--line-soft)">${quitadas}</div>` : '') + `
-      <div class="line"><span>Total anterior (${r.rooms.length} hab.)</span><span>${money(totalBefore)}</span></div>
-      <div class="total"><span>Total nuevo (${mdRows.length} hab.)</span><span>${money(totalNow)}</span></div>
-      <div class="line"><span>${diff > 0 ? 'La reserva aumenta' : diff < 0 ? 'La reserva disminuye' : 'Sin diferencia'}</span><span><b>${diff === 0 ? '' : signed(diff)}</b></span></div>`;
+    const quitadas = removed.map(x => `<div style="padding-bottom:10px;margin-bottom:10px;border-bottom:1px solid var(--line-soft)">
+        <div class="line"><b>Hab. ${x.n} · ${x.cat}</b><span class="note">Se quita</span></div>
+        <div class="line"><span>Tarifa anterior (${x.cat})</span><span>${money(x.gross)}</span></div>
+      </div>`).join('');
+    tarifa.innerHTML = cards + quitadas;
   } else tarifa.innerHTML = '';
 
   const notes = document.getElementById('mdNotes').value;
@@ -1045,8 +1041,7 @@ function refreshNuevaDirecta(){
     tarifa.innerHTML = `
       <div class="line"><span>${q.nights} noche(s) × ${money(q.base)}</span><span>${money(q.subtotal)}</span></div>
       <div class="line"><span>Ajuste de temporada (+${SEASON_PCT * 100}%)</span><span>${money(q.season)}</span></div>
-      <div class="total"><span>Tarifa por habitación</span><span>${money(q.gross)}</span></div>
-      ${qty > 1 ? `<div class="line" style="margin-top:8px"><span>${qty} habitaciones × ${money(q.gross)}</span></div><div class="total"><span>Total de la reserva</span><span>${money(q.gross * qty)}</span></div>` : ''}`;
+      <div class="total"><span>Tarifa por habitación</span><span>${money(q.gross)}</span></div>`;
   } else {
     tarifa.innerHTML = '<p class="note">Ingrese fechas válidas para cotizar.</p>';
   }

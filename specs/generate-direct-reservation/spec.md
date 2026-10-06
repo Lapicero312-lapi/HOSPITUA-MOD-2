@@ -37,8 +37,7 @@ operativo de la llegada.
    igual a la suma de la capacidad máxima (`maxCapacity`) de las habitaciones elegidas.
 4. Si todas las habitaciones están disponibles, el sistema solicita al Módulo 3 el cálculo del
    valor de hospedaje bruto de cada habitación mediante "Calcular tarifa dinámica", obtiene un
-   `RateQuote` por habitación y muestra al huésped, de forma informativa, la tarifa de cada una y, si la
-   reserva tiene varias habitaciones, el total de todas (solo en pantalla, no se guarda).
+   `RateQuote` por habitación y muestra al huésped, de forma informativa, la tarifa de cada una.
 5. El solicitante ingresa los datos de identidad del `Guest` titular y, opcionalmente, las
    observaciones de la reserva (`notes`, máximo 500 caracteres), y confirma la reserva. El formulario
    de creación no pide el aviso de llegada tardía (`lateArrivalNotice`): la reserva nace sin aviso y
@@ -59,8 +58,7 @@ operativo de la llegada.
 
 El sistema guarda en cada `ReservationRoom` la tarifa devuelta por el Módulo 3 para esa habitación
 (`roomGrossAmount`: tarifa bruta de hospedaje de esa habitación, antes de comisión e impuestos), con
-carácter informativo, y no guarda un total de la reserva (el total que se muestra en pantalla es solo
-informativo); registra `source` como `DIRECT`, la comisión (`commissionPercentage` y
+carácter informativo, y no calcula ni guarda un total de la reserva; registra `source` como `DIRECT`, la comisión (`commissionPercentage` y
 `commissionAmount`) en `0` y el `externalConfirmationCode` como `null`. No se calcula ni se almacena
 IVA en esta etapa: se fija al facturar en el Check-Out.
 
