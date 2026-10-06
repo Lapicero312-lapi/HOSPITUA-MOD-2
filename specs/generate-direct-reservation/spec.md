@@ -236,8 +236,7 @@ reserva y se devuelve un error controlado.
   `roomNumber`, `categoryRoom`, `roomGrossAmount` (tarifa de la habitación calculada por el Módulo 3,
   informativa), `currency` y `stayStatus` (nace en `EXPECTED`).
 - **Guest**: Huésped titular. Atributos: `id`, `fullName`, `documentType` (`CC`, `CE`, `PASSPORT` u `OTHER`), `documentNumber`,
-  `nationality`, `type`,
-  `contactPhone`, `contactEmail`.
+  `nationality`, `contactPhone`, `contactEmail`.
 - **RateQuote**: Cotización del valor bruto de una habitación calculada por el Módulo 3, con
   carácter informativo. Atributos: `reservationRef`, `roomId`, `grossAmount`, `currency`,
   `calculatedAt`.

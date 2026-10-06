@@ -11,8 +11,8 @@ están numeradas como en [decisiones-pendientes.md](./decisiones-pendientes.md).
 Los dos módulos comparten habitaciones, reservas, Check-In, Check-Out y datos de huéspedes extranjeros.
 Para que la lógica sea la misma en ambos lados, necesitamos que el Módulo 1 confirme **cinco cosas**:
 
-1. **Datos migratorios completos.** Los huéspedes extranjeros llegan ya procesados y completos. Si a uno
-   le falta un dato, el Módulo 2 se lo devuelve y el Módulo 1 debe reenviarlo completo. Además de los
+1. **Datos migratorios completos.** Los huéspedes extranjeros llegan ya procesados y completos, y el
+   Módulo 2 da por hecho que llegan bien: no los valida ni los devuelve. Además de los
    campos anteriores, ahora se exige **procedencia y destino**.
 2. **Check-In y Check-Out por habitación**, con el `roomId` y la lista de huéspedes extranjeros en la
    misma notificación.
@@ -59,15 +59,10 @@ Cada huésped de `foreignGuests` debe traer **los diez campos**:
 Reglas:
 
 - **Ya procesados y completos.** El Módulo 1 no arma ni envía el huésped si le falta un dato.
-- **Si a pesar de eso llega incompleto**, el Módulo 2 no registra su movimiento y **se lo devuelve** al
-  Módulo 1 (ver 4.3). El Check-In o Check-Out físico y el cambio de estado de la habitación **se
-  conservan**; los demás huéspedes de la misma notificación se registran normalmente.
-- **Reenvío.** El Módulo 1 reenvía solo al huésped devuelto, completo. Es idempotente: reenviar un huésped
-  ya registrado no lo duplica.
+- **Sin devoluciones.** El Módulo 2 registra los datos tal como llegan. Es idempotente: recibir de nuevo un
+  huésped ya registrado no lo duplica.
 - Un huésped tiene, por reserva, un solo `ENTRY` y un solo `DEPARTURE`, aunque cambie de habitación.
 - Una reserva de titular colombiano puede tener acompañantes extranjeros: se registran igual.
-- Si el titular es extranjero y la notificación llega sin ningún dato migratorio suyo, el Módulo 2
-  devuelve la notificación para que se reenvíe con él.
 - Una notificación duplicada de una habitación ya en `CHECKED_IN` o `CHECKED_OUT` se responde 200 sin
   cambiar estados.
 - Si la reserva no existe, o está en `CANCELLED`, `NO_SHOW`, `PENDING` o `COMPLETED` al llegar un
@@ -105,7 +100,7 @@ Cuando el Módulo 2 ordena `Reserved` o `Available` (ver 4.2), el Módulo 1 debe
 - **Por cada reserva**: `reservationRef`, `status`, `source`, `externalConfirmationCode` (solo OTA),
   `startDate`, `endDate`, noches, `guestCount`, `notes` y `updatedAt`; por cada
   habitación `roomId`, `roomNumber` y `categoryRoom`; y el titular con `guestRef`, `fullName`,
-  `documentType`, `documentNumber`, `nationality`, `type`, `contactPhone` y `contactEmail`.
+  `documentType`, `documentNumber`, `nationality`, `contactPhone` y `contactEmail`.
 - **Sin datos financieros** (ni tarifas ni comisión). Es **informativa**: no aparta ni libera
   habitaciones y no cambia estados.
 - No se envían actualizaciones por el Check-In, el Check-Out ni por cambios de reservas cuya llegada no es
@@ -130,21 +125,6 @@ Cuando el Módulo 2 ordena `Reserved` o `Available` (ver 4.2), el Módulo 1 debe
   nada). Si rechaza el de un cambio de habitación, el cambio se aborta y la reserva original se conserva.
 - **Requisito:** el estado `Reserved` debe existir en `Room.status`. Sin él, las reservas con llegada hoy
   fallan y se cancelan (B1).
-
-### 4.3 Devolución de datos migratorios (`MigratoryDataReturned`) — nuevo
-
-Mensaje del Módulo 2 al Módulo 1 cuando un huésped extranjero llega incompleto o inválido:
-
-- `reservationRef`
-- `guest` (`documentNumber` y nombre, si se enviaron)
-- `origin` (`CHECK_IN` o `CHECK_OUT`)
-- `missingFields` (campos faltantes o inválidos)
-- `reason` (motivo legible, por ejemplo "La fecha de movimiento migratorio no puede ser futura")
-
-**El Módulo 1 debe** recibirlo, completar los datos de ese huésped y reenviarlo (ver 3.1). Casos que lo
-disparan: campo obligatorio ausente, fecha de nacimiento no pasada, fecha de movimiento futura,
-`movementType` que no corresponde al evento (un `DEPARTURE` en un Check-In) o salida anterior a la
-entrada del mismo huésped.
 
 ## 5. Lo que el Módulo 1 expone (consultas del Módulo 2) — B2, B3, B4, B5, B6, B12
 
@@ -199,7 +179,7 @@ Su spec ya cubre gran parte de lo que pedimos. Esto es lo que coincide y lo que 
 | B17 | Nombres exactos de los campos del inventario | `id`, `roomNumber`, `categoryRoom`, `maxCapacity`, `status` | Pendiente |
 | B18 | Poder excluir habitaciones `Inactive` y filtrar por varios estados | Sí | Pendiente |
 | B19 | Qué estados impiden reservar una estadía futura | `PendingCleaning` e `InCleaning` no bloquean (decidido); confirmar los demás | Parcial |
-| Nueva | Recibir la devolución de datos migratorios y reenviar completo | Ver sección 4.3 | Pendiente |
+| B20 | Tipo de documento del titular (`documentType`) en la lista del día | Valores `CC`, `CE`, `PASSPORT` y `OTHER` | Pendiente: confirmar la lista de valores |
 
 ## 6.1 Preguntas para el Módulo 1
 
@@ -267,35 +247,36 @@ favor respondan con datos concretos (nombres, valores, ejemplos); si algo no exi
     nacimiento, nacionalidad, tipo de movimiento (entrada o salida), fecha del movimiento, **lugar de
     procedencia y lugar de destino**. ¿Los capturan todos hoy? ¿Cuáles no y por qué?
 23. Si un huésped les llega con un dato faltante, ¿lo dejan pasar o no arman el mensaje? ¿Pueden
-    garantizar que solo nos envían huéspedes completos?
-24. Cuando les devolvamos un huésped incompleto (con qué dato falta), ¿cómo lo reciben y cómo lo
-    reenviarían completo? ¿Pueden reenviar solo a ese huésped?
-25. ¿Qué formato y zona horaria tienen las fechas de Check-In y Check-Out?
-26. Si un huésped cambia de habitación dentro de la misma reserva, ¿qué mensajes envían?
+    garantizar que solo nos envían huéspedes completos? (El Módulo 2 no los valida ni los devuelve.)
+24. ¿Qué formato y zona horaria tienen las fechas de Check-In y Check-Out?
+25. Si un huésped cambia de habitación dentro de la misma reserva, ¿qué mensajes envían?
 
 ### G. Lista de reservas del día
 
-27. ¿Pueden recibir por cola la lista de reservas del día y sus actualizaciones (alta, cambio, baja)?
+26. ¿Pueden recibir por cola la lista de reservas del día y sus actualizaciones (alta, cambio, baja)?
     ¿Cuál es el nombre de la cola o del canal?
-28. La lista trae, por reserva: referencia, estado, canal, código de la agencia (si es OTA), fechas,
+27. La lista trae, por reserva: referencia, estado, canal, código de la agencia (si es OTA), fechas,
     noches, personas, observaciones, fecha de última actualización, habitaciones (identificador,
-    número y categoría) y datos del titular (nombre, tipo y número de documento, nacionalidad, tipo, teléfono, correo).
+    número y categoría) y datos del titular (nombre, tipo y número de documento, nacionalidad, teléfono, correo).
     ¿Les falta algún dato? ¿Sobra alguno?
-29. ¿Cómo manejan un mensaje repetido o fuera de orden? (Cada mensaje lleva identificador y número de
+28. ¿Cómo manejan un mensaje repetido o fuera de orden? (Cada mensaje lleva identificador y número de
     secuencia.)
-30. Hoy consultan las reservas al Módulo 2. ¿Pueden dejar de hacerlo y usar solo la lista?
+29. Hoy consultan las reservas al Módulo 2. ¿Pueden dejar de hacerlo y usar solo la lista?
 
 ### H. Día operativo
 
-31. Vamos a usar el día calendario de Colombia, de 00:00 a 23:59, con la lista del día a las 00:00. ¿Su
+30. Vamos a usar el día calendario de Colombia, de 00:00 a 23:59, con la lista del día a las 00:00. ¿Su
     sistema opera igual? ¿Qué zona horaria usa su servidor?
 
 ## 7. Cambios recientes que afectan al Módulo 1
 
 - **Procedencia y destino** son ahora obligatorios por huésped extranjero (antes se habían quitado).
-- **Ya no existe el estado "incompleto"** en el Módulo 2. Lo incompleto se devuelve al Módulo 1.
+- **El Módulo 2 ya no devuelve datos migratorios.** Da por hecho que el Módulo 1 los envía completos y correctos.
 - **La lista del día sale a las 00:00**, no a una hora configurable.
 - **El Módulo 1 ya no consulta `GET /api/reservations`.**
+- **La lista del día trae el tipo de documento del titular** (`documentType`) y la fecha de última actualización de la reserva (`updatedAt`, que reemplaza al antiguo `version`). Ya no se envía el tipo `NATIONAL`/`FOREIGN`: el extranjero se identifica por nacionalidad distinta de Colombia.
+- **Ya no existe el aviso de llegada tardía.** El cierre del día marca `NO_SHOW` (OTA) o `CANCELLED` (directa) a toda reserva con llegada ese día que no tuvo Check-In, y el Módulo 2 ordena `Available` para sus habitaciones.
+- Las tarifas de las habitaciones se quedan en el Módulo 2: la lista no las incluye.
 - Las reservas OTA las modifica y cancela solo la propia OTA por su API; no afecta el contrato con el
   Módulo 1, pero explica que una cancelación OTA llega como `REMOVED` con motivo `CANCELLED`.
 
