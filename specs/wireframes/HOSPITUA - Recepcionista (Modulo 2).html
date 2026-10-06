@@ -267,7 +267,7 @@
         <div class="panel">
           <h2>Habitaciones</h2>
           <div class="tablewrap"><table>
-            <thead><tr><th>N.º</th><th>Categoría</th><th>Estado hoy</th><th>Detalle</th></tr></thead>
+            <thead><tr><th>N.º</th><th>Categoría</th><th>Capacidad</th><th>Estado hoy</th><th>Detalle</th></tr></thead>
             <tbody id="tblRooms"></tbody>
           </table></div>
         </div>
@@ -278,7 +278,7 @@
         <div class="panel">
           <h2>Tarifas</h2>
           <div class="tablewrap"><table>
-            <thead><tr><th>Categoría</th><th>Capacidad</th><th>Tarifa base</th><th>Ajuste de temporada</th><th>Tarifa efectiva / noche</th></tr></thead>
+            <thead><tr><th>Categoría</th><th>Tarifa base</th><th>Ajuste de temporada</th><th>Tarifa efectiva / noche</th></tr></thead>
             <tbody id="tblTarifas"></tbody>
           </table></div>
         </div>
@@ -1118,12 +1118,12 @@ function renderRooms(){
   document.getElementById('tblRooms').innerHTML = rooms.map(rm => {
     const st = roomStatus(rm.n);
     const cls = {Available: 'ok', Reserved: 'warn', Occupied: 'ok', DisabledForRepairs: 'err'}[st.estado] || 'neutral';
-    return `<tr><td>Hab. ${rm.n}</td><td>${rm.cat}</td><td><span class="badge ${cls}">${st.estado}</span></td><td class="note">${st.det}</td></tr>`;
+    return `<tr><td>Hab. ${rm.n}</td><td>${rm.cat}</td><td>${capacity[rm.cat]} personas</td><td><span class="badge ${cls}">${st.estado}</span></td><td class="note">${st.det}</td></tr>`;
   }).join('');
 }
 function renderTarifas(){
   document.getElementById('tblTarifas').innerHTML = Object.entries(rateTable).map(([cat, base]) =>
-    `<tr><td>${cat}</td><td>${capacity[cat]} personas</td><td>${money(base)}</td><td>+${SEASON_PCT * 100}% (${money(base * SEASON_PCT)})</td><td><b>${money(base * (1 + SEASON_PCT))}</b></td></tr>`).join('');
+    `<tr><td>${cat}</td><td>${money(base)}</td><td>+${SEASON_PCT * 100}% (${money(base * SEASON_PCT)})</td><td><b>${money(base * (1 + SEASON_PCT))}</b></td></tr>`).join('');
 }
 function renderOtas(){
   document.getElementById('tblOtas').innerHTML = otas.map(o => {

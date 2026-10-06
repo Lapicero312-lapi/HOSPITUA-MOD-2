@@ -61,7 +61,9 @@ de cotizar. Esta pantalla **no sustituye ni anticipa** la cotización real: es u
 construida en el Módulo 2 con una regla fija de ejemplo (un mismo porcentaje de ajuste para todas las
 categorías), sin ninguna llamada al Módulo 3. La tarifa que realmente queda en el `roomGrossAmount` de
 una reserva siempre se obtiene en el momento de reservar o recotizar, mediante la llamada síncrona de
-este caso de uso — nunca desde los valores mostrados en esta pantalla de referencia.
+este caso de uso — nunca desde los valores mostrados en esta pantalla de referencia. La tarifa se
+fija por categoría y fechas, no por cantidad de personas, así que esta pantalla no muestra la
+capacidad de las habitaciones (esa información está en la pantalla "Habitaciones").
 
 **Reservas con varias habitaciones**: el servicio del Módulo 3 cotiza una categoría para un rango de
 fechas. Por eso el Módulo 2 lo invoca **una vez por cada habitación** de la reserva (con la
@@ -212,8 +214,8 @@ cambio no se aplica y que la respuesta es un **HTTP 400** controlado.
   de excepciones que deriven en **HTTP 500 (Internal Server Error)**.
 - **FR-009**: El sistema debe ofrecer a la Recepcionista una pantalla de solo lectura con una tarifa
   de referencia por categoría (tarifa base, ajuste de temporada ilustrativo y tarifa efectiva
-  resultante), separada del flujo de reserva, sin invocar al Módulo 3 y sin que sus valores se
-  persistan ni se usen como `roomGrossAmount` de ninguna reserva.
+  resultante), sin capacidad de las habitaciones, separada del flujo de reserva, sin invocar al
+  Módulo 3 y sin que sus valores se persistan ni se usen como `roomGrossAmount` de ninguna reserva.
 
 ### Non-Functional Requirements
 

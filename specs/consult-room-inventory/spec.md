@@ -35,7 +35,8 @@ de insumo a "Verificar disponibilidades" antes de crear o modificar cualquier re
 **Pantalla de referencia "Habitaciones" (solo lectura, fuera de "Verificar disponibilidades"):**
 además de ser insumo interno de "Verificar disponibilidades", el Módulo 2 ofrece a la Recepcionista
 una pantalla de solo lectura que lista **todas** las `Room` de **todas** las categorías con su
-`status` vigente (reutilizando FR-002 sin filtro, una vez por categoría) y, por cada una, un detalle
+`categoryRoom`, su capacidad máxima (`maxCapacity`) y su `status` vigente (reutilizando FR-002 sin
+filtro, una vez por categoría) y, por cada una, un detalle
 breve: si está `Reserved` u `Occupied`, la reserva/huésped asociado; si tiene un mantenimiento próximo
 que se cruza con fechas cercanas, lo indica (dato que proviene de "Consultar calendario de
 mantenimientos"). Esta pantalla no modifica ningún dato ni sustituye la consulta síncrona que hace
@@ -120,7 +121,8 @@ repite pidiendo solo las `Available` y se comprueba que el listado solo incluya 
   identificadores inválidos, respondiendo con **HTTP 400 (Bad Request)** y prohibiendo que escalen a
   **HTTP 500**.
 - **FR-006**: El sistema debe ofrecer a la Recepcionista una pantalla de solo lectura con todas las
-  `Room` de todas las categorías y su `status` vigente, sin opción de editar, reutilizando esta misma
+  `Room` de todas las categorías, con su `categoryRoom`, su `maxCapacity` y su `status` vigente, sin
+  opción de editar, reutilizando esta misma
   consulta y la de "Consultar calendario de mantenimientos" para el detalle de cada habitación.
 
 ### Non-Functional Requirements
