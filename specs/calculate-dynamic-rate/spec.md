@@ -17,9 +17,11 @@ Esta especificación describe el caso de uso desde el punto de vista del **clien
 servicio**: el Módulo 2 verifica la disponibilidad mediante "Verificar disponibilidades", invoca de
 forma síncrona el servicio externo del Módulo 3, recibe una cotización (`RateQuote`) y
 **relaciona la tarifa recibida con la habitación de la reserva** (`ReservationRoom.roomGrossAmount`),
-de manera estrictamente informativa. El Módulo 2 **no calcula nada** con ese importe: no suma las
-tarifas de las habitaciones, no calcula diferencias, no agrega impuestos y no aplica comisiones.
-Lo único que hace con la tarifa es guardarla junto a su habitación. El IVA lo fija el Módulo 3 más adelante, al facturar.
+de manera estrictamente informativa. El Módulo 2 **no hace cálculos de negocio** con ese importe: no
+agrega impuestos, no aplica comisiones y no guarda un total en la reserva. Lo único que persiste es la
+tarifa junto a su habitación. Lo único que sí hace, solo para mostrarlo en pantalla antes de confirmar,
+es sumar las tarifas de las habitaciones y compararlas con las anteriores (ver "Resumen de tarifa").
+El IVA lo fija el Módulo 3 más adelante, al facturar.
 
 Reglas de la integración que enmarcan este caso de uso:
 
@@ -30,8 +32,9 @@ Reglas de la integración que enmarcan este caso de uso:
 - **Contrato de salida (lo que el Módulo 2 recibe del Módulo 3)**: una entidad de cotización
   `RateQuote` con la tarifa de la habitación (`grossAmount`), la moneda (`currency`) y la marca de
   tiempo del cálculo (`calculatedAt`).
-- **Sin cálculos en el Módulo 2**: el Módulo 2 almacena la tarifa tal cual la recibe, sin
-  transformarla, sin sumarla y sin compararla con tarifas anteriores.
+- **Sin cálculos de negocio en el Módulo 2**: el Módulo 2 almacena la tarifa tal cual la recibe, sin
+  transformarla. Puede sumarla y compararla con las tarifas anteriores únicamente para el resumen en
+  pantalla, sin guardar esos resultados.
 - **Separación de responsabilidades**: la disponibilidad de la habitación se verifica **antes** de
   invocar al Módulo 3 mediante "Verificar disponibilidades" (reservas locales y calendario del
   Módulo 1). El Módulo 3 calcula el precio sobre la categoría y nunca verifica ni modifica el estado
@@ -64,6 +67,15 @@ una reserva siempre se obtiene en el momento de reservar o recotizar, mediante l
 este caso de uso — nunca desde los valores mostrados en esta pantalla de referencia. La tarifa se
 fija por categoría y fechas, no por cantidad de personas, así que esta pantalla no muestra la
 capacidad de las habitaciones (esa información está en la pantalla "Habitaciones").
+
+**Resumen de tarifa (solo en pantalla):** al crear una reserva con varias habitaciones y al modificar
+una reserva, el Módulo 2 muestra el detalle de cada habitación cotizada (en una modificación, solo las
+afectadas, con su tarifa anterior si la tenía y la categoría nueva con su tarifa base por noche) y, al
+final, el total de todas las habitaciones de la reserva. En una modificación el total se muestra como
+**total anterior**, **total nuevo** y **diferencia** (aumenta, disminuye o sin diferencia), contando las
+habitaciones que no cambian, las agregadas y las quitadas (una habitación quitada resta su tarifa sin
+invocar al Módulo 3). Estas sumas son informativas: no se guardan, no incluyen IVA ni comisiones y no se
+envían a ningún otro módulo.
 
 **Reservas con varias habitaciones**: el servicio del Módulo 3 cotiza una categoría para un rango de
 fechas. Por eso el Módulo 2 lo invoca **una vez por cada habitación** de la reserva (con la
@@ -133,8 +145,8 @@ Cuando la recepcionista modifica las fechas o la categoría de una reserva `ACTI
 volver a consultar la tarifa de las habitaciones afectadas. Consume el mismo servicio del Módulo 3,
 con los mismos tres parámetros, y recibe la nueva `RateQuote` de cada habitación. El Módulo 2
 muestra al solicitante la tarifa nueva de cada habitación afectada, junto a su tarifa anterior y con el
-mismo detalle de la cotización que al crear la reserva (sin sumar las tarifas ni calcular la
-diferencia entre ambas) y solo persiste el cambio localmente tras la confirmación.
+mismo detalle de la cotización que al crear la reserva, y al final el resumen de tarifa (total anterior,
+total nuevo y diferencia de toda la reserva); solo persiste el cambio localmente tras la confirmación.
 
 **Why this priority**: Las modificaciones de estadía son frecuentes y tienen impacto económico
 directo. Recotizar contra el motor oficial y mostrar la tarifa nueva antes de guardar evita que el
@@ -168,7 +180,8 @@ cambio no se aplica y que la respuesta es un **HTTP 400** controlado.
    - **When** la recepcionista cambia esa habitación a `Suite`, o agrega una habitación
    - **Then** el Módulo 2 invoca "Calcular tarifa dinámica" solo por la habitación de categoría
      distinta o por la agregada, y muestra su tarifa anterior (si la tenía) junto a su nueva tarifa
-     con el desglose de la cotización, sin sumar tarifas ni calcular la diferencia
+     con el desglose de la cotización, y al final muestra el total anterior, el total nuevo y la
+     diferencia de todas las habitaciones de la reserva (incluidas las que no cambian)
 
 4. **Scenario**: Cambio de habitación por otra de la misma categoría
    - **Given** una reserva en estado `ACTIVE` con la habitación 204 `Superior`
@@ -201,8 +214,8 @@ cambio no se aplica y que la respuesta es un **HTTP 400** controlado.
   cuerpo JSON (JSON Body) los parámetros `categoryRoom`, `startDate` y `endDate`.
 - **FR-002**: El sistema debe mapear el objeto `RateQuote` retornado por el Módulo 3 y guardar su
   `grossAmount` y su `currency`, de forma estrictamente informativa, en el `roomGrossAmount` de la
-  habitación cotizada. El sistema no debe sumar las tarifas de las habitaciones ni guardar un total
-  en la reserva.
+  habitación cotizada. El sistema no debe guardar un total en la reserva; solo puede sumar las tarifas
+  para mostrar el resumen en pantalla (FR-007).
 - **FR-002a**: El sistema debe invocar el servicio una vez por cada habitación que necesite
   cotización (todas en una reserva nueva o en un cambio de fechas; las nuevas o de categoría distinta en un
   cambio de habitaciones) y tratar la cotización de la reserva como todo o nada: si una sola
@@ -214,16 +227,17 @@ cambio no se aplica y que la respuesta es un **HTTP 400** controlado.
 - **FR-004**: El sistema debe detener la recotización de una actualización de fechas o categoría
   cuando el servicio de Pricing no responde, sin aplicar ningún cambio, conservando las tarifas
   vigentes y respondiendo **HTTP 400 (Bad Request)**.
-- **FR-005**: El sistema no debe realizar ningún cálculo con la tarifa recibida: ni sumas, ni
-  diferencias, ni IVA, ni comisiones. Los cálculos que se necesiten con la tarifa no son
-  del Módulo 2; el IVA lo fija exclusivamente el Módulo 3 al facturar.
+- **FR-005**: El sistema no debe realizar ningún cálculo de negocio con la tarifa recibida: ni IVA ni
+  comisiones, y no debe guardar sumas ni diferencias. Las únicas sumas y diferencias permitidas son las
+  del resumen informativo en pantalla (FR-007); el IVA lo fija exclusivamente el Módulo 3 al facturar.
 - **FR-006**: El sistema no debe verificar disponibilidad ni realizar llamadas al Módulo 1 dentro de
   este caso de uso: el flujo invocador (generar reservación directa o actualizar reservación)
   ejecuta "Verificar disponibilidades" antes de solicitar la cotización, y este caso solo consume el
   servicio de Pricing del Módulo 3.
 - **FR-007**: El sistema debe mostrar a la recepcionista, en los flujos de recotización, la tarifa
   anterior (si la tenía) y la nueva de cada habitación afectada, con el mismo detalle que al crear la
-  reserva y sin calcular la diferencia, y persistir los nuevos `roomGrossAmount` únicamente tras la
+  reserva, y mostrar al final el resumen de tarifa de toda la reserva (total anterior, total nuevo y
+  diferencia, contando habitaciones sin cambio, agregadas y quitadas), sin guardarlo, y persistir los nuevos `roomGrossAmount` únicamente tras la
   confirmación explícita del solicitante, actualizando el `updatedAt` de la reserva.
 - **FR-008**: El sistema debe interceptar los errores de validación de entrada y las respuestas de
   error del Módulo 3 (rango de fechas incoherente, categoría inexistente, parámetros ausentes) y
