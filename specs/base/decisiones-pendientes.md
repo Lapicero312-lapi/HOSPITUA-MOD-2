@@ -49,6 +49,7 @@ C (equipo del Módulo 3), D (equipo del Módulo 2) y E (ajustes a documentos).
 | B12 | **`maxCapacity` en el inventario**: que el Módulo 1 devuelva la capacidad máxima de cada habitación | Agregarlo a la consulta puntual y por categoría | [x] | Cubierto por su spec (2026-09-07): incluye la capacidad máxima de personas |
 | B13 | **Check-In y Check-Out por habitación**: que `habitacion.checkin` y `habitacion.checkout` traigan el `roomId` además de la `reservationRef` | Obligatorio en ambos mensajes | [ ] | Reservas con varias habitaciones (2026-09-28) |
 | B14 | **Lista de reservas del día**: que el Módulo 1 consuma por cola la lista (`DailyReservationList`) y sus actualizaciones (`ADDED`, `UPDATED`, `REMOVED`) y deje de consultar `GET /api/reservations` | Routing keys propuestas: `reserva.lista-del-dia` y `reserva.lista-del-dia.actualizacion` | [ ] | Spec `check-view-reservation`, historias 4 y 5 (2026-09-28) |
+| B15 | **Consulta de reservas por fechas**: el Módulo 1 consulta las reservas de un rango (y habitación) al registrar un mantenimiento | Adoptarlo como `check-view-reservation` FR-023; confirmar ruta (`GET /api/reservations` con `dateFrom`, `dateTo`, `roomId`) y campos devueltos | [ ] | El Módulo 2 solo informa; la lógica la aplica el Módulo 1 |
 
 ## C. Con el equipo del Módulo 3
 

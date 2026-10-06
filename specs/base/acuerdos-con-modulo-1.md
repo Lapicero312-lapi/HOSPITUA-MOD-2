@@ -16,7 +16,7 @@ Para que la lógica sea la misma en ambos lados, necesitamos que el Módulo 1 co
    campos anteriores, ahora se exige **procedencia y destino**.
 2. **Check-In y Check-Out por habitación**, con el `roomId` y la lista de huéspedes extranjeros en la
    misma notificación.
-3. **La lista de reservas del día llega por cola**; el Módulo 1 ya no consulta las reservas al Módulo 2.
+3. **La lista de reservas del día llega por cola.** El Módulo 1 solo consulta al Módulo 2 las reservas entre una fecha de inicio y una de fin (y, si quiere, de una habitación) cuando registra un mantenimiento, para saber si cae sobre alguna reserva. La lógica sobre qué hacer con esa reserva la aplica el Módulo 1.
 4. **El estado `Reserved`** debe existir en `Room.status`.
 5. **El día operativo es fijo**: de 00:00 a 23:59, hora de Colombia (UTC-5).
 
@@ -273,7 +273,7 @@ favor respondan con datos concretos (nombres, valores, ejemplos); si algo no exi
 - **Procedencia y destino** son ahora obligatorios por huésped extranjero (antes se habían quitado).
 - **El Módulo 2 ya no devuelve datos migratorios.** Da por hecho que el Módulo 1 los envía completos y correctos.
 - **La lista del día sale a las 00:00**, no a una hora configurable.
-- **El Módulo 1 ya no consulta `GET /api/reservations`.**
+- **El Módulo 1 ya no consulta la lista de reservas**: solo consulta las reservas entre una fecha de inicio y una de fin al registrar un mantenimiento.
 - **La lista del día trae el tipo de documento del titular** (`documentType`) y la fecha de última actualización de la reserva (`updatedAt`, que reemplaza al antiguo `version`). Ya no se envía el tipo `NATIONAL`/`FOREIGN`: el extranjero se identifica por nacionalidad distinta de Colombia.
 - **El aviso de llegada tardía vuelve, solo para reservas directas.** La Recepcionista puede marcar `lateArrivalNotice` en una reserva directa y la lista del día (y sus actualizaciones `UPDATED`) lo lleva para que el Módulo 1 sepa que el huésped llegará tarde. En el cierre del día, la reserva directa con aviso no se cancela: queda protegida hasta el cierre del día siguiente a su llegada; si sigue sin Check-In, pasa a `CANCELLED` y el Módulo 2 ordena `Available` para sus habitaciones. Las reservas OTA no tienen este aviso: el cierre del día las marca `NO_SHOW` el mismo día de llegada si no tuvieron Check-In.
 - Las tarifas de las habitaciones se quedan en el Módulo 2: la lista no las incluye.
