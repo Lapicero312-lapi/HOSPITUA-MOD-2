@@ -148,7 +148,6 @@
               <h2>Cotización recalculada</h2>
               <div class="calcbox" id="mdTarifa"></div>
             </div>
-            <div class="readonly-banner" id="mdOrderNote"></div>
             <div class="row">
               <button class="btn primary" id="mdSave">Guardar cambios</button>
               <button class="btn" id="mdCancel">Volver sin guardar</button>
@@ -170,11 +169,9 @@
           </div>
           <div class="panel">
             <h2>Confirmación</h2>
-            <div class="readonly-banner" id="cxImpact"></div>
             <div class="field" style="margin-bottom:12px"><label>Motivo (opcional)</label>
               <textarea id="cxReason" rows="3" placeholder="Ej. el huésped canceló su viaje"></textarea>
             </div>
-            <p class="note" style="margin-bottom:10px">Se registrará con canal <span class="code">RECEPTION</span> y procesada por Laura Méndez.</p>
             <label class="check" style="margin-bottom:14px"><input type="checkbox" id="cxAck"> Entiendo que la cancelación no se puede deshacer.</label>
             <div class="row" style="margin:0">
               <button class="btn danger-solid" id="cxConfirm" disabled>Confirmar cancelación</button>
@@ -218,11 +215,11 @@
             </div>
             <div>
               <div class="panel" style="margin:0 0 12px">
-                <h2>Verificar disponibilidad</h2>
+                <h2>Disponibilidad</h2>
                 <div id="ndDispo" class="note"></div>
               </div>
               <div class="panel" style="margin:0 0 12px">
-                <h2>Calcular tarifa dinámica</h2>
+                <h2>Tarifa</h2>
                 <div class="calcbox" id="ndTarifa"></div>
               </div>
               <div class="row">
@@ -291,7 +288,6 @@
             <span>Agencias OTA</span>
             <button class="btn primary" onclick="openOtaModal(null)">+ Nueva agencia</button>
           </h2>
-          <p class="note" style="margin-bottom:12px">La comisión de cada reserva se calcula al recibirla y queda congelada en la reserva; un nuevo porcentaje solo afecta reservas futuras. La conciliación de comisiones la hace el Módulo 3 (finanzas), no la recepción. Si la OTA cancela una reserva, solo cambia su estado: la comisión no se toca.</p>
           <div class="tablewrap"><table>
             <thead><tr><th>Agencia</th><th>Cuenta del hotel vinculada</th><th>Vinculada el</th><th>% Comisión</th><th>Conexión</th><th>Reservas activas</th><th style="text-align:right">Acciones</th></tr></thead>
             <tbody id="tblOtas"></tbody>
@@ -323,7 +319,7 @@
 <div class="overlay" id="m-linea" hidden>
   <div class="modal">
     <h3>Previsualizar movimiento</h3>
-    <p class="sub">Así saldría la línea en el archivo <span class="code">.TXT</span>. Previsualizar no registra nada.</p>
+    <p class="sub">Así saldría la línea en el archivo .TXT.</p>
     <div class="kv" id="lnMeta" style="margin-bottom:14px"></div>
     <div class="tablewrap" style="margin-bottom:12px"><table>
       <thead><tr><th>#</th><th>Campo SIRE</th><th>Valor</th></tr></thead>
@@ -480,10 +476,10 @@ const lockShort = {
   NO_SHOW: 'Marcada No-Show: solo consulta',
 };
 const lockLong = {
-  IN_PROGRESS: '🔒 Hospedaje en curso: el Módulo 1 notificó el Check-In. La reserva no admite cambios de estadía ni cancelación desde aquí. El Check-Out también lo registra el Módulo 1.',
-  COMPLETED: '🔒 Estadía finalizada: todas las habitaciones terminaron (Check-Out o no llegaron). Reserva de solo consulta.',
+  IN_PROGRESS: '🔒 Hospedaje en curso: la reserva no admite cambios de estadía ni cancelación.',
+  COMPLETED: '🔒 Estadía finalizada. Reserva de solo consulta.',
   CANCELLED: '🔒 Reserva cancelada. Solo consulta.',
-  NO_SHOW: '🔒 Reserva OTA marcada No-Show por el cierre del día. Se conserva para la conciliación de la comisión. Solo consulta.',
+  NO_SHOW: '🔒 Reserva OTA marcada No-Show por el cierre del día. Solo consulta.',
 };
 function statusBadge(s){
   const cls = {ACTIVE:'ok', PENDING:'warn', IN_PROGRESS:'ok', COMPLETED:'neutral', CANCELLED:'err', NO_SHOW:'err'}[s] || 'neutral';
@@ -508,7 +504,7 @@ function migrationStatus(r){
   return 'COMPLETE';
 }
 const MIG = {
-  AWAITING_CHECK_IN: {cls:'neutral', txt:'Pendiente de Check-In', tip:'Los datos migratorios de cada huésped llegan con el Check-In del Módulo 1'},
+  AWAITING_CHECK_IN: {cls:'neutral', txt:'Pendiente de Check-In', tip:'Los datos migratorios de cada huésped se registran en el Check-In'},
   COMPLETE: {cls:'ok', txt:'Completo', tip:'Todos los movimientos están registrados y listos para SIRE'},
   NOT_REQUIRED: {cls:'neutral', txt:'Sin extranjeros', tip:'No hay huéspedes extranjeros: no entra al reporte SIRE'},
   NO_CHECK_IN: {cls:'neutral', txt:'Sin Check-In', tip:'La reserva nunca tuvo ingreso: no hay movimientos que reportar'},
@@ -710,7 +706,7 @@ function renderDetalle(){
   });
   let lock = lockLong[r.status] || '';
   if (!lock && r.source === 'OTA'){
-    lock = `🔗 Reserva enviada por ${r.ota} por API. Sus datos no se editan desde recepción: los cambios y la cancelación llegan por la API de la agencia (canal <span class="code">OTA_API</span>).`;
+    lock = `🔗 Reserva de ${r.ota}. Sus cambios y su cancelación los gestiona la agencia, no se editan desde recepción.`;
   }
   document.getElementById('dtLock').innerHTML = lock ? `<div class="lockbox">${lock}</div>` : '';
   document.getElementById('dtGuest').innerHTML = `
@@ -734,7 +730,7 @@ function renderDetalle(){
       ${kv('% comisión congelado', r.commissionPct + '%')}${kv('Comisión', money(r.commissionAmount))}
       ${kv('Estado de la comisión', r.commissionStatus)}</div></div>`;
   } else {
-    canal = '<div class="readonly-banner" style="margin:0">Reserva de canal directo: sin código externo y con comisión 0.</div>';
+    canal = '';
   }
   if (r.cancellation){
     const c = r.cancellation;
@@ -758,7 +754,7 @@ function renderMigTab(r){
   const ms = movementsOf(r.ref);
   if (!ms.length){
     const msg = {
-      AWAITING_CHECK_IN: 'Pendiente de Check-In. Los datos migratorios de cada huésped extranjero (incluidos los acompañantes) llegan con el Check-In del Módulo 1.',
+      AWAITING_CHECK_IN: 'Pendiente de Check-In. Los datos migratorios de cada huésped extranjero (incluidos los acompañantes) se registran en el Check-In.',
       NOT_REQUIRED: 'Sin extranjeros: ningún huésped de esta reserva es extranjero, así que no entra al reporte SIRE.',
       NO_CHECK_IN: 'Sin Check-In: la reserva nunca tuvo ingreso, así que no hay movimientos migratorios que reportar.',
     }[migrationStatus(r)];
@@ -872,16 +868,8 @@ function refreshModificar(){
       const q = quoteFor(row.cat, s, e);
       lines += `<div class="line"><span>${row.n ? 'Hab. ' + row.n + ' · ' : ''}${row.cat} · ${q.nights} noche(s) + temporada</span><span>${money(q.gross)}</span></div>`;
     });
-    tarifa.innerHTML = lines + `
-      <p class="note" style="margin-top:6px">Tarifa de cada habitación, tal como la entrega el Módulo 3. Informativa: el Módulo 2 no suma ni calcula diferencias, IVA ni comisión. Solo cambiar las personas, los datos del titular o las observaciones no recotiza.</p>`;
+    tarifa.innerHTML = lines;
   }
-
-  const origRooms = r.rooms.map(x => x.n).sort().join();
-  const changed = valid && (s !== r.start || e !== r.end || mdRows.map(x => x.n).sort().join() !== origRooms);
-  const note = document.getElementById('mdOrderNote');
-  if (!changed) note.innerHTML = '';
-  else if (s === TODAY || r.start === TODAY) note.innerHTML = '🔔 El cambio toca el día de hoy: el Módulo 2 ordenará <span class="code">Reserved</span> o <span class="code">Available</span> al Módulo 1 para las habitaciones agregadas, quitadas o cambiadas.';
-  else note.innerHTML = '📅 Cambio sobre una llegada futura: no se envía ninguna orden al Módulo 1.';
 
   const notes = document.getElementById('mdNotes').value;
   document.getElementById('mdNotesCount').textContent = notes.length + ' / 500 caracteres';
@@ -917,9 +905,6 @@ function renderCancelar(){
     kv('Titular', `${r.guest}<br><span class="note">${r.doc}</span>`) + kv('Canal', channelBadge(r)) +
     kv('Entrada', r.start) + kv('Salida', r.end) + kv('Habitaciones', roomsText(r)) + kv('Personas', r.guestCount) +
     (r.source === 'OTA' ? kv('Valor bruto', money(r.gross)) : '') + (r.ext ? kv('Código OTA', r.ext) : '');
-  document.getElementById('cxImpact').innerHTML = roomIsReservedToday(r)
-    ? `🔔 La llegada es <b>hoy</b> y ${roomsText(r)} ya está <span class="code">Reserved</span>: al confirmar se notificará de inmediato al Módulo 1 para devolverla a <span class="code">Available</span>.`
-    : `📅 La llegada es futura (${r.start}): la habitación aún no está apartada, así que no se enviará ninguna orden al Módulo 1.`;
   document.getElementById('cxReason').value = '';
   document.getElementById('cxAck').checked = false;
   document.getElementById('cxConfirm').disabled = true;
@@ -927,15 +912,15 @@ function renderCancelar(){
 document.getElementById('cxAck').addEventListener('change', e => document.getElementById('cxConfirm').disabled = !e.target.checked);
 document.getElementById('cxConfirm').addEventListener('click', () => {
   const r = findRes(currentRef);
-  const notified = roomIsReservedToday(r);
   r.status = 'CANCELLED';
   r.cancellation = {date: TODAY, reason: document.getElementById('cxReason').value.trim() || null, channel: 'RECEPTION', processedBy: USER};
-  backToList(r.ref, 'Reserva ' + r.ref + ' cancelada.' + (notified ? ' Se notificó al Módulo 1 para liberar la habitación.' : ''));
+  backToList(r.ref, 'Reserva ' + r.ref + ' cancelada.');
 });
 document.getElementById('cxBack').addEventListener('click', () => goDetalle(currentRef));
 document.getElementById('cxCancel').addEventListener('click', () => goDetalle(currentRef));
 
 // ================= Nueva reserva directa =================
+let ndPaisTouched = false;
 function refreshNuevaDirecta(){
   const cat = document.getElementById('ndCategoria').value;
   const qty = parseInt(document.getElementById('ndQty').value, 10) || 0;
@@ -947,7 +932,7 @@ function refreshNuevaDirecta(){
   else if (qty < 1 || qty > 10) err = 'Una reserva debe tener entre 1 y 10 habitaciones.';
   else if (personas < qty) err = 'La cantidad de personas no puede ser menor a la cantidad de habitaciones.';
   else if (personas > qty * capacity[cat]) err = 'La cantidad de personas supera la capacidad de las habitaciones de la reserva.';
-  else if (!document.getElementById('ndPais').value.trim()) err = 'Debe indicar el país de origen.';
+  else if (ndPaisTouched && !document.getElementById('ndPais').value.trim()) err = 'Debe indicar el país de origen.';
   document.getElementById('ndErr').hidden = !err;
   document.getElementById('ndErrTxt').textContent = err;
 
@@ -955,7 +940,7 @@ function refreshNuevaDirecta(){
   const free = dateOk ? roomsFreeFor(cat, s, e) : [];
   const dispo = document.getElementById('ndDispo');
   if (!dateOk) dispo.innerHTML = '<span class="badge neutral">Sin verificar</span> corrija las fechas para consultar disponibilidad.';
-  else if (free.length >= qty && qty > 0) dispo.innerHTML = `<span class="badge ok">Disponible</span> ${free.slice(0, qty).map(x => 'Hab. ' + x.n).join(', ')} · ${free.length} libre(s) en ${cat} (inventario + calendario de mantenimientos).`;
+  else if (free.length >= qty && qty > 0) dispo.innerHTML = `<span class="badge ok">Disponible</span> ${free.slice(0, qty).map(x => 'Hab. ' + x.n).join(', ')} · ${free.length} libre(s) en ${cat}.`;
   else dispo.innerHTML = `<span class="badge err">Sin disponibilidad</span> La habitación no está disponible para el rango de fechas solicitado. Solo hay ${free.length} habitación(es) ${cat} libre(s).`;
 
   const tarifa = document.getElementById('ndTarifa');
@@ -964,8 +949,7 @@ function refreshNuevaDirecta(){
     tarifa.innerHTML = `
       <div class="line"><span>${q.nights} noche(s) × ${money(q.base)}</span><span>${money(q.subtotal)}</span></div>
       <div class="line"><span>Ajuste de temporada (+${SEASON_PCT * 100}%)</span><span>${money(q.season)}</span></div>
-      <div class="total"><span>Tarifa por habitación</span><span>${money(q.gross)}</span></div>
-      <p class="note" style="margin-top:6px">Se guarda en cada una de las ${qty} habitación(es), tal como la entrega el Módulo 3. Informativa: el Módulo 2 no suma un total ni calcula IVA o comisión.</p>`;
+      <div class="total"><span>Tarifa por habitación</span><span>${money(q.gross)}</span></div>`;
   } else {
     tarifa.innerHTML = '<p class="note">Ingrese fechas válidas para cotizar.</p>';
   }
@@ -975,6 +959,7 @@ function refreshNuevaDirecta(){
   document.getElementById('ndSubmit').title = filled ? '' : 'Complete el nombre y el documento del titular';
 }
 ['ndNombre', 'ndDoc', 'ndPais', 'ndCategoria', 'ndQty', 'ndPersonas', 'ndEntrada', 'ndSalida'].forEach(id => document.getElementById(id).addEventListener('input', refreshNuevaDirecta));
+document.getElementById('ndPais').addEventListener('blur', () => { ndPaisTouched = true; refreshNuevaDirecta(); });
 document.getElementById('ndSubmit').addEventListener('click', () => {
   const cat = document.getElementById('ndCategoria').value;
   const qty = parseInt(document.getElementById('ndQty').value, 10);
@@ -991,8 +976,9 @@ document.getElementById('ndSubmit').addEventListener('click', () => {
     notes: document.getElementById('ndNotes').value.trim()};
   reservations.unshift(r);
   ['ndNombre', 'ndDoc', 'ndPais', 'ndTel', 'ndEmail', 'ndNotes'].forEach(id => document.getElementById(id).value = '');
+  ndPaisTouched = false;
   refreshNuevaDirecta();
-  backToList(ref, 'Reserva ' + ref + ' creada en ACTIVE.' + (s === TODAY ? ' El Módulo 1 confirmó Reserved.' : ' No se apartó habitación (llegada futura).'));
+  backToList(ref, 'Reserva ' + ref + ' creada correctamente.');
 });
 
 // ================= Exportar SIRE =================
