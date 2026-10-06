@@ -716,7 +716,7 @@ function renderDetalle(){
   document.getElementById('dtGuest').innerHTML = `
     <div class="row" style="margin:0;align-items:center;justify-content:space-between">
       <div class="person">${avatarHTML(r.guest)}<div><b>${r.guest}</b> <span class="note">· titular</span><br><span class="note">${r.doc}</span></div></div>
-      <span class="note">${r.pais} · ${r.pais !== 'Colombia' ? 'huésped extranjero' : 'huésped nacional'}</span>
+      <span class="note">${r.pais} · ${stripAccents(r.pais).toLowerCase() !== 'colombia' ? 'huésped extranjero' : 'huésped nacional'}</span>
     </div>
     <div class="kv" style="margin-top:12px">${kv('Teléfono', r.phone || '<span class="note">—</span>')}${kv('Email', r.email || '<span class="note">—</span>')}</div>`;
   const nights = nightsBetween(r.start, r.end);
@@ -986,6 +986,8 @@ document.getElementById('ndSubmit').addEventListener('click', () => {
     source: 'DIRECT', start: s, end: e, status: 'ACTIVE',
     guestCount: parseInt(document.getElementById('ndPersonas').value, 10),
     rooms: picked.map(x => ({n: x.n, cat, stay: 'EXPECTED', gross: quoteFor(cat, s, e).gross})),
+    phone: document.getElementById('ndTel').value.trim(), email: document.getElementById('ndEmail').value.trim(),
+    createdAt: TODAY + ' ' + new Date().toTimeString().slice(0, 5),
     notes: document.getElementById('ndNotes').value.trim()};
   reservations.unshift(r);
   ['ndNombre', 'ndDoc', 'ndPais', 'ndTel', 'ndEmail', 'ndNotes'].forEach(id => document.getElementById(id).value = '');
