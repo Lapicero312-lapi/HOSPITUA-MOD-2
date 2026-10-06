@@ -150,10 +150,12 @@ reserva y se devuelve un error controlado.
      la 101 y responde **HTTP 400** indicando que la habitación 102 ya no está disponible
 
 9. **Scenario**: Fecha de entrada anterior a hoy (Error)
-   - **Given** que hoy es el 2026-09-28
+   - **Given** que el día operativo en curso, cuando se genera la reserva, es el 2026-09-28
    - **When** la Recepcionista intenta crear una reserva con `startDate` 2026-09-27 o anterior
    - **Then** el sistema no crea la reserva y responde **HTTP 400** con el mensaje "La fecha de entrada
-     no puede ser anterior a hoy."; una reserva con `startDate` igual a hoy sí se acepta
+     no puede ser anterior a hoy."; una reserva con `startDate` 2026-09-28 sí se acepta. Si la misma
+     solicitud se hace el 2026-09-29, el `startDate` 2026-09-28 ya se rechaza y el mínimo pasa a ser
+     2026-09-29
 
 ### Casos Borde
 
@@ -197,9 +199,11 @@ reserva y se devuelve un error controlado.
 - **FR-001**: El sistema debe verificar la disponibilidad de cada `Room` de la reserva mediante
   "Verificar disponibilidades" antes de cotizar o registrar cualquier reserva, y rechazar la
   reserva completa si una sola no está disponible.
-- **FR-001a**: El sistema debe exigir que la fecha de entrada (`startDate`) sea hoy o posterior (la
-  fecha mínima para crear una reserva es la del día operativo en curso, no días anteriores) y que la
-  fecha de salida (`endDate`) sea posterior a la de entrada. De lo contrario, debe responder
+- **FR-001a**: El sistema debe exigir que la fecha de entrada (`startDate`) sea igual o posterior al
+  día operativo en curso en el momento de crear la reserva. "Hoy" no es una fecha fija: es el día en
+  que se genera la reserva, así que la fecha mínima avanza cada día (si la reserva se crea mañana, la
+  fecha mínima de entrada es mañana; si se crea dentro de 2 días, será ese día). Además, la fecha de
+  salida (`endDate`) debe ser posterior a la de entrada. De lo contrario, debe responder
   **HTTP 400** con el mensaje "La fecha de entrada no puede ser anterior a hoy." o "La fecha de
   salida debe ser posterior a la de entrada.", según el caso, sin consultar disponibilidad.
 - **FR-002**: El sistema debe exigir entre 1 y 10 habitaciones distintas por reserva y un

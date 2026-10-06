@@ -962,6 +962,8 @@ function refreshNuevaDirecta(){
 }
 ['ndNombre', 'ndDoc', 'ndPais', 'ndCategoria', 'ndQty', 'ndPersonas', 'ndEntrada', 'ndSalida'].forEach(id => document.getElementById(id).addEventListener('input', refreshNuevaDirecta));
 ['ndEntrada', 'ndSalida', 'mdEntrada', 'mdSalida'].forEach(id => document.getElementById(id).min = TODAY);
+document.getElementById('ndEntrada').value = TODAY;
+document.getElementById('ndSalida').value = addDays(TODAY, 3);
 document.getElementById('ndPais').addEventListener('blur', () => { ndPaisTouched = true; refreshNuevaDirecta(); });
 document.getElementById('ndSubmit').addEventListener('click', () => {
   const cat = document.getElementById('ndCategoria').value;
