@@ -135,11 +135,9 @@ respuesta es un **HTTP 400 (Bad Request)** controlado, sin tarifas asumidas.
 Cuando la recepcionista modifica las fechas o la categoría de una reserva `ACTIVE`, el Módulo 2 debe
 volver a consultar la tarifa de las habitaciones afectadas. Consume el mismo servicio del Módulo 3,
 con los mismos tres parámetros, y recibe la nueva `RateQuote` de cada habitación. El Módulo 2
-muestra al solicitante la tarifa nueva de cada habitación afectada, junto a su tarifa anterior y con el
-mismo detalle de la cotización que al crear la reserva (sin sumar las tarifas ni calcular la
-diferencia entre ambas). Si una habitación cambia de categoría, muestra además la categoría nueva con su
-tarifa base por noche; si se quita una habitación, la muestra como quitada con su tarifa anterior, sin
-restarla de ningún total. Solo persiste el cambio localmente tras la confirmación.
+muestra al solicitante la tarifa de cada habitación afectada con el mismo detalle de la cotización que
+al crear la reserva, sin mostrar la tarifa anterior, sin sumar tarifas ni calcular diferencias. Una
+habitación quitada no se muestra. Solo persiste el cambio localmente tras la confirmación.
 
 **Why this priority**: Las modificaciones de estadía son frecuentes y tienen impacto económico
 directo. Recotizar contra el motor oficial y mostrar la tarifa nueva antes de guardar evita que el
@@ -172,9 +170,8 @@ cambio no se aplica y que la respuesta es un **HTTP 400** controlado.
    - **Given** una reserva en estado `ACTIVE` con una habitación `Superior` y tarifa vigente
    - **When** la recepcionista cambia esa habitación a `Suite`, o agrega una habitación
    - **Then** el Módulo 2 invoca "Calcular tarifa dinámica" solo por la habitación de categoría
-     distinta o por la agregada, y muestra su tarifa anterior (si la tenía) junto a su nueva tarifa
-     con el desglose de la cotización (y, si cambió de categoría, la categoría nueva con su tarifa
-     base por noche), sin sumar tarifas ni calcular la diferencia ni ningún total de la reserva
+     distinta o por la agregada, y muestra su tarifa con el desglose de la cotización, igual que al
+     crear la reserva, sin tarifa anterior, sin sumar tarifas ni calcular diferencias ni totales
 
 4. **Scenario**: Cambio de habitación por otra de la misma categoría
    - **Given** una reserva en estado `ACTIVE` con la habitación 204 `Superior`

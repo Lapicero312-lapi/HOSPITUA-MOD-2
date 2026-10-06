@@ -146,7 +146,7 @@
           </div>
           <div>
             <div class="panel" id="mdTarifaPanel" hidden>
-              <h2>Resumen de tarifa</h2>
+              <h2>Tarifa</h2>
               <div class="calcbox" id="mdTarifa"></div>
             </div>
             <div class="row">
@@ -936,29 +936,19 @@ function refreshModificar(){
   mdPlan = mdRows.map(row => row.n ? {n: row.n, cat: row.cat, stay: 'EXPECTED'} : null);
   const datesChanged = valid && (s !== r.start || e !== r.end);
   const affected = valid ? mdRows.filter(row => datesChanged || row.orig === null || row.cat !== row.origCat) : [];
-  const removed = valid ? r.rooms.filter(x => !mdRows.some(row => row.orig === x.n)) : [];
-  const show = valid && (affected.length || removed.length);
-  document.getElementById('mdTarifaPanel').hidden = !show;
-  if (show){
-    const prevOf = row => row.orig === null ? null : r.rooms.find(x => x.n === row.orig);
+  document.getElementById('mdTarifaPanel').hidden = !affected.length;
+  if (affected.length){
     const cards = affected.map(row => {
       const q = quoteFor(row.cat, s, e);
-      const before = prevOf(row);
       const motivo = row.orig === null ? 'Habitación nueva' : row.cat !== row.origCat ? 'Cambia de categoría' : 'Cambian las fechas';
       return `<div style="padding-bottom:10px;margin-bottom:10px;border-bottom:1px solid var(--line-soft)">
         <div class="line"><b>${row.n ? 'Hab. ' + row.n + ' · ' : ''}${row.cat}</b><span class="note">${motivo}</span></div>
-        ${before ? `<div class="line"><span>Tarifa anterior (${row.origCat})</span><span>${money(before.gross)}</span></div>` : ''}
-        ${before && row.cat !== row.origCat ? `<div class="line"><span>Categoría nueva: ${row.cat}</span><span>${money(q.base)} por noche</span></div>` : ''}
         <div class="line"><span>${q.nights} noche(s) × ${money(q.base)}</span><span>${money(q.subtotal)}</span></div>
         <div class="line"><span>Ajuste de temporada (+${SEASON_PCT * 100}%)</span><span>${money(q.season)}</span></div>
         <div class="total"><span>Tarifa por habitación</span><span>${money(q.gross)}</span></div>
       </div>`;
     }).join('');
-    const quitadas = removed.map(x => `<div style="padding-bottom:10px;margin-bottom:10px;border-bottom:1px solid var(--line-soft)">
-        <div class="line"><b>Hab. ${x.n} · ${x.cat}</b><span class="note">Se quita</span></div>
-        <div class="line"><span>Tarifa anterior (${x.cat})</span><span>${money(x.gross)}</span></div>
-      </div>`).join('');
-    tarifa.innerHTML = cards + quitadas;
+    tarifa.innerHTML = cards;
   } else tarifa.innerHTML = '';
 
   const notes = document.getElementById('mdNotes').value;
