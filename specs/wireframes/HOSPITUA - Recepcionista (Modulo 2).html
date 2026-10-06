@@ -69,7 +69,7 @@
           </div>
           <div id="fErr"></div>
           <div class="tablewrap"><table>
-            <thead><tr><th>Ref. reserva</th><th>Huésped</th><th>Habitaciones</th><th>Canal</th><th>Fechas (in → out)</th><th>Estado</th><th style="text-align:right">Acciones</th></tr></thead>
+            <thead><tr><th>Ref. reserva</th><th>Huésped</th><th>Habitaciones</th><th>Canal</th><th>Fechas (in → out)</th><th>Estado</th><th>Migración</th><th style="text-align:right">Acciones</th></tr></thead>
             <tbody id="tblReservas"></tbody>
           </table></div>
           <div class="pager" id="pager"></div>
@@ -703,7 +703,7 @@ function renderReservas(){
   const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
   if (listPage > pages) listPage = pages;
   if (!list.length){
-    tbl.innerHTML = '<tr><td colspan="7" class="note" style="text-align:center;padding:24px">No se encontraron reservas con los filtros aplicados.</td></tr>';
+    tbl.innerHTML = '<tr><td colspan="8" class="note" style="text-align:center;padding:24px">No se encontraron reservas con los filtros aplicados.</td></tr>';
     pager.innerHTML = '<span class="note">0 reservas</span>';
     return;
   }
@@ -719,7 +719,8 @@ function renderReservas(){
       <td>${roomsText(r)}<br><span class="note">${cats}</span></td>
       <td>${channelBadge(r)}</td>
       <td style="white-space:nowrap">${fmtDate(r.start)} →<br>${fmtDate(r.end)}</td>
-      <td><div style="display:flex;flex-direction:column;align-items:flex-start;gap:5px">${statusBadge(r.status)}${migBadge(r)}</div></td>
+      <td>${statusBadge(r.status)}</td>
+      <td>${migBadge(r)}</td>
       <td><div class="rowacts">
         <button class="btn sm" style="white-space:nowrap" onclick="goDetalle('${r.ref}')">Ver detalle</button>
         <button class="btn sm" ${dis} onclick="goModificar('${r.ref}')">Modificar</button>
