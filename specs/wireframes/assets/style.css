@@ -166,6 +166,7 @@ tbody tr:hover{background:var(--accent-soft)}
 
 /* Acciones por fila de la tabla */
 .rowacts{display:flex;gap:6px;flex-wrap:nowrap;justify-content:flex-end}
+.rowacts .btn{white-space:nowrap}
 .btn.danger-solid{background:var(--err);border-color:var(--err);color:#fff}
 
 /* Fila recién cambiada: se resalta unos segundos */
