@@ -273,7 +273,7 @@ favor respondan con datos concretos (nombres, valores, ejemplos); si algo no exi
 - **Procedencia y destino** son ahora obligatorios por huésped extranjero (antes se habían quitado).
 - **El Módulo 2 ya no devuelve datos migratorios.** Da por hecho que el Módulo 1 los envía completos y correctos.
 - **La lista del día sale a las 00:00**, no a una hora configurable.
-- **El Módulo 1 ya no consulta la lista de reservas**: solo consulta las reservas entre una fecha de inicio y una de fin al registrar un mantenimiento.
+- **El Módulo 1 ya no consulta la lista de reservas**: solo consulta las reservas entre una fecha de inicio y una de fin (y, si quiere, de una habitación) al registrar un mantenimiento o al dar de baja una habitación.
 - **La lista del día trae el tipo de documento del titular** (`documentType`) y la fecha de última actualización de la reserva (`updatedAt`, que reemplaza al antiguo `version`). Ya no se envía el tipo `NATIONAL`/`FOREIGN`: el extranjero se identifica por nacionalidad distinta de Colombia.
 - **El aviso de llegada tardía vuelve, solo para reservas directas.** La Recepcionista puede marcar `lateArrivalNotice` en una reserva directa y la lista del día (y sus actualizaciones `UPDATED`) lo lleva para que el Módulo 1 sepa que el huésped llegará tarde. En el cierre del día, la reserva directa con aviso no se cancela: queda protegida hasta el cierre del día siguiente a su llegada; si sigue sin Check-In, pasa a `CANCELLED` y el Módulo 2 ordena `Available` para sus habitaciones. Las reservas OTA no tienen este aviso: el cierre del día las marca `NO_SHOW` el mismo día de llegada si no tuvieron Check-In.
 - Las tarifas de las habitaciones se quedan en el Módulo 2: la lista no las incluye.

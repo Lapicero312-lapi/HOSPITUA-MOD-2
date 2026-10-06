@@ -603,8 +603,8 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
 - **FR-023**: El sistema debe permitir que el Módulo 1 consulte, con una credencial de servicio (actor
   `Modulo1`), las reservas cuya estadía se cruza con un rango de fechas, con fecha de inicio (`dateFrom`) y fecha
   de fin (`dateTo`) obligatorias, ambas con formato `AAAA-MM-DD` y la misma regla de cruce de FR-003, y,
-  opcionalmente, las de una habitación (`roomId`), para que verifique un mantenimiento al registrarlo
-  (las fechas son las de inicio y fin del mantenimiento). Solo devuelve reservas vigentes
+  opcionalmente, las de una habitación (`roomId`), para que verifique un mantenimiento al registrarlo o dé
+  de baja una habitación (las fechas son las de inicio y fin del mantenimiento o de la baja). Solo devuelve reservas vigentes
   (`PENDING`, `ACTIVE` o `IN_PROGRESS`), con `reservationRef`, `status`, `startDate`, `endDate` y, por
   cada `ReservationRoom`, `roomId`, `roomNumber` y `categoryRoom`. No incluye datos financieros ni del
   huésped. El Módulo 2 solo informa: no decide qué hacer con la reserva ni modifica nada, esa lógica
