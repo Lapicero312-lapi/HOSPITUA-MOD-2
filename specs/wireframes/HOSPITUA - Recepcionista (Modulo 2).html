@@ -45,8 +45,8 @@
             <div class="field"><label>Estado</label>
               <select id="fEstado">
                 <option value="">Todos</option>
-                <option>ACTIVE</option><option>PENDING</option><option>IN_PROGRESS</option>
-                <option>COMPLETED</option><option>CANCELLED</option><option>NO_SHOW</option>
+                <option value="ACTIVE">Activa</option><option value="PENDING">Pendiente</option><option value="IN_PROGRESS">En curso</option>
+                <option value="COMPLETED">Completada</option><option value="CANCELLED">Cancelada</option><option value="NO_SHOW">No se presentó</option>
               </select>
             </div>
             <div class="field"><label>Canal</label>
@@ -186,7 +186,7 @@
       <section class="screen" id="scr-nueva-directa" hidden>
         <button class="crumbnav" data-nav="reservas">← Volver a reservas</button>
         <div class="panel" style="margin-top:10px">
-          <h2>Generar reservación directa</h2>
+          <h2>Nueva reserva directa</h2>
           <div class="grid2">
             <div>
               <div class="row"><div class="field" style="flex:1"><label class="req">Nombre completo del titular</label><input id="ndNombre" placeholder="Ej. Laura Fernández Gómez"></div></div>
@@ -224,7 +224,7 @@
                 <div class="calcbox" id="ndTarifa"></div>
               </div>
               <div class="row">
-                <button class="btn primary" id="ndSubmit">Crear reserva directa</button>
+                <button class="btn primary" id="ndSubmit">Crear reserva</button>
                 <button class="btn" data-nav="reservas">Volver</button>
               </div>
             </div>
@@ -542,21 +542,31 @@ const lockShort = {
   IN_PROGRESS: 'Hospedaje en curso: no admite cambios ni cancelación',
   COMPLETED: 'Estadía finalizada: solo consulta',
   CANCELLED: 'Reserva cancelada: solo consulta',
-  NO_SHOW: 'Marcada No-Show: solo consulta',
+  NO_SHOW: 'No se presentó: solo consulta',
 };
 const lockLong = {
   IN_PROGRESS: '🔒 Hospedaje en curso: la reserva no admite cambios de estadía ni cancelación.',
   COMPLETED: '🔒 Estadía finalizada. Reserva de solo consulta.',
   CANCELLED: '🔒 Reserva cancelada. Solo consulta.',
-  NO_SHOW: '🔒 Reserva OTA marcada No-Show por el cierre del día. Solo consulta.',
+  NO_SHOW: '🔒 Reserva OTA marcada como no presentada por el cierre del día. Solo consulta.',
 };
+const STATUS_ES = {ACTIVE:'Activa', PENDING:'Pendiente', IN_PROGRESS:'En curso', COMPLETED:'Completada', CANCELLED:'Cancelada', NO_SHOW:'No se presentó'};
+const STAY_ES = {EXPECTED:'Esperada', CHECKED_IN:'Con Check-In', CHECKED_OUT:'Con Check-Out', NOT_ARRIVED:'No llegó'};
+const COMMISSION_ES = {CALCULATED:'Calculada', RECONCILED:'Conciliada'};
+const MOVEMENT_ES = {ENTRY:'Entrada', DEPARTURE:'Salida'};
+function fmtDate(v){
+  if (!v) return '';
+  const [d, t] = v.split(' ');
+  const [y, m, day] = d.split('-');
+  return `${day}/${m}/${y}` + (t ? ' ' + t : '');
+}
 function statusBadge(s){
   const cls = {ACTIVE:'ok', PENDING:'warn', IN_PROGRESS:'info', COMPLETED:'neutral', CANCELLED:'err', NO_SHOW:'alt'}[s] || 'neutral';
-  return `<span class="badge ${cls}">${s}</span>`;
+  return `<span class="badge ${cls}">${STATUS_ES[s]}</span>`;
 }
 function stayBadge(s){
   const cls = {EXPECTED:'neutral', CHECKED_IN:'ok', CHECKED_OUT:'info', NOT_ARRIVED:'err'}[s] || 'neutral';
-  return `<span class="badge ${cls}">${s}</span>`;
+  return `<span class="badge ${cls}">${STAY_ES[s]}</span>`;
 }
 function channelBadge(r){
   return r.source === 'DIRECT' ? '<span class="badge neutral">Directo</span>' : `<span class="badge ota">OTA · ${r.ota}</span>`;
@@ -585,7 +595,7 @@ function migBadge(r){
 function kv(k, v){ return `<div><div class="k">${k}</div><div class="v">${v}</div></div>`; }
 
 // ================= Navegación =================
-const titles = {reservas:'Reservas', 'nueva-directa':'Generar reservación directa', detalle:'Detalle de reserva',
+const titles = {reservas:'Reservas', 'nueva-directa':'Nueva reserva directa', detalle:'Detalle de reserva',
   modificar:'Modificar reserva', cancelar:'Cancelar reserva', sire:'Exportar SIRE', habitaciones:'Habitaciones', tarifas:'Tarifas', otas:'Agencias OTA'};
 const RES_SCREENS = ['detalle', 'modificar', 'cancelar', 'nueva-directa'];
 let currentRef = null;
@@ -712,7 +722,7 @@ function renderReservas(){
       <td><div class="person">${avatarHTML(r.guest)}<div>${r.guest}<br><span class="note">${r.doc}</span></div></div></td>
       <td>${roomsText(r)}<br><span class="note">${cats}</span></td>
       <td>${channelBadge(r)}</td>
-      <td style="white-space:nowrap">${r.start} →<br>${r.end}</td>
+      <td style="white-space:nowrap">${fmtDate(r.start)} →<br>${fmtDate(r.end)}</td>
       <td><div style="display:flex;flex-direction:column;align-items:flex-start;gap:5px">${statusBadge(r.status)}${migBadge(r)}</div></td>
       <td><div class="rowacts">
         <button class="btn sm" style="white-space:nowrap" onclick="goDetalle('${r.ref}')">Ver detalle</button>
@@ -785,11 +795,11 @@ function renderDetalle(){
     <div class="kv" style="margin-top:12px">${kv('Teléfono', r.phone || '<span class="note">—</span>')}${kv('Email', r.email || '<span class="note">—</span>')}</div>`;
   const nights = nightsBetween(r.start, r.end);
   document.getElementById('dtStay').innerHTML =
-    kv('Entrada', r.start) + kv('Salida', r.end) + kv('Noches', nights) + kv('Personas', r.guestCount) +
+    kv('Entrada', fmtDate(r.start)) + kv('Salida', fmtDate(r.end)) + kv('Noches', nights) + kv('Personas', r.guestCount) +
     (r.source === 'OTA' ? kv('Valor bruto', money(r.gross)) : '') +
     (r.source === 'DIRECT' ? kv('Aviso de llegada tardía', r.lateArrivalNotice ? 'Sí' : 'No') : '') +
     kv('Observaciones', r.notes || '<span class="note">—</span>') +
-    kv('Creada el', r.createdAt);
+    kv('Creada el', fmtDate(r.createdAt));
   document.getElementById('dtRooms').innerHTML = r.rooms.map(x => `<tr><td>Hab. ${x.n}</td><td>${x.cat}</td>
     <td>${x.gross ? money(x.gross) : '<span class="note">lo informa la OTA</span>'}</td><td>${stayBadge(x.stay)}</td></tr>`).join('');
   let canal;
@@ -797,7 +807,7 @@ function renderDetalle(){
     canal = `<div class="readonly-banner" style="margin:0"><div class="kv">
       ${kv('Agencia', r.ota)}${kv('Código de confirmación', r.ext)}
       ${kv('% comisión congelado', r.commissionPct + '%')}${kv('Comisión', money(r.commissionAmount))}
-      ${kv('Estado de la comisión', r.commissionStatus)}</div></div>`;
+      ${kv('Estado de la comisión', COMMISSION_ES[r.commissionStatus])}</div></div>`;
   } else {
     canal = '';
   }
@@ -836,10 +846,10 @@ function renderMigTab(r){
       <tbody>${ms.map(m => `<tr>
         <td>${m.firstName} ${m.lastName}<br><span class="note">Hab. ${m.room}</span></td>
         <td>${m.docType} ${m.docNumber}</td>
-        <td>${m.birthDate}</td>
+        <td>${fmtDate(m.birthDate)}</td>
         <td>${m.nat}</td>
         <td>${m.origin} → ${m.dest}</td>
-        <td><span class="badge neutral">${m.type}</span><br><span class="note">${m.date}</span></td>
+        <td><span class="badge neutral">${MOVEMENT_ES[m.type]}</span><br><span class="note">${fmtDate(m.date)}</span></td>
       </tr>`).join('')}</tbody>
     </table></div>`;
 }
@@ -983,7 +993,7 @@ function renderCancelar(){
   document.getElementById('cxBadges').innerHTML = headerBadges(r);
   document.getElementById('cxSummary').innerHTML =
     kv('Titular', `${r.guest}<br><span class="note">${r.doc}</span>`) + kv('Canal', channelBadge(r)) +
-    kv('Entrada', r.start) + kv('Salida', r.end) + kv('Habitaciones', roomsText(r)) + kv('Personas', r.guestCount) +
+    kv('Entrada', fmtDate(r.start)) + kv('Salida', fmtDate(r.end)) + kv('Habitaciones', roomsText(r)) + kv('Personas', r.guestCount) +
     (r.source === 'OTA' ? kv('Valor bruto', money(r.gross)) : '') + (r.ext ? kv('Código OTA', r.ext) : '');
   document.getElementById('cxReason').value = '';
   document.getElementById('cxAck').checked = false;
@@ -1126,7 +1136,7 @@ function renderSire(){
         <td><span style="font-family:var(--mono);font-size:12px">${m.ref}</span><br><span class="note">Hab. ${m.room}</span></td>
         <td><div class="person">${avatarHTML(name)}<div>${name}<br><span class="note">${m.docType} ${m.docNumber || '—'}</span></div></div></td>
         <td>${m.nat}</td>
-        <td><span class="badge neutral">${m.type}</span><br><span class="note">${m.date}</span></td>
+        <td><span class="badge neutral">${MOVEMENT_ES[m.type]}</span><br><span class="note">${fmtDate(m.date)}</span></td>
         <td><div class="rowacts">
           <button class="btn sm" onclick="sirePreview('${m.id}')">Previsualizar</button>
           <button class="btn sm primary" onclick="sireDownloadOne('${m.id}')">Descargar</button>
@@ -1202,8 +1212,8 @@ function renderOtas(){
     const activas = mine.filter(r => LIVE.includes(r.status)).length;
     const connected = o.connection === 'CONNECTED';
     const badge = connected ? `<span class="badge ok">Conectada</span>` : `<span class="badge err">Desconectada</span>`;
-    const syncNote = connected ? `Última sincronización ${o.lastSync}` : `Desvinculada · último mensaje ${o.lastSync}`;
-    return `<tr><td><b>${o.name}</b></td><td><span class="code">${o.account}</span></td><td class="note" style="white-space:nowrap">${o.linkedAt}</td>
+    const syncNote = connected ? `Última sincronización ${fmtDate(o.lastSync)}` : `Desvinculada · último mensaje ${fmtDate(o.lastSync)}`;
+    return `<tr><td><b>${o.name}</b></td><td><span class="code">${o.account}</span></td><td class="note" style="white-space:nowrap">${fmtDate(o.linkedAt)}</td>
       <td>${o.pct}%</td>
       <td>${badge}<br><span class="note">${syncNote}</span></td>
       <td>${activas}</td>
