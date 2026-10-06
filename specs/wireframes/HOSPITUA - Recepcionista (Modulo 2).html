@@ -1118,7 +1118,7 @@ function renderOtas(){
     const connected = o.connection === 'CONNECTED';
     const badge = connected ? `<span class="badge ok">Conectada</span>` : `<span class="badge err">Desconectada</span>`;
     const syncNote = connected ? `Última sincronización ${o.lastSync}` : `Desvinculada · último mensaje ${o.lastSync}`;
-    return `<tr><td><b>${o.name}</b></td><td class="code">${o.account}</td><td class="note" style="white-space:nowrap">${o.linkedAt}</td>
+    return `<tr><td><b>${o.name}</b></td><td><span class="code">${o.account}</span></td><td class="note" style="white-space:nowrap">${o.linkedAt}</td>
       <td>${o.pct}%</td>
       <td>${badge}<br><span class="note">${syncNote}</span></td>
       <td>${activas}</td>
