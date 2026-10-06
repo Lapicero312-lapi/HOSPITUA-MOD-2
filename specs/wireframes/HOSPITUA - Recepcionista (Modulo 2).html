@@ -382,7 +382,7 @@ const reservations = [
   {ref:'RSV-2026-00410', guest:'Isabela Santos Rocha', doc:'Pasaporte BR552104', pais:'Brasil', source:'DIRECT',
     start:'2026-09-26', end:'2026-09-30', status:'IN_PROGRESS', guestCount:3, rooms:[{n:'202',cat:'Superior',stay:'CHECKED_IN'},{n:'301',cat:'Suite',stay:'CHECKED_IN'}],
     notes:'Grupo familiar: titular y dos acompañantes.'},
-  {ref:'RSV-2026-00415', guest:'Lucía Fernández Gil', doc:'Pasaporte', pais:'España', source:'OTA', ota:'Booking.com', ext:'4410038871',
+  {ref:'RSV-2026-00415', guest:'Lucía Fernández Gil', doc:'Pasaporte ES4471230', pais:'España', source:'OTA', ota:'Booking.com', ext:'4410038871',
     start:'2026-09-27', end:'2026-10-01', status:'IN_PROGRESS', guestCount:1, rooms:[{n:'101',cat:'Estándar',stay:'CHECKED_IN'}],
     gross:1012000, commissionPct:15, commissionStatus:'CALCULATED', notes:''},
   {ref:'RSV-2026-00413', guest:'Hiroshi Tanaka', doc:'Pasaporte JP0098231', pais:'Japón', source:'OTA', ota:'Expedia', ext:'EXP-72201934',
@@ -396,19 +396,23 @@ const reservations = [
     notes:'', cancellation:{date:'2026-09-15', reason:'No-Show de canal directo al cierre del día', channel:'SYSTEM', processedBy:'Cierre automático'}},
 ];
 
-// Movimientos migratorios: uno por huésped extranjero y por tipo (ENTRY / DEPARTURE).
-const movements = [
-  {id:'MM-0101', ref:'RSV-2026-00413', room:'302', firstName:'Hiroshi', lastName:'Tanaka', docType:'PA', docNumber:'JP0098231', birthDate:'1984-03-11', nat:'JAPÓN',
-    origin:'TOKIO', dest:'CARTAGENA', type:'ENTRY', date:'2026-09-20', status:'COMPLETE'},
-  {id:'MM-0102', ref:'RSV-2026-00413', room:'302', firstName:'Hiroshi', lastName:'Tanaka', docType:'PA', docNumber:'JP0098231', birthDate:'1984-03-11', nat:'JAPÓN',
-    origin:'TOKIO', dest:'CARTAGENA', type:'DEPARTURE', date:'2026-09-24', status:'COMPLETE'},
-  {id:'MM-0110', ref:'RSV-2026-00412', room:'201', firstName:'Lukas', lastName:'Becker', docType:'PA', docNumber:'C4X8R21K', birthDate:'1991-07-02', nat:'ALEMANIA',
-    origin:'BERLÍN', dest:'MEDELLÍN', type:'ENTRY', date:'2026-09-26', status:'COMPLETE'},
-  {id:'MM-0111', ref:'RSV-2026-00410', room:'202', firstName:'Isabela', lastName:'Santos Rocha', docType:'PA', docNumber:'BR552104', birthDate:'1988-12-19', nat:'BRASIL',
-    origin:'SÃO PAULO', dest:'SANTA MARTA', type:'ENTRY', date:'2026-09-26', status:'COMPLETE'},
-  {id:'MM-0112', ref:'RSV-2026-00410', room:'202', firstName:'Pedro', lastName:'Santos Rocha', docType:'PA', docNumber:'BR552187', birthDate:'2014-05-30', nat:'BRASIL',
-    origin:'SÃO PAULO', dest:'SANTA MARTA', type:'ENTRY', date:'2026-09-26', status:'COMPLETE'},
+// Plantillas de movimientos migratorios de cada huésped extranjero. El ENTRY existe cuando la reserva ya tuvo
+// Check-In (llegó) y el DEPARTURE cuando ya tuvo Check-Out; la fecha es la de entrada o la de salida de la reserva.
+const movementTemplates = [
+  {id:'MM-0101', ref:'RSV-2026-00413', room:'302', firstName:'Hiroshi', lastName:'Tanaka', docType:'PA', docNumber:'JP0098231', birthDate:'1984-03-11', nat:'JAPÓN', origin:'TOKIO', dest:'CARTAGENA', type:'ENTRY'},
+  {id:'MM-0102', ref:'RSV-2026-00413', room:'302', firstName:'Hiroshi', lastName:'Tanaka', docType:'PA', docNumber:'JP0098231', birthDate:'1984-03-11', nat:'JAPÓN', origin:'TOKIO', dest:'CARTAGENA', type:'DEPARTURE'},
+  {id:'MM-0110', ref:'RSV-2026-00412', room:'201', firstName:'Lukas', lastName:'Becker', docType:'PA', docNumber:'C4X8R21K', birthDate:'1991-07-02', nat:'ALEMANIA', origin:'BERLÍN', dest:'MEDELLÍN', type:'ENTRY'},
+  {id:'MM-0113', ref:'RSV-2026-00412', room:'201', firstName:'Lukas', lastName:'Becker', docType:'PA', docNumber:'C4X8R21K', birthDate:'1991-07-02', nat:'ALEMANIA', origin:'BERLÍN', dest:'MEDELLÍN', type:'DEPARTURE'},
+  {id:'MM-0111', ref:'RSV-2026-00410', room:'202', firstName:'Isabela', lastName:'Santos Rocha', docType:'PA', docNumber:'BR552104', birthDate:'1988-12-19', nat:'BRASIL', origin:'SÃO PAULO', dest:'SANTA MARTA', type:'ENTRY'},
+  {id:'MM-0114', ref:'RSV-2026-00410', room:'202', firstName:'Isabela', lastName:'Santos Rocha', docType:'PA', docNumber:'BR552104', birthDate:'1988-12-19', nat:'BRASIL', origin:'SÃO PAULO', dest:'SANTA MARTA', type:'DEPARTURE'},
+  {id:'MM-0112', ref:'RSV-2026-00410', room:'202', firstName:'Pedro', lastName:'Santos Rocha', docType:'PA', docNumber:'BR552187', birthDate:'2014-05-30', nat:'BRASIL', origin:'SÃO PAULO', dest:'SANTA MARTA', type:'ENTRY'},
+  {id:'MM-0115', ref:'RSV-2026-00410', room:'202', firstName:'Pedro', lastName:'Santos Rocha', docType:'PA', docNumber:'BR552187', birthDate:'2014-05-30', nat:'BRASIL', origin:'SÃO PAULO', dest:'SANTA MARTA', type:'DEPARTURE'},
+  {id:'MM-0116', ref:'RSV-2026-00415', room:'101', firstName:'Lucía', lastName:'Fernández Gil', docType:'PA', docNumber:'ES4471230', birthDate:'1990-09-08', nat:'ESPAÑA', origin:'MADRID', dest:'BOGOTÁ', type:'ENTRY'},
+  {id:'MM-0117', ref:'RSV-2026-00415', room:'101', firstName:'Lucía', lastName:'Fernández Gil', docType:'PA', docNumber:'ES4471230', birthDate:'1990-09-08', nat:'ESPAÑA', origin:'MADRID', dest:'BOGOTÁ', type:'DEPARTURE'},
+  {id:'MM-0118', ref:'RSV-2026-00427', room:'303', firstName:'Marta', lastName:'Kowalski', docType:'PA', docNumber:'PL7730215', birthDate:'1986-02-14', nat:'POLONIA', origin:'VARSOVIA', dest:'CARTAGENA', type:'ENTRY'},
+  {id:'MM-0119', ref:'RSV-2026-00427', room:'303', firstName:'Marta', lastName:'Kowalski', docType:'PA', docNumber:'PL7730215', birthDate:'1986-02-14', nat:'POLONIA', origin:'VARSOVIA', dest:'CARTAGENA', type:'DEPARTURE'},
 ];
+const movements = [];
 
 // Configuración SIRE del hotel (export-sire-file FR-005). Se carga desde el manual de cargue de SIRE.
 const SIRE_CONFIG = {hotelSireCode:'123456', hotelCityCode:'11001', separator:'\t', separatorLabel:'Tabulador', dateFormat:'dd/mm/aaaa'};
@@ -444,18 +448,56 @@ function addDays(iso, n){
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 }
-// Los datos de ejemplo se escribieron alrededor del 2026-09-28; se corren los días para que queden
-// alrededor de la fecha actual del computador y el listado, las llegadas y las salidas de "hoy" sean reales.
+// Los datos de ejemplo se escribieron alrededor del 2026-09-28. Se anclan al primer día en que se abre el
+// wireframe (se guarda en el navegador): desde ahí las fechas quedan fijas y el tiempo corre de verdad, así las
+// reservas llegan, se alojan, salen o no se presentan según el día. Pasados 14 días se vuelve a anclar a hoy.
 const SAMPLE_BASE = '2026-09-28';
-const sampleDelta = Math.round((Date.parse(TODAY) - Date.parse(SAMPLE_BASE)) / 86400000);
+const daysBetween = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
+let sampleAnchor = TODAY;
+try {
+  const saved = localStorage.getItem('hospitua.sampleAnchor');
+  if (saved && daysBetween(saved, TODAY) >= 0 && daysBetween(saved, TODAY) <= 14) sampleAnchor = saved;
+  else localStorage.setItem('hospitua.sampleAnchor', TODAY);
+} catch (err) { /* sin almacenamiento: se ancla a hoy en cada carga */ }
+const sampleDelta = daysBetween(SAMPLE_BASE, sampleAnchor);
 const shiftDay = s => addDays(s.slice(0, 10), sampleDelta) + s.slice(10);
 const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
 const diaMes = iso => parseInt(iso.slice(8, 10), 10) + ' ' + MESES[parseInt(iso.slice(5, 7), 10) - 1];
 maintenance.forEach(m => { m.start = shiftDay(m.start); m.end = shiftDay(m.end); m.label = 'Mantenimiento programado ' + diaMes(m.start) + ' → ' + diaMes(m.end); });
 otas.forEach(o => { o.linkedAt = shiftDay(o.linkedAt); o.lastSync = shiftDay(o.lastSync); });
 reservations.forEach(r => { r.start = shiftDay(r.start); r.end = shiftDay(r.end); if (r.cancellation) r.cancellation.date = shiftDay(r.cancellation.date); });
-movements.forEach(m => { m.date = shiftDay(m.date); });
 exportsHist.forEach(h => { h.start = shiftDay(h.start); h.end = shiftDay(h.end); h.date = shiftDay(h.date); });
+
+// Ciclo de vida según la fecha (lo que harían el Check-In/Check-Out del Módulo 1 y el cierre del día):
+// llega hoy = ACTIVE (espera el Check-In); ya llegó y no ha salido = IN_PROGRESS; ya pasó su salida = COMPLETED;
+// no se presentó = NO_SHOW (OTA) o CANCELLED (directa) y una OTA que nunca confirmó (PENDING) vence igual.
+function deriveLifecycle(r){
+  const ota = r.source === 'OTA';
+  const neverArrives = r.status === 'NO_SHOW' || (r.status === 'CANCELLED' && r.cancellation && r.cancellation.channel === 'SYSTEM');
+  const unconfirmed = r.status === 'PENDING';
+  const setStay = st => r.rooms.forEach(x => { x.stay = st; });
+  if (neverArrives || unconfirmed){
+    if (r.start < TODAY){
+      r.status = ota ? 'NO_SHOW' : 'CANCELLED';
+      setStay('NOT_ARRIVED');
+      if (ota) delete r.cancellation;
+      else r.cancellation = {date: r.start, reason: 'No-Show de canal directo al cierre del día', channel: 'SYSTEM', processedBy: 'Cierre automático'};
+    } else {
+      r.status = unconfirmed ? 'PENDING' : 'ACTIVE';
+      setStay('EXPECTED');
+      delete r.cancellation;
+    }
+  } else if (r.end < TODAY){ r.status = 'COMPLETED'; setStay('CHECKED_OUT'); }
+  else if (r.start < TODAY){ r.status = 'IN_PROGRESS'; setStay('CHECKED_IN'); }
+  else { r.status = 'ACTIVE'; setStay('EXPECTED'); }
+}
+reservations.forEach(deriveLifecycle);
+// Movimientos migratorios: la entrada existe si la reserva ya tuvo Check-In y la salida si ya tuvo Check-Out.
+movementTemplates.forEach(t => {
+  const r = reservations.find(x => x.ref === t.ref);
+  if (t.type === 'ENTRY' && (r.status === 'IN_PROGRESS' || r.status === 'COMPLETED')) movements.push({...t, date: r.start});
+  if (t.type === 'DEPARTURE' && r.status === 'COMPLETED') movements.push({...t, date: r.end});
+});
 const CREATE_HOURS = ['09:14', '11:02', '14:37', '16:48', '08:55'];
 reservations.forEach((r, i) => {
   r.docType = /^Pasaporte/.test(r.doc) ? 'PASSPORT' : /^CE/.test(r.doc) ? 'CE' : 'CC';
