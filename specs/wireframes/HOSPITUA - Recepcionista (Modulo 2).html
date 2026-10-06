@@ -1099,14 +1099,14 @@ function sireFields(m){
     ['Código del hotel', SIRE_CONFIG.hotelSireCode],
     ['Código de la ciudad', SIRE_CONFIG.hotelCityCode],
     ['Tipo de documento', m.docType],
-    ['Número de documento', m.docNumber || ''],
+    ['Número de documento', m.docNumber],
     ['Nacionalidad', m.nat],
     ['Apellidos', m.lastName.toUpperCase()],
     ['Nombres', m.firstName.toUpperCase()],
     ['Tipo de movimiento', m.type === 'ENTRY' ? 'E' : 'S'],
     ['Fecha del movimiento', sireDate(m.date)],
-    ['Lugar de procedencia', m.origin || ''],
-    ['Lugar de destino', m.dest || ''],
+    ['Lugar de procedencia', m.origin],
+    ['Lugar de destino', m.dest],
     ['Fecha de nacimiento', sireDate(m.birthDate)],
   ];
 }
@@ -1136,7 +1136,7 @@ function renderSire(){
       const name = m.firstName + ' ' + m.lastName;
       return `<tr>
         <td><span style="font-family:var(--mono);font-size:12px">${m.ref}</span><br><span class="note">Hab. ${m.room}</span></td>
-        <td><div class="person">${avatarHTML(name)}<div>${name}<br><span class="note">${m.docType} ${m.docNumber || '—'}</span></div></div></td>
+        <td><div class="person">${avatarHTML(name)}<div>${name}<br><span class="note">${m.docType} ${m.docNumber}</span></div></div></td>
         <td>${m.nat}</td>
         <td><span class="badge neutral">${MOVEMENT_ES[m.type]}</span><br><span class="note">${fmtDate(m.date)}</span></td>
         <td><div class="rowacts">
@@ -1180,7 +1180,7 @@ function sirePreview(mid){
   document.getElementById('lnMeta').innerHTML =
     kv('Reserva', m.ref) + kv('Huésped', m.firstName + ' ' + m.lastName) + kv('Movimiento', m.type + ' · ' + m.date);
   document.getElementById('lnFields').innerHTML = sireFields(m).map((f, i) =>
-    `<tr><td class="note">${i + 1}</td><td>${f[0]}</td><td>${f[1] ? `<b>${f[1]}</b>` : '<span class="badge warn">Falta</span>'}</td></tr>`).join('');
+    `<tr><td class="note">${i + 1}</td><td>${f[0]}</td><td><b>${f[1]}</b></td></tr>`).join('');
   document.getElementById('lnPre').textContent = sireLine(m).split(SIRE_CONFIG.separator).join(SIRE_CONFIG.separator === '\t' ? '  →  ' : SIRE_CONFIG.separator);
   const btn = document.getElementById('lnDownload');
   btn.onclick = () => sireDownloadOne(mid);
@@ -1223,7 +1223,7 @@ function renderOtas(){
   }).join('');
 }
 
-// Crear o editar una agencia OTA (ajuste de spec en curso: ver nota de la pantalla).
+// Crear o editar una agencia OTA.
 let otaEditing = null;   // null = nueva; si no, el name de la agencia que se está editando
 function openOtaModal(name){
   otaEditing = name;
