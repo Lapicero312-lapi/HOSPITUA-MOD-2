@@ -553,6 +553,7 @@ const lockLong = {
 const STATUS_ES = {ACTIVE:'Activa', PENDING:'Pendiente', IN_PROGRESS:'En curso', COMPLETED:'Completada', CANCELLED:'Cancelada', NO_SHOW:'No se presentó'};
 const STAY_ES = {EXPECTED:'Esperada', CHECKED_IN:'Con Check-In', CHECKED_OUT:'Con Check-Out', NOT_ARRIVED:'No llegó'};
 const COMMISSION_ES = {CALCULATED:'Calculada', RECONCILED:'Conciliada'};
+const ROOM_STATE_ES = {Available:'Disponible', Reserved:'Reservada', Occupied:'Ocupada', DisabledForRepairs:'En reparación'};
 const MOVEMENT_ES = {ENTRY:'Entrada', DEPARTURE:'Salida'};
 function fmtDate(v){
   if (!v) return '';
@@ -1200,7 +1201,7 @@ function renderRooms(){
   document.getElementById('tblRooms').innerHTML = rooms.map(rm => {
     const st = roomStatus(rm.n);
     const cls = {Available: 'ok', Reserved: 'warn', Occupied: 'info', DisabledForRepairs: 'err'}[st.estado] || 'neutral';
-    return `<tr><td>Hab. ${rm.n}</td><td>${rm.cat}</td><td>${capacity[rm.cat]} personas</td><td><span class="badge ${cls}">${st.estado}</span></td><td class="note">${st.det}</td></tr>`;
+    return `<tr><td>Hab. ${rm.n}</td><td>${rm.cat}</td><td>${capacity[rm.cat]} personas</td><td><span class="badge ${cls}">${ROOM_STATE_ES[st.estado]}</span></td><td class="note">${st.det}</td></tr>`;
   }).join('');
 }
 function renderTarifas(){
