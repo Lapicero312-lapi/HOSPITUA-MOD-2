@@ -25,8 +25,9 @@ en curso.
    "Consultar reservas". La Recepcionista solo cancela reservas de canal `DIRECT`; una reserva de
    canal `OTA` solo la cancela la Ota por su API (canal `OTA_API`).
 2. El sistema valida que la `Reservation` esté en estado `ACTIVE` o `PENDING`.
-3. El solicitante confirma la cancelación: en pantalla para la Recepcionista, o mediante el JSON
-   recibido para la Ota.
+3. El solicitante confirma la cancelación: para la Recepcionista, marcando en pantalla una casilla
+   de confirmación ("Entiendo que la cancelación no se puede deshacer") antes de que el botón de
+   confirmar se habilite; para la Ota, mediante el JSON recibido.
 4. El sistema cambia el atributo `Reservation.status` directamente a `CANCELLED`, de forma atómica
    dentro de la transacción de cancelación, sin requerir la invocación del flujo de modificación de
    reservación.
@@ -136,6 +137,9 @@ se bloquea con un error controlado.
 - **FR-002a**: El sistema debe permitir a la Recepcionista cancelar solo reservas de canal `DIRECT`
   (canal `RECEPTION`); las reservas de canal `OTA` solo las cancela la Ota por su API (canal
   `OTA_API`).
+- **FR-002b**: La pantalla de cancelación debe exigir que la Recepcionista marque una casilla de
+  confirmación ("Entiendo que la cancelación no se puede deshacer") antes de habilitar el botón que
+  confirma la cancelación.
 - **FR-003**: El sistema debe cambiar el atributo `Reservation.status` directamente a `CANCELLED` al
   confirmarse la solicitud, de forma atómica dentro de la transacción de cancelación y aplicando las
   transiciones `ACTIVE` o `PENDING` → `CANCELLED` y el control de concurrencia, sin requerir la

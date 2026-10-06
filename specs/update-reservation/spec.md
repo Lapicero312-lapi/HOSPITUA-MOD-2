@@ -41,7 +41,8 @@ las mismas reglas de transición y de concurrencia.
      debe conservar al menos una) o cambiar una habitación por otra, de la misma o de otra
      categoría.
    - La cantidad de personas (`guestCount`).
-   - Los datos personales del `Guest` titular.
+   - Los datos personales del `Guest` titular, salvo `nationality`: el país de origen se fija al
+     crear la reserva y no se edita desde "Actualizar reservación".
    - Las observaciones (`notes`).
 3. Si cambian las fechas o se agrega o cambia una habitación, el sistema ejecuta "Verificar
    disponibilidades" para cada habitación que quedaría en la reserva, enviando la `reservationRef`
@@ -211,8 +212,8 @@ los cambios. Se repite con datos personales (sin recálculo) y sobre reservas `I
 10. **Scenario**: Intento de quitar la única habitación (Error)
     - **Given** una `Reservation` con una sola habitación
     - **When** el solicitante intenta quitarla
-    - **Then** el sistema responde **HTTP 400** con el mensaje "La reserva debe tener al menos una
-      habitación. Para anularla, cancele la reserva."
+    - **Then** el sistema responde **HTTP 400** con el mensaje "La reserva debe conservar al menos
+      una habitación."
 
 11. **Scenario**: Cambio solo de la cantidad de personas
     - **Given** una `Reservation` en `ACTIVE` con 2 habitaciones de capacidad máxima 2 cada una y
@@ -224,9 +225,9 @@ los cambios. Se repite con datos personales (sin recálculo) y sobre reservas `I
 12. **Scenario**: Cantidad de personas fuera de la capacidad (Error)
     - **Given** una `Reservation` con 2 habitaciones de capacidad máxima 2 cada una
     - **When** el solicitante cambia `guestCount` a 5, o a 1
-    - **Then** el sistema responde **HTTP 400** con el mensaje "La cantidad de personas supera la
-      capacidad de las habitaciones de la reserva." (5) o "La cantidad de personas no puede ser menor
-      a la cantidad de habitaciones." (1), sin guardar nada
+    - **Then** el sistema responde **HTTP 400** con el mensaje "Máximo {capacidad} personas para las
+      habitaciones elegidas." (5) o "Debe haber al menos {cantidad de habitaciones} persona(s): una
+      por habitación." (1), sin guardar nada
 
 ---
 
@@ -394,9 +395,9 @@ y libere las habitaciones correspondientes.
   confirmación financiera y responde **HTTP 400** con el mensaje: "No se pudo calcular la nueva
   tarifa en este momento. Intente más tarde." Si la reserva tiene varias habitaciones y falla la
   cotización de una sola, no se aplica ningún cambio.
-- ¿Qué sucede si se envían fechas inválidas (salida antes de llegada)? El sistema rechaza la
-  solicitud con **HTTP 400**: "Las nuevas fechas de reserva son inválidas", sin consultar al Módulo
-  3.
+- ¿Qué sucede si se envían fechas inválidas (salida antes de llegada, o vacías)? El sistema rechaza
+  la solicitud con **HTTP 400**: "La fecha de salida debe ser posterior a la de entrada.", sin
+  consultar al Módulo 3.
 - ¿Qué sucede si se ingresan caracteres extraños en los datos del huésped o en `notes`? El sistema
   los rechaza antes de guardar con **HTTP 400**: "El formato de los datos contiene caracteres no
   válidos."
@@ -405,7 +406,7 @@ y libere las habitaciones correspondientes.
 - ¿Qué sucede si se intenta agregar una habitación que ya está en la reserva? El sistema responde
   **HTTP 400**: "La habitación ya forma parte de la reserva."
 - ¿Qué sucede si al agregar habitaciones la reserva supera el máximo de 10 habitaciones? El sistema
-  responde **HTTP 400**: "Una reserva no puede tener más de 10 habitaciones."
+  responde **HTTP 400**: "Una reserva lleva entre 1 y 10 habitaciones."
 - ¿Qué sucede si al cambiar las fechas una sola de las habitaciones no está disponible? El cambio
   completo se rechaza con **HTTP 400** indicando qué habitación no está disponible; no se aplican
   cambios parciales.
@@ -501,7 +502,8 @@ y libere las habitaciones correspondientes.
 
 - **FR-001**: El sistema debe permitir, sobre una `Reservation` en `ACTIVE` o `PENDING`, editar las
   fechas, agregar, quitar o cambiar habitaciones, cambiar `guestCount`, corregir los datos
-  personales del `Guest` titular, y editar `notes` (máximo 500 caracteres).
+  personales del `Guest` titular (`fullName`, `documentType`, `documentNumber`, `contactPhone`,
+  `contactEmail` — no `nationality`), y editar `notes` (máximo 500 caracteres).
 - **FR-001a**: El sistema debe rechazar con **HTTP 400** que la Recepcionista modifique una reserva
   de canal `OTA`: esas reservas solo las modifica la Ota que las originó, por su API.
 - **FR-002**: El sistema debe validar la disponibilidad mediante "Verificar disponibilidades" de

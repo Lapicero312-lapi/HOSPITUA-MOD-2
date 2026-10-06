@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-theme="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -11,13 +11,11 @@
 <div class="shell">
   <nav class="side" id="side">
     <div class="brand"><span class="mark">H</span><span><span class="txt">HOSPITUA</span><small>Módulo 2 · Recepción</small></span></div>
-    <div class="group">Operación</div>
     <button class="navbtn" data-nav="reservas"><span>Reservas</span></button>
     <button class="navbtn" data-nav="sire"><span>Exportar SIRE</span></button>
-    <div class="group">Solo lectura · otros módulos</div>
-    <button class="navbtn" data-nav="habitaciones"><span>Habitaciones</span><span class="tag">M1</span></button>
-    <button class="navbtn" data-nav="tarifas"><span>Tarifas</span><span class="tag">M3</span></button>
-    <button class="navbtn" data-nav="otas"><span>Agencias OTA</span><span class="tag">API</span></button>
+    <button class="navbtn" data-nav="habitaciones"><span>Habitaciones</span></button>
+    <button class="navbtn" data-nav="tarifas"><span>Tarifas</span></button>
+    <button class="navbtn" data-nav="otas"><span>Agencias OTA</span></button>
   </nav>
 
   <div class="main">
@@ -42,8 +40,6 @@
             <span>Consultar reservas</span>
             <button class="btn primary" data-nav="nueva-directa">+ Nueva reserva directa</button>
           </h2>
-          <p class="note" style="margin-bottom:12px">Las reservas OTA llegan solas por la API de cada agencia (<span class="code">POST /api/ota/reservations</span>). Recepción no las crea, no las modifica ni las cancela: los cambios y las cancelaciones también los envía la agencia por su API.</p>
-          <div class="readonly-banner">🔧 Ajuste en curso: el spec vigente (<span class="code">check-view-reservation</span> FR-003) pide un filtro por tipo de fecha (Llegada/Salida/Estadía) además del rango. Esta pantalla ya anticipa la simplificación que se está incorporando al spec: un único rango Desde–Hasta sobre la estadía.</div>
           <div class="row">
             <div class="field" style="flex:1;min-width:220px"><label>Buscar</label><input id="fSearch" placeholder="Referencia, código OTA, documento o nombre"></div>
             <div class="field"><label>Estado</label>
@@ -77,7 +73,6 @@
             <tbody id="tblReservas"></tbody>
           </table></div>
           <div class="pager" id="pager"></div>
-          <p class="note" style="margin-top:10px">Modificar y Cancelar solo se habilitan en reservas <b>directas</b> en <span class="code">ACTIVE</span> o <span class="code">PENDING</span>. Pase el cursor sobre un botón deshabilitado para ver el motivo.</p>
         </div>
       </section>
 
@@ -128,29 +123,29 @@
             <div id="mdFechaErr" class="field" hidden><span class="err">La fecha de salida debe ser posterior a la de entrada.</span></div>
             <p class="note" style="margin-bottom:6px">Habitaciones de la reserva (entre 1 y 10). Puede cambiar una por otra, de la misma o de otra categoría, agregar o quitar.</p>
             <div class="tablewrap" style="margin-bottom:8px"><table>
-              <thead><tr><th>Habitación</th><th>Categoría</th><th><span class="tag-mod m1">MÓDULO 1</span> Disponibilidad</th><th></th></tr></thead>
+              <thead><tr><th>Habitación</th><th>Categoría</th><th>Disponibilidad</th><th></th></tr></thead>
               <tbody id="mdRooms"></tbody>
             </table></div>
             <div class="row" style="margin-bottom:14px"><button class="btn sm" id="mdAddRoom">+ Agregar habitación</button></div>
             <div class="row">
-              <div class="field" style="min-width:140px"><label class="req">Personas <span class="code">guestCount</span></label><input type="number" id="mdPersonas" min="1"></div>
+              <div class="field" style="min-width:140px"><label class="req">Personas</label><input type="number" id="mdPersonas" min="1"></div>
             </div>
             <div id="mdPersErr" class="field" hidden style="margin-bottom:10px"><span class="err"></span></div>
             <h2 style="margin-top:6px">Titular</h2>
             <div class="row"><div class="field" style="flex:1"><label class="req">Nombre completo</label><input id="mdNombre"></div></div>
-            <div class="row"><div class="field" style="flex:1"><label class="req">Tipo de documento <span class="code">documentType</span></label><select id="mdDocType"><option value="CC">Cédula de ciudadanía</option><option value="CE">Cédula de extranjería</option><option value="PASSPORT">Pasaporte</option><option value="OTHER">Otro</option></select></div><div class="field" style="flex:1"><label class="req">Documento <span class="code">documentNumber</span></label><input id="mdDoc"></div></div>
+            <div class="row"><div class="field" style="flex:1"><label class="req">Tipo de documento</label><select id="mdDocType"><option value="CC">Cédula de ciudadanía</option><option value="CE">Cédula de extranjería</option><option value="PASSPORT">Pasaporte</option><option value="OTHER">Otro</option></select></div><div class="field" style="flex:1"><label class="req">Documento</label><input id="mdDoc"></div></div>
             <div class="row">
               <div class="field"><label>Teléfono</label><input id="mdTel" placeholder="+57 300 000 0000"></div>
               <div class="field"><label>Email</label><input id="mdEmail" placeholder="nombre@correo.com"></div>
             </div>
-            <div class="field"><label>Observaciones <span class="code">notes</span></label>
+            <div class="field"><label>Observaciones</label>
               <textarea id="mdNotes" rows="3" maxlength="500"></textarea>
               <span class="note" id="mdNotesCount"></span>
             </div>
           </div>
           <div>
             <div class="panel">
-              <h2><span class="tag-mod m3">MÓDULO 3</span> Cotización recalculada</h2>
+              <h2>Cotización recalculada</h2>
               <div class="calcbox" id="mdTarifa"></div>
             </div>
             <div class="readonly-banner" id="mdOrderNote"></div>
@@ -176,7 +171,7 @@
           <div class="panel">
             <h2>Confirmación</h2>
             <div class="readonly-banner" id="cxImpact"></div>
-            <div class="field" style="margin-bottom:12px"><label>Motivo (opcional) <span class="code">Cancellation.reason</span></label>
+            <div class="field" style="margin-bottom:12px"><label>Motivo (opcional)</label>
               <textarea id="cxReason" rows="3" placeholder="Ej. el huésped canceló su viaje"></textarea>
             </div>
             <p class="note" style="margin-bottom:10px">Se registrará con canal <span class="code">RECEPTION</span> y procesada por Laura Méndez.</p>
@@ -197,41 +192,39 @@
           <div class="grid2">
             <div>
               <div class="row"><div class="field" style="flex:1"><label class="req">Nombre completo del titular</label><input id="ndNombre" placeholder="Ej. Laura Fernández Gómez"></div></div>
-              <div class="row"><div class="field" style="flex:1"><label class="req">Tipo de documento <span class="code">documentType</span></label><select id="ndDocType"><option value="CC">Cédula de ciudadanía</option><option value="CE">Cédula de extranjería</option><option value="PASSPORT">Pasaporte</option><option value="OTHER">Otro</option></select></div><div class="field" style="flex:1"><label class="req">Documento <span class="code">documentNumber</span></label><input id="ndDoc" placeholder="Ej. 1.014.223.980"></div></div>
+              <div class="row"><div class="field" style="flex:1"><label class="req">Tipo de documento</label><select id="ndDocType"><option value="CC">Cédula de ciudadanía</option><option value="CE">Cédula de extranjería</option><option value="PASSPORT">Pasaporte</option><option value="OTHER">Otro</option></select></div><div class="field" style="flex:1"><label class="req">No. documento</label><input id="ndDoc" placeholder="Ej. 1.014.223.980"></div></div>
               <div class="row">
                 <div class="field"><label>Teléfono</label><input id="ndTel" placeholder="+57 300 000 0000"></div>
                 <div class="field"><label>Email</label><input id="ndEmail" placeholder="nombre@correo.com"></div>
               </div>
               <div class="row">
                 <div class="field" style="flex:1"><label class="req">País de origen</label>
-                  <select id="ndPais"><option>Colombia</option><option>México</option><option>España</option><option>Alemania</option><option>Estados Unidos</option><option>Brasil</option></select>
+                  <input id="ndPais" placeholder="Ej. Colombia">
                 </div>
               </div>
-              <p class="note" style="margin-bottom:12px">Si el país no es Colombia, el huésped queda como <span class="code">FOREIGN</span>; sus datos migratorios los captura el Módulo 1 en el Check-In, no esta pantalla.</p>
               <div class="row">
                 <div class="field"><label class="req">Categoría</label>
                   <select id="ndCategoria"><option value="Estándar">Estándar</option><option value="Superior">Superior</option><option value="Suite">Suite</option></select>
                 </div>
                 <div class="field" style="min-width:110px"><label class="req">Habitaciones</label><input type="number" id="ndQty" min="1" max="10" value="1"></div>
-                <div class="field" style="min-width:110px"><label class="req">Personas <span class="code">guestCount</span></label><input type="number" id="ndPersonas" min="1" value="2"></div>
+                <div class="field" style="min-width:110px"><label class="req">Personas</label><input type="number" id="ndPersonas" min="1" value="2"></div>
               </div>
               <div class="row">
                 <div class="field"><label class="req">Fecha de entrada</label><input type="date" id="ndEntrada" value="2026-09-28"></div>
                 <div class="field"><label class="req">Fecha de salida</label><input type="date" id="ndSalida" value="2026-10-01"></div>
               </div>
               <div id="ndErr" class="field" hidden><span class="err" id="ndErrTxt"></span></div>
-              <div class="field"><label>Observaciones <span class="code">notes</span></label><textarea id="ndNotes" rows="2" maxlength="500" placeholder="Opcional, máximo 500 caracteres"></textarea></div>
+              <div class="field"><label>Observaciones</label><textarea id="ndNotes" rows="2" maxlength="500" placeholder="Opcional, máximo 500 caracteres"></textarea></div>
             </div>
             <div>
               <div class="panel" style="margin:0 0 12px">
-                <h2><span class="tag-mod m1">MÓDULO 1</span> Verificar disponibilidad</h2>
+                <h2>Verificar disponibilidad</h2>
                 <div id="ndDispo" class="note"></div>
               </div>
               <div class="panel" style="margin:0 0 12px">
-                <h2><span class="tag-mod m3">MÓDULO 3</span> Calcular tarifa dinámica</h2>
+                <h2>Calcular tarifa dinámica</h2>
                 <div class="calcbox" id="ndTarifa"></div>
               </div>
-              <div class="readonly-banner" id="ndReservedNote"></div>
               <div class="row">
                 <button class="btn primary" id="ndSubmit">Crear reserva directa</button>
                 <button class="btn" data-nav="reservas">Volver</button>
@@ -245,19 +238,16 @@
       <section class="screen" id="scr-sire" hidden>
         <div class="panel">
           <h2>Exportar archivo SIRE</h2>
-          <p class="note" style="margin-bottom:12px">Vista exclusiva de la Recepcionista. El Módulo 2 consolida los movimientos migratorios que el Módulo 1 envió en el Check-In y el Check-Out. Usted descarga el archivo y lo envía a Migración por los medios que esta disponga: <b>el sistema no envía nada a Migración</b>.</p>
           <div class="row">
             <div class="field"><label class="req">Fecha inicial</label><input type="date" id="sStart" value="2026-09-01"></div>
             <div class="field"><label class="req">Fecha final</label><input type="date" id="sEnd" value="2026-09-28"></div>
             <button class="btn sm" onclick="sireQuick(7)">Últimos 7 días</button>
             <button class="btn sm" onclick="sireQuick(30)">Últimos 30 días</button>
           </div>
-          <div class="row" style="justify-content:space-between;align-items:center">
-            <span class="note">Se puede descargar las veces que haga falta.</span>
+          <div class="row" style="justify-content:flex-end;align-items:center">
             <button class="btn primary" id="sAll" onclick="sireDownloadAll()">Descargar todo el periodo (.TXT)</button>
           </div>
           <div id="sErr"></div>
-          <p class="note">El periodo se compara con la fecha de cada movimiento (<span class="code">movementDate</span>), máximo 1 año. Cada descarga, sea del periodo o de un solo movimiento, queda registrada en el histórico.</p>
         </div>
 
         <div class="statrow" id="sStats"></div>
@@ -275,8 +265,7 @@
       <!-- ================= HABITACIONES (M1, solo lectura) ================= -->
       <section class="screen" id="scr-habitaciones" hidden>
         <div class="panel">
-          <h2>Habitaciones <span class="badge m1">Solo lectura · sincronizado con Módulo 1</span></h2>
-          <p class="note" style="margin-bottom:12px">Inventario físico y calendario de mantenimientos del Módulo 1 (<span class="code">consult-room-inventory</span>, <span class="code">consult-maintenance-calendar</span>). El Módulo 2 nunca cambia estos estados por su cuenta.</p>
+          <h2>Habitaciones</h2>
           <div class="tablewrap"><table>
             <thead><tr><th>N.º</th><th>Categoría</th><th>Estado hoy</th><th>Detalle</th></tr></thead>
             <tbody id="tblRooms"></tbody>
@@ -287,8 +276,7 @@
       <!-- ================= TARIFAS (M3, solo lectura) ================= -->
       <section class="screen" id="scr-tarifas" hidden>
         <div class="panel">
-          <h2>Tarifas <span class="badge m3">Solo lectura · sincronizado con Módulo 3</span></h2>
-          <p class="note" style="margin-bottom:12px">Tarifas vigentes por categoría, usadas por "Calcular tarifa dinámica" para relacionar la tarifa con cada habitación (<span class="code">roomGrossAmount</span>). El Módulo 2 no calcula IVA, no aplica comisiones y no edita estas tarifas.</p>
+          <h2>Tarifas</h2>
           <div class="tablewrap"><table>
             <thead><tr><th>Categoría</th><th>Capacidad</th><th>Tarifa base</th><th>Ajuste de temporada</th><th>Tarifa efectiva / noche</th></tr></thead>
             <tbody id="tblTarifas"></tbody>
@@ -303,8 +291,7 @@
             <span>Agencias OTA</span>
             <button class="btn primary" onclick="openOtaModal(null)">+ Nueva agencia</button>
           </h2>
-          <div class="readonly-banner">🔧 Ajuste en curso: el spec vigente dice que ninguna <span class="code">Ota</span> se crea ni se edita desde el hotel (se registra sola por su API). Esta pantalla ya anticipa el cambio que se está incorporando al spec, que permitirá vincular y editar agencias manualmente.</div>
-          <p class="note" style="margin-bottom:12px">La comisión de cada reserva se calcula al recibirla (<span class="code">totalAmount × commissionPercentage</span>) y queda congelada en la reserva; un nuevo porcentaje solo afecta reservas futuras. La conciliación de comisiones la hace el Módulo 3 (finanzas), no la recepción. Si la OTA cancela una reserva, solo cambia su estado: la comisión no se toca.</p>
+          <p class="note" style="margin-bottom:12px">La comisión de cada reserva se calcula al recibirla y queda congelada en la reserva; un nuevo porcentaje solo afecta reservas futuras. La conciliación de comisiones la hace el Módulo 3 (finanzas), no la recepción. Si la OTA cancela una reserva, solo cambia su estado: la comisión no se toca.</p>
           <div class="tablewrap"><table>
             <thead><tr><th>Agencia</th><th>Cuenta del hotel vinculada</th><th>Vinculada el</th><th>% Comisión</th><th>Conexión</th><th>Reservas activas</th><th style="text-align:right">Acciones</th></tr></thead>
             <tbody id="tblOtas"></tbody>
@@ -322,8 +309,8 @@
     <h3 id="otaTitle">Nueva agencia</h3>
     <p class="sub">Nombre, cuenta del hotel vinculada en la OTA y porcentaje de comisión contractual.</p>
     <div class="field" style="margin-bottom:10px"><label class="req">Nombre</label><input id="otaNombre" placeholder="Ej. Hotels.com"></div>
-    <div class="field" style="margin-bottom:10px"><label class="req">Cuenta del hotel vinculada <span class="code">hotelAccountId</span></label><input id="otaCuenta" placeholder="Ej. Hotel ID 8841207"></div>
-    <div class="field"><label class="req">% Comisión <span class="code">commissionPercentage</span></label><input id="otaPct" type="number" min="0" max="100" value="15"></div>
+    <div class="field" style="margin-bottom:10px"><label class="req">Cuenta del hotel vinculada</label><input id="otaCuenta" placeholder="Ej. Hotel ID 8841207"></div>
+    <div class="field"><label class="req">% Comisión</label><input id="otaPct" type="number" min="0" max="100" value="15"></div>
     <div id="otaErr"></div>
     <div class="acts">
       <button class="btn" onclick="closeModal('m-ota')">Cancelar</button>
@@ -380,13 +367,13 @@ const otas = [
 const reservations = [
   {ref:'RSV-2026-00420', guest:'Andrés Molina', doc:'CC 80.221.334', pais:'Colombia', tipo:'NATIONAL', source:'DIRECT',
     start:'2026-09-28', end:'2026-09-29', status:'ACTIVE', guestCount:1, rooms:[{n:'102',cat:'Estándar',stay:'EXPECTED'}],
-    notes:'Llega en el último vuelo, 23:30.'},
+    phone:'+57 310 220 4471', email:'andres.molina@correo.com', notes:'Llega en el último vuelo, 23:30.'},
   {ref:'RSV-2026-00418', guest:'Camila Restrepo', doc:'CC 1.020.456.789', pais:'Colombia', tipo:'NATIONAL', source:'DIRECT',
     start:'2026-09-28', end:'2026-10-01', status:'ACTIVE', guestCount:2, rooms:[{n:'104',cat:'Estándar',stay:'EXPECTED'}],
     notes:''},
   {ref:'RSV-2026-00421', guest:'Valentina Ospina', doc:'CC 1.144.093.552', pais:'Colombia', tipo:'NATIONAL', source:'DIRECT',
     start:'2026-10-15', end:'2026-10-17', status:'ACTIVE', guestCount:3, rooms:[{n:'204',cat:'Superior',stay:'EXPECTED'}],
-    notes:'Aniversario, solicita decoración.'},
+    phone:'+57 300 118 5520', email:'valentina.ospina@correo.com', notes:'Aniversario, solicita decoración.'},
   {ref:'RSV-2026-00427', guest:'Marta Kowalski', doc:'Pasaporte PL7730215', pais:'Polonia', tipo:'FOREIGN', source:'OTA', ota:'Airbnb', ext:'HMX4Q8Z2TA',
     start:'2026-10-05', end:'2026-10-08', status:'ACTIVE', guestCount:2, rooms:[{n:'303',cat:'Suite',stay:'EXPECTED'}],
     gross:1656000, commissionPct:12, commissionStatus:'CALCULATED', notes:''},
@@ -465,10 +452,17 @@ function quoteFor(cat, s, e){
 const DOC_PREFIX = {CC: 'CC', CE: 'CE', PASSPORT: 'Pasaporte', OTHER: ''};
 const docNumberOf = doc => (doc || '').replace(/^(CC|CE|Pasaporte)s*/, '');
 const docLabel = (type, num) => (DOC_PREFIX[type] ? DOC_PREFIX[type] + ' ' : '') + num;
-reservations.forEach(r => {
+function addDays(iso, n){
+  const d = new Date(iso + 'T00:00:00');
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+const CREATE_HOURS = ['09:14', '11:02', '14:37', '16:48', '08:55'];
+reservations.forEach((r, i) => {
   r.docType = /^Pasaporte/.test(r.doc) ? 'PASSPORT' : /^CE/.test(r.doc) ? 'CE' : 'CC';
   r.rooms.forEach(rm => { if (r.source === 'DIRECT') rm.gross = quoteFor(rm.cat, r.start, r.end).gross; });
   if (r.source === 'OTA') r.commissionAmount = Math.round(r.gross * r.commissionPct / 100);
+  if (!r.createdAt) r.createdAt = addDays(r.start, -(3 + (i % 5))) + ' ' + CREATE_HOURS[i % CREATE_HOURS.length];
 });
 
 const LIVE = ['ACTIVE', 'PENDING', 'IN_PROGRESS'];
@@ -591,8 +585,9 @@ function fillAgencias(){
 // orden por fecha de llegada y paginación de a 10.
 const PAGE_SIZE = 10;
 let listPage = 1;
+function stripAccents(s){ return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, ''); }
 function filteredReservas(){
-  const q = (document.getElementById('fSearch').value || '').toLowerCase();
+  const qRaw = (document.getElementById('fSearch').value || '').trim();
   const fe = document.getElementById('fEstado').value;
   const fc = document.getElementById('fCanal').value;
   document.getElementById('fAgenciaWrap').hidden = fc !== 'OTA';
@@ -600,14 +595,35 @@ function filteredReservas(){
   const from = document.getElementById('fDesde').value;
   const to = document.getElementById('fHasta').value;
   const order = document.getElementById('fOrden').value;
+
+  // Búsqueda por código (reservationRef o externalConfirmationCode): coincidencia exacta,
+  // ignora los demás filtros (check-view-reservation FR-006).
+  if (qRaw){
+    const qUp = qRaw.toUpperCase();
+    const byCode = reservations.filter(r => r.ref.toUpperCase() === qUp || (r.ext && r.ext.toUpperCase() === qUp));
+    if (byCode.length) return {list: byCode.sort((a, b) => a.ref.localeCompare(b.ref))};
+    if (/^RSV-/.test(qUp)) return {error: 'La reserva no existe.'};
+  }
+
   if ((from && !to) || (!from && to)) return {error: 'Debe completar ambas fechas del rango.'};
   if (from && to && from > to) return {error: 'La fecha inicial no puede ser posterior a la fecha final.'};
   if (from && to && nightsBetween(from, to) > 366) return {error: 'El rango de fechas no puede superar 366 días.'};
+
+  // Búsqueda por titular: documento (coincidencia exacta) o nombre (parcial, sin tildes ni
+  // mayúsculas, mínimo 3 caracteres) — check-view-reservation FR-004/FR-009.
+  let docQ = '', nameQ = '';
+  if (qRaw){
+    if (/\d/.test(qRaw)) docQ = qRaw.replace(/[^0-9a-zA-Z]/g, '').toUpperCase();
+    else nameQ = stripAccents(qRaw).toLowerCase();
+  }
+  if (nameQ && nameQ.length < 3) return {error: 'La búsqueda por nombre requiere al menos 3 caracteres.'};
+
   const list = reservations
     .filter(r => !fe || r.status === fe)
     .filter(r => !fc || r.source === fc)
     .filter(r => !fa || r.ota === fa)
-    .filter(r => !q || (r.ref + ' ' + (r.ext || '') + ' ' + r.guest + ' ' + r.doc).toLowerCase().includes(q))
+    .filter(r => !docQ || docNumberOf(r.doc).replace(/[^0-9a-zA-Z]/g, '').toUpperCase() === docQ)
+    .filter(r => !nameQ || stripAccents(r.guest).toLowerCase().includes(nameQ))
     .filter(r => !from || !to || (r.start <= to && r.end > from))   // reservas cuya estadía cae entre Desde y Hasta
     .sort((a, b) => (order === 'asc' ? a.start.localeCompare(b.start) : b.start.localeCompare(a.start)) || a.ref.localeCompare(b.ref));
   return {list};
@@ -713,12 +729,14 @@ function renderDetalle(){
     <div class="row" style="margin:0;align-items:center;justify-content:space-between">
       <div class="person">${avatarHTML(r.guest)}<div><b>${r.guest}</b> <span class="note">· titular</span><br><span class="note">${r.doc}</span></div></div>
       <span class="note">${r.pais} · ${r.tipo === 'FOREIGN' ? 'huésped extranjero' : 'huésped nacional'}</span>
-    </div>`;
+    </div>
+    <div class="kv" style="margin-top:12px">${kv('Teléfono', r.phone || '<span class="note">—</span>')}${kv('Email', r.email || '<span class="note">—</span>')}</div>`;
   const nights = nightsBetween(r.start, r.end);
   document.getElementById('dtStay').innerHTML =
     kv('Entrada', r.start) + kv('Salida', r.end) + kv('Noches', nights) + kv('Personas', r.guestCount) +
-    (r.source === 'OTA' ? kv('Valor bruto <span class="code">totalAmount</span>', money(r.gross)) : '') +
-    kv('Observaciones', r.notes || '<span class="note">—</span>');
+    (r.source === 'OTA' ? kv('Valor bruto', money(r.gross)) : '') +
+    kv('Observaciones', r.notes || '<span class="note">—</span>') +
+    kv('Creada el', r.createdAt);
   document.getElementById('dtRooms').innerHTML = r.rooms.map(x => `<tr><td>Hab. ${x.n}</td><td>${x.cat}</td>
     <td>${x.gross ? money(x.gross) : '<span class="note">lo informa la OTA</span>'}</td><td>${stayBadge(x.stay)}</td></tr>`).join('');
   let canal;
@@ -774,8 +792,7 @@ function renderMigTab(r){
         <td>${m.origin} → ${m.dest}</td>
         <td><span class="badge neutral">${m.type}</span><br><span class="note">${m.date}</span></td>
       </tr>`).join('')}</tbody>
-    </table></div>
-    <p class="note" style="margin-top:10px">Solo lectura: el Módulo 1 envía los datos ya procesados en el Check-In y el Check-Out; el Módulo 2 no los completa ni los corrige.</p>`;
+    </table></div>`;
 }
 
 // ================= Modificar =================
@@ -872,7 +889,7 @@ function refreshModificar(){
       lines += `<div class="line"><span>${row.n ? 'Hab. ' + row.n + ' · ' : ''}${row.cat} · ${q.nights} noche(s) + temporada</span><span>${money(q.gross)}</span></div>`;
     });
     tarifa.innerHTML = lines + `
-      <p class="note" style="margin-top:6px">Tarifa de cada habitación, tal como la entrega el Módulo 3 (<span class="code">roomGrossAmount</span>). Informativa: el Módulo 2 no suma ni calcula diferencias, IVA ni comisión. Solo cambiar las personas, los datos del titular o las observaciones no recotiza.</p>`;
+      <p class="note" style="margin-top:6px">Tarifa de cada habitación, tal como la entrega el Módulo 3. Informativa: el Módulo 2 no suma ni calcula diferencias, IVA ni comisión. Solo cambiar las personas, los datos del titular o las observaciones no recotiza.</p>`;
   }
 
   const origRooms = r.rooms.map(x => x.n).sort().join();
@@ -943,9 +960,10 @@ function refreshNuevaDirecta(){
   const e = document.getElementById('ndSalida').value;
   let err = '';
   if (!s || !e || e <= s) err = 'La fecha de salida debe ser posterior a la de entrada.';
-  else if (qty < 1 || qty > 10) err = 'Una reserva lleva entre 1 y 10 habitaciones.';
-  else if (personas < qty) err = 'Debe haber al menos una persona por habitación.';
-  else if (personas > qty * capacity[cat]) err = `Máximo ${qty * capacity[cat]} personas para ${qty} habitación(es) ${cat} (capacidad ${capacity[cat]} c/u).`;
+  else if (qty < 1 || qty > 10) err = 'Una reserva debe tener entre 1 y 10 habitaciones.';
+  else if (personas < qty) err = 'La cantidad de personas no puede ser menor a la cantidad de habitaciones.';
+  else if (personas > qty * capacity[cat]) err = 'La cantidad de personas supera la capacidad de las habitaciones de la reserva.';
+  else if (!document.getElementById('ndPais').value.trim()) err = 'Debe indicar el país de origen.';
   document.getElementById('ndErr').hidden = !err;
   document.getElementById('ndErrTxt').textContent = err;
 
@@ -954,7 +972,7 @@ function refreshNuevaDirecta(){
   const dispo = document.getElementById('ndDispo');
   if (!dateOk) dispo.innerHTML = '<span class="badge neutral">Sin verificar</span> corrija las fechas para consultar disponibilidad.';
   else if (free.length >= qty && qty > 0) dispo.innerHTML = `<span class="badge ok">Disponible</span> ${free.slice(0, qty).map(x => 'Hab. ' + x.n).join(', ')} · ${free.length} libre(s) en ${cat} (inventario + calendario de mantenimientos).`;
-  else dispo.innerHTML = `<span class="badge err">Sin disponibilidad</span> solo hay ${free.length} habitación(es) ${cat} libre(s) para esas fechas.`;
+  else dispo.innerHTML = `<span class="badge err">Sin disponibilidad</span> La habitación no está disponible para el rango de fechas solicitado. Solo hay ${free.length} habitación(es) ${cat} libre(s).`;
 
   const tarifa = document.getElementById('ndTarifa');
   if (dateOk && qty > 0){
@@ -962,36 +980,31 @@ function refreshNuevaDirecta(){
     tarifa.innerHTML = `
       <div class="line"><span>${q.nights} noche(s) × ${money(q.base)}</span><span>${money(q.subtotal)}</span></div>
       <div class="line"><span>Ajuste de temporada (+${SEASON_PCT * 100}%)</span><span>${money(q.season)}</span></div>
-      <div class="total"><span>Tarifa por habitación <span class="code">roomGrossAmount</span></span><span>${money(q.gross)}</span></div>
+      <div class="total"><span>Tarifa por habitación</span><span>${money(q.gross)}</span></div>
       <p class="note" style="margin-top:6px">Se guarda en cada una de las ${qty} habitación(es), tal como la entrega el Módulo 3. Informativa: el Módulo 2 no suma un total ni calcula IVA o comisión.</p>`;
   } else {
     tarifa.innerHTML = '<p class="note">Ingrese fechas válidas para cotizar.</p>';
   }
 
-  const note = document.getElementById('ndReservedNote');
-  if (s === TODAY) note.innerHTML = '🔔 La llegada es <b>hoy</b>: al crear la reserva, el Módulo 2 ordenará <span class="code">Reserved</span> al Módulo 1. Si el Módulo 1 no confirma, la reserva no se crea (todo o nada).';
-  else if (s) note.innerHTML = `📅 La llegada es futura (${s}): la reserva se crea en <span class="code">ACTIVE</span> sin apartar la habitación todavía.`;
-  else note.innerHTML = '';
-
-  const filled = document.getElementById('ndNombre').value.trim() && document.getElementById('ndDoc').value.trim();
+  const filled = document.getElementById('ndNombre').value.trim() && document.getElementById('ndDoc').value.trim() && document.getElementById('ndPais').value.trim();
   document.getElementById('ndSubmit').disabled = !!err || !filled || free.length < qty;
   document.getElementById('ndSubmit').title = filled ? '' : 'Complete el nombre y el documento del titular';
 }
-['ndNombre', 'ndDoc', 'ndCategoria', 'ndQty', 'ndPersonas', 'ndEntrada', 'ndSalida'].forEach(id => document.getElementById(id).addEventListener('input', refreshNuevaDirecta));
+['ndNombre', 'ndDoc', 'ndPais', 'ndCategoria', 'ndQty', 'ndPersonas', 'ndEntrada', 'ndSalida'].forEach(id => document.getElementById(id).addEventListener('input', refreshNuevaDirecta));
 document.getElementById('ndSubmit').addEventListener('click', () => {
   const cat = document.getElementById('ndCategoria').value;
   const qty = parseInt(document.getElementById('ndQty').value, 10);
   const s = document.getElementById('ndEntrada').value, e = document.getElementById('ndSalida').value;
-  const pais = document.getElementById('ndPais').value;
+  const pais = document.getElementById('ndPais').value.trim();
   const picked = roomsFreeFor(cat, s, e).slice(0, qty);
   const ref = 'RSV-2026-00' + (nextRefNum++);
   const r = {ref, guest: document.getElementById('ndNombre').value.trim(), docType: document.getElementById('ndDocType').value, doc: docLabel(document.getElementById('ndDocType').value, document.getElementById('ndDoc').value.trim()), pais,
-    tipo: pais === 'Colombia' ? 'NATIONAL' : 'FOREIGN', source: 'DIRECT', start: s, end: e, status: 'ACTIVE',
+    tipo: stripAccents(pais).toLowerCase() === 'colombia' ? 'NATIONAL' : 'FOREIGN', source: 'DIRECT', start: s, end: e, status: 'ACTIVE',
     guestCount: parseInt(document.getElementById('ndPersonas').value, 10),
     rooms: picked.map(x => ({n: x.n, cat, stay: 'EXPECTED', gross: quoteFor(cat, s, e).gross})),
     notes: document.getElementById('ndNotes').value.trim()};
   reservations.unshift(r);
-  ['ndNombre', 'ndDoc', 'ndTel', 'ndEmail', 'ndNotes'].forEach(id => document.getElementById(id).value = '');
+  ['ndNombre', 'ndDoc', 'ndPais', 'ndTel', 'ndEmail', 'ndNotes'].forEach(id => document.getElementById(id).value = '');
   refreshNuevaDirecta();
   backToList(ref, 'Reserva ' + ref + ' creada en ACTIVE.' + (s === TODAY ? ' El Módulo 1 confirmó Reserved.' : ' No se apartó habitación (llegada futura).'));
 });
@@ -1058,6 +1071,7 @@ function renderSire(){
         <td><div class="person">${avatarHTML(name)}<div>${name}<br><span class="note">${m.docType} ${m.docNumber || '—'}</span></div></div></td>
         <td>${m.nat}</td>
         <td><span class="badge neutral">${m.type}</span><br><span class="note">${m.date}</span></td>
+        <td><div class="rowacts">
           <button class="btn sm" onclick="sirePreview('${m.id}')">Previsualizar</button>
           <button class="btn sm primary" onclick="sireDownloadOne('${m.id}')">Descargar</button>
         </div></td></tr>`;

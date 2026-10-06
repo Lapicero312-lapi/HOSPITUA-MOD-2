@@ -54,6 +54,15 @@ Reglas de la integración que enmarcan este caso de uso:
 Este caso de uso nunca realiza llamadas al Módulo 1 ni verifica disponibilidad: su única integración
 saliente es la llamada síncrona al servicio de tarificación del Módulo 3.
 
+**Pantalla de referencia "Tarifas" (solo lectura, fuera del flujo de reserva):** además del consumo
+síncrono descrito arriba, la Recepcionista tiene una pantalla de solo lectura que lista, por
+categoría, una tarifa base y un ajuste de temporada ilustrativo, para darle una idea aproximada antes
+de cotizar. Esta pantalla **no sustituye ni anticipa** la cotización real: es una referencia local,
+construida en el Módulo 2 con una regla fija de ejemplo (un mismo porcentaje de ajuste para todas las
+categorías), sin ninguna llamada al Módulo 3. La tarifa que realmente queda en el `roomGrossAmount` de
+una reserva siempre se obtiene en el momento de reservar o recotizar, mediante la llamada síncrona de
+este caso de uso — nunca desde los valores mostrados en esta pantalla de referencia.
+
 **Reservas con varias habitaciones**: el servicio del Módulo 3 cotiza una categoría para un rango de
 fechas. Por eso el Módulo 2 lo invoca **una vez por cada habitación** de la reserva (con la
 `categoryRoom` de esa habitación y las fechas comunes de la reserva) y guarda cada resultado en el
@@ -201,6 +210,10 @@ cambio no se aplica y que la respuesta es un **HTTP 400** controlado.
   error del Módulo 3 (rango de fechas incoherente, categoría inexistente, parámetros ausentes) y
   mapearlos a respuestas **HTTP 400 (Bad Request)** estructuradas, quedando prohibida la propagación
   de excepciones que deriven en **HTTP 500 (Internal Server Error)**.
+- **FR-009**: El sistema debe ofrecer a la Recepcionista una pantalla de solo lectura con una tarifa
+  de referencia por categoría (tarifa base, ajuste de temporada ilustrativo y tarifa efectiva
+  resultante), separada del flujo de reserva, sin invocar al Módulo 3 y sin que sus valores se
+  persistan ni se usen como `roomGrossAmount` de ninguna reserva.
 
 ### Non-Functional Requirements
 
