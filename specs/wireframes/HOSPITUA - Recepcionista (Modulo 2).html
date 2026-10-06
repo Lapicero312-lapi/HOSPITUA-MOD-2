@@ -951,7 +951,7 @@ function refreshModificar(){
         ${before && row.cat !== row.origCat ? `<div class="line"><span>Categoría nueva: ${row.cat}</span><span>${money(q.base)} por noche</span></div>` : ''}
         <div class="line"><span>${q.nights} noche(s) × ${money(q.base)}</span><span>${money(q.subtotal)}</span></div>
         <div class="line"><span>Ajuste de temporada (+${SEASON_PCT * 100}%)</span><span>${money(q.season)}</span></div>
-        <div class="total"><span>Su nueva tarifa es</span><span>${money(q.gross)}</span></div>
+        <div class="total"><span>Tarifa por habitación</span><span>${money(q.gross)}</span></div>
       </div>`;
     }).join('');
     const quitadas = removed.map(x => `<div style="padding-bottom:10px;margin-bottom:10px;border-bottom:1px solid var(--line-soft)">
