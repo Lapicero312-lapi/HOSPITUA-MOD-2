@@ -145,8 +145,8 @@
             </div>
           </div>
           <div>
-            <div class="panel">
-              <h2>Cotización recalculada</h2>
+            <div class="panel" id="mdTarifaPanel" hidden>
+              <h2>Nueva tarifa</h2>
               <div class="calcbox" id="mdTarifa"></div>
             </div>
             <div class="row">
@@ -930,18 +930,25 @@ function refreshModificar(){
   document.getElementById('mdPersErr').hidden = !persErr;
   document.getElementById('mdPersErr').firstElementChild.textContent = persErr;
 
+  // La tarifa se muestra solo si el cambio la afecta: cambian las fechas, se agrega una habitación o una cambia de
+  // categoría. Cambiar una habitación por otra de la misma categoría no cambia el precio y no se muestra nada.
   const tarifa = document.getElementById('mdTarifa');
   mdPlan = mdRows.map(row => row.n ? {n: row.n, cat: row.cat, stay: 'EXPECTED'} : null);
-  if (!valid){
-    tarifa.innerHTML = '<p class="note">Ingrese fechas válidas para cotizar.</p>';
-  } else {
-    let lines = '';
-    mdRows.forEach(row => {
-      const q = quoteFor(row.cat, s, e);
-      lines += `<div class="line"><span>${row.n ? 'Hab. ' + row.n + ' · ' : ''}${row.cat} · ${q.nights} noche(s) + temporada</span><span>${money(q.gross)}</span></div>`;
-    });
-    tarifa.innerHTML = lines;
-  }
+  const datesChanged = valid && (s !== r.start || e !== r.end);
+  const affected = valid ? mdRows.filter(row => datesChanged || row.orig === null || row.cat !== row.origCat) : [];
+  document.getElementById('mdTarifaPanel').hidden = !affected.length;
+  tarifa.innerHTML = affected.map(row => {
+    const q = quoteFor(row.cat, s, e);
+    const before = row.orig === null ? null : r.rooms.find(x => x.n === row.orig);
+    const motivo = row.orig === null ? 'Habitación nueva' : row.cat !== row.origCat ? 'Cambia de categoría' : 'Cambian las fechas';
+    return `<div style="padding-bottom:10px;margin-bottom:10px;border-bottom:1px solid var(--line-soft)">
+      <div class="line"><b>${row.n ? 'Hab. ' + row.n + ' · ' : ''}${row.cat}</b><span class="note">${motivo}</span></div>
+      ${before ? `<div class="line"><span>Tarifa anterior (${row.origCat})</span><span>${money(before.gross)}</span></div>` : ''}
+      <div class="line"><span>${q.nights} noche(s) × ${money(q.base)}</span><span>${money(q.subtotal)}</span></div>
+      <div class="line"><span>Ajuste de temporada (+${SEASON_PCT * 100}%)</span><span>${money(q.season)}</span></div>
+      <div class="total"><span>Su nueva tarifa es</span><span>${money(q.gross)}</span></div>
+    </div>`;
+  }).join('');
 
   const notes = document.getElementById('mdNotes').value;
   document.getElementById('mdNotesCount').textContent = notes.length + ' / 500 caracteres';

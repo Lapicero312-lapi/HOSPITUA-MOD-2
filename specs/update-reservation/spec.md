@@ -54,8 +54,12 @@ las mismas reglas de transición y de concurrencia.
 4. Si cambia `guestCount` o cambian las habitaciones, el sistema valida que `guestCount` sea al menos
    igual a la cantidad de habitaciones y no supere la suma de la capacidad máxima (`maxCapacity`)
    de las habitaciones que quedarían en la reserva.
-5. Si cambian las fechas, las categorías o la cantidad de habitaciones, el sistema ejecuta "Calcular
-   tarifa dinámica" en el Módulo 3 para cada habitación afectada y obtiene la nueva tarifa de cada una. Un cambio solo de `guestCount`, de datos personales, de `notes` o de `lateArrivalNotice` no recotiza.
+5. Si cambian las fechas, se agrega una habitación o una habitación cambia de categoría, el sistema
+   ejecuta "Calcular tarifa dinámica" en el Módulo 3 para cada habitación afectada (todas si cambian las
+   fechas; solo la agregada o la de categoría distinta en los demás casos) y obtiene la nueva tarifa de
+   cada una. Un cambio solo de `guestCount`, de datos personales, de `notes` o de `lateArrivalNotice`, y
+   también cambiar una habitación por otra de la misma categoría, no recotiza ni muestra tarifa: el
+   precio depende de la categoría y de las fechas, no del número de habitación.
 6. El solicitante revisa el resumen y confirma; el sistema persiste los cambios.
 7. Si la reserva tiene llegada hoy, el sistema coordina con el Módulo 1 las habitaciones agregadas,
    quitadas o cambiadas mediante "Establecer estado de habitación", y avisa el cambio mediante
@@ -145,8 +149,9 @@ El Check-Out también se notifica **por habitación**.
 Un solicitante —la Recepcionista para las reservas directas, o la Ota por su API para las suyas—
 modifica una reserva que aún no ha iniciado su estadía. Puede cambiar fechas, agregar, quitar o cambiar habitaciones, cambiar la
 cantidad de personas, corregir datos personales, o editar las observaciones. Cuando el cambio afecta fechas o habitaciones, el sistema valida disponibilidad y delega el
-recálculo en el Módulo 3, mostrando la tarifa nueva de cada habitación antes de confirmar; cuando solo toca datos que no
-afectan el precio, guarda directamente. Por tratarse de una única vista, el camino feliz y los
+recálculo en el Módulo 3, mostrando la tarifa anterior y la nueva de cada habitación afectada antes de
+confirmar; cuando solo toca datos que no afectan el precio, o cambia una habitación por otra de la misma
+categoría, guarda directamente. Por tratarse de una única vista, el camino feliz y los
 bloqueos lógicos se consolidan en esta misma historia de usuario.
 
 **Why this priority**: Da al hotel la flexibilidad de acomodar los cambios del cliente sin fricción
@@ -164,8 +169,8 @@ los cambios. Se repite con datos personales (sin recálculo) y sobre reservas `I
    - **Given** una `Reservation` en `ACTIVE` con disponibilidad validada para las nuevas fechas
    - **When** el solicitante modifica las fechas o la categoría y el Módulo 3 devuelve la tarifa
      recalculada
-   - **Then** el sistema muestra el resumen con la tarifa nueva de cada habitación y, tras la
-     confirmación, actualiza la reserva
+   - **Then** el sistema muestra el resumen con la tarifa anterior y la nueva de cada habitación
+     afectada y, tras la confirmación, actualiza la reserva
 
 2. **Scenario**: Modificación de datos personales sin afectación financiera
    - **Given** una `Reservation` en `ACTIVE` o `PENDING`
@@ -559,8 +564,11 @@ ingreso, y libere las habitaciones correspondientes.
   excluirla del cruce de solapamientos. Si una sola habitación no está disponible, debe rechazar el
   cambio completo.
 - **FR-003**: El sistema debe invocar "Calcular tarifa dinámica" del Módulo 3 por cada habitación
-  afectada cuando cambien las fechas, las categorías o la cantidad de habitaciones, mostrar la tarifa
-  nueva de cada una, y exigir la confirmación del solicitante antes de persistir.
+  afectada cuando cambien las fechas, se agregue una habitación o una habitación cambie de categoría,
+  mostrar de cada una su tarifa anterior (si la tenía) y su nueva tarifa con el mismo detalle de la
+  cotización que al crear la reserva, sin sumarlas ni calcular la diferencia, y exigir la confirmación
+  del solicitante antes de persistir. Cambiar una habitación por otra de la misma categoría, sin cambiar
+  las fechas, no recotiza ni muestra tarifa.
 - **FR-004**: El sistema debe permitir modificar `guestCount`, los datos personales del `Guest`,
   `notes` y `lateArrivalNotice` sin invocar al Módulo 3 ni exigir disponibilidad.
 - **FR-004a**: El sistema debe exigir que las fechas de una reserva modificada cumplan que la fecha
