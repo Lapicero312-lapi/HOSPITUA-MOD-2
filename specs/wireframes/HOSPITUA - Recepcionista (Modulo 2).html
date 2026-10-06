@@ -482,11 +482,11 @@ const lockLong = {
   NO_SHOW: '🔒 Reserva OTA marcada No-Show por el cierre del día. Solo consulta.',
 };
 function statusBadge(s){
-  const cls = {ACTIVE:'ok', PENDING:'warn', IN_PROGRESS:'ok', COMPLETED:'neutral', CANCELLED:'err', NO_SHOW:'err'}[s] || 'neutral';
+  const cls = {ACTIVE:'ok', PENDING:'warn', IN_PROGRESS:'info', COMPLETED:'neutral', CANCELLED:'err', NO_SHOW:'alt'}[s] || 'neutral';
   return `<span class="badge ${cls}">${s}</span>`;
 }
 function stayBadge(s){
-  const cls = {EXPECTED:'neutral', CHECKED_IN:'ok', CHECKED_OUT:'neutral', NOT_ARRIVED:'err'}[s] || 'neutral';
+  const cls = {EXPECTED:'neutral', CHECKED_IN:'ok', CHECKED_OUT:'info', NOT_ARRIVED:'err'}[s] || 'neutral';
   return `<span class="badge ${cls}">${s}</span>`;
 }
 function channelBadge(r){
