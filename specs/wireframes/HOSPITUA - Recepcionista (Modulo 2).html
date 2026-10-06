@@ -751,11 +751,9 @@ document.getElementById('fClear').addEventListener('click', () => {
 function renderStatRow(){
   const llegadas = reservations.filter(r => r.start === TODAY && isEditable(r));
   const salidas = reservations.filter(r => r.end === TODAY && r.status === 'IN_PROGRESS');
-  const riesgo = llegadas.filter(r => !r.lateArrivalNotice);
   document.getElementById('statRow').innerHTML = `
     <div class="statcard"><div class="lbl">Llegadas esperadas hoy</div><div class="val">${llegadas.length}</div></div>
-    <div class="statcard"><div class="lbl">Salidas esperadas hoy</div><div class="val">${salidas.length}</div></div>
-    <div class="statcard ${riesgo.length ? 'warn' : ''}"><div class="lbl">Reservas en riesgo</div><div class="val">${riesgo.length}</div></div>`;
+    <div class="statcard"><div class="lbl">Salidas esperadas hoy</div><div class="val">${salidas.length}</div></div>`;
 }
 
 // ================= Detalle =================

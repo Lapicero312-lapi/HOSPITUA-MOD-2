@@ -516,9 +516,6 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
   operativo, calculado solo con datos del Módulo 2:
   - Llegadas esperadas hoy: reservas `ACTIVE` o `PENDING` con `startDate` igual a hoy.
   - Salidas esperadas hoy: reservas `IN_PROGRESS` con `endDate` igual a hoy.
-  - Reservas en riesgo: llegadas esperadas hoy (`ACTIVE` o `PENDING`) sin aviso de llegada tardía; las
-    reservas `OTA` siempre cuentan, porque no admiten ese aviso. Al cierre del día pasan a `NO_SHOW`
-    (`OTA`) o a `CANCELLED` (`DIRECT`) si no hay Check-In.
   La ocupación física no se muestra aquí: es un dato del Módulo 1.
 - **FR-005b**: El `migrationStatus` de cada reserva se deriva de sus `MigratoryMovement` y nunca se
   muestra vacío ni como "N/A":
@@ -642,7 +639,7 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
 ### Measurable Outcomes
 
 - **SC-001**: La Recepcionista ve el resumen del día operativo (FR-005a), con las llegadas y salidas
-  esperadas hoy y las reservas en riesgo, en menos de 1 segundo y sin tener que armar un filtro, encima del listado.
+  esperadas hoy, en menos de 1 segundo y sin tener que armar un filtro, encima del listado.
 - **SC-002**: El 100% de las búsquedas por código existente retornan el detalle completo en menos de
   500 milisegundos.
 - **SC-003**: El 100% de los listados filtrados contienen exactamente las reservas que cumplen todos
