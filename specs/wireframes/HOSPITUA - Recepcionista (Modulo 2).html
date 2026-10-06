@@ -338,7 +338,7 @@
 
 <script src="assets/app.js"></script>
 <script>
-const TODAY = '2026-09-28'; // reloj simulado del hotel; día operativo fijo de Colombia, 00:00 a 23:59 (UTC-5)
+const TODAY = (d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'))(new Date()); // día operativo = fecha del computador
 const USER = 'Laura Méndez';
 
 // ================= Datos de ejemplo =================
@@ -440,10 +440,22 @@ const DOC_PREFIX = {CC: 'CC', CE: 'CE', PASSPORT: 'Pasaporte', OTHER: ''};
 const docNumberOf = doc => (doc || '').replace(/^(CC|CE|Pasaporte)s*/, '');
 const docLabel = (type, num) => (DOC_PREFIX[type] ? DOC_PREFIX[type] + ' ' : '') + num;
 function addDays(iso, n){
-  const d = new Date(iso + 'T00:00:00');
-  d.setDate(d.getDate() + n);
+  const d = new Date(iso + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);
 }
+// Los datos de ejemplo se escribieron alrededor del 2026-09-28; se corren los días para que queden
+// alrededor de la fecha actual del computador y el listado, las llegadas y las salidas de "hoy" sean reales.
+const SAMPLE_BASE = '2026-09-28';
+const sampleDelta = Math.round((Date.parse(TODAY) - Date.parse(SAMPLE_BASE)) / 86400000);
+const shiftDay = s => addDays(s.slice(0, 10), sampleDelta) + s.slice(10);
+const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const diaMes = iso => parseInt(iso.slice(8, 10), 10) + ' ' + MESES[parseInt(iso.slice(5, 7), 10) - 1];
+maintenance.forEach(m => { m.start = shiftDay(m.start); m.end = shiftDay(m.end); m.label = 'Mantenimiento programado ' + diaMes(m.start) + ' → ' + diaMes(m.end); });
+otas.forEach(o => { o.linkedAt = shiftDay(o.linkedAt); o.lastSync = shiftDay(o.lastSync); });
+reservations.forEach(r => { r.start = shiftDay(r.start); r.end = shiftDay(r.end); if (r.cancellation) r.cancellation.date = shiftDay(r.cancellation.date); });
+movements.forEach(m => { m.date = shiftDay(m.date); });
+exportsHist.forEach(h => { h.start = shiftDay(h.start); h.end = shiftDay(h.end); h.date = shiftDay(h.date); });
 const CREATE_HOURS = ['09:14', '11:02', '14:37', '16:48', '08:55'];
 reservations.forEach((r, i) => {
   r.docType = /^Pasaporte/.test(r.doc) ? 'PASSPORT' : /^CE/.test(r.doc) ? 'CE' : 'CC';
@@ -964,6 +976,8 @@ function refreshNuevaDirecta(){
 ['ndEntrada', 'ndSalida', 'mdEntrada', 'mdSalida'].forEach(id => document.getElementById(id).min = TODAY);
 document.getElementById('ndEntrada').value = TODAY;
 document.getElementById('ndSalida').value = addDays(TODAY, 3);
+document.getElementById('sEnd').value = TODAY;
+document.getElementById('sStart').value = addDays(TODAY, -27);
 document.getElementById('ndPais').addEventListener('blur', () => { ndPaisTouched = true; refreshNuevaDirecta(); });
 document.getElementById('ndSubmit').addEventListener('click', () => {
   const cat = document.getElementById('ndCategoria').value;
@@ -988,10 +1002,8 @@ document.getElementById('ndSubmit').addEventListener('click', () => {
 
 // ================= Exportar SIRE =================
 function sireQuick(days){
-  const start = new Date(TODAY);
-  start.setDate(start.getDate() - days);
   document.getElementById('sEnd').value = TODAY;
-  document.getElementById('sStart').value = start.toISOString().slice(0, 10);
+  document.getElementById('sStart').value = addDays(TODAY, -days);
   renderSire();
 }
 function sirePeriod(){
