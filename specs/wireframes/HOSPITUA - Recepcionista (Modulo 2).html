@@ -393,7 +393,7 @@ const reservations = [
     gross:713000, commissionPct:12, commissionStatus:'CALCULATED', notes:''},
   {ref:'RSV-2026-00402', guest:'Ricardo Peña Salas', doc:'CC 79.554.120', pais:'Colombia', source:'DIRECT',
     start:'2026-09-15', end:'2026-09-16', status:'CANCELLED', guestCount:1, rooms:[{n:'103',cat:'Estándar',stay:'NOT_ARRIVED'}],
-    notes:'', cancellation:{date:'2026-09-15', reason:'No-Show de canal directo al cierre del día', channel:'SYSTEM', processedBy:'Cierre automático'}},
+    notes:'', noShow:true},
 ];
 
 // Plantillas de movimientos migratorios de cada huésped extranjero. El ENTRY existe cuando la reserva ya tuvo
@@ -457,7 +457,7 @@ let sampleAnchor = TODAY;
 try {
   const saved = localStorage.getItem('hospitua.sampleAnchor');
   if (saved && daysBetween(saved, TODAY) >= 0 && daysBetween(saved, TODAY) <= 14) sampleAnchor = saved;
-  else localStorage.setItem('hospitua.sampleAnchor', TODAY);
+  else { localStorage.setItem('hospitua.sampleAnchor', TODAY); localStorage.removeItem('hospitua.outcomes'); }
 } catch (err) { /* sin almacenamiento: se ancla a hoy en cada carga */ }
 const sampleDelta = daysBetween(SAMPLE_BASE, sampleAnchor);
 const shiftDay = s => addDays(s.slice(0, 10), sampleDelta) + s.slice(10);
@@ -471,25 +471,49 @@ exportsHist.forEach(h => { h.start = shiftDay(h.start); h.end = shiftDay(h.end);
 // Ciclo de vida según la fecha (lo que harían el Check-In/Check-Out del Módulo 1 y el cierre del día):
 // llega hoy = ACTIVE (espera el Check-In); ya llegó y no ha salido = IN_PROGRESS; ya pasó su salida = COMPLETED;
 // no se presentó = NO_SHOW (OTA) o CANCELLED (directa) y una OTA que nunca confirmó (PENDING) vence igual.
+// Como todavía no hay conexión con los demás módulos, el desenlace de cada reserva que llega después del primer día
+// se sortea (llegó, no se presentó o se canceló) y se guarda para que no cambie al recargar la página.
+let outcomes = {};
+try { outcomes = JSON.parse(localStorage.getItem('hospitua.outcomes') || '{}'); } catch (err) { outcomes = {}; }
+const ARRIVAL_OUTCOMES = ['IN_PROGRESS', 'NO_SHOW', 'CANCELLED'];
+function arrivalOutcome(r){
+  if (!outcomes[r.ref]){
+    outcomes[r.ref] = ARRIVAL_OUTCOMES[Math.floor(Math.random() * ARRIVAL_OUTCOMES.length)];
+    try { localStorage.setItem('hospitua.outcomes', JSON.stringify(outcomes)); } catch (err) { /* sin almacenamiento */ }
+  }
+  return outcomes[r.ref];
+}
 function deriveLifecycle(r){
   const ota = r.source === 'OTA';
-  const neverArrives = r.status === 'NO_SHOW' || (r.status === 'CANCELLED' && r.cancellation && r.cancellation.channel === 'SYSTEM');
-  const unconfirmed = r.status === 'PENDING';
   const setStay = st => r.rooms.forEach(x => { x.stay = st; });
+  const noShow = () => {
+    r.status = ota ? 'NO_SHOW' : 'CANCELLED';
+    setStay('NOT_ARRIVED');
+    delete r.cancellation;   // el cierre del día no registra una Cancellation (update-reservation FR-021)
+  };
+  const cancelled = () => {
+    r.status = 'CANCELLED';
+    setStay('NOT_ARRIVED');
+    r.cancellation = ota
+      ? {date: r.start, reason: 'Cancelada por la agencia', channel: 'OTA_API', processedBy: r.ota}
+      : {date: r.start, reason: 'Cancelada antes de la llegada', channel: 'RECEPTION', processedBy: USER};
+  };
+  const arrived = () => { if (r.end < TODAY){ r.status = 'COMPLETED'; setStay('CHECKED_OUT'); } else { r.status = 'IN_PROGRESS'; setStay('CHECKED_IN'); } };
+  const waiting = status => { r.status = status; setStay('EXPECTED'); delete r.cancellation; };
+
+  const neverArrives = r.status === 'NO_SHOW' || r.noShow;
+  const unconfirmed = r.status === 'PENDING';
+  const startedBeforeDemo = r.start < sampleAnchor;
   if (neverArrives || unconfirmed){
-    if (r.start < TODAY){
-      r.status = ota ? 'NO_SHOW' : 'CANCELLED';
-      setStay('NOT_ARRIVED');
-      if (ota) delete r.cancellation;
-      else r.cancellation = {date: r.start, reason: 'No-Show de canal directo al cierre del día', channel: 'SYSTEM', processedBy: 'Cierre automático'};
-    } else {
-      r.status = unconfirmed ? 'PENDING' : 'ACTIVE';
-      setStay('EXPECTED');
-      delete r.cancellation;
-    }
-  } else if (r.end < TODAY){ r.status = 'COMPLETED'; setStay('CHECKED_OUT'); }
-  else if (r.start < TODAY){ r.status = 'IN_PROGRESS'; setStay('CHECKED_IN'); }
-  else { r.status = 'ACTIVE'; setStay('EXPECTED'); }
+    if (r.start < TODAY) noShow(); else waiting(unconfirmed ? 'PENDING' : 'ACTIVE');
+  } else if (r.start >= TODAY) waiting('ACTIVE');
+  else if (startedBeforeDemo) arrived();
+  else {
+    const outcome = arrivalOutcome(r);
+    if (outcome === 'NO_SHOW') noShow();
+    else if (outcome === 'CANCELLED') cancelled();
+    else arrived();
+  }
 }
 reservations.forEach(deriveLifecycle);
 // Movimientos migratorios: la entrada existe si la reserva ya tuvo Check-In y la salida si ya tuvo Check-Out.
