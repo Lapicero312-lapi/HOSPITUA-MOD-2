@@ -435,10 +435,12 @@ function findRes(ref){ return reservations.find(r => r.ref === ref); }
 function overlaps(s1, e1, s2, e2){ return s1 < e2 && s2 < e1; }
 function quoteFor(cat, s, e){
   const nights = Math.max(0, nightsBetween(s, e));
-  const base = rateTable[cat];
-  const subtotal = nights * base;
-  const season = subtotal * SEASON_PCT;
-  return {nights, base, subtotal, season, gross: subtotal + season};
+  const rate = rateTable[cat] * (1 + SEASON_PCT);
+  const nightly = Array.from({length: nights}, (_, i) => ({date: addDays(s, i), rate}));
+  return {nights, nightly, gross: nights * rate};
+}
+function nightlyLines(q){
+  return q.nightly.map(n => `<div class="line"><span>${fmtDate(n.date)}</span><span>${money(n.rate)}</span></div>`).join('');
 }
 // Tarifas de las reservas directas: las entrega el Módulo 3 por habitación; el Módulo 2 no las suma.
 const DOC_PREFIX = {CC: 'CC', CE: 'CE', PASSPORT: 'Pasaporte', OTHER: ''};
@@ -954,8 +956,7 @@ function refreshModificar(){
       const motivo = row.orig === null ? 'Habitación nueva' : row.cat !== row.origCat ? 'Cambia de categoría' : 'Cambian las fechas';
       return `<div style="padding-bottom:10px;margin-bottom:10px;border-bottom:1px solid var(--line-soft)">
         <div class="line"><b>${row.n ? 'Hab. ' + row.n + ' · ' : ''}${row.cat}</b><span class="note">${motivo}</span></div>
-        <div class="line"><span>${q.nights} noche(s) × ${money(q.base)}</span><span>${money(q.subtotal)}</span></div>
-        <div class="line"><span>Ajuste de temporada (+${SEASON_PCT * 100}%)</span><span>${money(q.season)}</span></div>
+        ${nightlyLines(q)}
         <div class="total"><span>Tarifa por habitación</span><span>${money(q.gross)}</span></div>
       </div>`;
     }).join('');
@@ -1040,8 +1041,7 @@ function refreshNuevaDirecta(){
   if (dateOk && qty > 0){
     const q = quoteFor(cat, s, e);
     tarifa.innerHTML = `
-      <div class="line"><span>${q.nights} noche(s) × ${money(q.base)}</span><span>${money(q.subtotal)}</span></div>
-      <div class="line"><span>Ajuste de temporada (+${SEASON_PCT * 100}%)</span><span>${money(q.season)}</span></div>
+      ${nightlyLines(q)}
       <div class="total"><span>Tarifa por habitación</span><span>${money(q.gross)}</span></div>`;
   } else {
     tarifa.innerHTML = '<p class="note">Ingrese fechas válidas para cotizar.</p>';

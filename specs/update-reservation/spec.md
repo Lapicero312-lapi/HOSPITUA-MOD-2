@@ -566,7 +566,7 @@ ingreso, y libere las habitaciones correspondientes.
 - **FR-003**: El sistema debe invocar "Calcular tarifa dinámica" del Módulo 3 por cada habitación
   afectada cuando cambien las fechas, se agregue una habitación o una habitación cambie de categoría,
   mostrar la tarifa de cada una con el mismo detalle de la cotización que al crear la reserva, sin
-  mostrar la tarifa anterior, sin sumar tarifas ni calcular diferencias o totales (el Módulo 2 no calcula
+  mostrar la tarifa nueva, sin sumar tarifas ni calcular diferencias o totales (el Módulo 2 no calcula
   nada financiero: el valor a pagar lo calcula el Módulo 3 al recibir el Check-Out del Módulo 1), y exigir
   la confirmación del solicitante antes de persistir. Cambiar una habitación por otra de la misma categoría, sin cambiar
   las fechas, no recotiza ni muestra tarifa.
@@ -669,7 +669,8 @@ ingreso, y libere las habitaciones correspondientes.
   en `false`), `notes` y `status` (`PENDING`, `ACTIVE`,
   `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`).
 - **ReservationRoom**: Habitación de la reserva. Atributos: `reservationRef`, `roomId`,
-  `roomNumber`, `categoryRoom`, `roomGrossAmount` (tarifa de la habitación, solo canal `DIRECT`) y `stayStatus`
+  `roomNumber`, `categoryRoom`, `roomGrossAmount` (tarifa de la habitación, solo canal `DIRECT`),
+  `quoteId` (cotización que dio esa tarifa, solo canal `DIRECT`) y `stayStatus`
   (`EXPECTED` | `CHECKED_IN` | `CHECKED_OUT` | `NOT_ARRIVED`).
 - **Guest**: Titular de la reserva. Atributos: `id`, `fullName`, `documentType`, `documentNumber`, `nationality`,
   `contactPhone`, `contactEmail`.
@@ -678,7 +679,8 @@ ingreso, y libere las habitaciones correspondientes.
   `Available` en el No-Show. Atributos: `id`, `roomNumber`, `categoryRoom`, `maxCapacity` y `status`
   (`Available` | `Reserved` | `Occupied`).
 - **RateQuote**: Cotización del Módulo 3 para cada habitación afectada por la modificación.
-  Atributos: `reservationRef`, `roomId`, `grossAmount`, `currency`, `calculatedAt`.
+  Atributos: `quoteId`, `nightlyRates` (lista de `date` y `rate`) y `lodgingAmount`. Al confirmar, el
+  `quoteId` nuevo reemplaza al anterior en la habitación.
 - **MigratoryMovement**: Movimiento migratorio de entrada o salida de un huésped extranjero,
   registrado en el Check-In y en el Check-Out mediante "Procesar datos de huéspedes extranjeros".
   Atributos: `movementId`, `reservationRef`, `movementType` (`ENTRY` | `DEPARTURE`), `movementDate`,

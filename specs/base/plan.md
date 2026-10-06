@@ -108,9 +108,12 @@ Regla: **proactiva** (el módulo avisa un evento y no espera respuesta) → **co
 | Consultar calendario de mantenimientos | M2 → M1 | REST GET | Reactiva | `consult-maintenance-calendar` |
 | Marcar habitación como reservada / liberar | M2 → M1 | REST POST/PUT | Reactiva | `set-room-state` |
 | Consultar % de comisión OTA | M3 → M2 | REST GET | Reactiva | `register-ota-information-commission` |
-| Consultar tarifa dinámica | M2 → M3 | REST POST (cuerpo JSON) | Reactiva | `calculate-dynamic-rate` |
+| Consultar tarifa dinámica (`POST /pricing/quotes`: `roomType`, `checkInDate`, `checkOutDate`; responde `quoteId`, `nightlyRates`, `lodgingAmount`) | M2 → M3 | REST POST (cuerpo JSON) | Reactiva | `calculate-dynamic-rate` |
+| Consultar una reserva por su referencia (`quoteId` por habitación, canal y datos de la OTA) para liquidar en el Check-Out | M1 / M3 → M2 | REST GET | Reactiva | `check-view-reservation` (FR-022) |
 
-El Módulo 1 **ya no consulta las reservas** al Módulo 2 por REST: recibe la lista del día por cola. Las
+El Módulo 1 **ya no consulta la lista de reservas** al Módulo 2 por REST: la recibe por cola. Solo
+consulta una reserva puntual por su referencia (junto con el Módulo 3) para obtener el `otaId` y el
+`quoteId` que necesita el Check-Out. Las
 interacciones M1 ↔ M3 (liquidación, tarifa base, registrar check-out) no involucran al Módulo 2.
 
 ### Convenciones de colas
@@ -152,7 +155,7 @@ Contenido del `payload` (según el diccionario y los specs):
 | Recurso | Quién lo consume | Feature |
 |---|---|---|
 | `GET /api/reservations` con paginación de 10, filtros (búsqueda por `reservationRef`, documento o nombre; estado; canal; agencia; tipo de fecha `ARRIVAL`/`DEPARTURE`/`STAY` con `from` y `to`) y orden por `startDate` | Recepcionista, procesos internos | `check-view-reservation` |
-| `GET /api/reservations/{reservationRef}` (detalle) | Recepcionista | `check-view-reservation` |
+| `GET /api/reservations/{reservationRef}` (detalle) | Recepcionista; Módulo 1 y Módulo 3 con credencial de servicio (devuelve `quoteId` por habitación, canal y datos de la OTA; 404 si no existe) | `check-view-reservation` |
 | `POST /api/reservations/direct/preview` y `POST /api/reservations/direct` (canal directo) | Recepcionista | `generate-direct-reservation` |
 | `POST /api/reservations/{reservationRef}/modification-preview` y `PATCH /api/reservations/{reservationRef}` | Recepcionista (solo directas); la OTA modifica las suyas por su canal | `update-reservation` |
 | `POST /api/reservations/{reservationRef}/cancellation` | Recepcionista (solo directas); la OTA cancela las suyas por su canal | `cancel-reservation` |
@@ -172,11 +175,13 @@ rutas de alta ni edición manual (`POST`/`PUT /api/otas` quedan fuera).
 | Inventario de habitaciones por `categoryRoom` (o `roomId`) | M1 GET | `consult-room-inventory` |
 | Calendario de mantenimientos por categoría y rango | M1 GET | `consult-maintenance-calendar` |
 | Establecer estado de habitación (`Reserved` o `Available`, con `requestId`, `sequenceNumber`, `originEvent`, `reservationRef`) y consulta del resultado por `requestId` | M1 POST/PUT | `set-room-state` |
-| Tarifa dinámica: cuerpo `categoryRoom`, `startDate`, `endDate`, respuesta `grossAmount`, `currency`, `calculatedAt` | M3 POST | `calculate-dynamic-rate` |
+| Tarifa dinámica: `POST /pricing/quotes` con `roomType`, `checkInDate`, `checkOutDate` (equivalen a `categoryRoom`, `startDate`, `endDate`); respuesta `quoteId`, `nightlyRates`, `lodgingAmount` | M3 POST | `calculate-dynamic-rate` |
 
 **Errores**: cuerpo `{ "errorCode", "message", "timestamp", "path" }` con HTTP 400 (por defecto, también
 para recursos inexistentes, como piden los specs), 409 (conflicto de disponibilidad) o 429 (exportación
-SIRE). Ningún spec usa 404. El diccionario prohíbe 500 y cualquier 2xx o 3xx para un error.
+SIRE). La única excepción es la consulta de una reserva por referencia para los Módulos 1 y 3, que
+responde 404 si no existe, como lo espera el Módulo 3. El diccionario prohíbe 500 y cualquier 2xx o 3xx
+para un error.
 
 ## Project Structure
 
@@ -259,7 +264,7 @@ Módulo 1 tiene su propia interfaz.
 | Tabla | Entidad | Notas |
 |---|---|---|
 | `reservation` | `Reservation` | `reservation_ref` único; `guest_id`, `start_date`, `end_date`, `source`, `status`, `status_reason` (D6), `created_at`; `updated_at` (`@UpdateDateColumn`); `gross_amount` y `gross_amount_currency` (solo reservas OTA: el `totalAmount` que envía la agencia, base de la comisión; vacíos en las directas, que no tienen total); `commission_percentage`, `commission_amount`, `commission_status`; único `(ota_id, external_confirmation_code)` |
-| `reservation_room` | `ReservationRoom` | Entre 1 y 10 por reserva; `room_id` (`Room.id` del Módulo 1), `category_room`, `room_gross_amount` y `currency` (tarifa de la habitación recibida del Módulo 3, D2; solo canal `DIRECT`), `stay_status` (`EXPECTED`, `CHECKED_IN`, `CHECKED_OUT`, `NOT_ARRIVED`) |
+| `reservation_room` | `ReservationRoom` | Entre 1 y 10 por reserva; `room_id` (`Room.id` del Módulo 1), `category_room`, `room_gross_amount`, `quote_id` y `currency` (tarifa de la habitación recibida del Módulo 3 y el identificador de su cotización, D2; solo canal `DIRECT`), `stay_status` (`EXPECTED`, `CHECKED_IN`, `CHECKED_OUT`, `NOT_ARRIVED`) |
 | `guest` | `Guest` | Es extranjero si su `nationality` no es Colombia; no se guarda un tipo |
 | `ota` | `Ota` | `name`, `hotel_account_id`, `linked_at`, `commission_percentage`, `connection_status` (`CONNECTED`/`DISCONNECTED`), `last_sync_at`; se llena por la vinculación automática |
 | `cancellation` | `Cancellation` | Inmutable; `channel` `RECEPTION` u `OTA_API` |
@@ -316,8 +321,8 @@ Módulo 2; solo viajan en objetos de integración.
 
 | # | Decisión | Origen |
 |---|---|---|
-| D1 | **La confirmación de una cotización no confía en el importe de la pantalla.** Al confirmar, el servidor vuelve a cotizar con el Módulo 3 y lo compara con las tarifas por habitación que vio el solicitante; si difiere, responde 400 "La tarifa cambió, vuelva a cotizar". Nunca se guarda un monto enviado por el cliente y la `RateQuote` sigue sin persistirse. Lo aplican `generate-direct-reservation` y `update-reservation`. | `calculate-dynamic-rate` |
-| D2 | **La tarifa se guarda por habitación, sin total:** `reservation_room` guarda `room_gross_amount` y `currency` tal como las entrega el Módulo 3 (FR-002). El Módulo 2 no suma ni calcula nada con ellas. | `calculate-dynamic-rate` |
+| D1 | **La confirmación de una cotización no confía en el importe de la pantalla.** Al confirmar, el servidor vuelve a cotizar con el Módulo 3 y lo compara con las tarifas por habitación que vio el solicitante; si difiere, responde 400 "La tarifa cambió, vuelva a cotizar". Nunca se guarda un monto enviado por el cliente; de la `RateQuote` solo se guardan `lodgingAmount` y `quoteId` en la habitación. Lo aplican `generate-direct-reservation` y `update-reservation`. | `calculate-dynamic-rate` |
+| D2 | **La tarifa se guarda por habitación, sin total:** `reservation_room` guarda `room_gross_amount` (el `lodgingAmount`), `quote_id` y `currency` tal como las entrega el Módulo 3 (FR-002); el `quote_id` permite al Módulo 3 cobrar en el Check-Out exactamente el valor cotizado. El Módulo 2 no suma ni calcula nada con ellas. | `calculate-dynamic-rate` |
 | D3 | **Restricción de exclusión en PostgreSQL** sobre `reservation_room` y las fechas de su reserva (o sobre una tabla de ocupación equivalente): `EXCLUDE USING gist (room_id WITH =, daterange(start_date, end_date) WITH &&) WHERE (status IN ('PENDING','ACTIVE','IN_PROGRESS'))`, con la extensión `btree_gist` creada en la migración base. Impide dos reservas activas solapadas en la misma habitación aun con concurrencia; una violación se traduce en 409 `NO_AVAILABILITY` (o en probar la siguiente habitación candidata). El diseño exacto (copiar fechas y estado a la tabla de ocupación) se cierra en el plan de `check-room-availability`. | `check-room-availability` |
 | D4 | **El spec `consult-room-inventory` se ajustó**: la consulta por categoría admite listado completo o filtrado por estado, porque las estadías futuras necesitan todas las habitaciones de la categoría. Pendiente acordar con el Módulo 1 que su API permita ambos modos. | `check-room-availability` |
 | D5 | **Datos migratorios completos:** el Módulo 2 da por hecho que el Módulo 1 los envía completos y correctos; no los valida ni los devuelve. | `process-foreign-guest-data` |

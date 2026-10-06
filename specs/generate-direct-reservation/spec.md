@@ -57,8 +57,8 @@ operativo de la llegada.
    futura, el sistema responde 201 (Created) al crear la reserva, sin depender del Módulo 1.
 
 El sistema guarda en cada `ReservationRoom` la tarifa devuelta por el Módulo 3 para esa habitación
-(`roomGrossAmount`: tarifa bruta de hospedaje de esa habitación, antes de comisión e impuestos), con
-carácter informativo, y no calcula ni guarda un total de la reserva; registra `source` como `DIRECT`, la comisión (`commissionPercentage` y
+(`roomGrossAmount`: tarifa bruta de hospedaje de esa habitación, antes de comisión e impuestos) y el
+`quoteId` de esa cotización, con carácter informativo, y no calcula ni guarda un total de la reserva; registra `source` como `DIRECT`, la comisión (`commissionPercentage` y
 `commissionAmount`) en `0` y el `externalConfirmationCode` como `null`. No se calcula ni se almacena
 IVA en esta etapa: se fija al facturar en el Check-Out.
 
@@ -98,8 +98,8 @@ reserva y se devuelve un error controlado.
    - **When** la Recepcionista ingresa los datos del huésped titular, cotiza el valor bruto con el
      Módulo 3 y confirma la reserva
    - **Then** el sistema persiste la `Reservation` directamente en `ACTIVE` con el `roomGrossAmount`
-     de cada habitación asignado, comisión `0` y `externalConfirmationCode` `null`, asocia el `RateQuote` de forma
-     informativa, y, si la llegada es hoy, ordena al Módulo 1 marcar la `Room` como `Reserved` con
+     de cada habitación asignado, comisión `0` y `externalConfirmationCode` `null`, guarda el `quoteId` de
+     cada cotización en su habitación, y, si la llegada es hoy, ordena al Módulo 1 marcar la `Room` como `Reserved` con
      el detalle de la reserva
 
 2. **Scenario**: Intento de reserva sobre una habitación no disponible (Error)
@@ -223,7 +223,8 @@ reserva y se devuelve un error controlado.
 - **FR-005a**: El sistema no debe pedir ni aceptar el aviso de llegada tardía al crear la reserva: el
   `lateArrivalNotice` nace en `false` y solo se cambia mediante "Actualizar reservación".
 - **FR-006**: El sistema debe registrar `source` como `DIRECT`, `roomGrossAmount` en cada habitación
-  con la tarifa bruta devuelta por el Módulo 3 para ella, sin total en la reserva,
+  con la tarifa bruta devuelta por el Módulo 3 para ella (`lodgingAmount`) y su `quoteId`, sin total
+  en la reserva,
   `commissionPercentage` y `commissionAmount` con valor `0` y `externalConfirmationCode` como
   `null`; no debe calcular ni almacenar IVA en esta etapa.
 - **FR-007**: El sistema debe ordenar al Módulo 1, mediante "Establecer estado de habitación",
@@ -257,14 +258,15 @@ reserva y se devuelve un error controlado.
   siempre en `ACTIVE`.
 - **ReservationRoom**: Cada habitación de la reserva. Atributos: `reservationRef`, `roomId`,
   `roomNumber`, `categoryRoom`, `roomGrossAmount` (tarifa de la habitación calculada por el Módulo 3,
-  informativa), `currency` y `stayStatus` (nace en `EXPECTED`).
+  informativa), `quoteId` (identificador de esa cotización), `currency` y `stayStatus` (nace en
+  `EXPECTED`).
 - **Guest**: Huésped titular. Atributos: `id`, `fullName`, `documentType` (`CC`, `CE`, `PASSPORT` u `OTHER`), `documentNumber`,
   `nationality` (texto libre, obligatorio; no hay una lista fija de países; el huésped es extranjero
   si `nationality` no es "Colombia", sin distinguir mayúsculas ni tildes — no se guarda como un
   atributo propio, se deriva de `nationality` cuando hace falta), `contactPhone`, `contactEmail`.
-- **RateQuote**: Cotización del valor bruto de una habitación calculada por el Módulo 3, con
-  carácter informativo. Atributos: `reservationRef`, `roomId`, `grossAmount`, `currency`,
-  `calculatedAt`.
+- **RateQuote**: Cotización del valor de hospedaje de una habitación calculada por el Módulo 3, con
+  carácter informativo. Atributos: `quoteId`, `nightlyRates` (lista de `date` y `rate`) y
+  `lodgingAmount`.
 - **Room**: Habitación física, cuyo estado es propiedad del Módulo 1. Atributos: `id`,
   `roomNumber`, `categoryRoom`, `maxCapacity` y `status` (`Available` | `Reserved` | `Occupied`).
 

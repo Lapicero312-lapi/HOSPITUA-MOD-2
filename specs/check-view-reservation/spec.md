@@ -580,7 +580,8 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
   - Titular (`Guest`): `guestRef`, `fullName`, `documentType`, `documentNumber`, `nationality`,
     `contactPhone` y `contactEmail`.
 - **FR-015**: El sistema no debe incluir datos financieros (`grossAmount`, comisión) en la lista ni
-  en las actualizaciones: no los necesita el Módulo 1.
+  en las actualizaciones: no los necesita el Módulo 1. La consulta por referencia del Módulo 3 (FR-022)
+  es aparte y sí entrega el `quoteId` y el porcentaje de comisión.
 - **FR-016**: Después del envío de la lista, el sistema debe enviar una actualización
   `DailyReservationUpdate` por cada cambio confirmado que afecte a la lista del día: `ADDED` cuando
   una reserva entra (creación directa para hoy, confirmación OTA con llegada hoy, cambio de llegada
@@ -599,6 +600,14 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
   los reintentos, registrar una alerta para revisión humana.
 - **FR-021**: El envío al Módulo 1 no debe cambiar el `status` de ninguna reserva ni el estado de
   ninguna `Room`.
+- **FR-022**: El sistema debe permitir que los Módulos 1 y 3 consulten una reserva por su
+  `reservationRef` con una credencial de servicio (actor `Modulo1` o `Modulo3`), para que el Módulo 3
+  genere la liquidación en el Check-Out. La respuesta lleva `reservationRef`, `channel` (`DIRECT` |
+  `OTA`) y, por cada `ReservationRoom`, su `categoryRoom` y su `quoteId` (solo `DIRECT`). Si el canal
+  es `OTA`, también lleva `otaId`, `otaConfirmationCode` (el `externalConfirmationCode`) y
+  `otaCommissionPercentage` (el `commissionPercentage` congelado). No incluye otros datos financieros
+  ni datos del huésped. Si la reserva no existe, responde **HTTP 404 (Not Found)**. Es de solo lectura y
+  no modifica nada.
 
 ### Non-Functional Requirements
 

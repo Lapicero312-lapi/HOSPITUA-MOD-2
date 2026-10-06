@@ -54,8 +54,10 @@ C (equipo del Módulo 3), D (equipo del Módulo 2) y E (ajustes a documentos).
 
 | # | Decisión | Propuesta | Decisión | Notas |
 |---|---|---|---|---|
-| C1 | **Contrato de la tarifa dinámica**: ruta, campos y autenticación | Proponer `POST /pricing/quotes` | [ ] | Plan `calculate-dynamic-rate` |
-| C2 | **Escala del importe** (decimales) y moneda | Definir con el Módulo 3 | [ ] | D2 guarda la moneda en la reserva |
+| C1 | **Contrato de la tarifa dinámica**: ruta, campos y autenticación | `POST /pricing/quotes` con `roomType`, `checkInDate`, `checkOutDate`; responde `quoteId`, `nightlyRates`, `lodgingAmount` (propuesto por el Módulo 3) | [x] | Ruta y campos acordados; falta la autenticación. Specs ajustados |
+| C1a | **Cotización por habitación**: el Módulo 3 espera un solo `quoteId` por reserva, pero se cotiza una vez por habitación | `quoteId` por habitación: la consulta de la reserva devuelve `rooms[{categoryRoom, quoteId}]` | [ ] | Pedir al Módulo 3 que acepte una lista |
+| C1b | **Consulta de la reserva por el Módulo 3**: `GET /api/reservations/{reservationRef}` con `quoteId`, `channel`, `otaConfirmationCode`, `otaCommissionPercentage` y `otaId`; 404 si no existe; credencial de servicio (actor Módulo 3) | Adoptarlo (`check-view-reservation` FR-022). El plan decía que el Módulo 1 ya no consulta reservas por REST: ahora solo consulta una por referencia | [ ] | Confirmar con el Módulo 1 que consulta esta misma ruta |
+| C2 | **Escala del importe** (decimales) y moneda | Definir con el Módulo 3 | [ ] | La respuesta de `POST /pricing/quotes` no trae moneda; D2 guarda la moneda en la reserva |
 | C3 | **Porcentaje de comisión**: confirmar que lo expresan de 0 a 100 | 0 a 100, dividido entre 100 (C7) | [ ] | |
 | C4 | **Autenticación del Módulo 3** al llamar a `GET /api/otas/{otaId}` | Credencial de servicio (ver A7) | [ ] | |
 
