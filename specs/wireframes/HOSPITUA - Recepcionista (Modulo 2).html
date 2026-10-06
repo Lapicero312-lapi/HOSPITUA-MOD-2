@@ -504,10 +504,10 @@ function migrationStatus(r){
   return 'COMPLETE';
 }
 const MIG = {
-  AWAITING_CHECK_IN: {cls:'neutral', txt:'Pendiente de Check-In', tip:'Los datos migratorios de cada huésped se registran en el Check-In'},
+  AWAITING_CHECK_IN: {cls:'warn', txt:'Pendiente de Check-In', tip:'Los datos migratorios de cada huésped se registran en el Check-In'},
   COMPLETE: {cls:'ok', txt:'Completo', tip:'Todos los movimientos están registrados y listos para SIRE'},
   NOT_REQUIRED: {cls:'neutral', txt:'Sin extranjeros', tip:'No hay huéspedes extranjeros: no entra al reporte SIRE'},
-  NO_CHECK_IN: {cls:'neutral', txt:'Sin Check-In', tip:'La reserva nunca tuvo ingreso: no hay movimientos que reportar'},
+  NO_CHECK_IN: {cls:'alt', txt:'Sin Check-In', tip:'La reserva nunca tuvo ingreso: no hay movimientos que reportar'},
 };
 function migBadge(r){
   const m = MIG[migrationStatus(r)];
