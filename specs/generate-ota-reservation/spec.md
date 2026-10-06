@@ -246,8 +246,7 @@ crea una reserva y que todos devuelven una respuesta JSON de error estructurada.
   `roomNumber`, `categoryRoom` y `stayStatus` (nace en `EXPECTED`). En canal OTA no tiene valor por
   habitación: el valor es el `totalAmount` de la reserva.
 - **Guest**: Huésped titular. Atributos: `id`, `fullName`, `documentType` (`CC`, `CE`, `PASSPORT` u `OTHER`), `documentNumber`,
-  `nationality`, `type`,
-  `contactPhone`, `contactEmail`, extraídos del payload de la OTA.
+  `nationality`, `contactPhone`, `contactEmail`, extraídos del payload de la OTA.
 - **Ota**: Intermediario externo que origina la reserva. Atributos: `id`, `name` y
   `commissionPercentage`.
 - **Room**: Habitación física, cuyo estado es propiedad del Módulo 1. Atributos: `id`,

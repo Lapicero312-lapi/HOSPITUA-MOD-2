@@ -282,9 +282,7 @@ pase a `COMPLETED`, sin afectar el estado de las `Room`, que gestiona el Módulo
 4. **Scenario**: Check-In duplicado (idempotente)
    - **Given** una habitación de la reserva ya en `CHECKED_IN`
    - **When** el sistema recibe de nuevo la notificación de Check-In de esa habitación
-   - **Then** el sistema responde 200 sin cambiar estados; solo si trae datos migratorios completos
-     de huéspedes que el Módulo 2 había devuelto al Módulo 1, registra sus movimientos y resuelve la
-     devolución
+   - **Then** el sistema responde 200 sin cambiar estados
 
 5. **Scenario**: Rechazo de Check-In con estado inválido (Error)
    - **Given** una `Reservation` en `PENDING`, `COMPLETED`, `CANCELLED` o `NO_SHOW`
@@ -451,11 +449,6 @@ y libere las habitaciones correspondientes.
   sin el `roomId`? El sistema intercepta el error de inmediato y responde **HTTP 400** con el
   mensaje: "El payload de notificación es inválido. Falta el identificador de la reserva o de la
   habitación.", sin producir errores **HTTP 500**.
-- ¿Qué sucede si los datos migratorios del Check-In o del Check-Out están incompletos, tienen formato
-  inválido o fechas futuras? El Check-In o Check-Out físico ya ocurrió en el Módulo 1, así que el
-  sistema no lo rechaza: aplica el cambio de la habitación, no registra el movimiento de ese huésped,
-  se lo devuelve al Módulo 1 para que lo reenvíe completo y responde 200. Los demás huéspedes de la
-  notificación se registran normalmente.
 - ¿Qué sucede en una reserva con varias habitaciones? Cada notificación trae solo los huéspedes de
   su habitación; los movimientos se identifican por reserva, huésped y tipo de movimiento, según
   "Procesar datos de huéspedes extranjeros".
@@ -558,16 +551,13 @@ y libere las habitaciones correspondientes.
 - **FR-015**: Al procesar un Check-In, el sistema debe validar que la `Reservation` esté en
   `ACTIVE` o `IN_PROGRESS` y que la habitación esté en `EXPECTED`; debe cambiar la habitación a
   `CHECKED_IN` y, si es la primera en ingresar, la reserva a `IN_PROGRESS`. Si la habitación ya está
-  en `CHECKED_IN`, la notificación es un duplicado idempotente (200 sin efectos, salvo registrar los
-  movimientos migratorios que el Módulo 2 había devuelto al Módulo 1 y este reenvía completos). En cualquier otro caso (reserva inexistente o en otro
+  en `CHECKED_IN`, la notificación es un duplicado idempotente (200 sin efectos). En cualquier otro caso (reserva inexistente o en otro
   estado, habitación ajena o `NOT_ARRIVED`) debe responder **HTTP 400** sin cambiar estados y
   registrar una incidencia de conciliación con el Módulo 1, porque el efecto físico ya ocurrió allá.
 - **FR-016**: El sistema debe recibir y validar, en la misma notificación de Check-In y de
   Check-Out, los datos migratorios de cada huésped extranjero de la habitación (`ENTRY` en el
   Check-In, `DEPARTURE` en el Check-Out), registrándolos mediante "Procesar datos de huéspedes
-  extranjeros"; si están incompletos o son inválidos, debe conservar el Check-In o el Check-Out y
-  devolver los datos de ese huésped al Módulo 1 para que los reenvíe completos, respondiendo 200 sin
-  advertencias mezcladas.
+  extranjeros". Da por hecho que esos datos llegan completos y correctos del Módulo 1, y responde 200.
 - **FR-017**: Al procesar un Check-Out, el sistema debe validar que la `Reservation` esté en
   `IN_PROGRESS` y la habitación en `CHECKED_IN`; debe cambiar la habitación a `CHECKED_OUT` y, si ya
   no queda ninguna habitación en `CHECKED_IN` ni en `EXPECTED`, la reserva a `COMPLETED`. Si la
@@ -612,7 +602,7 @@ y libere las habitaciones correspondientes.
   `roomNumber`, `categoryRoom`, `roomGrossAmount` (tarifa de la habitación, solo canal `DIRECT`) y `stayStatus`
   (`EXPECTED` | `CHECKED_IN` | `CHECKED_OUT` | `NOT_ARRIVED`).
 - **Guest**: Titular de la reserva. Atributos: `id`, `fullName`, `documentType`, `documentNumber`, `nationality`,
-  `type`, `contactPhone`, `contactEmail`.
+  `contactPhone`, `contactEmail`.
 - **Room**: Habitación física controlada por el Módulo 1, referenciada para la disponibilidad: el
   Módulo 1 la pasa a `Occupied` en el Check-In y la libera en el Check-Out, y vuelve de `Reserved` a
   `Available` en el No-Show. Atributos: `id`, `roomNumber`, `categoryRoom`, `maxCapacity` y `status`
@@ -622,7 +612,7 @@ y libere las habitaciones correspondientes.
 - **MigratoryMovement**: Movimiento migratorio de entrada o salida de un huésped extranjero,
   registrado en el Check-In y en el Check-Out mediante "Procesar datos de huéspedes extranjeros".
   Atributos: `movementId`, `reservationRef`, `movementType` (`ENTRY` | `DEPARTURE`), `movementDate`,
-  los datos migratorios del huésped. Siempre está completo: lo incompleto se devuelve al Módulo 1. El
+  los datos migratorios del huésped. El
   detalle de sus atributos está en "Procesar datos de huéspedes extranjeros".
 - **ReconciliationIncident**: Registro de una discrepancia entre el Módulo 1 y el Módulo 2 que una
   persona debe resolver (por ejemplo, una habitación ocupada sin una reserva vigente). Atributos:
@@ -644,7 +634,7 @@ y libere las habitaciones correspondientes.
 - **SC-005**: El 100% de las notificaciones de Check-In y de Check-Out válidas del Módulo 1
   actualizan la habitación y la reserva según FR-015 y FR-017, y el 100% de la información
   migratoria completa enviada en el Check-In y en el Check-Out se registra en `MigratoryMovement` sin
-  intervención manual, y la incompleta se devuelve al Módulo 1.
+  intervención manual.
 - **SC-006**: El 100% de las notificaciones que no pueden aplicarse dejan una incidencia de
   conciliación registrada, con cero errores **HTTP 500** ante payloads mal formados o reservas
   inexistentes.

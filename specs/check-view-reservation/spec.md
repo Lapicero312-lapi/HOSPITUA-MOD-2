@@ -513,11 +513,7 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
   muestra vacío ni como "N/A":
   - `AWAITING_CHECK_IN` ("Pendiente de Check-In"): reserva `ACTIVE` o `PENDING`. Aún no se conoce
     la nacionalidad de todos los huéspedes; los datos migratorios llegan con el Check-In del Módulo 1.
-  - `COMPLETE`: tiene movimientos migratorios registrados y ninguna devolución abierta.
-  - `PENDING_RESEND` ("Reenvío pendiente del M1"): el Módulo 2 devolvió al Módulo 1 los datos de
-    algún huésped por estar incompletos y el Módulo 1 aún no los reenvía completos
-    (`ReconciliationIncident` `OPEN` de esa reserva). No existe un estado "incompleto": un movimiento
-    registrado siempre está completo.
+  - `COMPLETE`: tiene movimientos migratorios registrados.
   - `NOT_REQUIRED` ("Sin extranjeros"): reserva `IN_PROGRESS` o `COMPLETED` sin huéspedes
     extranjeros, por lo que no entra al reporte SIRE.
   - `NO_CHECK_IN` ("Sin Check-In"): reserva `CANCELLED` o `NO_SHOW`; nunca tuvo ingreso ni
@@ -531,7 +527,7 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
     `createdAt`.
   - Habitaciones (`ReservationRoom`): por cada una, `roomNumber`, `categoryRoom`,
     `roomGrossAmount` (tarifa, informativa; vacía en reservas `OTA`) y `stayStatus`.
-  - Titular (`Guest`): `fullName`, `documentType`, `documentNumber`, `nationality`, `type`, `contactPhone`,
+  - Titular (`Guest`): `fullName`, `documentType`, `documentNumber`, `nationality`, `contactPhone`,
     `contactEmail`.
   - Si la reserva está `CANCELLED` por una solicitud explícita: `cancellationDate`, `channel`,
     `reason` y `processedBy` de la `Cancellation`.
@@ -573,8 +569,8 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
     `startDate`, `endDate` (fecha de salida), número de noches, `guestCount` (cantidad de personas),
     `notes` (observaciones) y `updatedAt`.
   - Habitaciones: por cada `ReservationRoom`, `roomId`, `roomNumber` y `categoryRoom`.
-  - Titular (`Guest`): `guestRef`, `fullName`, `documentType`, `documentNumber`, `nationality`, `type`
-    (`NATIONAL` | `FOREIGN`), `contactPhone` y `contactEmail`.
+  - Titular (`Guest`): `guestRef`, `fullName`, `documentType`, `documentNumber`, `nationality`,
+    `contactPhone` y `contactEmail`.
 - **FR-015**: El sistema no debe incluir datos financieros (`grossAmount`, comisión) en la lista ni
   en las actualizaciones: no los necesita el Módulo 1.
 - **FR-016**: Después del envío de la lista, el sistema debe enviar una actualización
@@ -617,7 +613,7 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
   `roomNumber`, `categoryRoom` y `stayStatus` (`EXPECTED` | `CHECKED_IN` | `CHECKED_OUT` |
   `NOT_ARRIVED`).
 - **Guest**: Titular de la reserva. Atributos: `id`, `fullName`, `documentType` (tipo de documento: `CC`, `CE`, `PASSPORT` u `OTHER`),
-  `documentNumber`, `nationality`, `type` (`NATIONAL` | `FOREIGN`), `contactPhone`, `contactEmail`.
+  `documentNumber`, `nationality`, `contactPhone`, `contactEmail`.
 - **Cancellation**: Se muestra en el detalle de una reserva cancelada. Atributos: `cancellationDate`,
   `channel`, `reason` y `processedBy`.
 - **DailyReservationList**: Lista del día enviada al Módulo 1. Atributos: `messageId`,

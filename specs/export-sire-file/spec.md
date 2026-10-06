@@ -24,8 +24,7 @@ no es un actor del sistema.
    fecha de cada movimiento migratorio (`movementDate`).
 3. El sistema ejecuta "Procesar datos de huéspedes extranjeros" para obtener los movimientos
    migratorios del periodo, tanto de entrada (`ENTRY`) como de salida (`DEPARTURE`). Todos están
-   completos, porque el Módulo 1 los envía ya procesados y el Módulo 2 devuelve al Módulo 1 los que
-   llegan incompletos. El sistema no lleva
+   completos, porque el Módulo 1 los envía ya procesados. El sistema no lleva
    cuenta de lo que ya se descargó: el mismo periodo se puede descargar las veces que haga falta.
 4. El sistema genera el archivo de texto plano (`.TXT`) con las columnas, anchos y delimitadores de
    Migración Colombia. El archivo tiene una línea por cada movimiento de cada huésped, con toda su
@@ -85,31 +84,24 @@ controlado.
    - **When** se genera el archivo
    - **Then** el archivo incluye una línea por cada uno de los tres, no solo la del titular
 
-4. **Scenario**: Movimiento que el Módulo 1 reenvió completo
-   - **Given** un huésped cuyos datos se devolvieron al Módulo 1 por estar incompletos, y que el
-     Módulo 1 reenvió completos, con `movementDate` en el periodo
-   - **When** la Recepcionista exporta el periodo
-   - **Then** el archivo incluye ese movimiento como cualquier otro; los datos que se devolvieron
-     nunca formaron parte de un movimiento y por eso no aparecen antes del reenvío
-
-5. **Scenario**: Descarga repetida del mismo periodo
+4. **Scenario**: Descarga repetida del mismo periodo
    - **Given** un periodo que la Recepcionista ya descargó antes
    - **When** vuelve a exportarlo
    - **Then** el archivo incluye de nuevo todos los movimientos del periodo, sin ninguna restricción,
      y la descarga queda registrada como una nueva `SireExport`
 
-6. **Scenario**: Periodo sin huéspedes extranjeros (Error)
+5. **Scenario**: Periodo sin huéspedes extranjeros (Error)
    - **Given** un periodo con solo huéspedes nacionales o sin ocupación
    - **When** se ejecuta la exportación
    - **Then** el sistema no genera archivo y responde **HTTP 400** indicando que no hay movimientos
      migratorios que reportar en ese periodo, sin generar errores de infraestructura
 
-7. **Scenario**: Previsualización de un movimiento
+6. **Scenario**: Previsualización de un movimiento
    - **Given** un movimiento del periodo
    - **When** la Recepcionista pide previsualizarlo
    - **Then** el sistema muestra la línea tal como saldría en el archivo, sin crear una `SireExport`
 
-8. **Scenario**: Descarga individual de un movimiento
+7. **Scenario**: Descarga individual de un movimiento
    - **Given** un movimiento del periodo
    - **When** la Recepcionista descarga solo ese movimiento, las veces que quiera
    - **Then** el sistema entrega un `.TXT` con una sola línea y registra una `SireExport` con un
@@ -147,8 +139,7 @@ controlado.
   extranjeros de las reservas del periodo, no solo del titular, sin depender del estado actual de la
   reserva.
 - **FR-004**: El sistema debe obtener los `MigratoryMovement` mediante "Procesar datos de huéspedes
-  extranjeros". Todos están completos: los datos incompletos no se registran, se devuelven al Módulo 1
-  y no forman parte de la exportación hasta que el Módulo 1 los reenvíe completos.
+  extranjeros". Todos están completos: el Módulo 1 los envía ya procesados.
 - **FR-005**: El sistema debe generar el archivo plano `.TXT` de cargue de hospedaje de SIRE, con
   una línea por movimiento y estos 12 campos en este orden:
   1. Código del hotel en SIRE (`hotelSireCode`, configuración del hotel).
