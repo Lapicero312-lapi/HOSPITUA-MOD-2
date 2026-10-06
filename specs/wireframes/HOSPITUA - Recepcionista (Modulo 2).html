@@ -45,8 +45,8 @@
             <div class="field"><label>Estado</label>
               <select id="fEstado">
                 <option value="">Todos</option>
-                <option value="ACTIVE">Activa</option><option value="PENDING">Pendiente</option><option value="IN_PROGRESS">En curso</option>
-                <option value="COMPLETED">Completada</option><option value="CANCELLED">Cancelada</option><option value="NO_SHOW">No se presentó</option>
+                <option>ACTIVE</option><option>PENDING</option><option>IN_PROGRESS</option>
+                <option>COMPLETED</option><option>CANCELLED</option><option>NO_SHOW</option>
               </select>
             </div>
             <div class="field"><label>Canal</label>
@@ -542,18 +542,14 @@ const lockShort = {
   IN_PROGRESS: 'Hospedaje en curso: no admite cambios ni cancelación',
   COMPLETED: 'Estadía finalizada: solo consulta',
   CANCELLED: 'Reserva cancelada: solo consulta',
-  NO_SHOW: 'No se presentó: solo consulta',
+  NO_SHOW: 'Marcada No-Show: solo consulta',
 };
 const lockLong = {
   IN_PROGRESS: '🔒 Hospedaje en curso: la reserva no admite cambios de estadía ni cancelación.',
   COMPLETED: '🔒 Estadía finalizada. Reserva de solo consulta.',
   CANCELLED: '🔒 Reserva cancelada. Solo consulta.',
-  NO_SHOW: '🔒 Reserva OTA marcada como no presentada por el cierre del día. Solo consulta.',
+  NO_SHOW: '🔒 Reserva OTA marcada No-Show por el cierre del día. Solo consulta.',
 };
-const STATUS_ES = {ACTIVE:'Activa', PENDING:'Pendiente', IN_PROGRESS:'En curso', COMPLETED:'Completada', CANCELLED:'Cancelada', NO_SHOW:'No se presentó'};
-const STAY_ES = {EXPECTED:'Esperada', CHECKED_IN:'Con Check-In', CHECKED_OUT:'Con Check-Out', NOT_ARRIVED:'No llegó'};
-const COMMISSION_ES = {CALCULATED:'Calculada', RECONCILED:'Conciliada'};
-const MOVEMENT_ES = {ENTRY:'Entrada', DEPARTURE:'Salida'};
 function fmtDate(v){
   if (!v) return '';
   const [d, t] = v.split(' ');
@@ -562,11 +558,11 @@ function fmtDate(v){
 }
 function statusBadge(s){
   const cls = {ACTIVE:'ok', PENDING:'warn', IN_PROGRESS:'info', COMPLETED:'neutral', CANCELLED:'err', NO_SHOW:'alt'}[s] || 'neutral';
-  return `<span class="badge ${cls}">${STATUS_ES[s]}</span>`;
+  return `<span class="badge ${cls}">${s}</span>`;
 }
 function stayBadge(s){
   const cls = {EXPECTED:'neutral', CHECKED_IN:'ok', CHECKED_OUT:'info', NOT_ARRIVED:'err'}[s] || 'neutral';
-  return `<span class="badge ${cls}">${STAY_ES[s]}</span>`;
+  return `<span class="badge ${cls}">${s}</span>`;
 }
 function channelBadge(r){
   return r.source === 'DIRECT' ? '<span class="badge neutral">Directo</span>' : `<span class="badge ota">OTA · ${r.ota}</span>`;
@@ -807,7 +803,7 @@ function renderDetalle(){
     canal = `<div class="readonly-banner" style="margin:0"><div class="kv">
       ${kv('Agencia', r.ota)}${kv('Código de confirmación', r.ext)}
       ${kv('% comisión congelado', r.commissionPct + '%')}${kv('Comisión', money(r.commissionAmount))}
-      ${kv('Estado de la comisión', COMMISSION_ES[r.commissionStatus])}</div></div>`;
+      ${kv('Estado de la comisión', r.commissionStatus)}</div></div>`;
   } else {
     canal = '';
   }
@@ -849,7 +845,7 @@ function renderMigTab(r){
         <td>${fmtDate(m.birthDate)}</td>
         <td>${m.nat}</td>
         <td>${m.origin} → ${m.dest}</td>
-        <td><span class="badge neutral">${MOVEMENT_ES[m.type]}</span><br><span class="note">${fmtDate(m.date)}</span></td>
+        <td><span class="badge neutral">${m.type}</span><br><span class="note">${fmtDate(m.date)}</span></td>
       </tr>`).join('')}</tbody>
     </table></div>`;
 }
@@ -1136,7 +1132,7 @@ function renderSire(){
         <td><span style="font-family:var(--mono);font-size:12px">${m.ref}</span><br><span class="note">Hab. ${m.room}</span></td>
         <td><div class="person">${avatarHTML(name)}<div>${name}<br><span class="note">${m.docType} ${m.docNumber || '—'}</span></div></div></td>
         <td>${m.nat}</td>
-        <td><span class="badge neutral">${MOVEMENT_ES[m.type]}</span><br><span class="note">${fmtDate(m.date)}</span></td>
+        <td><span class="badge neutral">${m.type}</span><br><span class="note">${fmtDate(m.date)}</span></td>
         <td><div class="rowacts">
           <button class="btn sm" onclick="sirePreview('${m.id}')">Previsualizar</button>
           <button class="btn sm primary" onclick="sireDownloadOne('${m.id}')">Descargar</button>
