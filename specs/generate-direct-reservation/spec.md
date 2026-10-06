@@ -149,6 +149,12 @@ reserva y se devuelve un error controlado.
    - **Then** el sistema cancela la reserva recién creada (`ROOM_REJECTED`), ordena `Available` para
      la 101 y responde **HTTP 400** indicando que la habitación 102 ya no está disponible
 
+9. **Scenario**: Fecha de entrada anterior a hoy (Error)
+   - **Given** que hoy es el 2026-09-28
+   - **When** la Recepcionista intenta crear una reserva con `startDate` 2026-09-27 o anterior
+   - **Then** el sistema no crea la reserva y responde **HTTP 400** con el mensaje "La fecha de entrada
+     no puede ser anterior a hoy."; una reserva con `startDate` igual a hoy sí se acepta
+
 ### Casos Borde
 
 - ¿Qué sucede si un solicitante intenta reservar con un rango de fechas inválido o incoherente (por
@@ -191,6 +197,11 @@ reserva y se devuelve un error controlado.
 - **FR-001**: El sistema debe verificar la disponibilidad de cada `Room` de la reserva mediante
   "Verificar disponibilidades" antes de cotizar o registrar cualquier reserva, y rechazar la
   reserva completa si una sola no está disponible.
+- **FR-001a**: El sistema debe exigir que la fecha de entrada (`startDate`) sea hoy o posterior (la
+  fecha mínima para crear una reserva es la del día operativo en curso, no días anteriores) y que la
+  fecha de salida (`endDate`) sea posterior a la de entrada. De lo contrario, debe responder
+  **HTTP 400** con el mensaje "La fecha de entrada no puede ser anterior a hoy." o "La fecha de
+  salida debe ser posterior a la de entrada.", según el caso, sin consultar disponibilidad.
 - **FR-002**: El sistema debe exigir entre 1 y 10 habitaciones distintas por reserva y un
   `guestCount` entero, mayor o igual a la cantidad de habitaciones y menor o igual a la suma de la
   `maxCapacity` de las habitaciones elegidas. `notes` es opcional, con máximo 500 caracteres.

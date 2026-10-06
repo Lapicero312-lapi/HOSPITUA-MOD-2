@@ -396,6 +396,9 @@ y libere las habitaciones correspondientes.
 - ¿Qué sucede si se envían fechas inválidas (salida antes de llegada, o vacías)? El sistema rechaza
   la solicitud con **HTTP 400**: "La fecha de salida debe ser posterior a la de entrada.", sin
   consultar al Módulo 3.
+- ¿Qué sucede si la nueva fecha de entrada es anterior a hoy? El sistema rechaza la solicitud con
+  **HTTP 400**: "La fecha de entrada no puede ser anterior a hoy.", sin consultar disponibilidad ni al
+  Módulo 3. La fecha mínima de entrada es la del día operativo en curso, igual que al crear la reserva.
 - ¿Qué sucede si se ingresan caracteres extraños en los datos del huésped o en `notes`? El sistema
   los rechaza antes de guardar con **HTTP 400**: "El formato de los datos contiene caracteres no
   válidos."
@@ -509,6 +512,9 @@ y libere las habitaciones correspondientes.
   nueva de cada una, y exigir la confirmación del solicitante antes de persistir.
 - **FR-004**: El sistema debe permitir modificar `guestCount`, los datos personales del `Guest`
   y `notes` sin invocar al Módulo 3 ni exigir disponibilidad.
+- **FR-004a**: El sistema debe exigir que las fechas de una reserva modificada cumplan que la fecha
+  de entrada sea hoy o posterior y que la fecha de salida sea posterior a la de entrada, respondiendo
+  **HTTP 400** con el mensaje correspondiente en caso contrario.
 - **FR-005**: El sistema debe validar, al crear o cambiar habitaciones o `guestCount`, que la
   reserva conserve entre 1 y 10 habitaciones, sin habitaciones repetidas, y que `guestCount` sea
   mayor o igual a la cantidad de habitaciones y menor o igual a la suma de `maxCapacity` de sus

@@ -120,7 +120,7 @@
               <div class="field"><label class="req">Fecha de entrada</label><input type="date" id="mdEntrada"></div>
               <div class="field"><label class="req">Fecha de salida</label><input type="date" id="mdSalida"></div>
             </div>
-            <div id="mdFechaErr" class="field" hidden><span class="err">La fecha de salida debe ser posterior a la de entrada.</span></div>
+            <div id="mdFechaErr" class="field" hidden><span class="err" id="mdFechaTxt">La fecha de salida debe ser posterior a la de entrada.</span></div>
             <p class="note" style="margin-bottom:6px">Habitaciones de la reserva (entre 1 y 10). Puede cambiar una por otra, de la misma o de otra categoría, agregar o quitar.</p>
             <div class="tablewrap" style="margin-bottom:8px"><table>
               <thead><tr><th>Habitación</th><th>Categoría</th><th>Disponibilidad</th><th></th></tr></thead>
@@ -782,7 +782,7 @@ let mdRows = [];   // habitaciones que quedarían en la reserva: {n, cat, orig}
 let mdPlan = null;
 function mdDates(){
   const s = document.getElementById('mdEntrada').value, e = document.getElementById('mdSalida').value;
-  return {s, e, valid: !!(s && e && e > s)};
+  return {s, e, valid: !!(s && e && e > s && s >= TODAY)};
 }
 function renderModificar(){
   const r = findRes(currentRef);
@@ -817,6 +817,7 @@ function refreshModificar(){
   const r = findRes(currentRef);
   const {s, e, valid} = mdDates();
   document.getElementById('mdFechaErr').hidden = valid;
+  document.getElementById('mdFechaTxt').textContent = s && s < TODAY ? 'La fecha de entrada no puede ser anterior a hoy.' : 'La fecha de salida debe ser posterior a la de entrada.';
 
   // Cada fila queda con una habitación libre de su categoría (la actual si sigue libre).
   const chosen = [];
@@ -928,7 +929,8 @@ function refreshNuevaDirecta(){
   const s = document.getElementById('ndEntrada').value;
   const e = document.getElementById('ndSalida').value;
   let err = '';
-  if (!s || !e || e <= s) err = 'La fecha de salida debe ser posterior a la de entrada.';
+  if (s && s < TODAY) err = 'La fecha de entrada no puede ser anterior a hoy.';
+  else if (!s || !e || e <= s) err = 'La fecha de salida debe ser posterior a la de entrada.';
   else if (qty < 1 || qty > 10) err = 'Una reserva debe tener entre 1 y 10 habitaciones.';
   else if (personas < qty) err = 'La cantidad de personas no puede ser menor a la cantidad de habitaciones.';
   else if (personas > qty * capacity[cat]) err = 'La cantidad de personas supera la capacidad de las habitaciones de la reserva.';
@@ -936,7 +938,7 @@ function refreshNuevaDirecta(){
   document.getElementById('ndErr').hidden = !err;
   document.getElementById('ndErrTxt').textContent = err;
 
-  const dateOk = s && e && e > s;
+  const dateOk = s && e && e > s && s >= TODAY;
   const free = dateOk ? roomsFreeFor(cat, s, e) : [];
   const dispo = document.getElementById('ndDispo');
   if (!dateOk) dispo.innerHTML = '<span class="badge neutral">Sin verificar</span> corrija las fechas para consultar disponibilidad.';
@@ -959,6 +961,7 @@ function refreshNuevaDirecta(){
   document.getElementById('ndSubmit').title = filled ? '' : 'Complete el nombre y el documento del titular';
 }
 ['ndNombre', 'ndDoc', 'ndPais', 'ndCategoria', 'ndQty', 'ndPersonas', 'ndEntrada', 'ndSalida'].forEach(id => document.getElementById(id).addEventListener('input', refreshNuevaDirecta));
+['ndEntrada', 'ndSalida', 'mdEntrada', 'mdSalida'].forEach(id => document.getElementById(id).min = TODAY);
 document.getElementById('ndPais').addEventListener('blur', () => { ndPaisTouched = true; refreshNuevaDirecta(); });
 document.getElementById('ndSubmit').addEventListener('click', () => {
   const cat = document.getElementById('ndCategoria').value;
