@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-theme="light">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -11,13 +11,11 @@
 <div class="shell">
   <nav class="side" id="side">
     <div class="brand"><span class="mark">H</span><span><span class="txt">HOSPITUA</span><small>Módulo 2 · Recepción</small></span></div>
-    <div class="group">Operación</div>
     <button class="navbtn" data-nav="reservas"><span>Reservas</span></button>
     <button class="navbtn" data-nav="sire"><span>Exportar SIRE</span></button>
-    <div class="group">Solo lectura · otros módulos</div>
-    <button class="navbtn" data-nav="habitaciones"><span>Habitaciones</span><span class="tag">M1</span></button>
-    <button class="navbtn" data-nav="tarifas"><span>Tarifas</span><span class="tag">M3</span></button>
-    <button class="navbtn" data-nav="otas"><span>Agencias OTA</span><span class="tag">API</span></button>
+    <button class="navbtn" data-nav="habitaciones"><span>Habitaciones</span></button>
+    <button class="navbtn" data-nav="tarifas"><span>Tarifas</span></button>
+    <button class="navbtn" data-nav="otas"><span>Agencias OTA</span></button>
   </nav>
 
   <div class="main">
@@ -39,17 +37,16 @@
         <div class="statrow" id="statRow"></div>
         <div class="panel">
           <h2 style="justify-content:space-between">
-            <span>Consultar reservas <span style="font-weight:400;color:var(--sub);font-size:12px">check-view-reservation</span></span>
+            <span>Consultar reservas</span>
             <button class="btn primary" data-nav="nueva-directa">+ Nueva reserva directa</button>
           </h2>
-          <p class="note" style="margin-bottom:12px">Las reservas OTA llegan solas por la API de cada agencia (<span class="code">POST /api/ota/reservations</span>). Recepción no las crea, no las modifica ni las cancela: los cambios y las cancelaciones también los envía la agencia por su API.</p>
           <div class="row">
             <div class="field" style="flex:1;min-width:220px"><label>Buscar</label><input id="fSearch" placeholder="Referencia, código OTA, documento o nombre"></div>
             <div class="field"><label>Estado</label>
               <select id="fEstado">
                 <option value="">Todos</option>
-                <option>ACTIVE</option><option>PENDING</option><option>IN_PROGRESS</option>
-                <option>COMPLETED</option><option>CANCELLED</option><option>NO_SHOW</option>
+                <option value="ACTIVE">Activa</option><option value="PENDING">Pendiente</option><option value="IN_PROGRESS">En curso</option>
+                <option value="COMPLETED">Completada</option><option value="CANCELLED">Cancelada</option><option value="NO_SHOW">No se presentó</option>
               </select>
             </div>
             <div class="field"><label>Canal</label>
@@ -60,14 +57,6 @@
             </div>
           </div>
           <div class="row">
-            <div class="field"><label>Tipo de fecha</label>
-              <select id="fFechaTipo">
-                <option value="">Sin filtro de fecha</option>
-                <option value="ARRIVAL">Llegada</option>
-                <option value="DEPARTURE">Salida</option>
-                <option value="STAY">Estadía (en el hotel)</option>
-              </select>
-            </div>
             <div class="field"><label>Desde</label><input type="date" id="fDesde"></div>
             <div class="field"><label>Hasta</label><input type="date" id="fHasta"></div>
             <div class="field"><label>Orden</label>
@@ -76,6 +65,7 @@
                 <option value="asc">Llegada: más antigua primero</option>
               </select>
             </div>
+            <div class="field" style="justify-content:flex-end"><label>&nbsp;</label><button class="btn" id="fClear">Limpiar filtros</button></div>
           </div>
           <div id="fErr"></div>
           <div class="tablewrap"><table>
@@ -83,7 +73,6 @@
             <tbody id="tblReservas"></tbody>
           </table></div>
           <div class="pager" id="pager"></div>
-          <p class="note" style="margin-top:10px">Modificar y Cancelar solo se habilitan en reservas <b>directas</b> en <span class="code">ACTIVE</span> o <span class="code">PENDING</span>. Pase el cursor sobre un botón deshabilitado para ver el motivo.</p>
         </div>
       </section>
 
@@ -126,40 +115,40 @@
         </div>
         <div class="grid2">
           <div class="panel">
-            <h2>Estadía <span style="font-weight:400;color:var(--sub);font-size:12px">update-reservation</span></h2>
+            <h2>Estadía</h2>
             <div class="row">
               <div class="field"><label class="req">Fecha de entrada</label><input type="date" id="mdEntrada"></div>
               <div class="field"><label class="req">Fecha de salida</label><input type="date" id="mdSalida"></div>
             </div>
-            <div id="mdFechaErr" class="field" hidden><span class="err">La fecha de salida debe ser posterior a la de entrada.</span></div>
+            <div id="mdFechaErr" class="field" hidden><span class="err" id="mdFechaTxt">La fecha de salida debe ser posterior a la de entrada.</span></div>
             <p class="note" style="margin-bottom:6px">Habitaciones de la reserva (entre 1 y 10). Puede cambiar una por otra, de la misma o de otra categoría, agregar o quitar.</p>
             <div class="tablewrap" style="margin-bottom:8px"><table>
-              <thead><tr><th>Habitación</th><th>Categoría</th><th><span class="tag-mod m1">MÓDULO 1</span> Disponibilidad</th><th></th></tr></thead>
+              <thead><tr><th>Habitación</th><th>Categoría</th><th>Disponibilidad</th><th></th></tr></thead>
               <tbody id="mdRooms"></tbody>
             </table></div>
             <div class="row" style="margin-bottom:14px"><button class="btn sm" id="mdAddRoom">+ Agregar habitación</button></div>
             <div class="row">
-              <div class="field" style="min-width:140px"><label class="req">Personas <span class="code">guestCount</span></label><input type="number" id="mdPersonas" min="1"></div>
+              <div class="field" style="min-width:140px"><label class="req">Personas</label><input type="number" id="mdPersonas" min="1"></div>
             </div>
             <div id="mdPersErr" class="field" hidden style="margin-bottom:10px"><span class="err"></span></div>
             <h2 style="margin-top:6px">Titular</h2>
             <div class="row"><div class="field" style="flex:1"><label class="req">Nombre completo</label><input id="mdNombre"></div></div>
-            <div class="row"><div class="field" style="flex:1"><label class="req">Tipo de documento <span class="code">documentType</span></label><select id="mdDocType"><option value="CC">Cédula de ciudadanía</option><option value="CE">Cédula de extranjería</option><option value="PASSPORT">Pasaporte</option><option value="OTHER">Otro</option></select></div><div class="field" style="flex:1"><label class="req">Documento <span class="code">documentNumber</span></label><input id="mdDoc"></div></div>
+            <div class="row"><div class="field" style="flex:1"><label class="req">Tipo de documento</label><select id="mdDocType"><option value="CC">Cédula de ciudadanía</option><option value="CE">Cédula de extranjería</option><option value="PASSPORT">Pasaporte</option><option value="OTHER">Otro</option></select></div><div class="field" style="flex:1"><label class="req">Documento</label><input id="mdDoc"></div></div>
             <div class="row">
               <div class="field"><label>Teléfono</label><input id="mdTel" placeholder="+57 300 000 0000"></div>
               <div class="field"><label>Email</label><input id="mdEmail" placeholder="nombre@correo.com"></div>
             </div>
-            <div class="field"><label>Observaciones <span class="code">notes</span></label>
+            <label class="check" style="margin-bottom:12px"><input type="checkbox" id="mdTardia"> Aviso de llegada tardía</label>
+            <div class="field"><label>Observaciones</label>
               <textarea id="mdNotes" rows="3" maxlength="500"></textarea>
               <span class="note" id="mdNotesCount"></span>
             </div>
           </div>
           <div>
-            <div class="panel">
-              <h2><span class="tag-mod m3">MÓDULO 3</span> Cotización recalculada</h2>
+            <div class="panel" id="mdTarifaPanel" hidden>
+              <h2>Tarifa</h2>
               <div class="calcbox" id="mdTarifa"></div>
             </div>
-            <div class="readonly-banner" id="mdOrderNote"></div>
             <div class="row">
               <button class="btn primary" id="mdSave">Guardar cambios</button>
               <button class="btn" id="mdCancel">Volver sin guardar</button>
@@ -176,16 +165,14 @@
         </div>
         <div class="grid2">
           <div class="panel">
-            <h2>Reserva a cancelar <span style="font-weight:400;color:var(--sub);font-size:12px">cancel-reservation</span></h2>
+            <h2>Reserva a cancelar</h2>
             <div class="kv" id="cxSummary"></div>
           </div>
           <div class="panel">
             <h2>Confirmación</h2>
-            <div class="readonly-banner" id="cxImpact"></div>
-            <div class="field" style="margin-bottom:12px"><label>Motivo (opcional) <span class="code">Cancellation.reason</span></label>
+            <div class="field" style="margin-bottom:12px"><label>Motivo (opcional)</label>
               <textarea id="cxReason" rows="3" placeholder="Ej. el huésped canceló su viaje"></textarea>
             </div>
-            <p class="note" style="margin-bottom:10px">Se registrará con canal <span class="code">RECEPTION</span> y procesada por Laura Méndez.</p>
             <label class="check" style="margin-bottom:14px"><input type="checkbox" id="cxAck"> Entiendo que la cancelación no se puede deshacer.</label>
             <div class="row" style="margin:0">
               <button class="btn danger-solid" id="cxConfirm" disabled>Confirmar cancelación</button>
@@ -199,47 +186,45 @@
       <section class="screen" id="scr-nueva-directa" hidden>
         <button class="crumbnav" data-nav="reservas">← Volver a reservas</button>
         <div class="panel" style="margin-top:10px">
-          <h2>Generar reservación directa <span style="font-weight:400;color:var(--sub);font-size:12px">generate-direct-reservation</span></h2>
+          <h2>Nueva reserva directa</h2>
           <div class="grid2">
             <div>
               <div class="row"><div class="field" style="flex:1"><label class="req">Nombre completo del titular</label><input id="ndNombre" placeholder="Ej. Laura Fernández Gómez"></div></div>
-              <div class="row"><div class="field" style="flex:1"><label class="req">Tipo de documento <span class="code">documentType</span></label><select id="ndDocType"><option value="CC">Cédula de ciudadanía</option><option value="CE">Cédula de extranjería</option><option value="PASSPORT">Pasaporte</option><option value="OTHER">Otro</option></select></div><div class="field" style="flex:1"><label class="req">Documento <span class="code">documentNumber</span></label><input id="ndDoc" placeholder="Ej. 1.014.223.980"></div></div>
+              <div class="row"><div class="field" style="flex:1"><label class="req">Tipo de documento</label><select id="ndDocType"><option value="CC">Cédula de ciudadanía</option><option value="CE">Cédula de extranjería</option><option value="PASSPORT">Pasaporte</option><option value="OTHER">Otro</option></select></div><div class="field" style="flex:1"><label class="req">No. documento</label><input id="ndDoc" placeholder="Ej. 1.014.223.980"></div></div>
               <div class="row">
                 <div class="field"><label>Teléfono</label><input id="ndTel" placeholder="+57 300 000 0000"></div>
                 <div class="field"><label>Email</label><input id="ndEmail" placeholder="nombre@correo.com"></div>
               </div>
               <div class="row">
                 <div class="field" style="flex:1"><label class="req">País de origen</label>
-                  <select id="ndPais"><option>Colombia</option><option>México</option><option>España</option><option>Alemania</option><option>Estados Unidos</option><option>Brasil</option></select>
+                  <input id="ndPais" placeholder="Ej. Colombia">
                 </div>
               </div>
-              <p class="note" style="margin-bottom:12px">Si el país no es Colombia, el huésped se considera extranjero; sus datos migratorios los captura el Módulo 1 en el Check-In, no esta pantalla.</p>
               <div class="row">
                 <div class="field"><label class="req">Categoría</label>
                   <select id="ndCategoria"><option value="Estándar">Estándar</option><option value="Superior">Superior</option><option value="Suite">Suite</option></select>
                 </div>
                 <div class="field" style="min-width:110px"><label class="req">Habitaciones</label><input type="number" id="ndQty" min="1" max="10" value="1"></div>
-                <div class="field" style="min-width:110px"><label class="req">Personas <span class="code">guestCount</span></label><input type="number" id="ndPersonas" min="1" value="2"></div>
+                <div class="field" style="min-width:110px"><label class="req">Personas</label><input type="number" id="ndPersonas" min="1" value="2"></div>
               </div>
               <div class="row">
                 <div class="field"><label class="req">Fecha de entrada</label><input type="date" id="ndEntrada" value="2026-09-28"></div>
                 <div class="field"><label class="req">Fecha de salida</label><input type="date" id="ndSalida" value="2026-10-01"></div>
               </div>
               <div id="ndErr" class="field" hidden><span class="err" id="ndErrTxt"></span></div>
-              <div class="field"><label>Observaciones <span class="code">notes</span></label><textarea id="ndNotes" rows="2" maxlength="500" placeholder="Opcional, máximo 500 caracteres"></textarea></div>
+              <div class="field"><label>Observaciones</label><textarea id="ndNotes" rows="2" maxlength="500" placeholder="Opcional, máximo 500 caracteres"></textarea></div>
             </div>
             <div>
               <div class="panel" style="margin:0 0 12px">
-                <h2><span class="tag-mod m1">MÓDULO 1</span> Verificar disponibilidad</h2>
+                <h2>Disponibilidad</h2>
                 <div id="ndDispo" class="note"></div>
               </div>
               <div class="panel" style="margin:0 0 12px">
-                <h2><span class="tag-mod m3">MÓDULO 3</span> Calcular tarifa dinámica</h2>
+                <h2>Tarifa</h2>
                 <div class="calcbox" id="ndTarifa"></div>
               </div>
-              <div class="readonly-banner" id="ndReservedNote"></div>
               <div class="row">
-                <button class="btn primary" id="ndSubmit">Crear reserva directa</button>
+                <button class="btn primary" id="ndSubmit">Crear reserva</button>
                 <button class="btn" data-nav="reservas">Volver</button>
               </div>
             </div>
@@ -250,54 +235,37 @@
       <!-- ================= EXPORTAR SIRE ================= -->
       <section class="screen" id="scr-sire" hidden>
         <div class="panel">
-          <h2>Exportar archivo SIRE <span style="font-weight:400;color:var(--sub);font-size:12px">export-sire-file</span></h2>
-          <p class="note" style="margin-bottom:12px">Vista exclusiva de la Recepcionista. El Módulo 2 consolida los movimientos migratorios que el Módulo 1 envió en el Check-In y el Check-Out. Usted descarga el archivo y lo envía a Migración por los medios que esta disponga: <b>el sistema no envía nada a Migración</b>.</p>
+          <h2>Exportar archivo SIRE</h2>
           <div class="row">
             <div class="field"><label class="req">Fecha inicial</label><input type="date" id="sStart" value="2026-09-01"></div>
             <div class="field"><label class="req">Fecha final</label><input type="date" id="sEnd" value="2026-09-28"></div>
             <button class="btn sm" onclick="sireQuick(7)">Últimos 7 días</button>
             <button class="btn sm" onclick="sireQuick(30)">Últimos 30 días</button>
           </div>
-          <div class="row" style="justify-content:space-between;align-items:center">
-            <span class="note">Se puede descargar las veces que haga falta.</span>
+          <div class="row" style="justify-content:flex-end;align-items:center">
             <button class="btn primary" id="sAll" onclick="sireDownloadAll()">Descargar todo el periodo (.TXT)</button>
           </div>
           <div id="sErr"></div>
-          <p class="note">El periodo se compara con la fecha de cada movimiento (<span class="code">movementDate</span>), máximo 1 año. Cada descarga, sea del periodo o de un solo movimiento, queda registrada en el histórico.</p>
         </div>
 
         <div class="statrow" id="sStats"></div>
 
         <div class="panel">
-          <h2>Movimientos del periodo <span style="font-weight:400;color:var(--sub);font-size:12px">MigratoryMovement · uno por huésped y tipo</span></h2>
+          <h2>Movimientos del periodo</h2>
           <div class="tablewrap"><table>
             <thead><tr><th>Reserva</th><th>Huésped</th><th>Nacionalidad</th><th>Movimiento</th><th style="text-align:right">Acciones</th></tr></thead>
             <tbody id="sTable"></tbody>
           </table></div>
         </div>
 
-        <div class="panel">
-          <h2>Configuración SIRE del hotel <span style="font-weight:400;color:var(--sub);font-size:12px">export-sire-file FR-005</span></h2>
-          <div class="kv" id="sConfig" style="margin-bottom:12px"></div>
-          <p class="note">Cada línea lleva 12 campos en este orden: código del hotel, código de ciudad, tipo y número de documento, nacionalidad, apellidos, nombres, movimiento (<span class="code">E</span> entrada, <span class="code">S</span> salida), fecha del movimiento, procedencia, destino y fecha de nacimiento. El separador, el formato de fecha y las tablas de códigos se cargan desde el manual de cargue de SIRE (portal de SIRE, cuenta del hotel).</p>
-        </div>
-
-        <div class="panel">
-          <h2>Histórico de exportaciones <span style="font-weight:400;color:var(--sub);font-size:12px">SireExport</span></h2>
-          <div class="tablewrap"><table>
-            <thead><tr><th>Export-Id</th><th>Tipo</th><th>Periodo</th><th>Registros</th><th>Procesado por</th><th>Fecha</th></tr></thead>
-            <tbody id="sHist"></tbody>
-          </table></div>
-        </div>
       </section>
 
       <!-- ================= HABITACIONES (M1, solo lectura) ================= -->
       <section class="screen" id="scr-habitaciones" hidden>
         <div class="panel">
-          <h2>Habitaciones <span class="badge m1">Solo lectura · sincronizado con Módulo 1</span></h2>
-          <p class="note" style="margin-bottom:12px">Inventario físico y calendario de mantenimientos del Módulo 1 (<span class="code">consult-room-inventory</span>, <span class="code">consult-maintenance-calendar</span>). El Módulo 2 nunca cambia estos estados por su cuenta.</p>
+          <h2>Habitaciones</h2>
           <div class="tablewrap"><table>
-            <thead><tr><th>N.º</th><th>Categoría</th><th>Estado hoy</th><th>Detalle</th></tr></thead>
+            <thead><tr><th>N.º</th><th>Categoría</th><th>Capacidad</th><th>Estado hoy</th><th>Detalle</th></tr></thead>
             <tbody id="tblRooms"></tbody>
           </table></div>
         </div>
@@ -306,23 +274,23 @@
       <!-- ================= TARIFAS (M3, solo lectura) ================= -->
       <section class="screen" id="scr-tarifas" hidden>
         <div class="panel">
-          <h2>Tarifas <span class="badge m3">Solo lectura · sincronizado con Módulo 3</span></h2>
-          <p class="note" style="margin-bottom:12px">Tarifas vigentes por categoría, usadas por "Calcular tarifa dinámica" para relacionar la tarifa con cada habitación (<span class="code">roomGrossAmount</span>). El Módulo 2 no calcula IVA, no aplica comisiones y no edita estas tarifas.</p>
+          <h2>Tarifas</h2>
           <div class="tablewrap"><table>
-            <thead><tr><th>Categoría</th><th>Capacidad</th><th>Tarifa base</th><th>Ajuste de temporada</th><th>Tarifa efectiva / noche</th></tr></thead>
+            <thead><tr><th>Categoría</th><th>Tarifa base</th><th>Ajuste de temporada</th><th>Tarifa efectiva / noche</th></tr></thead>
             <tbody id="tblTarifas"></tbody>
           </table></div>
         </div>
       </section>
 
-      <!-- ================= AGENCIAS OTA (solo lectura, llegan por API) ================= -->
+      <!-- ================= AGENCIAS OTA ================= -->
       <section class="screen" id="scr-otas" hidden>
         <div class="panel">
-          <h2>Agencias OTA <span class="badge ota">Solo lectura · información enviada por cada OTA</span></h2>
-          <div class="readonly-banner">🔗 Las agencias no se crean ni se editan en el hotel. Cuando el hotel vincula su cuenta en la OTA, la agencia se registra sola con los datos que envía por su API (nombre, cuenta vinculada y porcentaje de comisión). Si la OTA cambia algo, lo envía de nuevo por la API.</div>
-          <p class="note" style="margin-bottom:12px">La comisión de cada reserva se calcula al recibirla (<span class="code">totalAmount × commissionPercentage</span>) y queda congelada en la reserva; un nuevo porcentaje enviado por la OTA solo afecta reservas futuras. La conciliación de comisiones la hace el Módulo 3 (finanzas), no la recepción. Si la OTA cancela una reserva, solo cambia su estado: la comisión no se toca.</p>
+          <h2 style="justify-content:space-between">
+            <span>Agencias OTA</span>
+            <button class="btn primary" onclick="openOtaModal(null)">+ Nueva agencia</button>
+          </h2>
           <div class="tablewrap"><table>
-            <thead><tr><th>Agencia</th><th>Cuenta del hotel vinculada</th><th>Vinculada el</th><th>% Comisión</th><th>Conexión</th><th>Reservas activas</th></tr></thead>
+            <thead><tr><th>Agencia</th><th>Cuenta del hotel vinculada</th><th>Vinculada el</th><th>% Comisión</th><th>Conexión</th><th>Reservas activas</th><th style="text-align:right">Acciones</th></tr></thead>
             <tbody id="tblOtas"></tbody>
           </table></div>
         </div>
@@ -332,11 +300,27 @@
   </div>
 </div>
 
+<!-- ============ MODAL: Nueva / editar agencia OTA ============ -->
+<div class="overlay" id="m-ota" hidden>
+  <div class="modal narrow">
+    <h3 id="otaTitle">Nueva agencia</h3>
+    <p class="sub">Nombre, cuenta del hotel vinculada en la OTA y porcentaje de comisión contractual.</p>
+    <div class="field" style="margin-bottom:10px"><label class="req">Nombre</label><input id="otaNombre" placeholder="Ej. Hotels.com"></div>
+    <div class="field" style="margin-bottom:10px"><label class="req">Cuenta del hotel vinculada</label><input id="otaCuenta" placeholder="Ej. Hotel ID 8841207"></div>
+    <div class="field"><label class="req">% Comisión</label><input id="otaPct" type="number" min="0" max="100" value="15"></div>
+    <div id="otaErr"></div>
+    <div class="acts">
+      <button class="btn" onclick="closeModal('m-ota')">Cancelar</button>
+      <button class="btn primary" id="otaSave">Guardar</button>
+    </div>
+  </div>
+</div>
+
 <!-- ============ MODAL: Previsualizar movimiento SIRE ============ -->
 <div class="overlay" id="m-linea" hidden>
   <div class="modal">
     <h3>Previsualizar movimiento</h3>
-    <p class="sub">Así saldría la línea en el archivo <span class="code">.TXT</span>. Previsualizar no registra nada.</p>
+    <p class="sub">Así saldría la línea en el archivo .TXT.</p>
     <div class="kv" id="lnMeta" style="margin-bottom:14px"></div>
     <div class="tablewrap" style="margin-bottom:12px"><table>
       <thead><tr><th>#</th><th>Campo SIRE</th><th>Valor</th></tr></thead>
@@ -355,7 +339,7 @@
 
 <script src="assets/app.js"></script>
 <script>
-const TODAY = '2026-09-28'; // reloj simulado del hotel; día operativo fijo de Colombia, 00:00 a 23:59 (UTC-5)
+const TODAY = (d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'))(new Date()); // día operativo = fecha del computador
 const USER = 'Laura Méndez';
 
 // ================= Datos de ejemplo =================
@@ -372,21 +356,21 @@ const maintenance = [{room:'203', start:'2026-09-30', end:'2026-10-02', label:'M
 
 // Agencias registradas solas al vincular la cuenta del hotel; datos enviados por cada OTA (no editables).
 const otas = [
-  {name:'Booking.com', account:'Hotel ID 8841207', linkedAt:'2026-03-02 09:14', pct:15, connection:'Conectada', lastSync:'2026-09-28 07:58'},
-  {name:'Expedia', account:'Property ID 51930442', linkedAt:'2026-04-18 16:40', pct:18, connection:'Conectada', lastSync:'2026-09-28 07:31'},
-  {name:'Airbnb', account:'Host 30928815', linkedAt:'2026-06-09 11:02', pct:12, connection:'Conectada', lastSync:'2026-09-27 22:10'},
+  {name:'Booking.com', account:'Hotel ID 8841207', linkedAt:'2026-03-02 09:14', pct:15, connection:'CONNECTED', lastSync:'2026-09-28 07:58'},
+  {name:'Expedia', account:'Property ID 51930442', linkedAt:'2026-04-18 16:40', pct:18, connection:'CONNECTED', lastSync:'2026-09-28 07:31'},
+  {name:'Airbnb', account:'Host 30928815', linkedAt:'2026-06-09 11:02', pct:12, connection:'DISCONNECTED', lastSync:'2026-09-19 10:47'},
 ];
 
 const reservations = [
   {ref:'RSV-2026-00420', guest:'Andrés Molina', doc:'CC 80.221.334', pais:'Colombia', source:'DIRECT',
     start:'2026-09-28', end:'2026-09-29', status:'ACTIVE', guestCount:1, rooms:[{n:'102',cat:'Estándar',stay:'EXPECTED'}],
-    notes:'Llega en el último vuelo, 23:30.'},
+    phone:'+57 310 220 4471', email:'andres.molina@correo.com', lateArrivalNotice:true, notes:'Llega en el último vuelo, 23:30.'},
   {ref:'RSV-2026-00418', guest:'Camila Restrepo', doc:'CC 1.020.456.789', pais:'Colombia', source:'DIRECT',
     start:'2026-09-28', end:'2026-10-01', status:'ACTIVE', guestCount:2, rooms:[{n:'104',cat:'Estándar',stay:'EXPECTED'}],
     notes:''},
   {ref:'RSV-2026-00421', guest:'Valentina Ospina', doc:'CC 1.144.093.552', pais:'Colombia', source:'DIRECT',
     start:'2026-10-15', end:'2026-10-17', status:'ACTIVE', guestCount:3, rooms:[{n:'204',cat:'Superior',stay:'EXPECTED'}],
-    notes:'Aniversario, solicita decoración.'},
+    phone:'+57 300 118 5520', email:'valentina.ospina@correo.com', notes:'Aniversario, solicita decoración.'},
   {ref:'RSV-2026-00427', guest:'Marta Kowalski', doc:'Pasaporte PL7730215', pais:'Polonia', source:'OTA', ota:'Airbnb', ext:'HMX4Q8Z2TA',
     start:'2026-10-05', end:'2026-10-08', status:'ACTIVE', guestCount:2, rooms:[{n:'303',cat:'Suite',stay:'EXPECTED'}],
     gross:1656000, commissionPct:12, commissionStatus:'CALCULATED', notes:''},
@@ -399,7 +383,7 @@ const reservations = [
   {ref:'RSV-2026-00410', guest:'Isabela Santos Rocha', doc:'Pasaporte BR552104', pais:'Brasil', source:'DIRECT',
     start:'2026-09-26', end:'2026-09-30', status:'IN_PROGRESS', guestCount:3, rooms:[{n:'202',cat:'Superior',stay:'CHECKED_IN'},{n:'301',cat:'Suite',stay:'CHECKED_IN'}],
     notes:'Grupo familiar: titular y dos acompañantes.'},
-  {ref:'RSV-2026-00415', guest:'Lucía Fernández Gil', doc:'Pasaporte', pais:'España', source:'OTA', ota:'Booking.com', ext:'4410038871',
+  {ref:'RSV-2026-00415', guest:'Lucía Fernández Gil', doc:'Pasaporte ES4471230', pais:'España', source:'OTA', ota:'Booking.com', ext:'4410038871',
     start:'2026-09-27', end:'2026-10-01', status:'IN_PROGRESS', guestCount:1, rooms:[{n:'101',cat:'Estándar',stay:'CHECKED_IN'}],
     gross:1012000, commissionPct:15, commissionStatus:'CALCULATED', notes:''},
   {ref:'RSV-2026-00413', guest:'Hiroshi Tanaka', doc:'Pasaporte JP0098231', pais:'Japón', source:'OTA', ota:'Expedia', ext:'EXP-72201934',
@@ -410,22 +394,26 @@ const reservations = [
     gross:713000, commissionPct:12, commissionStatus:'CALCULATED', notes:''},
   {ref:'RSV-2026-00402', guest:'Ricardo Peña Salas', doc:'CC 79.554.120', pais:'Colombia', source:'DIRECT',
     start:'2026-09-15', end:'2026-09-16', status:'CANCELLED', guestCount:1, rooms:[{n:'103',cat:'Estándar',stay:'NOT_ARRIVED'}],
-    notes:'', cancellation:{date:'2026-09-15', reason:'No-Show de canal directo al cierre del día', channel:'SYSTEM', processedBy:'Cierre automático'}},
+    notes:'', noShow:true},
 ];
 
-// Movimientos migratorios: uno por huésped extranjero y por tipo (ENTRY / DEPARTURE).
-const movements = [
-  {id:'MM-0101', ref:'RSV-2026-00413', room:'302', firstName:'Hiroshi', lastName:'Tanaka', docType:'PA', docNumber:'JP0098231', birthDate:'1984-03-11', nat:'JAPÓN',
-    origin:'TOKIO', dest:'CARTAGENA', type:'ENTRY', date:'2026-09-20', status:'COMPLETE'},
-  {id:'MM-0102', ref:'RSV-2026-00413', room:'302', firstName:'Hiroshi', lastName:'Tanaka', docType:'PA', docNumber:'JP0098231', birthDate:'1984-03-11', nat:'JAPÓN',
-    origin:'TOKIO', dest:'CARTAGENA', type:'DEPARTURE', date:'2026-09-24', status:'COMPLETE'},
-  {id:'MM-0110', ref:'RSV-2026-00412', room:'201', firstName:'Lukas', lastName:'Becker', docType:'PA', docNumber:'C4X8R21K', birthDate:'1991-07-02', nat:'ALEMANIA',
-    origin:'BERLÍN', dest:'MEDELLÍN', type:'ENTRY', date:'2026-09-26', status:'COMPLETE'},
-  {id:'MM-0111', ref:'RSV-2026-00410', room:'202', firstName:'Isabela', lastName:'Santos Rocha', docType:'PA', docNumber:'BR552104', birthDate:'1988-12-19', nat:'BRASIL',
-    origin:'SÃO PAULO', dest:'SANTA MARTA', type:'ENTRY', date:'2026-09-26', status:'COMPLETE'},
-  {id:'MM-0112', ref:'RSV-2026-00410', room:'202', firstName:'Pedro', lastName:'Santos Rocha', docType:'PA', docNumber:'BR552187', birthDate:'2014-05-30', nat:'BRASIL',
-    origin:'SÃO PAULO', dest:'SANTA MARTA', type:'ENTRY', date:'2026-09-26', status:'COMPLETE'},
+// Plantillas de movimientos migratorios de cada huésped extranjero. El ENTRY existe cuando la reserva ya tuvo
+// Check-In (llegó) y el DEPARTURE cuando ya tuvo Check-Out; la fecha es la de entrada o la de salida de la reserva.
+const movementTemplates = [
+  {id:'MM-0101', ref:'RSV-2026-00413', room:'302', firstName:'Hiroshi', lastName:'Tanaka', docType:'PA', docNumber:'JP0098231', birthDate:'1984-03-11', nat:'JAPÓN', origin:'TOKIO', dest:'CARTAGENA', type:'ENTRY'},
+  {id:'MM-0102', ref:'RSV-2026-00413', room:'302', firstName:'Hiroshi', lastName:'Tanaka', docType:'PA', docNumber:'JP0098231', birthDate:'1984-03-11', nat:'JAPÓN', origin:'TOKIO', dest:'CARTAGENA', type:'DEPARTURE'},
+  {id:'MM-0110', ref:'RSV-2026-00412', room:'201', firstName:'Lukas', lastName:'Becker', docType:'PA', docNumber:'C4X8R21K', birthDate:'1991-07-02', nat:'ALEMANIA', origin:'BERLÍN', dest:'MEDELLÍN', type:'ENTRY'},
+  {id:'MM-0113', ref:'RSV-2026-00412', room:'201', firstName:'Lukas', lastName:'Becker', docType:'PA', docNumber:'C4X8R21K', birthDate:'1991-07-02', nat:'ALEMANIA', origin:'BERLÍN', dest:'MEDELLÍN', type:'DEPARTURE'},
+  {id:'MM-0111', ref:'RSV-2026-00410', room:'202', firstName:'Isabela', lastName:'Santos Rocha', docType:'PA', docNumber:'BR552104', birthDate:'1988-12-19', nat:'BRASIL', origin:'SÃO PAULO', dest:'SANTA MARTA', type:'ENTRY'},
+  {id:'MM-0114', ref:'RSV-2026-00410', room:'202', firstName:'Isabela', lastName:'Santos Rocha', docType:'PA', docNumber:'BR552104', birthDate:'1988-12-19', nat:'BRASIL', origin:'SÃO PAULO', dest:'SANTA MARTA', type:'DEPARTURE'},
+  {id:'MM-0112', ref:'RSV-2026-00410', room:'202', firstName:'Pedro', lastName:'Santos Rocha', docType:'PA', docNumber:'BR552187', birthDate:'2014-05-30', nat:'BRASIL', origin:'SÃO PAULO', dest:'SANTA MARTA', type:'ENTRY'},
+  {id:'MM-0115', ref:'RSV-2026-00410', room:'202', firstName:'Pedro', lastName:'Santos Rocha', docType:'PA', docNumber:'BR552187', birthDate:'2014-05-30', nat:'BRASIL', origin:'SÃO PAULO', dest:'SANTA MARTA', type:'DEPARTURE'},
+  {id:'MM-0116', ref:'RSV-2026-00415', room:'101', firstName:'Lucía', lastName:'Fernández Gil', docType:'PA', docNumber:'ES4471230', birthDate:'1990-09-08', nat:'ESPAÑA', origin:'MADRID', dest:'BOGOTÁ', type:'ENTRY'},
+  {id:'MM-0117', ref:'RSV-2026-00415', room:'101', firstName:'Lucía', lastName:'Fernández Gil', docType:'PA', docNumber:'ES4471230', birthDate:'1990-09-08', nat:'ESPAÑA', origin:'MADRID', dest:'BOGOTÁ', type:'DEPARTURE'},
+  {id:'MM-0118', ref:'RSV-2026-00427', room:'303', firstName:'Marta', lastName:'Kowalski', docType:'PA', docNumber:'PL7730215', birthDate:'1986-02-14', nat:'POLONIA', origin:'VARSOVIA', dest:'CARTAGENA', type:'ENTRY'},
+  {id:'MM-0119', ref:'RSV-2026-00427', room:'303', firstName:'Marta', lastName:'Kowalski', docType:'PA', docNumber:'PL7730215', birthDate:'1986-02-14', nat:'POLONIA', origin:'VARSOVIA', dest:'CARTAGENA', type:'DEPARTURE'},
 ];
+const movements = [];
 
 // Configuración SIRE del hotel (export-sire-file FR-005). Se carga desde el manual de cargue de SIRE.
 const SIRE_CONFIG = {hotelSireCode:'123456', hotelCityCode:'11001', separator:'\t', separatorLabel:'Tabulador', dateFormat:'dd/mm/aaaa'};
@@ -456,10 +444,81 @@ function quoteFor(cat, s, e){
 const DOC_PREFIX = {CC: 'CC', CE: 'CE', PASSPORT: 'Pasaporte', OTHER: ''};
 const docNumberOf = doc => (doc || '').replace(/^(CC|CE|Pasaporte)s*/, '');
 const docLabel = (type, num) => (DOC_PREFIX[type] ? DOC_PREFIX[type] + ' ' : '') + num;
-reservations.forEach(r => {
+function addDays(iso, n){
+  const d = new Date(iso + 'T00:00:00Z');
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+// Los datos de ejemplo se escribieron alrededor del 2026-09-28. Se anclan al primer día en que se abre el
+// wireframe (se guarda en el navegador): desde ahí las fechas quedan fijas y el tiempo corre de verdad, así las
+// reservas llegan, se alojan, salen o no se presentan según el día. Pasados 14 días se vuelve a anclar a hoy.
+const SAMPLE_BASE = '2026-09-28';
+const daysBetween = (a, b) => Math.round((Date.parse(b) - Date.parse(a)) / 86400000);
+let sampleAnchor = TODAY;
+try {
+  const saved = localStorage.getItem('hospitua.sampleAnchor');
+  if (saved && daysBetween(saved, TODAY) >= 0 && daysBetween(saved, TODAY) <= 14) sampleAnchor = saved;
+  else { localStorage.setItem('hospitua.sampleAnchor', TODAY); localStorage.removeItem('hospitua.arrivals'); }
+} catch (err) { /* sin almacenamiento: se ancla a hoy en cada carga */ }
+const sampleDelta = daysBetween(SAMPLE_BASE, sampleAnchor);
+const shiftDay = s => addDays(s.slice(0, 10), sampleDelta) + s.slice(10);
+const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+const diaMes = iso => parseInt(iso.slice(8, 10), 10) + ' ' + MESES[parseInt(iso.slice(5, 7), 10) - 1];
+maintenance.forEach(m => { m.start = shiftDay(m.start); m.end = shiftDay(m.end); m.label = 'Mantenimiento programado ' + diaMes(m.start) + ' → ' + diaMes(m.end); });
+otas.forEach(o => { o.linkedAt = shiftDay(o.linkedAt); o.lastSync = shiftDay(o.lastSync); });
+reservations.forEach(r => { r.start = shiftDay(r.start); r.end = shiftDay(r.end); if (r.cancellation) r.cancellation.date = shiftDay(r.cancellation.date); });
+exportsHist.forEach(h => { h.start = shiftDay(h.start); h.end = shiftDay(h.end); h.date = shiftDay(h.date); });
+
+// Ciclo de vida según la fecha (lo que harían el Check-In/Check-Out del Módulo 1 y el cierre del día):
+// llega hoy = ACTIVE (espera el Check-In); ya llegó y no ha salido = IN_PROGRESS; ya pasó su salida = COMPLETED;
+// no se presentó = NO_SHOW (OTA) o CANCELLED (directa) y una OTA que nunca confirmó (PENDING) vence igual.
+// Como todavía no hay conexión con los demás módulos, lo que pasa con cada reserva que llega después del primer día
+// se sortea y se guarda para que no cambie al recargar: las directas con aviso de llegada tardía siempre llegan; a las
+// demás les toca llegar o no presentarse. Quien no se presenta queda NO_SHOW si es OTA y CANCELLED si es directa
+// (cierre del día, sin registrar una Cancellation).
+let arrivals = {};
+try { localStorage.removeItem('hospitua.outcomes'); arrivals = JSON.parse(localStorage.getItem('hospitua.arrivals') || '{}'); } catch (err) { arrivals = {}; }
+function arrivalDraw(r){
+  if (!arrivals[r.ref]){
+    arrivals[r.ref] = {arrives: Math.random() < 0.5};
+    try { localStorage.setItem('hospitua.arrivals', JSON.stringify(arrivals)); } catch (err) { /* sin almacenamiento */ }
+  }
+  return arrivals[r.ref];
+}
+function deriveLifecycle(r){
+  const ota = r.source === 'OTA';
+  const setStay = st => r.rooms.forEach(x => { x.stay = st; });
+  const noShow = () => {
+    r.status = ota ? 'NO_SHOW' : 'CANCELLED';
+    setStay('NOT_ARRIVED');
+    delete r.cancellation;   // el cierre del día no registra una Cancellation (update-reservation FR-021)
+  };
+  const arrived = () => { if (r.end < TODAY){ r.status = 'COMPLETED'; setStay('CHECKED_OUT'); } else { r.status = 'IN_PROGRESS'; setStay('CHECKED_IN'); } };
+  const waiting = status => { r.status = status; setStay('EXPECTED'); delete r.cancellation; };
+
+  const neverArrives = r.status === 'NO_SHOW' || r.noShow;
+  const unconfirmed = r.status === 'PENDING';
+  const startedBeforeDemo = r.start < sampleAnchor;
+  if (neverArrives || unconfirmed){
+    if (r.start < TODAY) noShow(); else waiting(unconfirmed ? 'PENDING' : 'ACTIVE');
+  } else if (r.start >= TODAY) waiting('ACTIVE');
+  else if (startedBeforeDemo) arrived();
+  else if ((r.source === 'DIRECT' && r.lateArrivalNotice) || arrivalDraw(r).arrives) arrived();
+  else noShow();
+}
+reservations.forEach(deriveLifecycle);
+// Movimientos migratorios: la entrada existe si la reserva ya tuvo Check-In y la salida si ya tuvo Check-Out.
+movementTemplates.forEach(t => {
+  const r = reservations.find(x => x.ref === t.ref);
+  if (t.type === 'ENTRY' && (r.status === 'IN_PROGRESS' || r.status === 'COMPLETED')) movements.push({...t, date: r.start});
+  if (t.type === 'DEPARTURE' && r.status === 'COMPLETED') movements.push({...t, date: r.end});
+});
+const CREATE_HOURS = ['09:14', '11:02', '14:37', '16:48', '08:55'];
+reservations.forEach((r, i) => {
   r.docType = /^Pasaporte/.test(r.doc) ? 'PASSPORT' : /^CE/.test(r.doc) ? 'CE' : 'CC';
   r.rooms.forEach(rm => { if (r.source === 'DIRECT') rm.gross = quoteFor(rm.cat, r.start, r.end).gross; });
   if (r.source === 'OTA') r.commissionAmount = Math.round(r.gross * r.commissionPct / 100);
+  if (!r.createdAt) r.createdAt = addDays(r.start, -(3 + (i % 5))) + ' ' + CREATE_HOURS[i % CREATE_HOURS.length];
 });
 
 const LIVE = ['ACTIVE', 'PENDING', 'IN_PROGRESS'];
@@ -483,21 +542,32 @@ const lockShort = {
   IN_PROGRESS: 'Hospedaje en curso: no admite cambios ni cancelación',
   COMPLETED: 'Estadía finalizada: solo consulta',
   CANCELLED: 'Reserva cancelada: solo consulta',
-  NO_SHOW: 'Marcada No-Show: solo consulta',
+  NO_SHOW: 'No se presentó: solo consulta',
 };
 const lockLong = {
-  IN_PROGRESS: '🔒 Hospedaje en curso: el Módulo 1 notificó el Check-In. La reserva no admite cambios de estadía ni cancelación desde aquí. El Check-Out también lo registra el Módulo 1.',
-  COMPLETED: '🔒 Estadía finalizada: todas las habitaciones terminaron (Check-Out o no llegaron). Reserva de solo consulta.',
+  IN_PROGRESS: '🔒 Hospedaje en curso: la reserva no admite cambios de estadía ni cancelación.',
+  COMPLETED: '🔒 Estadía finalizada. Reserva de solo consulta.',
   CANCELLED: '🔒 Reserva cancelada. Solo consulta.',
-  NO_SHOW: '🔒 Reserva OTA marcada No-Show por el cierre del día. Se conserva para la conciliación de la comisión. Solo consulta.',
+  NO_SHOW: '🔒 Reserva OTA marcada como no presentada por el cierre del día. Solo consulta.',
 };
+const STATUS_ES = {ACTIVE:'Activa', PENDING:'Pendiente', IN_PROGRESS:'En curso', COMPLETED:'Completada', CANCELLED:'Cancelada', NO_SHOW:'No se presentó'};
+const STAY_ES = {EXPECTED:'Esperada', CHECKED_IN:'Con Check-In', CHECKED_OUT:'Con Check-Out', NOT_ARRIVED:'No llegó'};
+const COMMISSION_ES = {CALCULATED:'Calculada', RECONCILED:'Conciliada'};
+const ROOM_STATE_ES = {Available:'Disponible', Reserved:'Reservada', Occupied:'Ocupada', DisabledForRepairs:'En reparación'};
+const MOVEMENT_ES = {ENTRY:'Entrada', DEPARTURE:'Salida'};
+function fmtDate(v){
+  if (!v) return '';
+  const [d, t] = v.split(' ');
+  const [y, m, day] = d.split('-');
+  return `${day}/${m}/${y}` + (t ? ' ' + t : '');
+}
 function statusBadge(s){
-  const cls = {ACTIVE:'ok', PENDING:'warn', IN_PROGRESS:'ok', COMPLETED:'neutral', CANCELLED:'err', NO_SHOW:'err'}[s] || 'neutral';
-  return `<span class="badge ${cls}">${s}</span>`;
+  const cls = {ACTIVE:'ok', PENDING:'warn', IN_PROGRESS:'info', COMPLETED:'neutral', CANCELLED:'err', NO_SHOW:'alt'}[s] || 'neutral';
+  return `<span class="badge ${cls}">${STATUS_ES[s]}</span>`;
 }
 function stayBadge(s){
-  const cls = {EXPECTED:'neutral', CHECKED_IN:'ok', CHECKED_OUT:'neutral', NOT_ARRIVED:'err'}[s] || 'neutral';
-  return `<span class="badge ${cls}">${s}</span>`;
+  const cls = {EXPECTED:'neutral', CHECKED_IN:'ok', CHECKED_OUT:'info', NOT_ARRIVED:'err'}[s] || 'neutral';
+  return `<span class="badge ${cls}">${STAY_ES[s]}</span>`;
 }
 function channelBadge(r){
   return r.source === 'DIRECT' ? '<span class="badge neutral">Directo</span>' : `<span class="badge ota">OTA · ${r.ota}</span>`;
@@ -514,10 +584,10 @@ function migrationStatus(r){
   return 'COMPLETE';
 }
 const MIG = {
-  AWAITING_CHECK_IN: {cls:'neutral', txt:'Pendiente de Check-In', tip:'Los datos migratorios de cada huésped llegan con el Check-In del Módulo 1'},
-  COMPLETE: {cls:'ok', txt:'COMPLETE', tip:'Todos los movimientos están registrados y listos para SIRE'},
+  AWAITING_CHECK_IN: {cls:'warn', txt:'Pendiente de Check-In', tip:'Los datos migratorios de cada huésped se registran en el Check-In'},
+  COMPLETE: {cls:'ok', txt:'Completo', tip:'Todos los movimientos están registrados y listos para SIRE'},
   NOT_REQUIRED: {cls:'neutral', txt:'Sin extranjeros', tip:'No hay huéspedes extranjeros: no entra al reporte SIRE'},
-  NO_CHECK_IN: {cls:'neutral', txt:'Sin Check-In', tip:'La reserva nunca tuvo ingreso: no hay movimientos que reportar'},
+  NO_CHECK_IN: {cls:'alt', txt:'Sin Check-In', tip:'La reserva nunca tuvo ingreso: no hay movimientos que reportar'},
 };
 function migBadge(r){
   const m = MIG[migrationStatus(r)];
@@ -526,7 +596,7 @@ function migBadge(r){
 function kv(k, v){ return `<div><div class="k">${k}</div><div class="v">${v}</div></div>`; }
 
 // ================= Navegación =================
-const titles = {reservas:'Reservas', 'nueva-directa':'Generar reservación directa', detalle:'Detalle de reserva',
+const titles = {reservas:'Reservas', 'nueva-directa':'Nueva reserva directa', detalle:'Detalle de reserva',
   modificar:'Modificar reserva', cancelar:'Cancelar reserva', sire:'Exportar SIRE', habitaciones:'Habitaciones', tarifas:'Tarifas', otas:'Agencias OTA'};
 const RES_SCREENS = ['detalle', 'modificar', 'cancelar', 'nueva-directa'];
 let currentRef = null;
@@ -579,30 +649,46 @@ function fillAgencias(){
 // orden por fecha de llegada y paginación de a 10.
 const PAGE_SIZE = 10;
 let listPage = 1;
+function stripAccents(s){ return (s || '').normalize('NFD').replace(/[̀-ͯ]/g, ''); }
 function filteredReservas(){
-  const q = (document.getElementById('fSearch').value || '').toLowerCase();
+  const qRaw = (document.getElementById('fSearch').value || '').trim();
   const fe = document.getElementById('fEstado').value;
   const fc = document.getElementById('fCanal').value;
   document.getElementById('fAgenciaWrap').hidden = fc !== 'OTA';
   const fa = fc === 'OTA' ? document.getElementById('fAgencia').value : '';
-  const ft = document.getElementById('fFechaTipo').value;
   const from = document.getElementById('fDesde').value;
   const to = document.getElementById('fHasta').value;
   const order = document.getElementById('fOrden').value;
-  if ((ft && !(from && to)) || (!ft && (from || to))) return {error: 'Debe indicar el tipo de fecha y el rango completo.'};
-  if (ft && from > to) return {error: 'La fecha inicial no puede ser posterior a la fecha final.'};
-  if (ft && nightsBetween(from, to) > 366) return {error: 'El rango de fechas no puede superar 366 días.'};
+
+  // Búsqueda por código (reservationRef o externalConfirmationCode): coincidencia exacta,
+  // ignora los demás filtros (check-view-reservation FR-006).
+  if (qRaw){
+    const qUp = qRaw.toUpperCase();
+    const byCode = reservations.filter(r => r.ref.toUpperCase() === qUp || (r.ext && r.ext.toUpperCase() === qUp));
+    if (byCode.length) return {list: byCode.sort((a, b) => a.ref.localeCompare(b.ref))};
+    if (/^RSV-/.test(qUp)) return {error: 'La reserva no existe.'};
+  }
+
+  if ((from && !to) || (!from && to)) return {error: 'Debe completar ambas fechas del rango.'};
+  if (from && to && from > to) return {error: 'La fecha inicial no puede ser posterior a la fecha final.'};
+  if (from && to && nightsBetween(from, to) > 366) return {error: 'El rango de fechas no puede superar 366 días.'};
+
+  // Búsqueda por titular: documento (coincidencia exacta) o nombre (parcial, sin tildes ni
+  // mayúsculas, mínimo 3 caracteres) — check-view-reservation FR-004/FR-009.
+  let docQ = '', nameQ = '';
+  if (qRaw){
+    if (/\d/.test(qRaw)) docQ = qRaw.replace(/[^0-9a-zA-Z]/g, '').toUpperCase();
+    else nameQ = stripAccents(qRaw).toLowerCase();
+  }
+  if (nameQ && nameQ.length < 3) return {error: 'La búsqueda por nombre requiere al menos 3 caracteres.'};
+
   const list = reservations
     .filter(r => !fe || r.status === fe)
     .filter(r => !fc || r.source === fc)
     .filter(r => !fa || r.ota === fa)
-    .filter(r => !q || (r.ref + ' ' + (r.ext || '') + ' ' + r.guest + ' ' + r.doc).toLowerCase().includes(q))
-    .filter(r => {
-      if (!ft) return true;
-      if (ft === 'ARRIVAL') return r.start >= from && r.start <= to;
-      if (ft === 'DEPARTURE') return r.end >= from && r.end <= to;
-      return r.start <= to && r.end > from;            // STAY: la estadía se cruza con el rango
-    })
+    .filter(r => !docQ || docNumberOf(r.doc).replace(/[^0-9a-zA-Z]/g, '').toUpperCase() === docQ)
+    .filter(r => !nameQ || stripAccents(r.guest).toLowerCase().includes(nameQ))
+    .filter(r => !from || !to || (r.start <= to && r.end > from))   // reservas cuya estadía cae entre Desde y Hasta
     .sort((a, b) => (order === 'asc' ? a.start.localeCompare(b.start) : b.start.localeCompare(a.start)) || a.ref.localeCompare(b.ref));
   return {list};
 }
@@ -633,15 +719,15 @@ function renderReservas(){
     const ext = r.ext ? `<br><span class="note">Cód. OTA ${r.ext}</span>` : '';
     const cats = [...new Set(r.rooms.map(x => x.cat))].join(', ');
     return `<tr id="row-${r.ref}">
-      <td><b style="font-family:var(--mono);font-size:12.5px">${r.ref}</b>${ext}</td>
+      <td style="white-space:nowrap"><b style="font-family:var(--mono);font-size:12.5px">${r.ref}</b>${ext}</td>
       <td><div class="person">${avatarHTML(r.guest)}<div>${r.guest}<br><span class="note">${r.doc}</span></div></div></td>
       <td>${roomsText(r)}<br><span class="note">${cats}</span></td>
       <td>${channelBadge(r)}</td>
-      <td style="white-space:nowrap">${r.start} → ${r.end}</td>
+      <td style="white-space:nowrap">${fmtDate(r.start)} →<br>${fmtDate(r.end)}</td>
       <td>${statusBadge(r.status)}</td>
       <td>${migBadge(r)}</td>
       <td><div class="rowacts">
-        <button class="btn sm" onclick="goDetalle('${r.ref}')">Ver detalle</button>
+        <button class="btn sm" style="white-space:nowrap" onclick="goDetalle('${r.ref}')">Ver detalle</button>
         <button class="btn sm" ${dis} onclick="goModificar('${r.ref}')">Modificar</button>
         <button class="btn sm danger" ${dis} onclick="goCancelar('${r.ref}')">Cancelar</button>
       </div></td></tr>`;
@@ -657,16 +743,28 @@ function renderReservas(){
 }
 function setListPage(p){ listPage = p; renderReservas(); }
 // Cambiar cualquier filtro o el orden vuelve a la página 1.
-['fSearch', 'fEstado', 'fCanal', 'fAgencia', 'fFechaTipo', 'fDesde', 'fHasta', 'fOrden']
+['fSearch', 'fEstado', 'fCanal', 'fAgencia', 'fDesde', 'fHasta', 'fOrden']
   .forEach(id => document.getElementById(id).addEventListener('input', () => { listPage = 1; renderReservas(); }));
+document.getElementById('fClear').addEventListener('click', () => {
+  document.getElementById('fSearch').value = '';
+  document.getElementById('fEstado').value = '';
+  document.getElementById('fCanal').value = '';
+  document.getElementById('fAgencia').value = '';
+  document.getElementById('fDesde').value = '';
+  document.getElementById('fHasta').value = '';
+  document.getElementById('fOrden').value = 'desc';
+  document.getElementById('fAgenciaWrap').hidden = true;
+  listPage = 1;
+  renderReservas();
+});
 
 // Resumen del día operativo (check-view-reservation FR-005a): solo datos del Módulo 2.
 function renderStatRow(){
   const llegadas = reservations.filter(r => r.start === TODAY && isEditable(r));
   const salidas = reservations.filter(r => r.end === TODAY && r.status === 'IN_PROGRESS');
   document.getElementById('statRow').innerHTML = `
-    <div class="statcard"><div class="lbl">Llegadas esperadas hoy</div><div class="val">${llegadas.length}</div><div class="sub">pendientes de Check-In (M1)</div></div>
-    <div class="statcard"><div class="lbl">Salidas esperadas hoy</div><div class="val">${salidas.length}</div><div class="sub">IN_PROGRESS con salida hoy</div></div>`;
+    <div class="statcard"><div class="lbl">Llegadas esperadas hoy</div><div class="val">${llegadas.length}</div></div>
+    <div class="statcard"><div class="lbl">Salidas esperadas hoy</div><div class="val">${salidas.length}</div></div>`;
 }
 
 // ================= Detalle =================
@@ -688,19 +786,22 @@ function renderDetalle(){
   });
   let lock = lockLong[r.status] || '';
   if (!lock && r.source === 'OTA'){
-    lock = `🔗 Reserva enviada por ${r.ota} por API. Sus datos no se editan desde recepción: los cambios y la cancelación llegan por la API de la agencia (canal <span class="code">OTA_API</span>).`;
+    lock = `🔗 Reserva de ${r.ota}. Sus cambios y su cancelación los gestiona la agencia, no se editan desde recepción.`;
   }
   document.getElementById('dtLock').innerHTML = lock ? `<div class="lockbox">${lock}</div>` : '';
   document.getElementById('dtGuest').innerHTML = `
     <div class="row" style="margin:0;align-items:center;justify-content:space-between">
       <div class="person">${avatarHTML(r.guest)}<div><b>${r.guest}</b> <span class="note">· titular</span><br><span class="note">${r.doc}</span></div></div>
-      <span class="note">${r.pais} · ${r.pais !== 'Colombia' ? 'huésped extranjero' : 'huésped nacional'}</span>
-    </div>`;
+      <span class="note">${r.pais} · ${stripAccents(r.pais).toLowerCase() !== 'colombia' ? 'huésped extranjero' : 'huésped nacional'}</span>
+    </div>
+    <div class="kv" style="margin-top:12px">${kv('Teléfono', r.phone || '<span class="note">—</span>')}${kv('Email', r.email || '<span class="note">—</span>')}</div>`;
   const nights = nightsBetween(r.start, r.end);
   document.getElementById('dtStay').innerHTML =
-    kv('Entrada', r.start) + kv('Salida', r.end) + kv('Noches', nights) + kv('Personas', r.guestCount) +
-    (r.source === 'OTA' ? kv('Valor bruto <span class="code">totalAmount</span>', money(r.gross)) : '') +
-    kv('Observaciones', r.notes || '<span class="note">—</span>');
+    kv('Entrada', fmtDate(r.start)) + kv('Salida', fmtDate(r.end)) + kv('Noches', nights) + kv('Personas', r.guestCount) +
+    (r.source === 'OTA' ? kv('Valor bruto', money(r.gross)) : '') +
+    (r.source === 'DIRECT' ? kv('Aviso de llegada tardía', r.lateArrivalNotice ? 'Sí' : 'No') : '') +
+    kv('Observaciones', r.notes || '<span class="note">—</span>') +
+    kv('Creada el', fmtDate(r.createdAt));
   document.getElementById('dtRooms').innerHTML = r.rooms.map(x => `<tr><td>Hab. ${x.n}</td><td>${x.cat}</td>
     <td>${x.gross ? money(x.gross) : '<span class="note">lo informa la OTA</span>'}</td><td>${stayBadge(x.stay)}</td></tr>`).join('');
   let canal;
@@ -708,9 +809,9 @@ function renderDetalle(){
     canal = `<div class="readonly-banner" style="margin:0"><div class="kv">
       ${kv('Agencia', r.ota)}${kv('Código de confirmación', r.ext)}
       ${kv('% comisión congelado', r.commissionPct + '%')}${kv('Comisión', money(r.commissionAmount))}
-      ${kv('Estado de la comisión', r.commissionStatus)}</div></div>`;
+      ${kv('Estado de la comisión', COMMISSION_ES[r.commissionStatus])}</div></div>`;
   } else {
-    canal = '<div class="readonly-banner" style="margin:0">Reserva de canal directo: sin código externo y con comisión 0.</div>';
+    canal = '';
   }
   if (r.cancellation){
     const c = r.cancellation;
@@ -734,7 +835,7 @@ function renderMigTab(r){
   const ms = movementsOf(r.ref);
   if (!ms.length){
     const msg = {
-      AWAITING_CHECK_IN: 'Pendiente de Check-In. Los datos migratorios de cada huésped extranjero (incluidos los acompañantes) llegan con el Check-In del Módulo 1.',
+      AWAITING_CHECK_IN: 'Pendiente de Check-In. Los datos migratorios de cada huésped extranjero (incluidos los acompañantes) se registran en el Check-In.',
       NOT_REQUIRED: 'Sin extranjeros: ningún huésped de esta reserva es extranjero, así que no entra al reporte SIRE.',
       NO_CHECK_IN: 'Sin Check-In: la reserva nunca tuvo ingreso, así que no hay movimientos migratorios que reportar.',
     }[migrationStatus(r)];
@@ -747,13 +848,12 @@ function renderMigTab(r){
       <tbody>${ms.map(m => `<tr>
         <td>${m.firstName} ${m.lastName}<br><span class="note">Hab. ${m.room}</span></td>
         <td>${m.docType} ${m.docNumber}</td>
-        <td>${m.birthDate}</td>
+        <td>${fmtDate(m.birthDate)}</td>
         <td>${m.nat}</td>
         <td>${m.origin} → ${m.dest}</td>
-        <td><span class="badge neutral">${m.type}</span><br><span class="note">${m.date}</span></td>
+        <td><span class="badge neutral">${MOVEMENT_ES[m.type]}</span><br><span class="note">${fmtDate(m.date)}</span></td>
       </tr>`).join('')}</tbody>
-    </table></div>
-    <p class="note" style="margin-top:10px">Solo lectura: el Módulo 1 envía los datos ya procesados en el Check-In y el Check-Out; el Módulo 2 no los completa ni los corrige.</p>`;
+    </table></div>`;
 }
 
 // ================= Modificar =================
@@ -763,7 +863,7 @@ let mdRows = [];   // habitaciones que quedarían en la reserva: {n, cat, orig}
 let mdPlan = null;
 function mdDates(){
   const s = document.getElementById('mdEntrada').value, e = document.getElementById('mdSalida').value;
-  return {s, e, valid: !!(s && e && e > s)};
+  return {s, e, valid: !!(s && e && e > s && s >= TODAY)};
 }
 function renderModificar(){
   const r = findRes(currentRef);
@@ -778,6 +878,7 @@ function renderModificar(){
   document.getElementById('mdTel').value = r.phone || '';
   document.getElementById('mdEmail').value = r.email || '';
   document.getElementById('mdNotes').value = r.notes || '';
+  document.getElementById('mdTardia').checked = !!r.lateArrivalNotice;
   mdRows = r.rooms.map(x => ({n: x.n, cat: x.cat, orig: x.n, origCat: x.cat}));
   refreshModificar();
 }
@@ -798,6 +899,7 @@ function refreshModificar(){
   const r = findRes(currentRef);
   const {s, e, valid} = mdDates();
   document.getElementById('mdFechaErr').hidden = valid;
+  document.getElementById('mdFechaTxt').textContent = s && s < TODAY ? 'La fecha de entrada no puede ser anterior a hoy.' : 'La fecha de salida debe ser posterior a la de entrada.';
 
   // Cada fila queda con una habitación libre de su categoría (la actual si sigue libre).
   const chosen = [];
@@ -839,33 +941,33 @@ function refreshModificar(){
   document.getElementById('mdPersErr').hidden = !persErr;
   document.getElementById('mdPersErr').firstElementChild.textContent = persErr;
 
+  // La tarifa se muestra solo si el cambio la afecta: cambian las fechas, se agrega una habitación o una cambia de
+  // categoría. Cambiar una habitación por otra de la misma categoría no cambia el precio y no se muestra nada.
   const tarifa = document.getElementById('mdTarifa');
   mdPlan = mdRows.map(row => row.n ? {n: row.n, cat: row.cat, stay: 'EXPECTED'} : null);
-  if (!valid){
-    tarifa.innerHTML = '<p class="note">Ingrese fechas válidas para cotizar.</p>';
-  } else {
-    let lines = '';
-    mdRows.forEach(row => {
+  const datesChanged = valid && (s !== r.start || e !== r.end);
+  const affected = valid ? mdRows.filter(row => datesChanged || row.orig === null || row.cat !== row.origCat) : [];
+  document.getElementById('mdTarifaPanel').hidden = !affected.length;
+  if (affected.length){
+    const cards = affected.map(row => {
       const q = quoteFor(row.cat, s, e);
-      lines += `<div class="line"><span>${row.n ? 'Hab. ' + row.n + ' · ' : ''}${row.cat} · ${q.nights} noche(s) + temporada</span><span>${money(q.gross)}</span></div>`;
-    });
-    tarifa.innerHTML = lines + `
-      <p class="note" style="margin-top:6px">Tarifa de cada habitación, tal como la entrega el Módulo 3 (<span class="code">roomGrossAmount</span>). Informativa: el Módulo 2 no suma ni calcula diferencias, IVA ni comisión. Solo cambiar las personas, los datos del titular o las observaciones no recotiza.</p>`;
-  }
-
-  const origRooms = r.rooms.map(x => x.n).sort().join();
-  const changed = valid && (s !== r.start || e !== r.end || mdRows.map(x => x.n).sort().join() !== origRooms);
-  const note = document.getElementById('mdOrderNote');
-  if (!changed) note.innerHTML = '';
-  else if (s === TODAY || r.start === TODAY) note.innerHTML = '🔔 El cambio toca el día de hoy: el Módulo 2 ordenará <span class="code">Reserved</span> o <span class="code">Available</span> al Módulo 1 para las habitaciones agregadas, quitadas o cambiadas.';
-  else note.innerHTML = '📅 Cambio sobre una llegada futura: no se envía ninguna orden al Módulo 1.';
+      const motivo = row.orig === null ? 'Habitación nueva' : row.cat !== row.origCat ? 'Cambia de categoría' : 'Cambian las fechas';
+      return `<div style="padding-bottom:10px;margin-bottom:10px;border-bottom:1px solid var(--line-soft)">
+        <div class="line"><b>${row.n ? 'Hab. ' + row.n + ' · ' : ''}${row.cat}</b><span class="note">${motivo}</span></div>
+        <div class="line"><span>${q.nights} noche(s) × ${money(q.base)}</span><span>${money(q.subtotal)}</span></div>
+        <div class="line"><span>Ajuste de temporada (+${SEASON_PCT * 100}%)</span><span>${money(q.season)}</span></div>
+        <div class="total"><span>Tarifa por habitación</span><span>${money(q.gross)}</span></div>
+      </div>`;
+    }).join('');
+    tarifa.innerHTML = cards;
+  } else tarifa.innerHTML = '';
 
   const notes = document.getElementById('mdNotes').value;
   document.getElementById('mdNotesCount').textContent = notes.length + ' / 500 caracteres';
   const titularOk = document.getElementById('mdNombre').value.trim() && document.getElementById('mdDoc').value.trim();
   document.getElementById('mdSave').disabled = !valid || mdRows.some(row => !row.n) || !!persErr || !titularOk;
 }
-['mdEntrada', 'mdSalida', 'mdPersonas', 'mdNombre', 'mdDoc', 'mdTel', 'mdEmail', 'mdNotes']
+['mdEntrada', 'mdSalida', 'mdPersonas', 'mdNombre', 'mdDoc', 'mdTel', 'mdEmail', 'mdNotes', 'mdTardia']
   .forEach(id => document.getElementById(id).addEventListener('input', refreshModificar));
 document.getElementById('mdAddRoom').addEventListener('click', mdAddRoom);
 document.getElementById('mdSave').addEventListener('click', () => {
@@ -880,6 +982,7 @@ document.getElementById('mdSave').addEventListener('click', () => {
   r.phone = document.getElementById('mdTel').value.trim();
   r.email = document.getElementById('mdEmail').value.trim();
   r.notes = document.getElementById('mdNotes').value.trim();
+  r.lateArrivalNotice = document.getElementById('mdTardia').checked;
   backToList(r.ref, 'Reserva ' + r.ref + ' modificada correctamente.');
 });
 document.getElementById('mdBack').addEventListener('click', () => goDetalle(currentRef));
@@ -892,11 +995,8 @@ function renderCancelar(){
   document.getElementById('cxBadges').innerHTML = headerBadges(r);
   document.getElementById('cxSummary').innerHTML =
     kv('Titular', `${r.guest}<br><span class="note">${r.doc}</span>`) + kv('Canal', channelBadge(r)) +
-    kv('Entrada', r.start) + kv('Salida', r.end) + kv('Habitaciones', roomsText(r)) + kv('Personas', r.guestCount) +
+    kv('Entrada', fmtDate(r.start)) + kv('Salida', fmtDate(r.end)) + kv('Habitaciones', roomsText(r)) + kv('Personas', r.guestCount) +
     (r.source === 'OTA' ? kv('Valor bruto', money(r.gross)) : '') + (r.ext ? kv('Código OTA', r.ext) : '');
-  document.getElementById('cxImpact').innerHTML = roomIsReservedToday(r)
-    ? `🔔 La llegada es <b>hoy</b> y ${roomsText(r)} ya está <span class="code">Reserved</span>: al confirmar se notificará de inmediato al Módulo 1 para devolverla a <span class="code">Available</span>.`
-    : `📅 La llegada es futura (${r.start}): la habitación aún no está apartada, así que no se enviará ninguna orden al Módulo 1.`;
   document.getElementById('cxReason').value = '';
   document.getElementById('cxAck').checked = false;
   document.getElementById('cxConfirm').disabled = true;
@@ -904,15 +1004,15 @@ function renderCancelar(){
 document.getElementById('cxAck').addEventListener('change', e => document.getElementById('cxConfirm').disabled = !e.target.checked);
 document.getElementById('cxConfirm').addEventListener('click', () => {
   const r = findRes(currentRef);
-  const notified = roomIsReservedToday(r);
   r.status = 'CANCELLED';
   r.cancellation = {date: TODAY, reason: document.getElementById('cxReason').value.trim() || null, channel: 'RECEPTION', processedBy: USER};
-  backToList(r.ref, 'Reserva ' + r.ref + ' cancelada.' + (notified ? ' Se notificó al Módulo 1 para liberar la habitación.' : ''));
+  backToList(r.ref, 'Reserva ' + r.ref + ' cancelada.');
 });
 document.getElementById('cxBack').addEventListener('click', () => goDetalle(currentRef));
 document.getElementById('cxCancel').addEventListener('click', () => goDetalle(currentRef));
 
 // ================= Nueva reserva directa =================
+let ndPaisTouched = false;
 function refreshNuevaDirecta(){
   const cat = document.getElementById('ndCategoria').value;
   const qty = parseInt(document.getElementById('ndQty').value, 10) || 0;
@@ -920,19 +1020,21 @@ function refreshNuevaDirecta(){
   const s = document.getElementById('ndEntrada').value;
   const e = document.getElementById('ndSalida').value;
   let err = '';
-  if (!s || !e || e <= s) err = 'La fecha de salida debe ser posterior a la de entrada.';
-  else if (qty < 1 || qty > 10) err = 'Una reserva lleva entre 1 y 10 habitaciones.';
-  else if (personas < qty) err = 'Debe haber al menos una persona por habitación.';
-  else if (personas > qty * capacity[cat]) err = `Máximo ${qty * capacity[cat]} personas para ${qty} habitación(es) ${cat} (capacidad ${capacity[cat]} c/u).`;
+  if (s && s < TODAY) err = 'La fecha de entrada no puede ser anterior a hoy.';
+  else if (!s || !e || e <= s) err = 'La fecha de salida debe ser posterior a la de entrada.';
+  else if (qty < 1 || qty > 10) err = 'Una reserva debe tener entre 1 y 10 habitaciones.';
+  else if (personas < qty) err = 'La cantidad de personas no puede ser menor a la cantidad de habitaciones.';
+  else if (personas > qty * capacity[cat]) err = 'La cantidad de personas supera la capacidad de las habitaciones de la reserva.';
+  else if (ndPaisTouched && !document.getElementById('ndPais').value.trim()) err = 'Debe indicar el país de origen.';
   document.getElementById('ndErr').hidden = !err;
   document.getElementById('ndErrTxt').textContent = err;
 
-  const dateOk = s && e && e > s;
+  const dateOk = s && e && e > s && s >= TODAY;
   const free = dateOk ? roomsFreeFor(cat, s, e) : [];
   const dispo = document.getElementById('ndDispo');
   if (!dateOk) dispo.innerHTML = '<span class="badge neutral">Sin verificar</span> corrija las fechas para consultar disponibilidad.';
-  else if (free.length >= qty && qty > 0) dispo.innerHTML = `<span class="badge ok">Disponible</span> ${free.slice(0, qty).map(x => 'Hab. ' + x.n).join(', ')} · ${free.length} libre(s) en ${cat} (inventario + calendario de mantenimientos).`;
-  else dispo.innerHTML = `<span class="badge err">Sin disponibilidad</span> solo hay ${free.length} habitación(es) ${cat} libre(s) para esas fechas.`;
+  else if (free.length >= qty && qty > 0) dispo.innerHTML = `<span class="badge ok">Disponible</span> ${free.slice(0, qty).map(x => 'Hab. ' + x.n).join(', ')} · ${free.length} libre(s) en ${cat}.`;
+  else dispo.innerHTML = `<span class="badge err">Sin disponibilidad</span> La habitación no está disponible para el rango de fechas solicitado. Solo hay ${free.length} habitación(es) ${cat} libre(s).`;
 
   const tarifa = document.getElementById('ndTarifa');
   if (dateOk && qty > 0){
@@ -940,46 +1042,48 @@ function refreshNuevaDirecta(){
     tarifa.innerHTML = `
       <div class="line"><span>${q.nights} noche(s) × ${money(q.base)}</span><span>${money(q.subtotal)}</span></div>
       <div class="line"><span>Ajuste de temporada (+${SEASON_PCT * 100}%)</span><span>${money(q.season)}</span></div>
-      <div class="total"><span>Tarifa por habitación <span class="code">roomGrossAmount</span></span><span>${money(q.gross)}</span></div>
-      <p class="note" style="margin-top:6px">Se guarda en cada una de las ${qty} habitación(es), tal como la entrega el Módulo 3. Informativa: el Módulo 2 no suma un total ni calcula IVA o comisión.</p>`;
+      <div class="total"><span>Tarifa por habitación</span><span>${money(q.gross)}</span></div>`;
   } else {
     tarifa.innerHTML = '<p class="note">Ingrese fechas válidas para cotizar.</p>';
   }
 
-  const note = document.getElementById('ndReservedNote');
-  if (s === TODAY) note.innerHTML = '🔔 La llegada es <b>hoy</b>: al crear la reserva, el Módulo 2 ordenará <span class="code">Reserved</span> al Módulo 1. Si el Módulo 1 no confirma, la reserva no se crea (todo o nada).';
-  else if (s) note.innerHTML = `📅 La llegada es futura (${s}): la reserva se crea en <span class="code">ACTIVE</span> sin apartar la habitación todavía.`;
-  else note.innerHTML = '';
-
-  const filled = document.getElementById('ndNombre').value.trim() && document.getElementById('ndDoc').value.trim();
+  const filled = document.getElementById('ndNombre').value.trim() && document.getElementById('ndDoc').value.trim() && document.getElementById('ndPais').value.trim();
   document.getElementById('ndSubmit').disabled = !!err || !filled || free.length < qty;
   document.getElementById('ndSubmit').title = filled ? '' : 'Complete el nombre y el documento del titular';
 }
-['ndNombre', 'ndDoc', 'ndCategoria', 'ndQty', 'ndPersonas', 'ndEntrada', 'ndSalida'].forEach(id => document.getElementById(id).addEventListener('input', refreshNuevaDirecta));
+['ndNombre', 'ndDoc', 'ndPais', 'ndCategoria', 'ndQty', 'ndPersonas', 'ndEntrada', 'ndSalida'].forEach(id => document.getElementById(id).addEventListener('input', refreshNuevaDirecta));
+['ndEntrada', 'ndSalida', 'mdEntrada', 'mdSalida'].forEach(id => document.getElementById(id).min = TODAY);
+document.getElementById('ndEntrada').value = TODAY;
+document.getElementById('ndSalida').value = addDays(TODAY, 3);
+document.getElementById('sEnd').value = TODAY;
+document.getElementById('sStart').value = addDays(TODAY, -27);
+document.getElementById('ndPais').addEventListener('blur', () => { ndPaisTouched = true; refreshNuevaDirecta(); });
 document.getElementById('ndSubmit').addEventListener('click', () => {
   const cat = document.getElementById('ndCategoria').value;
   const qty = parseInt(document.getElementById('ndQty').value, 10);
   const s = document.getElementById('ndEntrada').value, e = document.getElementById('ndSalida').value;
-  const pais = document.getElementById('ndPais').value;
+  const pais = document.getElementById('ndPais').value.trim();
   const picked = roomsFreeFor(cat, s, e).slice(0, qty);
   const ref = 'RSV-2026-00' + (nextRefNum++);
   const r = {ref, guest: document.getElementById('ndNombre').value.trim(), docType: document.getElementById('ndDocType').value, doc: docLabel(document.getElementById('ndDocType').value, document.getElementById('ndDoc').value.trim()), pais,
     source: 'DIRECT', start: s, end: e, status: 'ACTIVE',
     guestCount: parseInt(document.getElementById('ndPersonas').value, 10),
     rooms: picked.map(x => ({n: x.n, cat, stay: 'EXPECTED', gross: quoteFor(cat, s, e).gross})),
+    phone: document.getElementById('ndTel').value.trim(), email: document.getElementById('ndEmail').value.trim(),
+    createdAt: TODAY + ' ' + new Date().toTimeString().slice(0, 5),
+    lateArrivalNotice: false,
     notes: document.getElementById('ndNotes').value.trim()};
   reservations.unshift(r);
-  ['ndNombre', 'ndDoc', 'ndTel', 'ndEmail', 'ndNotes'].forEach(id => document.getElementById(id).value = '');
+  ['ndNombre', 'ndDoc', 'ndPais', 'ndTel', 'ndEmail', 'ndNotes'].forEach(id => document.getElementById(id).value = '');
+  ndPaisTouched = false;
   refreshNuevaDirecta();
-  backToList(ref, 'Reserva ' + ref + ' creada en ACTIVE.' + (s === TODAY ? ' El Módulo 1 confirmó Reserved.' : ' No se apartó habitación (llegada futura).'));
+  backToList(ref, 'Reserva ' + ref + ' creada correctamente.');
 });
 
 // ================= Exportar SIRE =================
 function sireQuick(days){
-  const start = new Date(TODAY);
-  start.setDate(start.getDate() - days);
   document.getElementById('sEnd').value = TODAY;
-  document.getElementById('sStart').value = start.toISOString().slice(0, 10);
+  document.getElementById('sStart').value = addDays(TODAY, -days);
   renderSire();
 }
 function sirePeriod(){
@@ -995,22 +1099,19 @@ function sireFields(m){
     ['Código del hotel', SIRE_CONFIG.hotelSireCode],
     ['Código de la ciudad', SIRE_CONFIG.hotelCityCode],
     ['Tipo de documento', m.docType],
-    ['Número de documento', m.docNumber || ''],
+    ['Número de documento', m.docNumber],
     ['Nacionalidad', m.nat],
     ['Apellidos', m.lastName.toUpperCase()],
     ['Nombres', m.firstName.toUpperCase()],
     ['Tipo de movimiento', m.type === 'ENTRY' ? 'E' : 'S'],
     ['Fecha del movimiento', sireDate(m.date)],
-    ['Lugar de procedencia', m.origin || ''],
-    ['Lugar de destino', m.dest || ''],
+    ['Lugar de procedencia', m.origin],
+    ['Lugar de destino', m.dest],
     ['Fecha de nacimiento', sireDate(m.birthDate)],
   ];
 }
 function sireLine(m){ return sireFields(m).map(f => f[1]).join(SIRE_CONFIG.separator); }
 function renderSire(){
-  document.getElementById('sConfig').innerHTML =
-    kv('Código del hotel en SIRE', SIRE_CONFIG.hotelSireCode) + kv('Código de la ciudad', SIRE_CONFIG.hotelCityCode) +
-    kv('Separador de campos', SIRE_CONFIG.separatorLabel) + kv('Formato de fecha', SIRE_CONFIG.dateFormat);
   const p = sirePeriod();
   const errBox = document.getElementById('sErr');
   const tbl = document.getElementById('sTable');
@@ -1019,13 +1120,12 @@ function renderSire(){
     tbl.innerHTML = '';
     document.getElementById('sStats').innerHTML = '';
     document.getElementById('sAll').disabled = true;
-    renderSireHist();
     return;
   }
   errBox.innerHTML = '';
   const inRange = movements.filter(m => m.date >= p.s && m.date <= p.e).sort((a, b) => a.date.localeCompare(b.date));
   document.getElementById('sStats').innerHTML = `
-    <div class="statcard"><div class="lbl">Movimientos en el periodo</div><div class="val">${inRange.length}</div><div class="sub">${p.s} → ${p.e}</div></div>`;
+    <div class="statcard"><div class="lbl">Movimientos en el periodo</div><div class="val">${inRange.length}</div></div>`;
   document.getElementById('sAll').disabled = !inRange.length;
   document.getElementById('sAll').title = inRange.length ? '' : 'No hay movimientos para descargar en este periodo';
 
@@ -1036,15 +1136,15 @@ function renderSire(){
       const name = m.firstName + ' ' + m.lastName;
       return `<tr>
         <td><span style="font-family:var(--mono);font-size:12px">${m.ref}</span><br><span class="note">Hab. ${m.room}</span></td>
-        <td><div class="person">${avatarHTML(name)}<div>${name}<br><span class="note">${m.docType} ${m.docNumber || '—'}</span></div></div></td>
+        <td><div class="person">${avatarHTML(name)}<div>${name}<br><span class="note">${m.docType} ${m.docNumber}</span></div></div></td>
         <td>${m.nat}</td>
-        <td><span class="badge neutral">${m.type}</span><br><span class="note">${m.date}</span></td>
+        <td><span class="badge neutral">${MOVEMENT_ES[m.type]}</span><br><span class="note">${fmtDate(m.date)}</span></td>
+        <td><div class="rowacts">
           <button class="btn sm" onclick="sirePreview('${m.id}')">Previsualizar</button>
           <button class="btn sm primary" onclick="sireDownloadOne('${m.id}')">Descargar</button>
         </div></td></tr>`;
     }).join('');
   }
-  renderSireHist();
 }
 ['sStart', 'sEnd'].forEach(id => document.getElementById(id).addEventListener('input', renderSire));
 
@@ -1080,20 +1180,12 @@ function sirePreview(mid){
   document.getElementById('lnMeta').innerHTML =
     kv('Reserva', m.ref) + kv('Huésped', m.firstName + ' ' + m.lastName) + kv('Movimiento', m.type + ' · ' + m.date);
   document.getElementById('lnFields').innerHTML = sireFields(m).map((f, i) =>
-    `<tr><td class="note">${i + 1}</td><td>${f[0]}</td><td>${f[1] ? `<b>${f[1]}</b>` : '<span class="badge warn">Falta</span>'}</td></tr>`).join('');
+    `<tr><td class="note">${i + 1}</td><td>${f[0]}</td><td><b>${f[1]}</b></td></tr>`).join('');
   document.getElementById('lnPre').textContent = sireLine(m).split(SIRE_CONFIG.separator).join(SIRE_CONFIG.separator === '\t' ? '  →  ' : SIRE_CONFIG.separator);
   const btn = document.getElementById('lnDownload');
   btn.onclick = () => sireDownloadOne(mid);
   openModal('m-linea');
 }
-function renderSireHist(){
-  document.getElementById('sHist').innerHTML = exportsHist.map(h => `<tr>
-    <td class="code">${h.id}</td>
-    <td><span class="badge ${h.kind === 'Periodo' ? 'neutral' : 'ota'}">${h.kind}</span></td>
-    <td style="white-space:nowrap">${h.start} → ${h.end}</td><td>${h.ok}</td>
-    <td class="note">${h.by}</td><td class="note" style="white-space:nowrap">${h.date}</td></tr>`).join('');
-}
-
 // ================= Habitaciones, tarifas y agencias =================
 function roomStatus(n){
   const occ = reservations.find(r => r.status === 'IN_PROGRESS' && r.rooms.some(x => x.n === n && x.stay === 'CHECKED_IN'));
@@ -1108,24 +1200,63 @@ function roomStatus(n){
 function renderRooms(){
   document.getElementById('tblRooms').innerHTML = rooms.map(rm => {
     const st = roomStatus(rm.n);
-    const cls = {Available: 'ok', Reserved: 'warn', Occupied: 'ok', DisabledForRepairs: 'err'}[st.estado] || 'neutral';
-    return `<tr><td>Hab. ${rm.n}</td><td>${rm.cat}</td><td><span class="badge ${cls}">${st.estado}</span></td><td class="note">${st.det}</td></tr>`;
+    const cls = {Available: 'ok', Reserved: 'warn', Occupied: 'info', DisabledForRepairs: 'err'}[st.estado] || 'neutral';
+    return `<tr><td>Hab. ${rm.n}</td><td>${rm.cat}</td><td>${capacity[rm.cat]} personas</td><td><span class="badge ${cls}">${ROOM_STATE_ES[st.estado]}</span></td><td class="note">${st.det}</td></tr>`;
   }).join('');
 }
 function renderTarifas(){
   document.getElementById('tblTarifas').innerHTML = Object.entries(rateTable).map(([cat, base]) =>
-    `<tr><td>${cat}</td><td>${capacity[cat]} personas</td><td>${money(base)}</td><td>+${SEASON_PCT * 100}% (${money(base * SEASON_PCT)})</td><td><b>${money(base * (1 + SEASON_PCT))}</b></td></tr>`).join('');
+    `<tr><td>${cat}</td><td>${money(base)}</td><td>+${SEASON_PCT * 100}% (${money(base * SEASON_PCT)})</td><td><b>${money(base * (1 + SEASON_PCT))}</b></td></tr>`).join('');
 }
 function renderOtas(){
   document.getElementById('tblOtas').innerHTML = otas.map(o => {
     const mine = reservations.filter(r => r.ota === o.name);
     const activas = mine.filter(r => LIVE.includes(r.status)).length;
-    return `<tr><td><b>${o.name}</b></td><td class="code">${o.account}</td><td class="note" style="white-space:nowrap">${o.linkedAt}</td>
+    const connected = o.connection === 'CONNECTED';
+    const badge = connected ? `<span class="badge ok">Conectada</span>` : `<span class="badge err">Desconectada</span>`;
+    const syncNote = connected ? `Última sincronización ${fmtDate(o.lastSync)}` : `Desvinculada · último mensaje ${fmtDate(o.lastSync)}`;
+    return `<tr><td><b>${o.name}</b></td><td><span class="code">${o.account}</span></td><td class="note" style="white-space:nowrap">${fmtDate(o.linkedAt)}</td>
       <td>${o.pct}%</td>
-      <td><span class="badge ok">${o.connection}</span><br><span class="note">Última sincronización ${o.lastSync}</span></td>
-      <td>${activas}</td></tr>`;
+      <td>${badge}<br><span class="note">${syncNote}</span></td>
+      <td>${activas}</td>
+      <td><button class="btn sm" onclick="openOtaModal('${o.name}')">Editar</button></td></tr>`;
   }).join('');
 }
+
+// Crear o editar una agencia OTA.
+let otaEditing = null;   // null = nueva; si no, el name de la agencia que se está editando
+function openOtaModal(name){
+  otaEditing = name;
+  const o = name ? otas.find(x => x.name === name) : null;
+  document.getElementById('otaTitle').textContent = o ? 'Editar agencia' : 'Nueva agencia';
+  document.getElementById('otaNombre').value = o ? o.name : '';
+  document.getElementById('otaCuenta').value = o ? o.account : '';
+  document.getElementById('otaPct').value = o ? o.pct : 15;
+  document.getElementById('otaErr').innerHTML = '';
+  openModal('m-ota');
+}
+document.getElementById('otaSave').addEventListener('click', () => {
+  const name = document.getElementById('otaNombre').value.trim();
+  const account = document.getElementById('otaCuenta').value.trim();
+  const pct = parseFloat(document.getElementById('otaPct').value);
+  const errBox = document.getElementById('otaErr');
+  let err = '';
+  if (!name || !account) err = 'Nombre y cuenta del hotel vinculada son obligatorios.';
+  else if (isNaN(pct) || pct < 0 || pct > 100) err = 'El porcentaje de comisión debe estar entre 0 y 100.';
+  else if (!otaEditing && otas.some(o => o.name.toLowerCase() === name.toLowerCase())) err = 'Ya existe una agencia con ese nombre.';
+  if (err){ errBox.innerHTML = `<p class="field" style="margin-top:8px"><span class="err">${err}</span></p>`; return; }
+  if (otaEditing){
+    const o = otas.find(x => x.name === otaEditing);
+    o.name = name; o.account = account; o.pct = pct;
+  } else {
+    const now = TODAY + ' ' + new Date().toTimeString().slice(0, 5);
+    otas.push({name, account, linkedAt: now, pct, connection: 'CONNECTED', lastSync: now});
+  }
+  closeModal('m-ota');
+  fillAgencias();
+  renderOtas();
+  toast('Agencia ' + name + (otaEditing ? ' actualizada.' : ' vinculada correctamente.'));
+});
 
 // ================= Inicio =================
 function renderAll(){ renderReservas(); renderStatRow(); renderRooms(); renderOtas(); renderSire(); }

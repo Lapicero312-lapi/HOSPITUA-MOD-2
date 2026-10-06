@@ -19,8 +19,8 @@ los criterios serían inconsistentes.
 El negocio necesita un único servicio de consulta, de solo lectura, que:
 
 - Liste **todas** las reservas, paginadas de a 10.
-- Permita **filtrar por estado** (`status`), por canal, por agencia (en las reservas OTA) y por fecha
-  (de llegada, de salida o de estadía) con un rango de fechas.
+- Permita **filtrar por estado** (`status`), por canal, por agencia (en las reservas OTA) y por un
+  rango de fechas sobre la estadía.
 - Permita **ordenar** el listado por fecha de llegada.
 - Permita **buscar** por código de reserva, código de la OTA, documento o nombre del titular, y ver el
   detalle completo de una reserva.
@@ -55,8 +55,9 @@ habitación") ni cambia el estado de ninguna reserva.
    - **Estado**: uno de `PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
    - **Canal**: `DIRECT` u `OTA`.
    - **Agencia**: solo cuando el canal es `OTA`.
-   - **Fecha**: un tipo de fecha (`ARRIVAL`, `DEPARTURE` o `STAY`) y un rango (`dateFrom` y
-     `dateTo`, ambos inclusivos). Para un solo día, `dateFrom` y `dateTo` son iguales.
+   - **Fecha**: un rango (`dateFrom` y `dateTo`, ambos inclusivos) sobre la estadía de la reserva:
+     muestra las reservas cuya estadía se cruza con el rango (`startDate` ≤ `dateTo` y `endDate` >
+     `dateFrom`). Para un solo día, `dateFrom` y `dateTo` son iguales.
 3. El sistema combina todos los filtros aplicados con la regla "Y" (una reserva aparece solo si
    cumple todos) y devuelve la página solicitada (10 reservas), con el total de reservas que cumplen
    los filtros y el total de páginas.
@@ -67,12 +68,19 @@ habitación") ni cambia el estado de ninguna reserva.
 
 **Búsqueda por código**
 
-1. La Recepcionista ingresa un código de reserva.
-2. El sistema busca una coincidencia exacta con la `reservationRef` y, si no la encuentra, con el
-   `externalConfirmationCode` (código de la OTA).
-3. Si la encuentra, muestra el detalle completo de esa reserva. La búsqueda por código ignora los
-   demás filtros.
-4. Si no existe, responde **HTTP 400 (Bad Request)** con el mensaje "La reserva no existe."
+1. La Recepcionista ingresa un código en el mismo cuadro de búsqueda del listado (no hay un campo
+   separado para el código).
+2. El sistema busca una coincidencia exacta con la `reservationRef` y, en paralelo, con el
+   `externalConfirmationCode` (código de la OTA); no distingue mayúsculas de minúsculas.
+3. Si la encuentra, el listado se acota a esa o esas reservas (puede haber más de una fila si el
+   texto coincide con el `reservationRef` de una reserva y con el `externalConfirmationCode` de otra;
+   ver Casos Borde), ignorando el resto de los filtros aplicados (estado, canal, agencia, fecha). La
+   Recepcionista abre **Ver detalle** desde la fila para ver el detalle completo (FR-006).
+4. Si el texto tiene el formato de una `reservationRef` interna (empieza con `RSV-`) y no hay
+   coincidencia, el sistema responde con el mensaje "La reserva no existe." Si el texto no tiene ese
+   formato y tampoco coincide con ningún `externalConfirmationCode`, el sistema no lo trata como un
+   código fallido: continúa evaluándolo como búsqueda por documento o por nombre (ver "Búsqueda por
+   titular").
 
 **Detalle de la reserva**
 
@@ -101,7 +109,8 @@ completo (ver FR-006), incluidas todas sus habitaciones y la cantidad de persona
      llegada hoy, una OTA confirma hoy una reserva con llegada hoy (`PENDING` → `ACTIVE`), o una
      modificación cambia la llegada a hoy.
    - `UPDATED`: cambia un dato enviado de una reserva que ya está en la lista: habitaciones
-     (agregar, quitar o cambiar), `guestCount`, `endDate`, datos del titular o `notes`.
+     (agregar, quitar o cambiar), `guestCount`, `endDate`, datos del titular, `lateArrivalNotice` (solo
+     reservas directas) o `notes`.
    - `REMOVED`: una reserva sale de la lista: se cancela (`CANCELLED`), una modificación mueve su
      llegada a otro día, o el cierre del día la marca `NO_SHOW` o `CANCELLED`.
 2. Las actualizaciones `ADDED` y `UPDATED` llevan el detalle completo y vigente de la reserva, no
@@ -133,10 +142,10 @@ filtros inválidos se consolidan en esta historia.
 punto de partida para cancelar o modificar una reserva.
 
 **Independent Test**: Con un conjunto de reservas de prueba en los seis estados, de ambos canales y en
-distintas fechas, se consulta el listado sin filtros, por cada estado, por canal, por agencia, por
-cada tipo de fecha y con filtros combinados, y se verifica que cada resultado contenga exactamente las
-reservas esperadas, con el total correcto y la paginación de a 10 correcta. Luego se cambia el orden y
-se envían filtros inválidos y se confirma el **HTTP 400**.
+distintas fechas, se consulta el listado sin filtros, por cada estado, por canal, por agencia, por el
+rango de fechas sobre la estadía y con filtros combinados, y se verifica que cada resultado contenga
+exactamente las reservas esperadas, con el total correcto y la paginación de a 10 correcta. Luego se
+cambia el orden y se envían filtros inválidos y se confirma el **HTTP 400**.
 
 **Acceptance Scenarios**:
 
@@ -157,53 +166,41 @@ se envían filtros inválidos y se confirma el **HTTP 400**.
    - **Then** el sistema muestra solo las reservas OTA de esa agencia, con el nombre de la agencia y
      su código de confirmación en cada fila
 
-4. **Scenario**: Llegadas de un día (filtro por fecha de llegada)
-   - **Given** reservas con `startDate` el 2026-10-01 y otras con `startDate` en otros días
-   - **When** la Recepcionista filtra por tipo de fecha `ARRIVAL` con `dateFrom` y `dateTo` iguales
-     a 2026-10-01
-   - **Then** el sistema muestra solo las reservas cuya `startDate` es 2026-10-01
-
-5. **Scenario**: Salidas en un rango (filtro por fecha de salida)
-   - **Given** reservas con distintas `endDate`
-   - **When** la Recepcionista filtra por tipo de fecha `DEPARTURE` entre 2026-10-01 y 2026-10-07
-   - **Then** el sistema muestra solo las reservas cuya `endDate` está entre esas dos fechas,
-     ambas incluidas
-
-6. **Scenario**: Reservas en el hotel en un rango (filtro por estadía)
+4. **Scenario**: Reservas en el hotel en un rango (filtro por estadía)
    - **Given** una reserva del 2026-09-28 al 2026-10-03, otra del 2026-10-05 al 2026-10-08 y otra del
      2026-10-10 al 2026-10-12
-   - **When** la Recepcionista filtra por tipo de fecha `STAY` entre 2026-10-02 y 2026-10-06
+   - **When** la Recepcionista filtra entre 2026-10-02 y 2026-10-06
    - **Then** el sistema muestra las dos primeras, porque su estadía se cruza con el rango
      (`startDate` ≤ `dateTo` y `endDate` > `dateFrom`), y excluye la tercera
 
-7. **Scenario**: Filtros combinados
-   - **Given** reservas `ACTIVE` y `CANCELLED`, directas y OTA, con llegada el 2026-10-01
-   - **When** la Recepcionista filtra por estado `ACTIVE`, canal `DIRECT` y tipo de fecha `ARRIVAL` el
-     2026-10-01
-   - **Then** el sistema muestra solo las reservas directas en `ACTIVE` con llegada ese día
+5. **Scenario**: Filtros combinados
+   - **Given** reservas `ACTIVE` y `CANCELLED`, directas y OTA, con estadía que incluye el 2026-10-01
+   - **When** la Recepcionista filtra por estado `ACTIVE`, canal `DIRECT` y rango de fecha con
+     `dateFrom` y `dateTo` iguales a 2026-10-01
+   - **Then** el sistema muestra solo las reservas directas en `ACTIVE` cuya estadía incluye ese día
 
-8. **Scenario**: Cambio de orden
+6. **Scenario**: Cambio de orden
    - **Given** el listado ordenado por `startDate` descendente
    - **When** la Recepcionista cambia el orden a ascendente
    - **Then** el sistema muestra las mismas reservas de la página 1 ordenadas de la llegada más
      antigua a la más reciente, sin alterar los filtros aplicados
 
-9. **Scenario**: Navegación entre páginas
+7. **Scenario**: Navegación entre páginas
    - **Given** 25 reservas que cumplen los filtros aplicados
    - **When** la Recepcionista pasa a la página 3
    - **Then** el sistema muestra las 5 últimas reservas e informa el total de 25 y 3 páginas, con los
      mismos filtros y el mismo orden
 
-10. **Scenario**: Filtros sin resultados
-    - **Given** que ninguna reserva cumple los filtros aplicados
-    - **When** la Recepcionista consulta el listado
-    - **Then** el sistema responde 200 con una lista vacía, total 0 y el mensaje "No se encontraron
-      reservas con los filtros aplicados." (no es un error)
+8. **Scenario**: Filtros sin resultados
+   - **Given** que ninguna reserva cumple los filtros aplicados
+   - **When** la Recepcionista consulta el listado
+   - **Then** el sistema responde 200 con una lista vacía, total 0 y el mensaje "No se encontraron
+     reservas con los filtros aplicados." (no es un error)
 
-11. **Scenario**: Filtro con valores inválidos (Error)
-    - **Given** un filtro con un estado o un canal que no existe, una fecha mal formada, `dateFrom`
-      posterior a `dateTo`, un tipo de fecha sin rango o un rango sin tipo de fecha
-    - **When** la Recepcionista consulta el listado
+9. **Scenario**: Filtro con valores inválidos (Error)
+   - **Given** un filtro con un estado o un canal que no existe, una fecha mal formada, `dateFrom`
+     posterior a `dateTo`, o solo una de las dos fechas del rango
+   - **When** la Recepcionista consulta el listado
    - **Then** el sistema responde **HTTP 400** con el mensaje correspondiente de la tabla de
      validaciones (FR-009) y no ejecuta la consulta
 
@@ -249,10 +246,12 @@ busca un código inexistente y uno con caracteres inválidos confirmando el **HT
      cancelación (`Cancellation`)
 
 5. **Scenario**: Código inexistente (Error)
-   - **Given** un código que no corresponde a ninguna `reservationRef` ni a ningún
-     `externalConfirmationCode`
+   - **Given** un texto con el formato de una `reservationRef` interna (empieza con `RSV-`) que no
+     corresponde a ninguna reserva
    - **When** la Recepcionista lo busca
-   - **Then** el sistema responde **HTTP 400** con el mensaje "La reserva no existe."
+   - **Then** el sistema responde con el mensaje "La reserva no existe." Si el texto buscado no tiene
+     ese formato y tampoco coincide con ningún `externalConfirmationCode`, el sistema no muestra este
+     mensaje: lo evalúa en cambio como búsqueda por documento o por nombre (User Story 3)
 
 6. **Scenario**: Código vacío o con caracteres inválidos (Error)
    - **Given** un código vacío, con solo espacios o con caracteres fuera de letras, dígitos y guion
@@ -265,7 +264,12 @@ busca un código inexistente y uno con caracteres inválidos confirmando el **HT
 ### User Story 3 - Búsqueda por Titular (Priority: P2)
 
 Cuando el huésped no tiene a mano el código, la Recepcionista busca sus reservas por número de
-documento o por nombre, y combina esa búsqueda con los filtros de estado, canal y fecha.
+documento o por nombre, usando el mismo cuadro de búsqueda del listado (no hay campos separados para
+código, documento y nombre). Si el texto no coincide con ningún código (ver "Búsqueda por código") y
+contiene al menos un dígito, el sistema lo trata como `documentNumber` con coincidencia exacta; si no
+contiene ningún dígito, lo trata como `fullName` con coincidencia parcial. Por tener un único cuadro,
+nunca se envían `documentNumber` y `fullName` a la vez. Esta búsqueda se combina con los filtros de
+estado, canal y fecha.
 
 **Why this priority**: Complementa la búsqueda por código en la atención telefónica y presencial,
 pero la operación puede avanzar con el listado filtrado y la búsqueda por código.
@@ -343,6 +347,13 @@ segunda lista.
    - **Then** el sistema no envía una segunda lista; los cambios posteriores al primer envío ya
      viajan como actualizaciones
 
+
+5. **Scenario**: Reserva directa con llegada tardía avisada
+   - **Given** una reserva `DIRECT` `ACTIVE` con llegada hoy y `lateArrivalNotice` activo
+   - **When** inicia el día operativo
+   - **Then** la reserva viaja en la lista con `lateArrivalNotice` en verdadero, para que el Módulo 1
+     sepa que el huésped llegará tarde y no libere su habitación antes de tiempo; las reservas `OTA`
+     viajan siempre con `lateArrivalNotice` en falso
 ---
 
 ### User Story 5 - Actualizaciones de la Lista del Día (Priority: P1)
@@ -409,19 +420,21 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
 
 ### Casos Borde
 
-- ¿Qué sucede si se envían a la vez un código de reserva y otros filtros? El código tiene
-  prioridad: se ignoran los demás filtros y se devuelve solo esa reserva o el **HTTP 400** de
-  "La reserva no existe.".
-- ¿Qué sucede si se envían a la vez `documentNumber` y `fullName`? El sistema responde **HTTP 400**
-  con el mensaje "Busque por documento o por nombre, no por ambos."
-- ¿Qué sucede si un código coincide con la `reservationRef` de una reserva y con el
-  `externalConfirmationCode` de otra? Gana la coincidencia con `reservationRef`, porque es el
-  identificador interno único. Dos OTAs distintas pueden usar el mismo `externalConfirmationCode`:
-  si el código solo coincide con `externalConfirmationCode` y hay más de una reserva, el sistema
-  lista todas las coincidencias para que la Recepcionista elija.
+- ¿Qué sucede si el texto del cuadro de búsqueda coincide con una `reservationRef` o un
+  `externalConfirmationCode`? El código tiene prioridad: se ignoran los demás filtros aplicados
+  (estado, canal, agencia, fecha) y se devuelve solo esa reserva. Si el texto tiene el formato de una
+  `reservationRef` interna (empieza con `RSV-`) y no hay coincidencia, responde con el mensaje
+  "La reserva no existe."
+- ¿Puede la Recepcionista buscar por `documentNumber` y por `fullName` a la vez? No: hay un único
+  cuadro de búsqueda, y el sistema decide automáticamente cuál de los dos aplica según si el texto
+  contiene algún dígito (ver "Búsqueda por titular").
+- ¿Qué sucede si un texto coincide con la `reservationRef` de una reserva y, a la vez, con el
+  `externalConfirmationCode` de otra? El sistema no resuelve una prioridad entre ambas: lista las dos
+  coincidencias para que la Recepcionista elija. Dos OTAs distintas también pueden usar el mismo
+  `externalConfirmationCode`; en ese caso también se listan todas las coincidencias.
 - ¿Qué sucede si se pide una página que no existe (por ejemplo, la página 10 cuando solo hay 3)?
-  El sistema responde 200 con una lista vacía y el total real, para que la vista pueda volver a la
-  última página.
+  El sistema ajusta automáticamente a la última página válida y la muestra, en vez de devolver una
+  lista vacía.
 - ¿Qué sucede si el rango de fechas supera los 366 días? El sistema responde **HTTP 400** con el
   mensaje "El rango de fechas no puede superar 366 días."
 - ¿Qué sucede con los filtros de fecha y las reservas sin fechas reales, como `NO_SHOW` o
@@ -479,26 +492,26 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
 - **FR-002**: El sistema debe permitir filtrar el listado por `status` (`PENDING`, `ACTIVE`,
   `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`). Sin filtro de estado, debe incluir todos los
   estados.
-- **FR-003**: El sistema debe permitir filtrar el listado por fecha, con un tipo de fecha y un rango
-  inclusivo (`dateFrom` y `dateTo`, formato `AAAA-MM-DD`, hora de Colombia):
-  - `ARRIVAL`: reservas cuya `startDate` está dentro del rango.
-  - `DEPARTURE`: reservas cuya `endDate` está dentro del rango.
-  - `STAY`: reservas cuya estadía se cruza con el rango (`startDate` ≤ `dateTo` y
-    `endDate` > `dateFrom`).
+- **FR-003**: El sistema debe permitir filtrar el listado por un rango inclusivo de fechas
+  (`dateFrom` y `dateTo`, formato `AAAA-MM-DD`, hora de Colombia) sobre la estadía: muestra las
+  reservas cuya estadía se cruza con el rango (`startDate` ≤ `dateTo` y `endDate` > `dateFrom`).
 - **FR-003a**: El sistema debe permitir ordenar el listado por `startDate`, ascendente o descendente.
   Por defecto, descendente (la llegada más reciente primero). El orden y los filtros se conservan al
   cambiar de página.
-- **FR-004**: El sistema debe permitir filtrar por titular (`documentNumber` con coincidencia exacta,
-  o `fullName` con coincidencia parcial sin distinguir mayúsculas ni tildes y con mínimo 3
-  caracteres), por canal (`source`: `DIRECT` | `OTA`) y, cuando el canal es `OTA`, por agencia
-  (`otaId`), y combinar todos los filtros con la regla "Y".
+- **FR-004**: El sistema debe permitir filtrar por titular a través del mismo cuadro de búsqueda
+  usado para el código: si el texto no coincide con ningún código y contiene al menos un dígito, se
+  interpreta como `documentNumber` con coincidencia exacta; si no contiene ningún dígito, se
+  interpreta como `fullName` con coincidencia parcial sin distinguir mayúsculas ni tildes y con
+  mínimo 3 caracteres. El sistema también debe permitir filtrar por canal (`source`: `DIRECT` |
+  `OTA`) y, cuando el canal es `OTA`, por agencia (`otaId`), y combinar todos los filtros con la
+  regla "Y".
 - **FR-005**: Cada fila del listado debe mostrar: `reservationRef` (y, si es `OTA`, el
   `externalConfirmationCode`), el `fullName` y el `documentNumber` del titular, los `roomNumber` y la
   `categoryRoom` de sus habitaciones, el canal (`source` y, si es `OTA`, el `name` de la agencia),
   `startDate` y `endDate`, `status`, su estado migratorio (`migrationStatus`, FR-005b) y las acciones
   Ver detalle, Modificar y Cancelar. Modificar y Cancelar solo se habilitan en reservas directas
-  `ACTIVE` o `PENDING`. El número de noches y `guestCount` se ven en el detalle
-  (FR-006).
+  `ACTIVE` o `PENDING`. El número de noches, `guestCount` y `lateArrivalNotice` se ven en el
+  detalle (FR-006).
 - **FR-005a**: Encima del listado, el sistema debe mostrar a la Recepcionista un resumen del día
   operativo, calculado solo con datos del Módulo 2:
   - Llegadas esperadas hoy: reservas `ACTIVE` o `PENDING` con `startDate` igual a hoy.
@@ -513,14 +526,15 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
     extranjeros, por lo que no entra al reporte SIRE.
   - `NO_CHECK_IN` ("Sin Check-In"): reserva `CANCELLED` o `NO_SHOW`; nunca tuvo ingreso ni
     movimientos que reportar.
-- **FR-006**: El sistema debe permitir buscar una reserva por código, con coincidencia exacta
-  primero sobre `reservationRef` y después sobre `externalConfirmationCode`, ignorando los demás
-  filtros, y mostrar su detalle completo:
+- **FR-006**: El sistema debe permitir buscar una reserva por código (coincidencia exacta sobre
+  `reservationRef` y sobre `externalConfirmationCode`, evaluadas en paralelo), acotar el listado a
+  la o las reservas encontradas ignorando los demás filtros, y permitir abrir desde ahí el detalle
+  completo de una reserva:
   - Datos de la reserva: `reservationRef`, `status`, `source`, `externalConfirmationCode` (solo
-    `OTA`), `startDate`, `endDate`, número de noches, `guestCount`, `notes`,
-    `createdAt`.
-  - Habitaciones (`ReservationRoom`): por cada una, `roomId`, `roomNumber`, `categoryRoom`,
-    `roomGrossAmount` (tarifa, informativa; vacía en reservas `OTA`), `currency` y `stayStatus`.
+    `OTA`), `startDate`, `endDate`, número de noches, `guestCount`, `lateArrivalNotice` (solo
+    reservas `DIRECT`), `notes`, `createdAt`.
+  - Habitaciones (`ReservationRoom`): por cada una, `roomNumber`, `categoryRoom`,
+    `roomGrossAmount` (tarifa, informativa; vacía en reservas `OTA`) y `stayStatus`.
   - Titular (`Guest`): `fullName`, `documentType`, `documentNumber`, `nationality`, `contactPhone`,
     `contactEmail`.
   - Si la reserva está `CANCELLED` por una solicitud explícita: `cancellationDate`, `channel`,
@@ -536,17 +550,16 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
   | Caso | Mensaje |
   |---|---|
   | Código vacío, solo espacios o con caracteres distintos de letras, dígitos y guion, o de más de 40 caracteres | "Debe proveer un código de reserva válido para la consulta." |
-  | Código sin coincidencias | "La reserva no existe." |
+  | Código con el formato de `reservationRef` interna (empieza con `RSV-`) sin coincidencias | "La reserva no existe." |
   | Estado inexistente | "El estado indicado no es válido." |
   | Canal inexistente | "El canal indicado no es válido." |
   | Fecha con formato distinto de `AAAA-MM-DD` o inexistente | "La fecha indicada no es válida." |
-  | Tipo de fecha sin rango, o rango sin tipo de fecha | "Debe indicar el tipo de fecha y el rango completo." |
+  | Solo una de las dos fechas del rango (`dateFrom` sin `dateTo`, o `dateTo` sin `dateFrom`) | "Debe completar ambas fechas del rango." |
   | `dateFrom` posterior a `dateTo` | "La fecha inicial no puede ser posterior a la fecha final." |
   | Rango de más de 366 días | "El rango de fechas no puede superar 366 días." |
   | Orden distinto de ascendente o descendente | "El orden indicado no es válido." |
   | Página menor a 1 | "El número de página debe ser 1 o mayor." |
-  | `documentNumber` y `fullName` a la vez | "Busque por documento o por nombre, no por ambos." |
-  | `fullName` de menos de 3 caracteres | "La búsqueda por nombre requiere al menos 3 caracteres." |
+  | `fullName` de menos de 3 caracteres (texto sin dígitos interpretado como nombre) | "La búsqueda por nombre requiere al menos 3 caracteres." |
 
 - **FR-010**: El sistema debe responder 200 con una lista vacía, y no un error, cuando los filtros
   son válidos pero ninguna reserva los cumple.
@@ -562,7 +575,7 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
 - **FR-014**: Por cada reserva, la lista y las actualizaciones `ADDED` y `UPDATED` deben incluir:
   - Reserva: `reservationRef`, `status`, `source`, `externalConfirmationCode` (solo `OTA`),
     `startDate`, `endDate` (fecha de salida), número de noches, `guestCount` (cantidad de personas),
-    `notes` (observaciones) y `updatedAt`.
+    `lateArrivalNotice` (siempre `false` en reservas `OTA`), `notes` (observaciones) y `updatedAt`.
   - Habitaciones: por cada `ReservationRoom`, `roomId`, `roomNumber` y `categoryRoom`.
   - Titular (`Guest`): `guestRef`, `fullName`, `documentType`, `documentNumber`, `nationality`,
     `contactPhone` y `contactEmail`.
@@ -602,7 +615,7 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
 
 - **Reservation**: Entidad consultada. Atributos: `reservationRef`, `guestRef`, `guestCount`,
   `startDate`, `endDate`, `source` (`DIRECT` | `OTA`), `externalConfirmationCode`,
-  `notes`, `createdAt`, `updatedAt` y `status` (`PENDING`, `ACTIVE`,
+  `lateArrivalNotice` (booleano; solo existe en reservas `DIRECT`), `notes`, `createdAt`, `updatedAt` y `status` (`PENDING`, `ACTIVE`,
   `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`).
 - **ReservationRoom**: Cada habitación de la reserva. Atributos: `reservationRef`, `roomId`,
   `roomNumber`, `categoryRoom` y `stayStatus` (`EXPECTED` | `CHECKED_IN` | `CHECKED_OUT` |
@@ -625,9 +638,8 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
 
 ### Measurable Outcomes
 
-- **SC-001**: La Recepcionista obtiene las llegadas del día (filtro `ARRIVAL` de hoy y estado
-  `ACTIVE`) en una sola consulta y en menos de 1 segundo, y ve el resumen del día operativo (FR-005a)
-  encima del listado.
+- **SC-001**: La Recepcionista ve el resumen del día operativo (FR-005a), con las llegadas y salidas
+  esperadas hoy, en menos de 1 segundo y sin tener que armar un filtro, encima del listado.
 - **SC-002**: El 100% de las búsquedas por código existente retornan el detalle completo en menos de
   500 milisegundos.
 - **SC-003**: El 100% de los listados filtrados contienen exactamente las reservas que cumplen todos

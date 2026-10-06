@@ -25,9 +25,11 @@ operativo de la llegada.
 ### Flujo de Usuario de Alto Nivel
 
 1. La **Recepcionista** indica las fechas de estadía (`startDate` y `endDate`, comunes a toda la
-   reserva), la cantidad de personas (`guestCount`) y una o varias habitaciones (entre 1 y 10). Para
-   cada habitación elige una `Room` específica de la lista de habitaciones disponibles de la
-   categoría deseada.
+   reserva), la cantidad de personas (`guestCount`), una única `categoryRoom` para toda la reserva y
+   la cantidad de habitaciones de esa categoría (entre 1 y 10). El sistema asigna automáticamente las
+   `Room` específicas disponibles de esa categoría; la Recepcionista no elige el número de habitación
+   ni puede combinar categorías distintas en una misma reserva desde esta pantalla (para eso existe
+   "Actualizar reservación", que sí permite cambiar una habitación por otra de distinta categoría).
 2. El sistema ejecuta "Verificar disponibilidades" para **cada** habitación: cruza las fechas contra
    las reservas locales del Módulo 2 y consulta al Módulo 1 el calendario de mantenimientos y el
    inventario en tiempo real. Si una sola habitación no está disponible, no se puede continuar.
@@ -37,7 +39,10 @@ operativo de la llegada.
    valor de hospedaje bruto de cada habitación mediante "Calcular tarifa dinámica", obtiene un
    `RateQuote` por habitación y muestra al huésped, de forma informativa, la tarifa de cada una.
 5. El solicitante ingresa los datos de identidad del `Guest` titular y, opcionalmente, las
-   observaciones de la reserva (`notes`, máximo 500 caracteres), y confirma la reserva.
+   observaciones de la reserva (`notes`, máximo 500 caracteres), y confirma la reserva. El formulario
+   de creación no pide el aviso de llegada tardía (`lateArrivalNotice`): la reserva nace sin aviso y
+   la Recepcionista lo marca después, solo con "Actualizar reservación", cuando el huésped se
+   comunica con ella para avisar que llegará tarde.
 6. El sistema crea la `Reservation` directamente en estado `ACTIVE`, sin ningún paso de cobro, con
    una `ReservationRoom` en `EXPECTED` por cada habitación.
 7. Si la llegada (`startDate`) es hoy, el sistema ejecuta "Establecer estado de habitación" para
@@ -147,6 +152,14 @@ reserva y se devuelve un error controlado.
    - **Then** el sistema cancela la reserva recién creada (`ROOM_REJECTED`), ordena `Available` para
      la 101 y responde **HTTP 400** indicando que la habitación 102 ya no está disponible
 
+9. **Scenario**: Fecha de entrada anterior a hoy (Error)
+   - **Given** que el día operativo en curso, cuando se genera la reserva, es el 2026-09-28
+   - **When** la Recepcionista intenta crear una reserva con `startDate` 2026-09-27 o anterior
+   - **Then** el sistema no crea la reserva y responde **HTTP 400** con el mensaje "La fecha de entrada
+     no puede ser anterior a hoy."; una reserva con `startDate` 2026-09-28 sí se acepta. Si la misma
+     solicitud se hace el 2026-09-29, el `startDate` 2026-09-28 ya se rechaza y el mínimo pasa a ser
+     2026-09-29
+
 ### Casos Borde
 
 - ¿Qué sucede si un solicitante intenta reservar con un rango de fechas inválido o incoherente (por
@@ -189,6 +202,13 @@ reserva y se devuelve un error controlado.
 - **FR-001**: El sistema debe verificar la disponibilidad de cada `Room` de la reserva mediante
   "Verificar disponibilidades" antes de cotizar o registrar cualquier reserva, y rechazar la
   reserva completa si una sola no está disponible.
+- **FR-001a**: El sistema debe exigir que la fecha de entrada (`startDate`) sea igual o posterior al
+  día operativo en curso en el momento de crear la reserva. "Hoy" no es una fecha fija: es el día en
+  que se genera la reserva, así que la fecha mínima avanza cada día (si la reserva se crea mañana, la
+  fecha mínima de entrada es mañana; si se crea dentro de 2 días, será ese día). Además, la fecha de
+  salida (`endDate`) debe ser posterior a la de entrada. De lo contrario, debe responder
+  **HTTP 400** con el mensaje "La fecha de entrada no puede ser anterior a hoy." o "La fecha de
+  salida debe ser posterior a la de entrada.", según el caso, sin consultar disponibilidad.
 - **FR-002**: El sistema debe exigir entre 1 y 10 habitaciones distintas por reserva y un
   `guestCount` entero, mayor o igual a la cantidad de habitaciones y menor o igual a la suma de la
   `maxCapacity` de las habitaciones elegidas. `notes` es opcional, con máximo 500 caracteres.
@@ -200,6 +220,8 @@ reserva y se devuelve un error controlado.
   amigable HTTP 400.
 - **FR-005**: El sistema debe crear y almacenar la reserva directamente en estado `ACTIVE`, sin
   ningún paso de cobro ni estado intermedio, con una `ReservationRoom` en `EXPECTED` por habitación.
+- **FR-005a**: El sistema no debe pedir ni aceptar el aviso de llegada tardía al crear la reserva: el
+  `lateArrivalNotice` nace en `false` y solo se cambia mediante "Actualizar reservación".
 - **FR-006**: El sistema debe registrar `source` como `DIRECT`, `roomGrossAmount` en cada habitación
   con la tarifa bruta devuelta por el Módulo 3 para ella, sin total en la reserva,
   `commissionPercentage` y `commissionAmount` con valor `0` y `externalConfirmationCode` como
@@ -227,7 +249,8 @@ reserva y se devuelve un error controlado.
 ### Key Entities *(include if feature involves data)*
 
 - **Reservation**: Contrato de reserva de canal directo. Atributos: `reservationRef`, `guestRef`,
-  `guestCount`, `startDate`, `endDate`, `notes`,
+  `guestCount`, `startDate`, `endDate`, `notes`, `lateArrivalNotice` (`false` al crear; la
+  Recepcionista puede marcarlo después con "Actualizar reservación"),
   `commissionPercentage` (`0`), `commissionAmount` (`0`), `externalConfirmationCode`
   (`null`), `source` (`DIRECT`), `createdAt`, y `status` con estados permitidos:
   `PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`. En este flujo se crea
@@ -236,7 +259,9 @@ reserva y se devuelve un error controlado.
   `roomNumber`, `categoryRoom`, `roomGrossAmount` (tarifa de la habitación calculada por el Módulo 3,
   informativa), `currency` y `stayStatus` (nace en `EXPECTED`).
 - **Guest**: Huésped titular. Atributos: `id`, `fullName`, `documentType` (`CC`, `CE`, `PASSPORT` u `OTHER`), `documentNumber`,
-  `nationality`, `contactPhone`, `contactEmail`.
+  `nationality` (texto libre, obligatorio; no hay una lista fija de países; el huésped es extranjero
+  si `nationality` no es "Colombia", sin distinguir mayúsculas ni tildes — no se guarda como un
+  atributo propio, se deriva de `nationality` cuando hace falta), `contactPhone`, `contactEmail`.
 - **RateQuote**: Cotización del valor bruto de una habitación calculada por el Módulo 3, con
   carácter informativo. Atributos: `reservationRef`, `roomId`, `grossAmount`, `currency`,
   `calculatedAt`.

@@ -117,6 +117,7 @@ C (equipo del Módulo 3), D (equipo del Módulo 2) y E (ajustes a documentos).
 | # | Decisión | Propuesta | Decisión | Notas |
 |---|---|---|---|---|
 | D27 | **Máximo de habitaciones por reserva** | 10 | [ ] | Usado en generar directa, generar OTA y actualizar |
+| D28 | **Vigencia del aviso de llegada tardía** | Solo reservas `DIRECT` (las OTA no lo tienen). Protege la reserva hasta el cierre del día siguiente a la llegada | [x] | Confirmado por el negocio el 2026-09-29; el 2026-10-06 se decidió que aplica solo a reservas directas; está en `update-reservation` |
 | D29 | **Reservas `PENDING` en la lista del día** | No se envían; viajan como `ADDED` si la OTA las confirma ese día | [ ] | El negocio pidió "reservas activas" |
 | D30 | **Largo máximo de `notes`** (observaciones) | 500 caracteres | [ ] | |
 | D32 | **Archivo SIRE por Recepcionista** | La Recepcionista genera el `.TXT` y lo envía a Migración fuera del sistema; Migración no es actor del sistema | [ ] | Cambio del 2026-09-28: antes Migración descargaba el archivo |

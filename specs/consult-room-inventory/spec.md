@@ -32,6 +32,16 @@ de insumo a "Verificar disponibilidades" antes de crear o modificar cualquier re
 5. Si el Módulo 1 no responde o el identificador consultado no existe, el sistema informa el
    fallo con un error de negocio controlado **HTTP 400 (Bad Request)**.
 
+**Pantalla de referencia "Habitaciones" (solo lectura, fuera de "Verificar disponibilidades"):**
+además de ser insumo interno de "Verificar disponibilidades", el Módulo 2 ofrece a la Recepcionista
+una pantalla de solo lectura que lista **todas** las `Room` de **todas** las categorías con su
+`categoryRoom`, su capacidad máxima (`maxCapacity`) y su `status` vigente (reutilizando FR-002 sin
+filtro, una vez por categoría) y, por cada una, un detalle
+breve: si está `Reserved` u `Occupied`, la reserva/huésped asociado; si tiene un mantenimiento próximo
+que se cruza con fechas cercanas, lo indica (dato que proviene de "Consultar calendario de
+mantenimientos"). Esta pantalla no modifica ningún dato ni sustituye la consulta síncrona que hace
+"Verificar disponibilidades" al procesar una reserva real.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Consulta del Inventario Físico en Tiempo Real (Priority: P1)
@@ -110,6 +120,10 @@ repite pidiendo solo las `Available` y se comprueba que el listado solo incluya 
 - **FR-005**: El sistema debe interceptar los fallos de integración con el Módulo 1 y los
   identificadores inválidos, respondiendo con **HTTP 400 (Bad Request)** y prohibiendo que escalen a
   **HTTP 500**.
+- **FR-006**: El sistema debe ofrecer a la Recepcionista una pantalla de solo lectura con todas las
+  `Room` de todas las categorías, con su `categoryRoom`, su `maxCapacity` y su `status` vigente, sin
+  opción de editar, reutilizando esta misma
+  consulta y la de "Consultar calendario de mantenimientos" para el detalle de cada habitación.
 
 ### Non-Functional Requirements
 

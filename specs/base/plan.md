@@ -60,8 +60,8 @@ objetivo global de carga)
 | Librería de RabbitMQ | `@golevelup/nestjs-rabbitmq` (aprobado) | Exchange topic, reintentos con espera creciente y dead-letter sin armarlos a mano |
 | Gestor de paquetes | pnpm (aprobado) | Instalación rápida, dependencias estrictas y filtros por paquete (`pnpm --filter backend test`) |
 | Bloqueo optimista | `@VersionColumn` de TypeORM | Edición y cancelación simultáneas (`CONCURRENT_UPDATE`) |
-| Dinero | `decimal.js`, columnas `numeric(14,2)`, redondeo `ROUND_HALF_UP`; **nunca `number`** | Comisión y diferencias de importe exactas |
-| Fechas | Fechas puras `AAAA-MM-DD` (texto `date` en la base) y `luxon` para el día operativo en `America/Bogota` | Evita corrimientos por zona horaria |
+| Dinero | `decimal.js`, columnas `numeric(14,2)`, redondeo `ROUND_HALF_UP`; **nunca `number`** | Comisión exacta |
+| Fechas | Fechas puras `AAAA-MM-DD` (texto `date` en la base) y `luxon` para el día operativo en `America/Bogota` | Evita corrimientos por zona horaria. Se guardan e intercambian como `AAAA-MM-DD`; las pantallas las muestran como `dd/mm/aaaa` |
 | Autenticación y autorización | Passport + JWT y guards por rol | Las specs exigen interfaces seguras y que cada Ota vea solo sus reservas |
 | Tareas programadas | `@nestjs/schedule` con `timeZone: 'America/Bogota'` | Apartado del inicio del día, cierre del día y reintentos |
 | Exclusión mutua de tareas con varias instancias | Bloqueo asesor de PostgreSQL (C10) | Evitar que dos instancias ejecuten el mismo cierre del día |
@@ -294,7 +294,8 @@ Módulo 2; solo viajan en objetos de integración.
    del resultado por `requestId` y `ReconciliationIncident` si queda `UNRESOLVED`.
 4. **Tareas programadas** (zona horaria `America/Bogota`, idempotentes, con bloqueo asesor): envío de la
    lista del día y apartado de habitaciones a las 00:00; cierre del día al terminar las 23:59 (No-Show:
-   `NO_SHOW` en OTA, `CANCELLED` en directa, sin `Cancellation`; habitaciones no llegadas pasan a
+   `NO_SHOW` en OTA, `CANCELLED` en directa, sin `Cancellation`; las directas con `lateArrivalNotice`
+   se aplazan al cierre del día siguiente; habitaciones no llegadas pasan a
    `NOT_ARRIVED`); y reintento de órdenes `PENDING`. El día operativo es fijo y no es configurable.
 5. **Errores uniformes.** Un filtro global de excepciones traduce toda excepción a `ApiError` 4xx; un
    conflicto de `updatedAt` (ediciones o cancelaciones simultáneas) es siempre 400 `CONCURRENT_UPDATE`.

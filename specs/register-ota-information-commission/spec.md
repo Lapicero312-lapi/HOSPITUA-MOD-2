@@ -102,20 +102,26 @@ en `COMPLETED`. El Módulo 3 ejecuta la conciliación y se comprueba que las com
 
 ---
 
-### User Story 3 - Registro Automático de la OTA al Vincular la Cuenta del Hotel (Priority: P3)
+### User Story 3 - Registro de la OTA, Automático por su API o Manual por la Recepcionista (Priority: P3)
 
 Cuando el hotel vincula su cuenta en una OTA, la **Ota** se registra sola en el Módulo 2 enviando
 por su API su `name`, el identificador de la cuenta del hotel en la agencia (`hotelAccountId`) y el
-`commissionPercentage` pactado. Nadie en el hotel crea ni edita una `Ota`: la Recepcionista solo la
-consulta. Si la OTA cambia algún dato, lo envía de nuevo por la misma API.
+`commissionPercentage` pactado. Si la OTA cambia algún dato, lo envía de nuevo por la misma API.
+Adicionalmente, la Recepcionista puede crear y editar manualmente el `name`, el `hotelAccountId` y el
+`commissionPercentage` de una `Ota` desde el hotel, para los casos en que la agencia todavía no tiene
+integración automática o hay que corregir un dato cargado mal. El `connectionStatus` y el `lastSyncAt`
+siempre los administra el sistema a partir de los mensajes que llegan por la API de la OTA: no son
+editables manualmente, ni siquiera cuando la `Ota` se creó a mano.
 
 **Why this priority**: Es una función de soporte para incorporar canales comerciales, pero no
 interviene en la ingesta diaria de reservas existentes.
 
 **Independent Test**: La OTA envía su registro con un 15% de comisión. Se envía una reserva de
 prueba sobre ese canal y se verifica que el sistema aplique automáticamente el 15% al calcular el
-`commissionAmount`. Se verifica que la Recepcionista no tenga ninguna operación para crear o editar
-la `Ota`.
+`commissionAmount`. Por separado, la Recepcionista crea una `Ota` a mano con nombre, cuenta del hotel
+y comisión, y se verifica que quede disponible para nuevas reservas; luego edita su comisión y se
+confirma que el cambio no afecta reservas ya registradas. Se verifica que ninguna de las dos vías deje
+editar `connectionStatus` ni `lastSyncAt`.
 
 **Acceptance Scenarios**:
 
@@ -136,15 +142,51 @@ la `Ota`.
      `commissionPercentage` fuera de 0 a 100
    - **Then** el sistema responde con **HTTP 400 (Bad Request)** especificando los campos inválidos
 
-4. **Scenario**: La Recepcionista no edita la OTA
-   - **Given** la pantalla de agencias de la Recepcionista
-   - **Then** los datos de cada `Ota` se muestran solo para consulta, sin opción de crear ni editar:
-     nombre, cuenta del hotel vinculada, fecha de vinculación, porcentaje de comisión, estado de la
-     conexión (`connectionStatus`), fecha y hora de la última sincronización (`lastSyncAt`) y cantidad
-     de reservas activas de esa agencia
+4. **Scenario**: La Recepcionista crea y edita una OTA manualmente
+   - **Given** la pantalla de agencias de la Recepcionista, con cada `Ota` mostrando nombre, cuenta
+     del hotel vinculada, fecha de vinculación, porcentaje de comisión, estado de la conexión
+     (`connectionStatus`), fecha y hora de la última sincronización (`lastSyncAt`) y cantidad de
+     reservas activas
+   - **When** la Recepcionista crea una nueva `Ota` con `name`, `hotelAccountId` y
+     `commissionPercentage`, o edita esos mismos datos de una `Ota` existente
+   - **Then** el sistema guarda los cambios y los dispone para las reservas futuras de esa agencia, sin
+     permitir editar `connectionStatus` ni `lastSyncAt`, que siguen siendo exclusivos del sistema
+
+5. **Scenario**: Rechazo de la creación o edición manual por datos inválidos (Error)
+   - **Given** el formulario de creación o edición manual de una `Ota`
+   - **When** la Recepcionista deja vacío el `name` o el `hotelAccountId`, envía un
+     `commissionPercentage` fuera de 0 a 100, o intenta crear una `Ota` con un `name` ya registrado
+   - **Then** el sistema responde **HTTP 400 (Bad Request)** especificando el campo inválido y no
+     guarda el cambio
+
+6. **Scenario**: La OTA informa su desvinculación (cambio a `DISCONNECTED`)
+   - **Given** una `Ota` en `connectionStatus` `CONNECTED`
+   - **When** la **Ota** envía por su API el aviso de que la cuenta del hotel se desvinculó
+   - **Then** el sistema cambia su `connectionStatus` a `DISCONNECTED` y actualiza su `lastSyncAt` con
+     la fecha y hora de ese mensaje; la `Ota` y sus datos se conservan, y la Recepcionista sigue viéndola
+     en la pantalla de agencias con el estado "Desconectada"
+
+7. **Scenario**: La OTA se vuelve a vincular (cambio a `CONNECTED`)
+   - **Given** una `Ota` en `connectionStatus` `DISCONNECTED`
+   - **When** la **Ota** envía por su API el aviso de que la cuenta del hotel quedó vinculada de nuevo
+   - **Then** el sistema cambia su `connectionStatus` a `CONNECTED` y actualiza su `lastSyncAt`; no se
+     crea una `Ota` nueva ni se pierde su `linkedAt` original
+
+8. **Scenario**: Cada mensaje de la OTA actualiza su última sincronización
+   - **Given** una `Ota` registrada, en cualquier `connectionStatus`
+   - **When** la **Ota** envía cualquier mensaje por su API (una reserva, un cambio, una cancelación o
+     un aviso de conexión)
+   - **Then** el sistema actualiza su `lastSyncAt` con la fecha y hora de ese mensaje, sin modificar
+     ningún otro dato de la `Ota`
 
 ### Casos Borde
 
+- ¿Con qué estado nace una `Ota` creada a mano por la Recepcionista? Nace en `CONNECTED`, con
+  `lastSyncAt` igual a la fecha y hora de su creación, y desde ese momento solo cambian por los mensajes
+  que llegan por la API de la OTA. La Recepcionista nunca los cambia a mano.
+- ¿Qué sucede con las reservas ya registradas de una `Ota` que pasa a `DISCONNECTED`? No cambian: conservan
+  su `status`, su `commissionAmount` y su `commissionStatus`. La desvinculación solo cambia el estado de la
+  conexión de la agencia.
 - ¿Qué sucede si la OTA envía un nuevo `commissionPercentage` para una `Ota` con reservas ya
   registradas? El nuevo porcentaje aplica exclusivamente a las reservas futuras; las reservas
   existentes conservan el `commissionAmount` calculado al momento de su creación.
@@ -178,12 +220,22 @@ la `Ota`.
 - **FR-007**: El sistema no debe modificar el `commissionAmount` ni el `commissionStatus` de una
   reserva OTA cuando la Ota la cancela: solo cambia su `status` a `CANCELLED`, porque la agencia ya
   sabe que no cobrará comisión por esa reserva.
-- **FR-008**: El sistema debe registrar y actualizar cada `Ota` únicamente con los datos que la
-  propia OTA envía por su API al vincular la cuenta del hotel (`name`, `hotelAccountId`,
-  `commissionPercentage`) o cuando los cambia. El sistema guarda además el estado de la conexión
-  (`connectionStatus`) y la fecha y hora del último mensaje recibido de la OTA (`lastSyncAt`). La
-  Recepcionista solo los consulta: el sistema no debe ofrecer operaciones para crear o editar una
-  `Ota` desde el hotel.
+- **FR-008**: El sistema debe registrar y actualizar cada `Ota` con los datos (`name`,
+  `hotelAccountId`, `commissionPercentage`) que la propia OTA envía por su API al vincular la cuenta
+  del hotel o cuando los cambia, y debe permitir además que la Recepcionista cree o edite esos mismos
+  tres campos manualmente desde el hotel. El sistema guarda, por separado, el estado de la conexión
+  (`connectionStatus`) y la fecha y hora del último mensaje recibido de la OTA (`lastSyncAt`): esos dos
+  campos los administra únicamente el sistema a partir de la API de la OTA, y no son editables ni al
+  crear ni al editar una `Ota` manualmente.
+- **FR-008a**: El sistema debe rechazar la creación o edición manual de una `Ota` cuando el `name` o
+  el `hotelAccountId` vienen vacíos, el `commissionPercentage` está fuera de 0 a 100, o el `name`
+  coincide con el de una `Ota` ya registrada, respondiendo **HTTP 400 (Bad Request)**.
+- **FR-008b**: El sistema debe cambiar el `connectionStatus` de una `Ota` a `DISCONNECTED` cuando la
+  propia OTA informa por su API que la cuenta del hotel se desvinculó, y de nuevo a `CONNECTED` cuando
+  informa que se vinculó otra vez; debe actualizar el `lastSyncAt` con cada mensaje recibido de la OTA;
+  y no debe eliminar la `Ota` ni modificar sus reservas al cambiar de estado. Una `Ota` creada
+  manualmente nace en `CONNECTED`. Estos cambios son funcionamiento interno: la Recepcionista solo
+  consulta el resultado en la pantalla de agencias.
 - **FR-009**: El sistema debe interceptar cualquier error de validación de entrada o integración y
   responder con **HTTP 400 (Bad Request)**, prohibiendo que se propaguen como fallas **HTTP 500**.
 - **FR-010**: El sistema debe mantener un registro auditable de cada comisión calculada o
@@ -209,7 +261,8 @@ la `Ota`.
   `PENDING` y pasa a `ACTIVE` cuando la agencia confirma el pago o la garantía; la comisión se
   calcula desde el momento de su registro.
 - **Ota**: Representa al intermediario externo que origina la reserva. Se registra sola al vincular
-  la cuenta del hotel y sus datos no se editan en el hotel. Atributos: `id`, `name`,
+  la cuenta del hotel, y la Recepcionista también puede crearla o editar su `name`, `hotelAccountId` y
+  `commissionPercentage` manualmente desde el hotel. Atributos: `id`, `name`,
   `hotelAccountId` (cuenta del hotel en la OTA), `linkedAt` (fecha de vinculación),
   `commissionPercentage` (porcentaje de comisión pactado por defecto), `connectionStatus`
   (`CONNECTED` | `DISCONNECTED`: `CONNECTED` mientras la cuenta del hotel siga vinculada y
