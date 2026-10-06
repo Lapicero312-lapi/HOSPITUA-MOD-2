@@ -1103,7 +1103,7 @@ function roomStatus(n){
 function renderRooms(){
   document.getElementById('tblRooms').innerHTML = rooms.map(rm => {
     const st = roomStatus(rm.n);
-    const cls = {Available: 'ok', Reserved: 'warn', Occupied: 'ok', DisabledForRepairs: 'err'}[st.estado] || 'neutral';
+    const cls = {Available: 'ok', Reserved: 'warn', Occupied: 'info', DisabledForRepairs: 'err'}[st.estado] || 'neutral';
     return `<tr><td>Hab. ${rm.n}</td><td>${rm.cat}</td><td>${capacity[rm.cat]} personas</td><td><span class="badge ${cls}">${st.estado}</span></td><td class="note">${st.det}</td></tr>`;
   }).join('');
 }
