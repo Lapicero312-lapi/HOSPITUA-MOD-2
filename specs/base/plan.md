@@ -109,11 +109,9 @@ Regla: **proactiva** (el módulo avisa un evento y no espera respuesta) → **co
 | Marcar habitación como reservada / liberar | M2 → M1 | REST POST/PUT | Reactiva | `set-room-state` |
 | Consultar % de comisión OTA | M3 → M2 | REST GET | Reactiva | `register-ota-information-commission` |
 | Consultar tarifa dinámica (`POST /pricing/quotes`: `roomType`, `checkInDate`, `checkOutDate`; responde `quoteId`, `nightlyRates`, `lodgingAmount`) | M2 → M3 | REST POST (cuerpo JSON) | Reactiva | `calculate-dynamic-rate` |
-| Consultar una reserva por su referencia (`quoteId` por habitación, canal y datos de la OTA) para liquidar en el Check-Out | M1 / M3 → M2 | REST GET | Reactiva | `check-view-reservation` (FR-022) |
+| Consultar una reserva por su referencia (`quoteId` por habitación, canal y datos de la OTA) para liquidar en el Check-Out | M3 → M2 | REST GET | Reactiva | `check-view-reservation` (FR-022) |
 
-El Módulo 1 **ya no consulta la lista de reservas** al Módulo 2 por REST: la recibe por cola. Solo
-consulta una reserva puntual por su referencia (junto con el Módulo 3) para obtener el `otaId` y el
-`quoteId` que necesita el Check-Out. Las
+El Módulo 1 **ya no consulta las reservas** al Módulo 2 por REST: recibe la lista del día por cola. Las
 interacciones M1 ↔ M3 (liquidación, tarifa base, registrar check-out) no involucran al Módulo 2.
 
 ### Convenciones de colas
@@ -155,7 +153,7 @@ Contenido del `payload` (según el diccionario y los specs):
 | Recurso | Quién lo consume | Feature |
 |---|---|---|
 | `GET /api/reservations` con paginación de 10, filtros (búsqueda por `reservationRef`, documento o nombre; estado; canal; agencia; tipo de fecha `ARRIVAL`/`DEPARTURE`/`STAY` con `from` y `to`) y orden por `startDate` | Recepcionista, procesos internos | `check-view-reservation` |
-| `GET /api/reservations/{reservationRef}` (detalle) | Recepcionista; Módulo 1 y Módulo 3 con credencial de servicio (devuelve `quoteId` por habitación, canal y datos de la OTA; 404 si no existe) | `check-view-reservation` |
+| `GET /api/reservations/{reservationRef}` (detalle) | Recepcionista; Módulo 3 con credencial de servicio (devuelve `quoteId` por habitación, canal y datos de la OTA; 404 si no existe) | `check-view-reservation` |
 | `POST /api/reservations/direct/preview` y `POST /api/reservations/direct` (canal directo) | Recepcionista | `generate-direct-reservation` |
 | `POST /api/reservations/{reservationRef}/modification-preview` y `PATCH /api/reservations/{reservationRef}` | Recepcionista (solo directas); la OTA modifica las suyas por su canal | `update-reservation` |
 | `POST /api/reservations/{reservationRef}/cancellation` | Recepcionista (solo directas); la OTA cancela las suyas por su canal | `cancel-reservation` |
@@ -179,8 +177,8 @@ rutas de alta ni edición manual (`POST`/`PUT /api/otas` quedan fuera).
 
 **Errores**: cuerpo `{ "errorCode", "message", "timestamp", "path" }` con HTTP 400 (por defecto, también
 para recursos inexistentes, como piden los specs), 409 (conflicto de disponibilidad) o 429 (exportación
-SIRE). La única excepción es la consulta de una reserva por referencia para los Módulos 1 y 3, que
-responde 404 si no existe, como lo espera el Módulo 3. El diccionario prohíbe 500 y cualquier 2xx o 3xx
+SIRE). La única excepción es la consulta de una reserva por referencia para el Módulo 3, que
+responde 404 si no existe, como lo espera ese módulo. El diccionario prohíbe 500 y cualquier 2xx o 3xx
 para un error.
 
 ## Project Structure

@@ -600,13 +600,12 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
   los reintentos, registrar una alerta para revisión humana.
 - **FR-021**: El envío al Módulo 1 no debe cambiar el `status` de ninguna reserva ni el estado de
   ninguna `Room`.
-- **FR-022**: El sistema debe permitir que los Módulos 1 y 3 consulten una reserva por su
-  `reservationRef` con una credencial de servicio (actor `Modulo1` o `Modulo3`), para que el Módulo 3
-  genere la liquidación en el Check-Out. La respuesta lleva `reservationRef`, `channel` (`DIRECT` |
-  `OTA`) y, por cada `ReservationRoom`, su `categoryRoom` y su `quoteId` (solo `DIRECT`). Si el canal
-  es `OTA`, también lleva `otaId`, `otaConfirmationCode` (el `externalConfirmationCode`) y
-  `otaCommissionPercentage` (el `commissionPercentage` congelado). No incluye otros datos financieros
-  ni datos del huésped. Si la reserva no existe, responde **HTTP 404 (Not Found)**. Es de solo lectura y
+- **FR-022**: El sistema debe permitir que el Módulo 3 consulte una reserva por su `reservationRef`
+  con una credencial de servicio (actor `Modulo3`), para que genere la liquidación en el Check-Out. La
+  respuesta lleva `reservationRef`, `channel` (`DIRECT` | `OTA`) y, por cada `ReservationRoom`, su
+  `categoryRoom` y su `quoteId` (solo `DIRECT`). Si el canal es `OTA`, también lleva
+  `otaConfirmationCode` (el `externalConfirmationCode`) y `otaCommissionPercentage` (el
+  `commissionPercentage` congelado). No incluye otros datos financieros ni datos del huésped. Si la reserva no existe, responde **HTTP 404 (Not Found)**. Es de solo lectura y
   no modifica nada.
 
 ### Non-Functional Requirements

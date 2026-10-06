@@ -16,7 +16,7 @@ Para que la lógica sea la misma en ambos lados, necesitamos que el Módulo 1 co
    campos anteriores, ahora se exige **procedencia y destino**.
 2. **Check-In y Check-Out por habitación**, con el `roomId` y la lista de huéspedes extranjeros en la
    misma notificación.
-3. **La lista de reservas del día llega por cola**; el Módulo 1 ya no consulta la lista de reservas al Módulo 2. Solo consulta una reserva puntual por su `reservationRef` (`GET /api/reservations/{reservationRef}`, con credencial de servicio) para obtener el `otaId` y el `quoteId` que necesita el Check-Out.
+3. **La lista de reservas del día llega por cola**; el Módulo 1 ya no consulta las reservas al Módulo 2.
 4. **El estado `Reserved`** debe existir en `Room.status`.
 5. **El día operativo es fijo**: de 00:00 a 23:59, hora de Colombia (UTC-5).
 
