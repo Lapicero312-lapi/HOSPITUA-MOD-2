@@ -98,7 +98,7 @@ Cuando el Módulo 2 ordena `Reserved` o `Available` (ver 4.2), el Módulo 1 debe
   - `REMOVED`: sale, con motivo `CANCELLED`, `DATE_CHANGED` o `NO_SHOW`.
   - Llevan `messageId` y `sequenceNumber` creciente dentro del día.
 - **Por cada reserva**: `reservationRef`, `status`, `source`, `externalConfirmationCode` (solo OTA),
-  `startDate`, `endDate`, noches, `guestCount`, `notes` y `updatedAt`; por cada
+  `startDate`, `endDate`, noches, `guestCount`, `lateArrivalNotice` (siempre `false` en las OTA), `notes` y `updatedAt`; por cada
   habitación `roomId`, `roomNumber` y `categoryRoom`; y el titular con `guestRef`, `fullName`,
   `documentType`, `documentNumber`, `nationality`, `contactPhone` y `contactEmail`.
 - **Sin datos financieros** (ni tarifas ni comisión). Es **informativa**: no aparta ni libera
@@ -275,7 +275,7 @@ favor respondan con datos concretos (nombres, valores, ejemplos); si algo no exi
 - **La lista del día sale a las 00:00**, no a una hora configurable.
 - **El Módulo 1 ya no consulta `GET /api/reservations`.**
 - **La lista del día trae el tipo de documento del titular** (`documentType`) y la fecha de última actualización de la reserva (`updatedAt`, que reemplaza al antiguo `version`). Ya no se envía el tipo `NATIONAL`/`FOREIGN`: el extranjero se identifica por nacionalidad distinta de Colombia.
-- **Ya no existe el aviso de llegada tardía.** El cierre del día marca `NO_SHOW` (OTA) o `CANCELLED` (directa) a toda reserva con llegada ese día que no tuvo Check-In, y el Módulo 2 ordena `Available` para sus habitaciones.
+- **El aviso de llegada tardía vuelve, solo para reservas directas.** La Recepcionista puede marcar `lateArrivalNotice` en una reserva directa y la lista del día (y sus actualizaciones `UPDATED`) lo lleva para que el Módulo 1 sepa que el huésped llegará tarde. En el cierre del día, la reserva directa con aviso no se cancela: queda protegida hasta el cierre del día siguiente a su llegada; si sigue sin Check-In, pasa a `CANCELLED` y el Módulo 2 ordena `Available` para sus habitaciones. Las reservas OTA no tienen este aviso: el cierre del día las marca `NO_SHOW` el mismo día de llegada si no tuvieron Check-In.
 - Las tarifas de las habitaciones se quedan en el Módulo 2: la lista no las incluye.
 - Las reservas OTA las modifica y cancela solo la propia OTA por su API; no afecta el contrato con el
   Módulo 1, pero explica que una cancelación OTA llega como `REMOVED` con motivo `CANCELLED`.

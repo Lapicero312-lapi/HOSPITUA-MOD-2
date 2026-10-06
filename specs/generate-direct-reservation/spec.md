@@ -244,7 +244,8 @@ reserva y se devuelve un error controlado.
 ### Key Entities *(include if feature involves data)*
 
 - **Reservation**: Contrato de reserva de canal directo. Atributos: `reservationRef`, `guestRef`,
-  `guestCount`, `startDate`, `endDate`, `notes`,
+  `guestCount`, `startDate`, `endDate`, `notes`, `lateArrivalNotice` (`false` al crear; la
+  Recepcionista puede marcarlo después con "Actualizar reservación"),
   `commissionPercentage` (`0`), `commissionAmount` (`0`), `externalConfirmationCode`
   (`null`), `source` (`DIRECT`), `createdAt`, y `status` con estados permitidos:
   `PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`. En este flujo se crea

@@ -294,7 +294,8 @@ Módulo 2; solo viajan en objetos de integración.
    del resultado por `requestId` y `ReconciliationIncident` si queda `UNRESOLVED`.
 4. **Tareas programadas** (zona horaria `America/Bogota`, idempotentes, con bloqueo asesor): envío de la
    lista del día y apartado de habitaciones a las 00:00; cierre del día al terminar las 23:59 (No-Show:
-   `NO_SHOW` en OTA, `CANCELLED` en directa, sin `Cancellation`; habitaciones no llegadas pasan a
+   `NO_SHOW` en OTA, `CANCELLED` en directa, sin `Cancellation`; las directas con `lateArrivalNotice`
+   se aplazan al cierre del día siguiente; habitaciones no llegadas pasan a
    `NOT_ARRIVED`); y reintento de órdenes `PENDING`. El día operativo es fijo y no es configurable.
 5. **Errores uniformes.** Un filtro global de excepciones traduce toda excepción a `ApiError` 4xx; un
    conflicto de `updatedAt` (ediciones o cancelaciones simultáneas) es siempre 400 `CONCURRENT_UPDATE`.

@@ -138,6 +138,7 @@
               <div class="field"><label>Teléfono</label><input id="mdTel" placeholder="+57 300 000 0000"></div>
               <div class="field"><label>Email</label><input id="mdEmail" placeholder="nombre@correo.com"></div>
             </div>
+            <label class="check" style="margin-bottom:12px"><input type="checkbox" id="mdTardia"> Aviso de llegada tardía</label>
             <div class="field"><label>Observaciones</label>
               <textarea id="mdNotes" rows="3" maxlength="500"></textarea>
               <span class="note" id="mdNotesCount"></span>
@@ -363,7 +364,7 @@ const otas = [
 const reservations = [
   {ref:'RSV-2026-00420', guest:'Andrés Molina', doc:'CC 80.221.334', pais:'Colombia', source:'DIRECT',
     start:'2026-09-28', end:'2026-09-29', status:'ACTIVE', guestCount:1, rooms:[{n:'102',cat:'Estándar',stay:'EXPECTED'}],
-    phone:'+57 310 220 4471', email:'andres.molina@correo.com', notes:'Llega en el último vuelo, 23:30.'},
+    phone:'+57 310 220 4471', email:'andres.molina@correo.com', lateArrivalNotice:true, notes:'Llega en el último vuelo, 23:30.'},
   {ref:'RSV-2026-00418', guest:'Camila Restrepo', doc:'CC 1.020.456.789', pais:'Colombia', source:'DIRECT',
     start:'2026-09-28', end:'2026-10-01', status:'ACTIVE', guestCount:2, rooms:[{n:'104',cat:'Estándar',stay:'EXPECTED'}],
     notes:''},
@@ -472,16 +473,14 @@ exportsHist.forEach(h => { h.start = shiftDay(h.start); h.end = shiftDay(h.end);
 // llega hoy = ACTIVE (espera el Check-In); ya llegó y no ha salido = IN_PROGRESS; ya pasó su salida = COMPLETED;
 // no se presentó = NO_SHOW (OTA) o CANCELLED (directa) y una OTA que nunca confirmó (PENDING) vence igual.
 // Como todavía no hay conexión con los demás módulos, lo que pasa con cada reserva que llega después del primer día
-// se sortea y se guarda para que no cambie al recargar: a algunas se les marca que avisaron que llegarán tarde (esas
-// siempre llegan); a las demás les toca llegar o no presentarse. Quien no se presenta queda NO_SHOW si es OTA y
-// CANCELLED si es directa (cierre del día, sin registrar una Cancellation).
+// se sortea y se guarda para que no cambie al recargar: las directas con aviso de llegada tardía siempre llegan; a las
+// demás les toca llegar o no presentarse. Quien no se presenta queda NO_SHOW si es OTA y CANCELLED si es directa
+// (cierre del día, sin registrar una Cancellation).
 let arrivals = {};
 try { localStorage.removeItem('hospitua.outcomes'); arrivals = JSON.parse(localStorage.getItem('hospitua.arrivals') || '{}'); } catch (err) { arrivals = {}; }
-const LATE_NOTICE_PROBABILITY = 0.3;
 function arrivalDraw(r){
   if (!arrivals[r.ref]){
-    const late = Math.random() < LATE_NOTICE_PROBABILITY;
-    arrivals[r.ref] = {late, arrives: late || Math.random() < 0.5};
+    arrivals[r.ref] = {arrives: Math.random() < 0.5};
     try { localStorage.setItem('hospitua.arrivals', JSON.stringify(arrivals)); } catch (err) { /* sin almacenamiento */ }
   }
   return arrivals[r.ref];
@@ -504,7 +503,7 @@ function deriveLifecycle(r){
     if (r.start < TODAY) noShow(); else waiting(unconfirmed ? 'PENDING' : 'ACTIVE');
   } else if (r.start >= TODAY) waiting('ACTIVE');
   else if (startedBeforeDemo) arrived();
-  else if (arrivalDraw(r).arrives) arrived();
+  else if ((r.source === 'DIRECT' && r.lateArrivalNotice) || arrivalDraw(r).arrives) arrived();
   else noShow();
 }
 reservations.forEach(deriveLifecycle);
@@ -752,9 +751,11 @@ document.getElementById('fClear').addEventListener('click', () => {
 function renderStatRow(){
   const llegadas = reservations.filter(r => r.start === TODAY && isEditable(r));
   const salidas = reservations.filter(r => r.end === TODAY && r.status === 'IN_PROGRESS');
+  const riesgo = llegadas.filter(r => !r.lateArrivalNotice);
   document.getElementById('statRow').innerHTML = `
     <div class="statcard"><div class="lbl">Llegadas esperadas hoy</div><div class="val">${llegadas.length}</div></div>
-    <div class="statcard"><div class="lbl">Salidas esperadas hoy</div><div class="val">${salidas.length}</div></div>`;
+    <div class="statcard"><div class="lbl">Salidas esperadas hoy</div><div class="val">${salidas.length}</div></div>
+    <div class="statcard ${riesgo.length ? 'warn' : ''}"><div class="lbl">Reservas en riesgo</div><div class="val">${riesgo.length}</div></div>`;
 }
 
 // ================= Detalle =================
@@ -789,6 +790,7 @@ function renderDetalle(){
   document.getElementById('dtStay').innerHTML =
     kv('Entrada', r.start) + kv('Salida', r.end) + kv('Noches', nights) + kv('Personas', r.guestCount) +
     (r.source === 'OTA' ? kv('Valor bruto', money(r.gross)) : '') +
+    (r.source === 'DIRECT' ? kv('Aviso de llegada tardía', r.lateArrivalNotice ? 'Sí' : 'No') : '') +
     kv('Observaciones', r.notes || '<span class="note">—</span>') +
     kv('Creada el', r.createdAt);
   document.getElementById('dtRooms').innerHTML = r.rooms.map(x => `<tr><td>Hab. ${x.n}</td><td>${x.cat}</td>
@@ -867,6 +869,7 @@ function renderModificar(){
   document.getElementById('mdTel').value = r.phone || '';
   document.getElementById('mdEmail').value = r.email || '';
   document.getElementById('mdNotes').value = r.notes || '';
+  document.getElementById('mdTardia').checked = !!r.lateArrivalNotice;
   mdRows = r.rooms.map(x => ({n: x.n, cat: x.cat, orig: x.n, origCat: x.cat}));
   refreshModificar();
 }
@@ -947,7 +950,7 @@ function refreshModificar(){
   const titularOk = document.getElementById('mdNombre').value.trim() && document.getElementById('mdDoc').value.trim();
   document.getElementById('mdSave').disabled = !valid || mdRows.some(row => !row.n) || !!persErr || !titularOk;
 }
-['mdEntrada', 'mdSalida', 'mdPersonas', 'mdNombre', 'mdDoc', 'mdTel', 'mdEmail', 'mdNotes']
+['mdEntrada', 'mdSalida', 'mdPersonas', 'mdNombre', 'mdDoc', 'mdTel', 'mdEmail', 'mdNotes', 'mdTardia']
   .forEach(id => document.getElementById(id).addEventListener('input', refreshModificar));
 document.getElementById('mdAddRoom').addEventListener('click', mdAddRoom);
 document.getElementById('mdSave').addEventListener('click', () => {
@@ -962,6 +965,7 @@ document.getElementById('mdSave').addEventListener('click', () => {
   r.phone = document.getElementById('mdTel').value.trim();
   r.email = document.getElementById('mdEmail').value.trim();
   r.notes = document.getElementById('mdNotes').value.trim();
+  r.lateArrivalNotice = document.getElementById('mdTardia').checked;
   backToList(r.ref, 'Reserva ' + r.ref + ' modificada correctamente.');
 });
 document.getElementById('mdBack').addEventListener('click', () => goDetalle(currentRef));
@@ -1050,6 +1054,7 @@ document.getElementById('ndSubmit').addEventListener('click', () => {
     rooms: picked.map(x => ({n: x.n, cat, stay: 'EXPECTED', gross: quoteFor(cat, s, e).gross})),
     phone: document.getElementById('ndTel').value.trim(), email: document.getElementById('ndEmail').value.trim(),
     createdAt: TODAY + ' ' + new Date().toTimeString().slice(0, 5),
+    lateArrivalNotice: false,
     notes: document.getElementById('ndNotes').value.trim()};
   reservations.unshift(r);
   ['ndNombre', 'ndDoc', 'ndPais', 'ndTel', 'ndEmail', 'ndNotes'].forEach(id => document.getElementById(id).value = '');
