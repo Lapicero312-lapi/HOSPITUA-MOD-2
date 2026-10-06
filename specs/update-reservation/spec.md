@@ -44,8 +44,10 @@ las mismas reglas de transición y de concurrencia.
    - Los datos personales del `Guest` titular, salvo `nationality`: el país de origen se fija al
      crear la reserva y no se edita desde "Actualizar reservación".
    - Las observaciones (`notes`).
-   - Solo en reservas `DIRECT`: el aviso de llegada tardía del huésped (`lateArrivalNotice`). Las
-     reservas `OTA` no admiten este aviso.
+   - Solo en reservas `DIRECT`: el aviso de llegada tardía del huésped (`lateArrivalNotice`). La
+     Recepcionista lo marca aquí, al modificar la reserva, cuando el huésped se comunica con ella para
+     avisar que llegará tarde; no se pide al crear la reserva. Las reservas `OTA` no admiten este
+     aviso.
 3. Si cambian las fechas o se agrega o cambia una habitación, el sistema ejecuta "Verificar
    disponibilidades" para cada habitación que quedaría en la reserva, enviando la `reservationRef`
    de la reserva editada, para que esta no se cruce consigo misma.

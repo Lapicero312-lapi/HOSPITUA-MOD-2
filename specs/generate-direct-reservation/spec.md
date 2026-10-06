@@ -39,7 +39,10 @@ operativo de la llegada.
    valor de hospedaje bruto de cada habitación mediante "Calcular tarifa dinámica", obtiene un
    `RateQuote` por habitación y muestra al huésped, de forma informativa, la tarifa de cada una.
 5. El solicitante ingresa los datos de identidad del `Guest` titular y, opcionalmente, las
-   observaciones de la reserva (`notes`, máximo 500 caracteres), y confirma la reserva.
+   observaciones de la reserva (`notes`, máximo 500 caracteres), y confirma la reserva. El formulario
+   de creación no pide el aviso de llegada tardía (`lateArrivalNotice`): la reserva nace sin aviso y
+   la Recepcionista lo marca después, solo con "Actualizar reservación", cuando el huésped se
+   comunica con ella para avisar que llegará tarde.
 6. El sistema crea la `Reservation` directamente en estado `ACTIVE`, sin ningún paso de cobro, con
    una `ReservationRoom` en `EXPECTED` por cada habitación.
 7. Si la llegada (`startDate`) es hoy, el sistema ejecuta "Establecer estado de habitación" para
@@ -217,6 +220,8 @@ reserva y se devuelve un error controlado.
   amigable HTTP 400.
 - **FR-005**: El sistema debe crear y almacenar la reserva directamente en estado `ACTIVE`, sin
   ningún paso de cobro ni estado intermedio, con una `ReservationRoom` en `EXPECTED` por habitación.
+- **FR-005a**: El sistema no debe pedir ni aceptar el aviso de llegada tardía al crear la reserva: el
+  `lateArrivalNotice` nace en `false` y solo se cambia mediante "Actualizar reservación".
 - **FR-006**: El sistema debe registrar `source` como `DIRECT`, `roomGrossAmount` en cada habitación
   con la tarifa bruta devuelta por el Módulo 3 para ella, sin total en la reserva,
   `commissionPercentage` y `commissionAmount` con valor `0` y `externalConfirmationCode` como
