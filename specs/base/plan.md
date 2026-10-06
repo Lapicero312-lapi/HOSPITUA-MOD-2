@@ -113,7 +113,7 @@ Regla: **proactiva** (el módulo avisa un evento y no espera respuesta) → **co
 | Consultar una reserva por su referencia (`quoteId` por habitación, canal y datos de la OTA) para liquidar en el Check-Out | M3 → M2 | REST GET | Reactiva | `check-view-reservation` (FR-022) |
 
 El Módulo 1 **ya no consulta la lista de reservas** al Módulo 2 por REST: la recibe por cola. Solo
-consulta las reservas de un rango de fechas puntual al registrar un mantenimiento (`check-view-reservation`,
+consulta las reservas entre una fecha de inicio y una de fin al registrar un mantenimiento (`check-view-reservation`,
 FR-023); la lógica sobre esas reservas la aplica el Módulo 1. Las
 interacciones M1 ↔ M3 (liquidación, tarifa base, registrar check-out) no involucran al Módulo 2.
 
