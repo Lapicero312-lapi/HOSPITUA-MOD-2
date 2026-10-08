@@ -606,7 +606,7 @@ Estos ajustes **no** están hechos; los specs y los diagramas son del equipo y s
 | Los 13 `plan.md` de las features | Quitar las referencias a Java, Spring, JPA, Flyway, JUnit y Maven; usar la arquitectura hexagonal y el stack de este plan | C11, D10 |
 | `mod-1-2-3.drawio` | Reflejar la lista del día por cola (M2 → M1), los extranjeros en su propia cola y la consulta del calendario (M2 → M1) | C2, C4 |
 | `DIAGRAMA.drawio` (casos de uso) | Quitar la línea "Generar reservación por OTA" → "Calcular tarifa dinámica" | C5 |
-| Equipo del Módulo 1 | Cambiar `Reserved` y `Available` por su cuenta con la lista del día; acordar los nombres de las colas que envía el Módulo 2; ver [acuerdos-con-modulo-1.md](./acuerdos-con-modulo-1.md) | C8, C2 |
+| Equipo del Módulo 1 | Cambiar `Reserved` y `Available` por su cuenta con la lista del día; las colas ya están definidas en "Convenciones de colas" | C8, C2 |
 | Equipo del Módulo 3 | Confirmar cómo expresa el porcentaje de comisión (0 a 100) | C7 |
 
 ## Notes
