@@ -30,14 +30,12 @@ C (equipo del Módulo 3), D (equipo del Módulo 2) y E (ajustes a documentos).
 
 | # | Decisión | Propuesta | Decisión | Notas |
 |---|---|---|---|---|
-| B1 | **Agregar el estado `Reserved`** a `Room.status` | Que lo aprueben y lo incorporen | [ ] | C8: sin él, las reservas con llegada hoy fallan y se cancelan |
+| B1 | **El Módulo 1 maneja `Reserved` y `Available`** por su cuenta con la lista del día | El Módulo 2 no envía órdenes de estado | [x] | Decidido: se elimina `set-room-state`; reemplaza a C8, C9, B7 y B8 |
 | B2 | **Contrato REST del inventario**: rutas, campos y si acepta rango de fechas | No enviar fechas (el estado físico es del instante actual) | [ ] | Plan `consult-room-inventory`. Su spec (2026-09-07) no filtra por fechas, como se propuso; faltan rutas y nombres de campos (B17) |
 | B3 | **Listado por categoría**: completo o filtrado por estado | Que ofrezca ambos modos (D4) | [x] | Cubierto por su spec (2026-09-07): filtra por tipo y por estado, combinables |
 | B4 | **Categoría inexistente** en el inventario | Devolver lista vacía, no error | [x] | Cubierto por su spec (2026-09-07): sin resultados devuelve lista vacía |
 | B5 | **Calendario de mantenimientos**: si las fechas son fecha o fecha y hora, y si el fin es inclusivo | Fecha, con fin inclusivo | [ ] | La regla de cruce depende de esto |
 | B6 | **Calendario por categoría**: que acepte `categoryRoom` o varios `roomId` | Sí, para evitar una llamada por habitación | [ ] | |
-| B7 | **Órdenes de estado de habitación**: ruta, idempotencia por `requestId`, consulta del resultado por `requestId` y campos del "detalle de la reserva" | Proponer `PUT /rooms/{roomId}/state` con `Idempotency-Key` | [ ] | Plan `set-room-state` |
-| B8 | **Valores de reintento** de las órdenes | Cada 15 s y 3 intentos de resolución en 2 minutos | [ ] | |
 | B9 | **Mensajes `habitacion.checkin` y `habitacion.checkout`**: confirmar que traen dentro la lista `foreignGuests` con los datos migratorios de cada huésped extranjero de la habitación, incluidos `movementType` (`ENTRY` en el Check-In, `DEPARTURE` en el Check-Out) y `movementDate` | Dentro de cada mensaje (C2), actualizado el 2026-09-28: el Check-Out también los trae | [ ] | El Módulo 1 procesa los datos y los envía (2026-09-28) |
 | B15 | **Campos de `ForeignGuestData`**: confirmar que el Módulo 1 envía, por huésped, `firstName`, `lastName`, `documentType`, `documentNumber`, `birthDate`, `nationality`, `movementType` y `movementDate` | Esa lista, según la especificación del Módulo 1 y lo pedido por el negocio el 2026-09-28 | [ ] | Los obligatorios están en `process-foreign-guest-data` FR-003 |
 | B16 | **`reservedByReservationRef` en el inventario**: el spec de inventario del Módulo 1 (2026-09-07) no lo trae | Que lo agreguen, solo cuando el estado es `Reserved` | [ ] | Sin él no se distingue el apartado propio de una reserva de uno ajeno, ni se libera solo lo apartado por ella (`check-room-availability`, `set-room-state` FR-010) |
@@ -95,7 +93,6 @@ C (equipo del Módulo 3), D (equipo del Módulo 2) y E (ajustes a documentos).
 |---|---|---|---|---|
 | D16 | **Formato de `processedBy`** en las cancelaciones | Usuario autenticado (Recepcionista) o identificador de la agencia | [ ] | |
 | D17 | **Cancelar una reserva OTA en `PENDING`** | Igual que `ACTIVE` | [ ] | El spec lo admite |
-| D18 | **400 cuando la cancelación sí se aplicó** (`ROOM_RELEASE_PENDING`) | Mantener lo que pide el spec; el cliente distingue por `errorCode` | [ ] | |
 | D19 | **Hora de cierre del día operativo** | **Fija:** al terminar las 23:59, hora de Colombia | [x] | Decidido por el negocio el 2026-09-29 (ver B11) |
 | D20 | **Reintentos de los consumidores de colas** | Definir cantidad y espera | [ ] | |
 | D21 | ~~Check-In de un huésped `NATIONAL` con datos migratorios~~ | **Resuelto 2026-09-28**: se registran los huéspedes extranjeros que envíe el Módulo 1 aunque el titular sea nacional | [x] | Los acompañantes pueden ser extranjeros |
@@ -138,7 +135,7 @@ Ninguno de estos cambios está hecho.
 
 | # | Documento | Ajuste | Motivo |
 |---|---|---|---|
-| E1 | `DIAGRAMA.drawio` (casos de uso) | Unir "Establecer estado de habitación" a generar directa, generar OTA y actualizar reservación | Solo está unido a cancelar; los specs lo usan en cuatro casos |
+| E1 | `DIAGRAMA.drawio` (casos de uso) | Quitar "Establecer estado de habitación" y sus uniones | El Módulo 2 ya no ordena estados de habitación |
 | E2 | `DIAGRAMA.drawio` | Quitar la línea de "Generar reservación por OTA" a "Calcular tarifa dinámica" | Decisión C5 |
 | E3 | `diccionario.md` y `guia_flujo_reservas.html` | Aclarar que el inventario se consulta siempre solo para elegir habitaciones y el estado físico solo si la estadía incluye hoy | El spec de disponibilidad dice esto último |
 | E4 | Specs de disponibilidad, inventario y otros | Listar los 8 estados de `Room` del diccionario, no solo 3 | Inconsistencia |

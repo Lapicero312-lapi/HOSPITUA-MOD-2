@@ -10,12 +10,11 @@
 Las reservas se caen todo el tiempo: el huésped cambia de planes, la agencia recibe una anulación o
 la Recepcionista atiende una llamada para dar de baja una reserva. El hotel necesita procesar esas
 cancelaciones de forma ágil por los dos canales por los que llegan —recepción y API de la OTA— y,
-sobre todo, cuando la cancelación ocurre el mismo día de la llegada, necesita que la habitación ya
-apartada vuelva a estar libre de inmediato para poder venderla otra vez. Las reservas con llegada
-futura no tienen la habitación apartada en el Módulo 1, por lo que se cancelan sin tocar el
-inventario físico. Como el pago del 100% de la estadía se liquida en el
+sobre todo, cuando la cancelación ocurre el mismo día de la llegada, necesita avisar al Módulo 1 para
+que libere la habitación. El Módulo 2 no libera habitaciones: lo avisa en la lista de reservas del día
+y el Módulo 1, dueño del estado de las habitaciones, decide qué hacer. Como el pago del 100% de la estadía se liquida en el
 Check-Out, cancelar antes del ingreso no genera cobros ni penalidades: es un proceso gratuito que
-solo tiene efecto sobre la reserva y sobre el estado físico de la habitación. El sistema debe además
+solo tiene efecto sobre la reserva. El sistema debe además
 proteger la reserva frente a cancelaciones inválidas, como intentar anular una estadía que ya está
 en curso.
 
@@ -31,12 +30,10 @@ en curso.
 4. El sistema cambia el atributo `Reservation.status` directamente a `CANCELLED`, de forma atómica
    dentro de la transacción de cancelación, sin requerir la invocación del flujo de modificación de
    reservación.
-5. Si la cancelación ocurre el mismo día de la llegada, el sistema ejecuta "Establecer estado de
-   habitación" y notifica de inmediato al Módulo 1 para que **cada** `Room` de la reserva que siga
-   en `Reserved` por ella vuelva a `Available`. Si la llegada es futura, no emite ninguna orden.
-6. Si la reserva forma parte de la lista del día ya enviada al Módulo 1, el sistema lo avisa
-   mediante "Enviar reservas del día al Módulo 1" (`REMOVED` con motivo `CANCELLED`).
-7. El sistema registra la cancelación en `Cancellation` para auditoría.
+5. Si la reserva forma parte de la lista del día ya enviada al Módulo 1, el sistema la quita de esa
+   lista mediante "Enviar reservas del día al Módulo 1" (`REMOVED` con motivo `CANCELLED`). El Módulo
+   1 decide qué hace con la habitación: el Módulo 2 no le ordena nada.
+6. El sistema registra la cancelación en `Cancellation` para auditoría.
 
 La cancelación aplica siempre a la reserva completa, con todas sus habitaciones. Para quitar solo
 una habitación de una reserva con varias, se usa "Actualizar reservación".
@@ -47,20 +44,20 @@ una habitación de una reserva con varias, se usa "Actualizar reservación".
 
 Un solicitante necesita anular una reserva que aún no ha iniciado su estadía. El caso de negocio es
 el mismo para los dos canales: se localiza la reserva, se valida que su estado admita cancelación,
-se confirma la baja, se cambia el estado a `CANCELLED` y, si la habitación ya estaba apartada, se
-ordena al Módulo 1 liberarla. Por eso los caminos de éxito de los dos canales y los bloqueos lógicos
+se confirma la baja, se cambia el estado a `CANCELLED` y, si la reserva estaba en la lista del día, se
+avisa al Módulo 1. Por eso los caminos de éxito de los dos canales y los bloqueos lógicos
 (estadía en
 curso o finalizada, referencia vacía, cancelación concurrente) se consolidan en esta misma historia
 de usuario, para evitar la sobre-atomización.
 
 **Why this priority**: Es el flujo principal para procesar bajas de hospedaje. Permite al hotel
-recuperar inventario vendible en tiempo real, evitando ocupaciones fantasma por reservas que ya no
-se van a honrar.
+avisar al Módulo 1 de inmediato para que recupere inventario vendible, evitando ocupaciones fantasma
+por reservas que ya no se van a honrar.
 
 **Independent Test**: Se cancela una reserva `ACTIVE` con llegada hoy por cada uno de los dos
 canales y se verifica que el `status` cambia a `CANCELLED`, que se registra la `Cancellation` con el
-canal correcto y que el Módulo 1 recibe de inmediato la orden de devolver la `Room` a `Available`.
-Se cancela una reserva con llegada futura y se verifica que no se emite ninguna orden. La prueba se
+canal correcto y que el Módulo 1 recibe de inmediato un `REMOVED` con motivo `CANCELLED`.
+Se cancela una reserva con llegada futura y se verifica que no se avisa nada. La prueba se
 completa intentando
 cancelar reservas `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`, confirmando que cada intento
 se bloquea con un error controlado.
@@ -68,36 +65,35 @@ se bloquea con un error controlado.
 **Acceptance Scenarios**:
 
 1. **Scenario**: Cancelación exitosa por la Recepcionista (Happy Path)
-   - **Given** una `Reservation` en `ACTIVE` con llegada hoy, cuya `Room` está en `Reserved`
+   - **Given** una `Reservation` en `ACTIVE` con llegada hoy, que ya está en la lista del día
    - **When** la Recepcionista confirma la cancelación
    - **Then** el sistema cambia la reserva a `CANCELLED`, registra la `Cancellation` con su canal, y
-     ordena al Módulo 1 cambiar la `Room` a `Available`
+     avisa `REMOVED` (motivo `CANCELLED`) al Módulo 1
 
 2. **Scenario**: Cancelación exitosa de una reserva OTA vía API (Happy Path)
    - **Given** una `Reservation` con `source` `OTA` en `ACTIVE` o `PENDING` y con llegada hoy
    - **When** la API recibe la solicitud de cancelación de la **Ota**
-   - **Then** el sistema procesa la baja de inmediato, cambia la reserva a `CANCELLED`, ordena al
-     Módulo 1 liberar la `Room` y devuelve una respuesta HTTP 200
+   - **Then** el sistema procesa la baja de inmediato, cambia la reserva a `CANCELLED`, avisa
+     `REMOVED` al Módulo 1 si estaba en la lista del día y devuelve una respuesta HTTP 200
 
 3. **Scenario**: Cancelación de una reserva con llegada futura (Happy Path)
-   - **Given** una `Reservation` en `ACTIVE` o `PENDING` cuya llegada es dentro de varios días, por
-     lo que su `Room` no está apartada
+   - **Given** una `Reservation` en `ACTIVE` o `PENDING` cuya llegada es dentro de varios días
    - **When** cualquier canal confirma la cancelación
-   - **Then** el sistema cambia la reserva a `CANCELLED`, registra la `Cancellation` y no envía
-     ninguna orden al Módulo 1
+   - **Then** el sistema cambia la reserva a `CANCELLED`, registra la `Cancellation` y no avisa nada
+     al Módulo 1
 
 4. **Scenario**: Bloqueo de cancelación para estadía en curso o finalizada (Error)
    - **Given** una `Reservation` en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` o `NO_SHOW`
    - **When** cualquier canal intenta cancelarla
-   - **Then** el sistema bloquea la acción, no envía ninguna orden al Módulo 1 y responde con un
+   - **Then** el sistema bloquea la acción, no avisa nada al Módulo 1 y responde con un
      error controlado **HTTP 400 (Bad Request)** indicando que el estado actual no admite
      cancelación
 
 5. **Scenario**: Cancelación de una reserva con varias habitaciones y llegada hoy (Happy Path)
-   - **Given** una `Reservation` `ACTIVE` con llegada hoy y las `Room` 101 y 102 en `Reserved`
+   - **Given** una `Reservation` `ACTIVE` con llegada hoy y las `Room` 101 y 102
    - **When** la Recepcionista confirma la cancelación
-   - **Then** el sistema cambia la reserva a `CANCELLED`, ordena `Available` para la 101 y para la
-     102, registra una sola `Cancellation` y avisa `REMOVED` en la lista del día
+   - **Then** el sistema cambia la reserva a `CANCELLED`, registra una sola `Cancellation` y avisa
+     `REMOVED` en la lista del día
 
 6. **Scenario**: La Recepcionista intenta cancelar una reserva OTA (Error)
    - **Given** una `Reservation` con `source` `OTA` en `ACTIVE` o `PENDING`
@@ -107,23 +103,18 @@ se bloquea con un error controlado.
 
 ### Casos Borde
 
-- ¿Qué sucede si el Módulo 1 no responde al enviar la orden de liberación de la habitación? La
-  reserva queda cancelada localmente, la orden queda en `PENDING` para reintentarse, y el sistema
-  responde con una alerta controlada **HTTP 400** indicando: "Reserva cancelada, pero hubo un fallo
-  al notificar la liberación de la habitación. Se reintentará automáticamente."
+- ¿Qué sucede si falla la publicación del aviso `REMOVED` al Módulo 1? La reserva queda cancelada
+  localmente, el aviso queda pendiente y se reintenta en orden (ver "Consultar y buscar reservas").
 - ¿Qué sucede si la referencia de la reserva es vacía o nula? El sistema intercepta el payload antes
   de tocar la lógica de negocio y responde **HTTP 400 (Bad Request)** con el mensaje: "La referencia
   de la reserva es obligatoria."
 - ¿Cómo maneja el sistema dos cancelaciones simultáneas de la misma reserva? Usa control de
   concurrencia optimista: la primera aplica la cancelación y la segunda recibe **HTTP 400**
   indicando: "Esta reserva ya fue actualizada o cancelada recientemente", sin duplicar registros ni
-  órdenes al Módulo 1.
-- ¿Qué sucede si en una reserva con varias habitaciones falla la liberación de solo una? La reserva
-  queda cancelada; las órdenes confirmadas quedan `COMPLETED` y la fallida queda en `PENDING` para
-  reintentarse, con la misma alerta **HTTP 400** de liberación pendiente.
+  avisos al Módulo 1.
 - ¿Se puede cancelar una reserva con varias habitaciones cuando una ya tuvo Check-In? No: la reserva
-  ya está en `IN_PROGRESS` y el sistema responde **HTTP 400**. Las habitaciones que no lleguen se
-  liberan en el cierre del día (`NOT_ARRIVED`).
+  ya está en `IN_PROGRESS` y el sistema responde **HTTP 400**. Las habitaciones que no lleguen quedan
+  como `NOT_ARRIVED` en el cierre del día.
 
 
 ## Requirements *(mandatory)*
@@ -144,10 +135,6 @@ se bloquea con un error controlado.
   confirmarse la solicitud, de forma atómica dentro de la transacción de cancelación y aplicando las
   transiciones `ACTIVE` o `PENDING` → `CANCELLED` y el control de concurrencia, sin requerir la
   invocación del flujo de modificación de reservación.
-- **FR-004**: El sistema debe ordenar de inmediato al Módulo 1, mediante "Establecer estado de
-  habitación", devolver a `Available` cada `Room` de la reserva que siga apartada por ella
-  (`previousStatus` `Reserved`) cuando la cancelación ocurre el mismo día de la llegada, sin revertir
-  la cancelación si alguna orden falla. Si la llegada es futura, no debe emitir ninguna orden.
 - **FR-004a**: El sistema debe avisar al Módulo 1, mediante "Enviar reservas del día al Módulo 1",
   la cancelación de una reserva que forme parte de la lista del día ya enviada (`REMOVED` con motivo
   `CANCELLED`).
@@ -173,22 +160,19 @@ se bloquea con un error controlado.
   `endDate`, `source` (`DIRECT` | `OTA`) y `status` (`PENDING`, `ACTIVE`,
   `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`). Solo pasa a `CANCELLED` desde `ACTIVE` o
   `PENDING`.
-- **ReservationRoom**: Habitaciones de la reserva que se liberan. Atributos: `reservationRef`,
+- **ReservationRoom**: Habitaciones de la reserva. Atributos: `reservationRef`,
   `roomId`, `roomNumber` y `stayStatus`.
 - **Room**: Habitación física, propiedad del Módulo 1. Atributos: `id`, `roomNumber`, `categoryRoom`
-  y `status` (`Available` | `Reserved` | `Occupied`). Pasa de `Reserved` a
-  `Available` por la cancelación.
+  y `status` (`Available` | `Reserved` | `Occupied`). Solo se menciona: el Módulo 2 no la modifica.
 - **Guest**: Titular de la reserva. Atributos: `id`, `fullName`, `documentNumber`, `contactEmail`.
 
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
-- **SC-001**: El 100% de las cancelaciones exitosas de reservas cuya `Room` estaba apartada ordenan
-  al Módulo 1 la liberación de la `Room`.
+- **SC-001**: El 100% de las cancelaciones de reservas que estaban en la lista del día se avisan al
+  Módulo 1 como `REMOVED` con motivo `CANCELLED`.
 - **SC-002**: El 100% de los intentos inválidos de cancelación se rechazan con **HTTP 400**, con
   cero errores **HTTP 500**.
-- **SC-003**: Cero habitaciones permanecen en `Reserved` de forma indefinida tras una cancelación
-  confirmada.
 - **SC-004**: El 100% de las cancelaciones quedan registradas en `Cancellation` con su canal de
   origen.

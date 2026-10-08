@@ -17,7 +17,9 @@ Para que la lógica sea la misma en ambos lados, necesitamos que el Módulo 1 co
 2. **Check-In y Check-Out por habitación**, con el `roomId` y la lista de huéspedes extranjeros en la
    misma notificación.
 3. **La lista de reservas del día llega por cola.** El Módulo 1 solo consulta al Módulo 2 las reservas entre una fecha de inicio y una de fin (y, si quiere, de una habitación) cuando registra un mantenimiento, para saber si cae sobre alguna reserva. La lógica sobre qué hacer con esa reserva la aplica el Módulo 1.
-4. **El estado `Reserved`** debe existir en `Room.status`.
+4. **El Módulo 1 maneja `Reserved` y `Available` por su cuenta.** El Módulo 2 solo envía la lista de
+   reservas del día y sus actualizaciones; el Módulo 1 decide qué hace con las habitaciones y no recibe
+   órdenes de estado.
 5. **El día operativo es fijo**: de 00:00 a 23:59, hora de Colombia (UTC-5).
 
 ## 2. Reglas que ambos módulos deben manejar igual
@@ -32,7 +34,7 @@ Para que la lógica sea la misma en ambos lados, necesitamos que el Módulo 1 co
 | Estado de cada habitación en la reserva | `EXPECTED`, `CHECKED_IN`, `CHECKED_OUT`, `NOT_ARRIVED`. No es el estado físico de la `Room`. |
 | Estados de `Room` | `Available`, `Reserved` (por aprobar), `Occupied`, `PendingCleaning`, `InCleaning`, `DisabledForRepairs`, `TechnicalBlock`, `Inactive`. |
 | Reserva con varias habitaciones | Entre 1 y 10 habitaciones, mismas fechas. Cada Check-In y Check-Out se notifica **por habitación**. |
-| Duplicados y orden | Todo mensaje lleva un identificador único (`messageId` o `requestId`) y un `sequenceNumber` creciente. Quien recibe descarta duplicados y aplica en orden. |
+| Duplicados y orden | Todo mensaje lleva un identificador único (`messageId`) y un `sequenceNumber` creciente. Quien recibe descarta duplicados y aplica en orden. |
 
 ## 3. Lo que el Módulo 1 nos envía
 
@@ -71,17 +73,6 @@ Reglas:
 - Si llega el Check-In de una habitación ya marcada `NOT_ARRIVED` (llegó después del cierre del día), se
   rechaza con la misma incidencia.
 
-### 3.2 Respuesta a las órdenes de estado de habitación — B7, B8
-
-Cuando el Módulo 2 ordena `Reserved` o `Available` (ver 4.2), el Módulo 1 debe:
-
-- Confirmar el cambio, o **rechazarlo** con motivo (`ROOM_OCCUPIED` si la habitación está ocupada).
-- Aplicar una orden **solo si su `sequenceNumber` es mayor que el de la última aplicada** para esa
-  habitación; las obsoletas se rechazan (`OBSOLETE`).
-- Ser idempotente por `requestId`: repetir una orden no la aplica dos veces.
-- Permitir **consultar el resultado de una orden por `requestId`**, para que el Módulo 2 resuelva las
-  órdenes cuyo resultado quedó ambiguo (timeout, falla de red).
-
 ## 4. Lo que el Módulo 1 recibe del Módulo 2
 
 ### 4.1 Lista de reservas del día y sus actualizaciones — B14
@@ -107,24 +98,6 @@ Cuando el Módulo 2 ordena `Reserved` o `Available` (ver 4.2), el Módulo 1 debe
   hoy.
 - **Cambia para el Módulo 1:** deja de consultar `GET /api/reservations`. La Recepcionista y los procesos
   internos son los únicos que consultan reservas en el Módulo 2.
-
-### 4.2 Órdenes de estado de habitación (`RoomStateRequest`) — B1, B7
-
-- Solo dos valores: `Reserved` y `Available`. El Módulo 2 **nunca** ordena `Occupied` ni estados de
-  limpieza: los cambia el Módulo 1 en el Check-In y el Check-Out.
-- `Reserved`: solo cuando la llegada es el día operativo en curso (al crear una reserva para hoy, o a las
-  00:00 para las reservas con llegada hoy). Trae el detalle de la reserva. Una orden por habitación.
-- `Available`: de inmediato, cuando se cancela una reserva o hay No-Show, o cuando una habitación pasa a
-  `NOT_ARRIVED` o se quita de una reserva con llegada hoy. Solo si la habitación sigue apartada por esa
-  misma reserva (`previousStatus` `Reserved` y `reservationRef` coincidente).
-- Cada orden lleva: `requestId`, `roomId`, `requestedStatus`, `previousStatus`, `originEvent`,
-  `reservationRef`, `sequenceNumber` (creciente y único por habitación), `requestedAt` y `requestedBy`.
-- El Módulo 2 envía las órdenes de una misma habitación **de una en una, en orden**: no envía la N+1
-  hasta que la N esté `COMPLETED` o `REJECTED`.
-- Si el Módulo 1 rechaza un `Reserved` de una reserva recién creada, esa reserva se cancela (todo o
-  nada). Si rechaza el de un cambio de habitación, el cambio se aborta y la reserva original se conserva.
-- **Requisito:** el estado `Reserved` debe existir en `Room.status`. Sin él, las reservas con llegada hoy
-  fallan y se cancelan (B1).
 
 ## 5. Lo que el Módulo 1 expone (consultas del Módulo 2) — B2, B3, B4, B5, B6, B12
 
@@ -161,14 +134,12 @@ Su spec ya cubre gran parte de lo que pedimos. Esto es lo que coincide y lo que 
 
 | # | Qué hay que confirmar | Propuesta del Módulo 2 | Estado |
 |---|---|---|---|
-| B1 | Agregar el estado `Reserved` a `Room.status` | Que lo aprueben e incorporen | Aparece en su spec de inventario; falta confirmar que lo aplican en las órdenes del Módulo 2 |
+| B1 | Agregar el estado `Reserved` a `Room.status` | Que lo incorporen y lo manejen ellos con la lista del día | Resuelto: el Módulo 1 maneja `Reserved` y `Available` por su cuenta |
 | B2 | Contrato REST del inventario: rutas, campos y si acepta fechas | No enviar fechas | Cubierto por su spec (sin fechas); faltan rutas y nombres de campos (B17) |
 | B3 | Listado por categoría: completo o filtrado por estado | Ofrecer ambos modos | Cubierto por su spec (filtra por tipo y estado, combinables) |
 | B4 | Categoría inexistente | Lista vacía, no error | Cubierto por su spec (sin resultados devuelve lista vacía) |
 | B5 | Calendario: fecha o fecha y hora, y fin inclusivo o no | Fecha, con fin inclusivo | Pendiente |
 | B6 | Calendario por categoría o por varios `roomId` | Sí, para evitar una llamada por habitación | Pendiente |
-| B7 | Órdenes de estado: ruta, idempotencia por `requestId`, consulta del resultado por `requestId`, campos del detalle de la reserva | Por acordar la ruta | Pendiente |
-| B8 | Valores de reintento de las órdenes | Cada 15 s y 3 intentos de resolución en 2 minutos | Pendiente |
 | B9 | Mensajes de Check-In y Check-Out con la lista `foreignGuests` | Dentro de cada mensaje (incluye Check-Out) | Pendiente |
 | B11 | Hora de inicio del día operativo y zona horaria | **Decidido:** 00:00 a 23:59, Colombia (UTC-5) | Decidido, falta que lo confirmen |
 | B12 | `maxCapacity` en el inventario | Agregarlo a la consulta puntual y por categoría | Cubierto por su spec (incluye capacidad máxima) |
@@ -207,65 +178,51 @@ favor respondan con datos concretos (nombres, valores, ejemplos); si algo no exi
 8. ¿Alguna parte de su sistema cambia una habitación `Reserved` por su cuenta (por ejemplo, un cierre de
    día)?
 
-### C. Órdenes de estado de habitación (`Reserved` y `Available`)
-
-9. ¿Cómo prefieren recibir la orden (servicio, ruta, campos)? Nosotros enviamos: identificador de la
-   orden, habitación, estado pedido, estado anterior, reserva, número de secuencia y detalle de la
-   reserva.
-10. ¿Pueden garantizar que repetir la misma orden no se aplique dos veces? ¿Con qué identificador?
-11. ¿Pueden ignorar una orden más vieja que otra ya aplicada para la misma habitación? ¿Cómo lo
-    detectarían?
-12. ¿Se puede consultar después el resultado de una orden ya enviada? ¿Cómo?
-13. ¿Qué motivos de rechazo pueden devolver y con qué nombres? (Nosotros contemplamos "habitación
-    ocupada" y "orden obsoleta".)
-14. ¿En cuánto tiempo responden normalmente y cuál es su tiempo máximo? ¿Cuántas veces y cada cuánto
-    toleran que reintentemos?
-
 ### D. Calendario de mantenimientos
 
-15. ¿Las fechas de un mantenimiento son solo fecha o fecha y hora? ¿La fecha de fin es el último día
+9. ¿Las fechas de un mantenimiento son solo fecha o fecha y hora? ¿La fecha de fin es el último día
     bloqueado o el día en que la habitación vuelve a estar disponible?
-16. ¿Se puede consultar por varias habitaciones o por una categoría en una sola llamada? ¿Cómo?
-17. ¿Qué campos devuelve cada mantenimiento? ¿Existen mantenimientos sin fecha de fin?
-18. ¿Qué pasa con las reservas que ya existen cuando programan un mantenimiento que se les cruza? ¿Nos
+10. ¿Se puede consultar por varias habitaciones o por una categoría en una sola llamada? ¿Cómo?
+11. ¿Qué campos devuelve cada mantenimiento? ¿Existen mantenimientos sin fecha de fin?
+12. ¿Qué pasa con las reservas que ya existen cuando programan un mantenimiento que se les cruza? ¿Nos
     avisan?
 
 ### E. Qué estados impiden vender una habitación
 
-19. Para cada estado (`Available`, `Reserved`, `Occupied`, `PendingCleaning`, `InCleaning`,
+13. Para cada estado (`Available`, `Reserved`, `Occupied`, `PendingCleaning`, `InCleaning`,
     `DisabledForRepairs`, `TechnicalBlock`, `Inactive`): ¿la habitación se puede **reservar hoy**? ¿Y se
     puede **reservar para una fecha futura**? (Ya decidimos, de nuestro lado, que `PendingCleaning` e
     `InCleaning` no impiden una reserva.)
 
 ### F. Check-In y Check-Out
 
-20. ¿Cómo nos notifican el Check-In y el Check-Out (cola, nombre del mensaje)? ¿Uno por habitación?
+14. ¿Cómo nos notifican el Check-In y el Check-Out (cola, nombre del mensaje)? ¿Uno por habitación?
     ¿Incluyen el identificador de la habitación además de la reserva?
-21. ¿Pueden incluir, en la misma notificación, la lista de huéspedes extranjeros de esa habitación (los
+15. ¿Pueden incluir, en la misma notificación, la lista de huéspedes extranjeros de esa habitación (los
     acompañantes también)? ¿Cómo identifican que un huésped es extranjero?
-22. Por cada extranjero necesitamos: nombres, apellidos, tipo y número de documento, fecha de
+16. Por cada extranjero necesitamos: nombres, apellidos, tipo y número de documento, fecha de
     nacimiento, nacionalidad, tipo de movimiento (entrada o salida), fecha del movimiento, **lugar de
     procedencia y lugar de destino**. ¿Los capturan todos hoy? ¿Cuáles no y por qué?
-23. Si un huésped les llega con un dato faltante, ¿lo dejan pasar o no arman el mensaje? ¿Pueden
+17. Si un huésped les llega con un dato faltante, ¿lo dejan pasar o no arman el mensaje? ¿Pueden
     garantizar que solo nos envían huéspedes completos? (El Módulo 2 no los valida ni los devuelve.)
-24. ¿Qué formato y zona horaria tienen las fechas de Check-In y Check-Out?
-25. Si un huésped cambia de habitación dentro de la misma reserva, ¿qué mensajes envían?
+18. ¿Qué formato y zona horaria tienen las fechas de Check-In y Check-Out?
+19. Si un huésped cambia de habitación dentro de la misma reserva, ¿qué mensajes envían?
 
 ### G. Lista de reservas del día
 
-26. ¿Pueden recibir por cola la lista de reservas del día y sus actualizaciones (alta, cambio, baja)?
+20. ¿Pueden recibir por cola la lista de reservas del día y sus actualizaciones (alta, cambio, baja)?
     ¿Cuál es el nombre de la cola o del canal?
-27. La lista trae, por reserva: referencia, estado, canal, código de la agencia (si es OTA), fechas,
+21. La lista trae, por reserva: referencia, estado, canal, código de la agencia (si es OTA), fechas,
     noches, personas, observaciones, fecha de última actualización, habitaciones (identificador,
     número y categoría) y datos del titular (nombre, tipo y número de documento, nacionalidad, teléfono, correo).
     ¿Les falta algún dato? ¿Sobra alguno?
-28. ¿Cómo manejan un mensaje repetido o fuera de orden? (Cada mensaje lleva identificador y número de
+22. ¿Cómo manejan un mensaje repetido o fuera de orden? (Cada mensaje lleva identificador y número de
     secuencia.)
-29. Hoy consultan las reservas al Módulo 2. ¿Pueden dejar de hacerlo y usar solo la lista?
+23. Hoy consultan las reservas al Módulo 2. ¿Pueden dejar de hacerlo y usar solo la lista?
 
 ### H. Día operativo
 
-30. Vamos a usar el día calendario de Colombia, de 00:00 a 23:59, con la lista del día a las 00:00. ¿Su
+24. Vamos a usar el día calendario de Colombia, de 00:00 a 23:59, con la lista del día a las 00:00. ¿Su
     sistema opera igual? ¿Qué zona horaria usa su servidor?
 
 ## 7. Cambios recientes que afectan al Módulo 1
@@ -283,6 +240,6 @@ favor respondan con datos concretos (nombres, valores, ejemplos); si algo no exi
 ## 8. Lo que el Módulo 2 no hace (para que no se espere)
 
 - No captura ni completa datos migratorios: no tiene pantalla para eso.
-- No cambia el estado físico de la habitación, salvo pedir `Reserved` o `Available`.
+- No cambia ni ordena cambiar el estado de la habitación: el Módulo 1 decide qué hace con la lista de reservas del día.
 - No envía nada a Migración Colombia: la Recepcionista descarga el archivo SIRE y lo envía por su cuenta.
 - No envía datos financieros al Módulo 1.

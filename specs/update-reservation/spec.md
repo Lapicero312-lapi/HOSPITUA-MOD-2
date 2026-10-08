@@ -24,9 +24,9 @@ salida, solo necesita enterarse para actualizar el estado de la reserva (`IN_PRO
 `COMPLETED`) y conservar los datos migratorios que exige el reporte a Migración. Si esas
 notificaciones no se procesan, las reservas quedan desactualizadas o eternamente "en curso" y el
 reporte SIRE queda incompleto. Del mismo modo, una reserva cuyo huésped nunca llega queda
-"estancada": sigue ocupando una habitación apartada en el Módulo 1 y distorsiona las métricas de
-ocupación. El negocio necesita un proceso automático de cierre del día que identifique esas
-reservas, las marque como no presentadas y libere la habitación. Todas estas transiciones comparten
+"estancada" y distorsiona las métricas de ocupación. El negocio necesita un proceso automático de
+cierre del día que identifique esas reservas y las marque como no presentadas. El Módulo 1, dueño del
+estado de las habitaciones, libera las habitaciones por su cuenta. Todas estas transiciones comparten
 las mismas reglas de transición y de concurrencia.
 
 ### Flujo de Usuario de Alto Nivel
@@ -61,15 +61,13 @@ las mismas reglas de transición y de concurrencia.
    también cambiar una habitación por otra de la misma categoría, no recotiza ni muestra tarifa: el
    precio depende de la categoría y de las fechas, no del número de habitación.
 6. El solicitante revisa el resumen y confirma; el sistema persiste los cambios.
-7. Si la reserva tiene llegada hoy, el sistema coordina con el Módulo 1 las habitaciones agregadas,
-   quitadas o cambiadas mediante "Establecer estado de habitación", y avisa el cambio mediante
+7. Si la reserva forma parte de la lista del día, el sistema avisa el cambio mediante
    "Enviar reservas del día al Módulo 1" (`UPDATED`, o `ADDED` / `REMOVED` si el cambio de fechas
    hace entrar o salir la reserva de la lista del día).
 
 Adicionalmente, esta funcionalidad recibe el cambio de `status` que solicitan otros procesos:
 "Generar reservación por OTA" (confirmación de pago o garantía), "Generar reservación directa" y
-"Generar reservación por OTA" (cancelación compensatoria con el motivo `ROOM_REJECTED` cuando el
-Módulo 1 rechaza apartar la habitación), la notificación de Check-In, la notificación de Check-Out y
+la notificación de Check-In, la notificación de Check-Out y
 el cierre automático del día (No-Show), descritos a continuación. Todos ellos cambian el `status` de
 la reserva a `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED` o `NO_SHOW`, de modo que las reglas de
 transición y de concurrencia vivan en un solo lugar. "Cancelar reservación" es la excepción: cambia
@@ -81,8 +79,8 @@ El Check-In se notifica **por habitación**: una reserva con varias habitaciones
 notificación por cada habitación que ingresa, porque los huéspedes de un mismo grupo pueden llegar
 en momentos distintos.
 
-1. El **Módulo 1** ejecuta el Check-In físico de una habitación: cambia la `Room` a `Occupied`
-   (desde `Reserved` si la reserva era para hoy) y la entrega al huésped.
+1. El **Módulo 1** ejecuta el Check-In físico de una habitación: cambia la `Room` a `Occupied` y la
+   entrega al huésped.
 2. El Módulo 1 envía al Módulo 2 una notificación con la `reservationRef`, el `roomId` de la
    habitación que ingresó y, por cada huésped extranjero que ingresó a esa habitación (no solo el
    titular), sus datos migratorios (`ForeignGuestData`, con `movementType` `ENTRY` y su
@@ -134,11 +132,9 @@ El Check-Out también se notifica **por habitación**.
    habitaciones como
    `NOT_ARRIVED`, sin cambiar el `status` de la reserva. Si con eso ya no queda ninguna habitación
    en `CHECKED_IN` (todas las que ingresaron ya salieron), cambia la reserva a `COMPLETED`.
-5. En ambos casos, el sistema ejecuta "Establecer estado de habitación" para ordenar al Módulo 1
-   devolver a `Available` cada `Room` marcada como `NOT_ARRIVED` que siga apartada por la reserva.
-6. En el No-Show total, el sistema avisa al Módulo 1 mediante "Enviar reservas del día al Módulo 1"
+5. En el No-Show total, el sistema avisa al Módulo 1 mediante "Enviar reservas del día al Módulo 1"
    (`REMOVED` con motivo `NO_SHOW`).
-7. Se ignoran las reservas en estados finales, las habitaciones ya ingresadas y las reservas
+6. Se ignoran las reservas en estados finales, las habitaciones ya ingresadas y las reservas
    `DIRECT` con llegada el día procesado cuyo huésped avisó una llegada tardía (esas se procesan en el
    cierre del día siguiente, según el paso 2).
 
@@ -178,8 +174,7 @@ los cambios. Se repite con datos personales (sin recálculo) y sobre reservas `I
    - **Then** el sistema guarda los cambios sin invocar al Módulo 3 ni alterar fechas o categoría
 
 3. **Scenario**: Cambio de estado solicitado por un proceso interno
-   - **Given** una confirmación de pago OTA, una cancelación compensatoria por `ROOM_REJECTED`, o
-     una notificación de Check-In, Check-Out o No-Show válida
+   - **Given** una confirmación de pago OTA o una notificación de Check-In, Check-Out o No-Show válida
    - **When** el proceso correspondiente ejecuta "Actualizar reservación"
    - **Then** el sistema cambia el `status` a `CANCELLED`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED` o
      `NO_SHOW` según la transición permitida
@@ -197,18 +192,18 @@ los cambios. Se repite con datos personales (sin recálculo) y sobre reservas `I
    - **Then** el sistema bloquea la edición con **HTTP 400** indicando que el estado actual no
      admite modificaciones
 
-6. **Scenario**: Cambio de habitación coordinado con el Módulo 1
-   - **Given** una `Reservation` en `ACTIVE` con llegada hoy, con la `Room` A en `Reserved`, y la
-     `Room` B disponible en sus fechas
+6. **Scenario**: Cambio de habitación con llegada hoy
+   - **Given** una `Reservation` en `ACTIVE` con llegada hoy, con la `Room` A, y la `Room` B
+     disponible en sus fechas
    - **When** el solicitante cambia la reserva a la `Room` B y confirma
-   - **Then** el sistema ordena al Módulo 1 `Reserved` para la `Room` B y, tras su confirmación,
-     ordena `Available` para la `Room` A, y actualiza la reserva
+   - **Then** el sistema actualiza la reserva a la `Room` B y avisa al Módulo 1 con una actualización
+     `UPDATED` de la lista del día; el Módulo 1 decide qué hace con las habitaciones
 
 7. **Scenario**: Cambio de habitación en una reserva con llegada futura
-   - **Given** una `Reservation` en `ACTIVE` con llegada dentro de varias semanas, cuya `Room` A no
-     está apartada en el Módulo 1, y la `Room` B disponible en sus fechas
+   - **Given** una `Reservation` en `ACTIVE` con llegada dentro de varias semanas y la `Room` B
+     disponible en sus fechas
    - **When** el solicitante cambia la reserva a la `Room` B y confirma
-   - **Then** el sistema actualiza la reserva a la `Room` B sin enviar ninguna orden al Módulo 1
+   - **Then** el sistema actualiza la reserva a la `Room` B sin avisar al Módulo 1
 
 8. **Scenario**: Agregar una habitación a la reserva
    - **Given** una `Reservation` en `ACTIVE` con la `Room` A y 2 personas, y la `Room` C disponible en
@@ -216,15 +211,14 @@ los cambios. Se repite con datos personales (sin recálculo) y sobre reservas `I
    - **When** el solicitante agrega la `Room` C, cambia `guestCount` a 4 y confirma la tarifa
      calculada por el Módulo 3 para la `Room` C
    - **Then** el sistema agrega la `Room` C a la reserva en `EXPECTED`, actualiza `guestCount` y guarda
-     el `roomGrossAmount` de la `Room` C; si la llegada es hoy, ordena `Reserved` para la `Room` C (`ROOM_ADDED`) y avisa
+     el `roomGrossAmount` de la `Room` C; si la llegada es hoy, avisa
      al Módulo 1 con una actualización `UPDATED` de la lista del día
 
 9. **Scenario**: Quitar una habitación de la reserva
    - **Given** una `Reservation` en `ACTIVE` con las `Room` A y C y 4 personas
    - **When** el solicitante quita la `Room` C, cambia `guestCount` a 2 y confirma
    - **Then** el sistema quita la `Room` C (con su tarifa) y actualiza `guestCount`; si la llegada es
-     hoy y la `Room` C estaba `Reserved` por la reserva, ordena `Available` para ella
-     (`ROOM_REMOVED`) y avisa al Módulo 1 con una actualización `UPDATED`
+     hoy, avisa al Módulo 1 con una actualización `UPDATED` de la lista del día
 
 10. **Scenario**: Intento de quitar la única habitación (Error)
     - **Given** una `Reservation` con una sola habitación
@@ -364,10 +358,10 @@ pase a `COMPLETED`, sin afectar el estado de las `Room`, que gestiona el Módulo
 
 El sistema, sin intervención humana, identifica al cierre del día las reservas esperadas que no
 registraron ingreso físico, las marca como `NO_SHOW` (canal OTA) o
-`CANCELLED` (canal directo) y libera sus habitaciones, salvo las reservas directas cuyo huésped
+`CANCELLED` (canal directo), salvo las reservas directas cuyo huésped
 avisó una llegada tardía, que quedan protegidas hasta el cierre del día siguiente. En las reservas con varias habitaciones donde
-solo llegó una parte del grupo, marca como `NOT_ARRIVED` las habitaciones que no ingresaron y las
-libera, sin cambiar el estado de la reserva. Por tratarse de un único proceso automático en lote, el
+solo llegó una parte del grupo, marca como `NOT_ARRIVED` las habitaciones que no ingresaron, sin
+cambiar el estado de la reserva. El Módulo 1 libera las habitaciones por su cuenta. Por tratarse de un único proceso automático en lote, el
 camino exitoso por canal, las llegadas parciales, la protección de las reservas directas con
 llegada tardía y el manejo de fallos individuales se consolidan en esta misma historia de usuario.
 
@@ -379,7 +373,7 @@ conserva el registro de las reservas OTA para conciliar comisiones con la agenci
 del día, marque como `NO_SHOW` las de canal OTA y como `CANCELLED` las de canal directo que no
 tuvieron ingreso, marque `NOT_ARRIVED` las habitaciones sin ingreso de las reservas `IN_PROGRESS`,
 ignore las directas del día con llegada tardía avisada, procese las del día anterior que siguen sin
-ingreso, y libere las habitaciones correspondientes.
+ingreso, sin enviar ninguna orden de liberación al Módulo 1.
 
 **Acceptance Scenarios**:
 
@@ -388,23 +382,22 @@ ingreso, y libere las habitaciones correspondientes.
      `PENDING`
    - **When** el sistema ejecuta el proceso de fin de día
    - **Then** el sistema cambia la reserva a `NO_SHOW`, marca todas sus habitaciones como
-     `NOT_ARRIVED`, la conserva para la conciliación de comisiones, ordena al Módulo 1 devolver cada
-     `Room` a `Available` y avisa `REMOVED` (motivo `NO_SHOW`) en la lista del día
+     `NOT_ARRIVED`, la conserva para la conciliación de comisiones y avisa
+     `REMOVED` (motivo `NO_SHOW`) en la lista del día
 
 2. **Scenario**: Cancelación automática de una reserva directa sin presentarse (Happy Path)
    - **Given** una `Reservation` con `source` `DIRECT`, con `startDate` de hoy, que sigue en
      `ACTIVE` y cuyo huésped no avisó una llegada tardía
    - **When** el sistema ejecuta el proceso de fin de día
    - **Then** el sistema cambia la reserva a `CANCELLED`, sin generar comisión ni registro de
-     `Cancellation`, marca sus habitaciones como `NOT_ARRIVED`, ordena al Módulo 1 devolver cada
-     `Room` a `Available` y avisa `REMOVED` (motivo `NO_SHOW`) en la lista del día
+     `Cancellation`, marca sus habitaciones como `NOT_ARRIVED` y avisa `REMOVED` (motivo
+     `NO_SHOW`) en la lista del día
 
 3. **Scenario**: Llegada parcial de un grupo
    - **Given** una `Reservation` de hoy en `IN_PROGRESS` con la `Room` A en `CHECKED_IN` y la `Room`
      B en `EXPECTED`
    - **When** se ejecuta el proceso de fin de día
-   - **Then** el sistema marca la `Room` B como `NOT_ARRIVED`, ordena al Módulo 1 devolverla a
-     `Available`, y la reserva sigue en `IN_PROGRESS` por la `Room` A
+   - **Then** el sistema marca la `Room` B como `NOT_ARRIVED` y la reserva sigue en `IN_PROGRESS` por la `Room` A
 
 4. **Scenario**: Reserva en curso con todas sus habitaciones ingresadas
    - **Given** una `Reservation` de hoy en `IN_PROGRESS` con todas sus habitaciones en `CHECKED_IN`
@@ -421,7 +414,7 @@ ingreso, y libere las habitaciones correspondientes.
      sigue en `ACTIVE`
    - **When** se ejecuta el proceso de fin de día de hoy
    - **Then** el sistema la procesa como No-Show total (`CANCELLED`, por ser directa), sin registrar
-     una `Cancellation`, y libera sus habitaciones, porque el aviso de llegada tardía solo protege
+     una `Cancellation`, porque el aviso de llegada tardía solo protege
      hasta el cierre del día siguiente a la llegada
 
 7. **Scenario**: Una reserva OTA nunca está protegida por un aviso de llegada tardía
@@ -468,35 +461,14 @@ ingreso, y libere las habitaciones correspondientes.
   solicitante debe ajustar `guestCount` en la misma modificación.
 - ¿Cómo maneja el sistema dos ediciones simultáneas de la misma reserva? Usa control de concurrencia
   optimista con el atributo `updatedAt`: la segunda recibe **HTTP 400** indicando que debe recargar.
-- ¿Qué sucede con el Módulo 1 cuando solo cambian las fechas? Por lo general nada: un cambio de
-  fechas sin cambio de habitaciones no genera órdenes al Módulo 1. Las únicas excepciones son las
-  que cruzan el día actual: si la nueva llegada es hoy, el sistema ordena `Reserved` para cada
-  `Room` de la reserva (`originEvent` `DATES_CHANGED`) y avisa `ADDED` en la lista del día; si la
-  llegada era hoy y deja de serlo, ordena `Available` para cada una y avisa `REMOVED` (motivo
-  `DATE_CHANGED`). Un cambio de habitaciones en una reserva con llegada futura tampoco genera
-  órdenes, porque ninguna `Room` está apartada.
-- ¿Cómo se coordina el cambio de habitación con el Módulo 1 cuando la llegada es hoy? El sistema
-  ejecuta "Establecer estado de habitación" en este orden: primero ordena `Reserved` para la `Room`
-  nueva y, solo si el Módulo 1 la confirma, ordena `Available` para la anterior. Si el Módulo 1
-  rechaza la `Room` nueva, el cambio no se aplica, la reserva conserva su `Room` original y se
-  responde **HTTP 400**. Si no responde, como el resultado es ambiguo y el Módulo 1 pudo haber
-  apartado la `Room` nueva, el cambio tampoco se aplica y el sistema neutraliza esa posible reserva
-  emitiendo una orden `Available` para la `Room` nueva con un `sequenceNumber` mayor, secuenciada
-  por "Establecer estado de habitación" y reintentada desde `PENDING` si falla; la reserva conserva
-  su `Room` original y se responde **HTTP 400**, de modo que nunca queden apartadas la `Room`
-  original y la nueva por la misma reserva. Si falla únicamente la liberación de la `Room` anterior,
-  el cambio ya quedó aplicado y esa orden queda en `PENDING` para reintentarse; el sistema responde
-  **HTTP 400** con el mensaje "La reserva se actualizó, pero la liberación de la habitación anterior
-  quedó pendiente", y reenviar la misma solicitud no repite el cambio. Las mismas reglas aplican a
-  cada habitación cuando una modificación cambia varias a la vez.
-- ¿Cómo se coordina con el Módulo 1 agregar una habitación a una reserva con llegada hoy? El sistema
-  ordena `Reserved` para la nueva `Room` (`ROOM_ADDED`) y solo aplica el cambio si el Módulo 1 la
-  confirma. Si la rechaza o no responde, el cambio no se aplica y se responde **HTTP 400**; si no
-  respondió, se neutraliza con una orden `Available` de mayor `sequenceNumber`.
-- ¿Cómo se coordina con el Módulo 1 quitar una habitación de una reserva con llegada hoy? El cambio
-  se aplica en el Módulo 2 y el sistema ordena `Available` para la `Room` quitada
-  (`ROOM_REMOVED`); si esa orden falla, queda en `PENDING` para reintentarse y se responde **HTTP
-  400** con el aviso de liberación pendiente.
+- ¿Qué sucede con el Módulo 1 cuando solo cambian las fechas? Por lo general nada. Las únicas
+  excepciones son las que cruzan el día actual: si la nueva llegada es hoy, el sistema avisa `ADDED`
+  en la lista del día; si la llegada era hoy y deja de serlo, avisa `REMOVED` (motivo
+  `DATE_CHANGED`). Un cambio de habitaciones en una reserva con llegada futura tampoco se avisa.
+- ¿Cómo se coordina con el Módulo 1 un cambio, la adición o la eliminación de una habitación en una
+  reserva con llegada hoy? El cambio se aplica en el Módulo 2 y se avisa con una actualización
+  `UPDATED` de la lista del día. El Módulo 2 no le ordena nada al Módulo 1: él decide qué hace con
+  las habitaciones.
 
 **Check-In y Check-Out**
 
@@ -540,9 +512,6 @@ ingreso, y libere las habitaciones correspondientes.
 - ¿Qué ocurre si la base de datos pierde conexión durante el procesamiento masivo del cierre del
   día? El sistema detiene el proceso de forma transaccional, sin marcar reservas a medias, y emite
   alertas controladas sin exponer detalles de infraestructura.
-- ¿Qué sucede si el Módulo 1 no responde al liberar una habitación en el cierre del día? La reserva
-  queda en su nuevo estado (`NO_SHOW` o `CANCELLED`), la orden queda en `PENDING` para reintentarse,
-  y el lote continúa.
 
 ## Requirements *(mandatory)*
 
@@ -581,9 +550,9 @@ ingreso, y libere las habitaciones correspondientes.
   mayor o igual a la cantidad de habitaciones y menor o igual a la suma de `maxCapacity` de sus
   habitaciones, respondiendo **HTTP 400** con el mensaje correspondiente en caso contrario.
 - **FR-006**: El sistema debe ser el punto de cambio de `status` de la reserva para la confirmación
-  OTA, la cancelación compensatoria, el Check-In, el Check-Out y el No-Show, aceptando las
+  OTA, el Check-In, el Check-Out y el No-Show, aceptando las
   transiciones `PENDING`→`ACTIVE`, `ACTIVE`→`IN_PROGRESS`, `IN_PROGRESS`→`COMPLETED`, `ACTIVE` o
-  `PENDING`→`CANCELLED` (cancelación compensatoria o No-Show de canal directo), y `ACTIVE` o
+  `PENDING`→`CANCELLED` (No-Show de canal directo), y `ACTIVE` o
   `PENDING`→`NO_SHOW` (No-Show de canal OTA); cualquier otra transición debe rechazarse con **HTTP
   400**. La cancelación explícita la ejecuta "Cancelar reservación" directamente, con las mismas
   transiciones y el mismo control de concurrencia.
@@ -592,21 +561,14 @@ ingreso, y libere las habitaciones correspondientes.
   habitación) y `EXPECTED`→`NOT_ARRIVED` (cierre del día); cualquier otra transición debe
   rechazarse.
 - **FR-008**: El sistema debe aplicar control de concurrencia optimista mediante `updatedAt`.
-- **FR-009**: Cuando la modificación cambie o agregue una `Room` en una reserva con llegada hoy, el
-  sistema debe ordenar primero `Reserved` para la nueva y, en un cambio, solo después `Available`
-  para la anterior, abortando el cambio si el Módulo 1 rechaza la nueva o no responde; en el caso
-  de falta de respuesta debe neutralizar la posible reserva de la `Room` nueva con una orden
-  `Available` de mayor `sequenceNumber`, reintentada desde `PENDING` si falla. Si falla únicamente la
-  liberación de la anterior o de una `Room` quitada, el cambio debe conservarse, la orden debe
-  reintentarse desde `PENDING` y la respuesta debe ser **HTTP 400** con el aviso de liberación
-  pendiente.
+- **FR-009**: El sistema no debe ordenar al Módulo 1 que aparte o libere habitaciones por cambios,
+  adiciones o eliminaciones de habitaciones: el cambio se aplica en el Módulo 2 y se avisa con
+  `UPDATED` en la lista del día.
 - **FR-010**: El sistema debe interceptar excepciones de validación, concurrencia e integración,
-  respondiendo **HTTP 400 (Bad Request)** y prohibiendo errores **HTTP 500**; en el caso de la
-  liberación pendiente de FR-009, la respuesta 400 no implica que el cambio se haya revertido: el
-  cambio ya está aplicado y solo la liberación queda por reintentar.
-- **FR-011**: El sistema no debe emitir órdenes al Módulo 1 por cambios de habitaciones en una
-  reserva con llegada futura, y solo debe ordenar `Reserved` o `Available` por un cambio de fechas
-  (`DATES_CHANGED`) cuando este haga que la llegada pase a ser hoy o deje de serlo.
+  respondiendo **HTTP 400 (Bad Request)** y prohibiendo errores **HTTP 500**.
+- **FR-011**: El sistema no debe avisar al Módulo 1 por cambios de habitaciones en una reserva con
+  llegada futura, y solo debe avisar un cambio de fechas (`ADDED` o `REMOVED`) cuando este haga que
+  la llegada pase a ser hoy o deje de serlo.
 - **FR-012**: El sistema debe avisar al Módulo 1, mediante "Enviar reservas del día al Módulo 1",
   cada modificación confirmada de una reserva que forme parte de la lista del día (`UPDATED`), que
   entre en ella (`ADDED`) o que salga de ella (`REMOVED`), y cada No-Show total del cierre del día
@@ -641,10 +603,9 @@ ingreso, y libere las habitaciones correspondientes.
   `NOT_ARRIVED` las habitaciones en `EXPECTED` y pasar la reserva a `COMPLETED` si ya no queda
   ninguna en `CHECKED_IN`. Una reserva `OTA` nunca queda excluida, porque no tiene aviso de llegada
   tardía.
-- **FR-020**: Por cada habitación marcada como `NOT_ARRIVED`, el sistema debe ordenar al Módulo 1,
-  mediante "Establecer estado de habitación", devolver la `Room` a `Available` solo si sigue
-  apartada por esa reserva; si el Módulo 1 la reporta `Occupied`, la orden se trata como sin efecto
-  y se registra la incidencia.
+- **FR-020**: El sistema no debe ordenar al Módulo 1 que libere habitaciones: las habitaciones marcadas
+  `NOT_ARRIVED` y las reservas `NO_SHOW` se quitan de la lista del día (`REMOVED`) y el Módulo 1 decide
+  qué hace con ellas.
 - **FR-021**: El sistema debe conservar en el Módulo 2 las reservas OTA marcadas como `NO_SHOW` para
   la conciliación de comisiones con la agencia, y no debe registrar una `Cancellation` para las
   reservas directas que pasan a `CANCELLED` por el cierre del día.
@@ -675,8 +636,8 @@ ingreso, y libere las habitaciones correspondientes.
 - **Guest**: Titular de la reserva. Atributos: `id`, `fullName`, `documentType`, `documentNumber`, `nationality`,
   `contactPhone`, `contactEmail`.
 - **Room**: Habitación física controlada por el Módulo 1, referenciada para la disponibilidad: el
-  Módulo 1 la pasa a `Occupied` en el Check-In y la libera en el Check-Out, y vuelve de `Reserved` a
-  `Available` en el No-Show. Atributos: `id`, `roomNumber`, `categoryRoom`, `maxCapacity` y `status`
+  Módulo 1 la pasa a `Occupied` en el Check-In y la libera en el Check-Out, y maneja `Reserved` y
+  `Available` por su cuenta. Atributos: `id`, `roomNumber`, `categoryRoom`, `maxCapacity` y `status`
   (`Available` | `Reserved` | `Occupied`).
 - **RateQuote**: Cotización del Módulo 3 para cada habitación afectada por la modificación.
   Atributos: `quoteId`, `nightlyRates` (lista de `date` y `rate`) y `lodgingAmount`. Al confirmar, el
@@ -712,7 +673,7 @@ ingreso, y libere las habitaciones correspondientes.
   inexistentes.
 - **SC-007**: El 100% de las reservas y habitaciones sin ingreso al
   finalizar el día quedan marcadas (`NO_SHOW` o `CANCELLED` la reserva, `NOT_ARRIVED` la
-  habitación), con su habitación liberada, y ninguna reserva queda en `ACTIVE` más allá del cierre
+  habitación), y ninguna reserva queda en `ACTIVE` más allá del cierre
   de su día de llegada, salvo las reservas `DIRECT` con llegada tardía avisada, que pueden
   permanecer hasta el cierre del día siguiente.
 - **SC-008**: El 100% de las modificaciones de reservas de la lista del día llegan al Módulo 1 como

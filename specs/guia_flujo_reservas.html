@@ -72,11 +72,11 @@
     <h2>3. Matriz de Integración y Responsabilidades</h2>
 
     <div class="alert alert-info">
-        <strong>💡 Regla de Arquitectura:</strong> El <strong>Módulo 2</strong> es el orquestador que controla el estado <strong>lógico</strong> y financiero del hospedaje. El <strong>Módulo 1</strong> controla exclusivamente el estado <strong>físico</strong> (limpieza y ocupación real) de la habitación. Para todo lo que pertenece al Módulo 1 y al Módulo 3 (nombres, atributos y estados), manda el diccionario del proyecto: la habitación se identifica con <code>Room.id</code> y sus estados son <code>Available</code>, <code>Reserved</code>, <code>Occupied</code>, etc.
+        <strong>💡 Regla de Arquitectura:</strong> El <strong>Módulo 2</strong> es el orquestador que controla el estado <strong>lógico</strong> y financiero del hospedaje. El <strong>Módulo 1</strong> controla exclusivamente el estado <strong>físico</strong> (limpieza, ocupación y apartado) de la habitación, y es quien cambia <code>Reserved</code> y <code>Available</code>. Para todo lo que pertenece al Módulo 1 y al Módulo 3 (nombres, atributos y estados), manda el diccionario del proyecto: la habitación se identifica con <code>Room.id</code> y sus estados son <code>Available</code>, <code>Reserved</code>, <code>Occupied</code>, etc.
     </div>
 
     <div class="alert alert-info">
-        <strong>💡 Regla del día de llegada:</strong> El Módulo 1 aparta físicamente la habitación (<code>Reserved</code>) <strong>únicamente</strong> cuando la reserva es para el día operativo en curso: al crearse una reserva para hoy o al iniciar el día operativo. Las reservas con llegada futura no modifican el inventario físico; su disponibilidad se controla con las reservas locales del Módulo 2.
+        <strong>💡 Regla del día de llegada:</strong> El Módulo 2 solo envía al Módulo 1 la lista de reservas del día (a las 00:00) y sus actualizaciones. El Módulo 1 decide qué hace con las habitaciones: él las aparta (<code>Reserved</code>) y las libera (<code>Available</code>). Las reservas con llegada futura no se envían; su disponibilidad se controla con las reservas locales del Módulo 2.
     </div>
 
     <table>
@@ -96,22 +96,22 @@
             <tr>
                 <td><strong>Creación (llegada futura)</strong></td>
                 <td>Crea entidad <code>Reservation</code>: <code>ACTIVE</code> si es directa, <code>PENDING</code> si es de OTA (pasa a <code>ACTIVE</code> cuando la agencia confirma el pago o la garantía).</td>
-                <td>No hay orden a M1: la habitación no se aparta todavía.</td>
+                <td>No se avisa a M1 hasta el día de la llegada.</td>
             </tr>
             <tr>
                 <td><strong>Creación (llegada hoy) e inicio del día operativo</strong></td>
                 <td>Igual que la anterior. Al iniciar cada día, el sistema recorre las reservas <code>ACTIVE</code> o <code>PENDING</code> con llegada hoy.</td>
-                <td><strong>M2 notifica a M1:</strong> Envía detalles y ordena marcar la <code>Room</code> como <code>Reserved</code>, para evitar que Recepción la asigne a un cliente sin reserva (<em>walk-in</em>). Si el Módulo 1 no confirma una reserva creada hoy, la creación se revierte (todo o nada).</td>
+                <td><strong>M2 notifica a M1:</strong> Envía la reserva en la lista del día (a las 00:00) o como actualización <code>ADDED</code>. M1 decide si aparta la habitación; M2 no le ordena nada ni depende de su respuesta.</td>
             </tr>
             <tr>
                 <td><strong>Modificación de fechas o habitación</strong></td>
                 <td>"Actualizar reservación": valida disponibilidad, recotiza con el Módulo 3 y persiste tras la confirmación del solicitante.</td>
-                <td>Solo si la modificación involucra el día actual: ordena <code>Reserved</code> o <code>Available</code> (cambio de habitación o cambio de fechas que hace que la llegada sea hoy o deje de serlo).</td>
+                <td>Solo si la reserva está en la lista del día: actualización <code>UPDATED</code> (cambio de habitación) o <code>ADDED</code> / <code>REMOVED</code> (cambio de fechas que hace que la llegada sea hoy o deje de serlo).</td>
             </tr>
             <tr>
                 <td><strong>Cancelación</strong></td>
                 <td>Actualiza reserva a <code>CANCELLED</code> y registra la <code>Cancellation</code>.</td>
-                <td><strong>M2 notifica a M1:</strong> Si se cancela el mismo día y la <code>Room</code> estaba <code>Reserved</code>, ordena de inmediato revertirla a <code>Available</code> (Libre). Si la llegada es futura, no hay orden.</td>
+                <td><strong>M2 notifica a M1:</strong> Si la reserva estaba en la lista del día, envía <code>REMOVED</code> (motivo <code>CANCELLED</code>). M1 decide qué hace con la habitación. Si la llegada es futura, no se avisa nada.</td>
             </tr>
             <tr>
                 <td><strong>Check-In</strong></td>
@@ -126,7 +126,7 @@
             <tr>
                 <td><strong>Fin de Día (No-Show)</strong></td>
                 <td>Proceso automático sobre las reservas de hoy sin ingreso: canal OTA pasa a <code>NO_SHOW</code> y se conserva para conciliar comisiones con la agencia; canal directo pasa a <code>CANCELLED</code>.</td>
-                <td><strong>M2 notifica a M1:</strong> En ambos canales ordena devolver la <code>Room</code> a <code>Available</code>, solo si sigue apartada por esa reserva (nunca si M1 la reporta <code>Occupied</code>).</td>
+                <td><strong>M2 notifica a M1:</strong> Envía <code>REMOVED</code> (motivo <code>NO_SHOW</code>) si no hubo ningún ingreso. M1 libera las habitaciones por su cuenta.</td>
             </tr>
             <tr>
                 <td><strong>Exportación SIRE</strong></td>
@@ -173,8 +173,7 @@
             <tr><td>Consultar inventario de habitaciones</td><td><code>consult-room-inventory</code></td></tr>
             <tr><td>Consultar calendario de mantenimientos</td><td><code>consult-maintenance-calendar</code></td></tr>
             <tr><td>Calcular tarifa dinámica</td><td><code>calculate-dynamic-rate</code></td></tr>
-            <tr><td>Establecer estado de habitación</td><td><code>set-room-state</code></td></tr>
-            <tr><td>Procesar datos de huéspedes extranjeros</td><td><code>process-foreign-guest-data</code></td></tr>
+                        <tr><td>Procesar datos de huéspedes extranjeros</td><td><code>process-foreign-guest-data</code></td></tr>
             <tr><td>Exportar archivo SIRE</td><td><code>export-sire-file</code></td></tr>
         </tbody>
     </table>

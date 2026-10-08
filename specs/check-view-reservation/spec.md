@@ -39,8 +39,7 @@ qué habitaciones se les asignaron, quién es el titular, hasta cuándo se queda
 observación de la reserva. Además, las reservas del día cambian durante el día: se crean reservas
 para hoy, una OTA confirma una reserva pendiente, un huésped cancela o cambia de habitación. Si el
 Módulo 1 solo recibiera la lista de la mañana, trabajaría con datos desactualizados. Esta
-funcionalidad solo **informa**: no aparta ni libera habitaciones (eso lo hace "Establecer estado de
-habitación") ni cambia el estado de ninguna reserva.
+funcionalidad solo **informa**: no aparta ni libera habitaciones (el Módulo 1 decide qué hace con la lista) ni cambia el estado de ninguna reserva.
 
 ### Flujo de Usuario de Alto Nivel
 
@@ -471,7 +470,7 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
 - ¿Qué sucede si una reserva ya tuvo Check-In antes del inicio del día (llegada anticipada) y está en
   `IN_PROGRESS` al armar la lista? No se incluye, porque el Módulo 1 ya registró su ingreso.
 - ¿Qué sucede si una reserva `PENDING` de una OTA tiene llegada hoy y nunca se confirma? No viaja en
-  la lista. Su habitación sí se aparta por "Establecer estado de habitación"; si la OTA la confirma
+  la lista. Si la OTA la confirma
   durante el día, viaja como `ADDED`; si no, el cierre del día la marca `NO_SHOW`.
 - ¿Qué sucede si una reserva de la lista cambia varias veces en pocos segundos? Se envía una
   actualización por cada cambio confirmado, cada una con el detalle completo vigente en ese momento y
