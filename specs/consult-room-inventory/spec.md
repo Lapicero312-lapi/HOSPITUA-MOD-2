@@ -134,7 +134,7 @@ repite pidiendo solo las `Available` y se comprueba que el listado solo incluya 
 
 - **Room**: Unidad física provista por el Módulo 1. Atributos: `id`, `roomNumber`,
   `categoryRoom`, `maxCapacity` (capacidad máxima de personas, usada para validar el `guestCount` de
-  la reserva), `status` (`Available` | `Reserved` | `Occupied`) y `reservedByReservationRef`
+  cada habitación de la reserva), `status` (`Available` | `Reserved` | `Occupied`) y `reservedByReservationRef`
   (reserva que la mantiene apartada; solo presente cuando el `status` es `Reserved`). Su estado es
   propiedad
   exclusiva del Módulo 1; esta funcionalidad solo lo consulta.

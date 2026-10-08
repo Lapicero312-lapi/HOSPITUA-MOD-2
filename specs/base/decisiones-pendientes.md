@@ -30,15 +30,13 @@ C (equipo del Módulo 3), D (equipo del Módulo 2) y E (ajustes a documentos).
 
 | # | Decisión | Propuesta | Decisión | Notas |
 |---|---|---|---|---|
-| B1 | **Agregar el estado `Reserved`** a `Room.status` | Que lo aprueben y lo incorporen | [ ] | C8: sin él, las reservas con llegada hoy fallan y se cancelan |
+| B1 | **El Módulo 1 maneja `Reserved` y `Available`** por su cuenta con la lista del día | El Módulo 2 no envía órdenes de estado | [x] | Decidido: se elimina `set-room-state`; reemplaza a C8, C9, B7 y B8 |
 | B2 | **Contrato REST del inventario**: rutas, campos y si acepta rango de fechas | No enviar fechas (el estado físico es del instante actual) | [ ] | Plan `consult-room-inventory`. Su spec (2026-09-07) no filtra por fechas, como se propuso; faltan rutas y nombres de campos (B17) |
 | B3 | **Listado por categoría**: completo o filtrado por estado | Que ofrezca ambos modos (D4) | [x] | Cubierto por su spec (2026-09-07): filtra por tipo y por estado, combinables |
 | B4 | **Categoría inexistente** en el inventario | Devolver lista vacía, no error | [x] | Cubierto por su spec (2026-09-07): sin resultados devuelve lista vacía |
 | B5 | **Calendario de mantenimientos**: si las fechas son fecha o fecha y hora, y si el fin es inclusivo | Fecha, con fin inclusivo | [ ] | La regla de cruce depende de esto |
 | B6 | **Calendario por categoría**: que acepte `categoryRoom` o varios `roomId` | Sí, para evitar una llamada por habitación | [ ] | |
-| B7 | **Órdenes de estado de habitación**: ruta, idempotencia por `requestId`, consulta del resultado por `requestId` y campos del "detalle de la reserva" | Proponer `PUT /rooms/{roomId}/state` con `Idempotency-Key` | [ ] | Plan `set-room-state` |
-| B8 | **Valores de reintento** de las órdenes | Cada 15 s y 3 intentos de resolución en 2 minutos | [ ] | |
-| B9 | **Mensajes `habitacion.checkin` y `habitacion.checkout`**: confirmar que traen dentro la lista `foreignGuests` con los datos migratorios de cada huésped extranjero de la habitación, incluidos `movementType` (`ENTRY` en el Check-In, `DEPARTURE` en el Check-Out) y `movementDate` | Dentro de cada mensaje (C2), actualizado el 2026-09-28: el Check-Out también los trae | [ ] | El Módulo 1 procesa los datos y los envía (2026-09-28) |
+| B9 | **Mensajes `habitacion.checkin` y `habitacion.checkout`**: confirmar que traen solo `foreignGuestCount` y que cada huésped extranjero (con sus datos migratorios) viaja en su propio mensaje, incluidos `movementType` (`ENTRY` en el Check-In, `DEPARTURE` en el Check-Out) y `movementDate` | Solo `foreignGuestCount` en el Check-In y el Check-Out; cada extranjero viaja en su propio mensaje por `m2.huespedes.extranjeros.queue` (C2) | [x] | El Módulo 1 procesa los datos y los envía (2026-09-28) |
 | B15 | **Campos de `ForeignGuestData`**: confirmar que el Módulo 1 envía, por huésped, `firstName`, `lastName`, `documentType`, `documentNumber`, `birthDate`, `nationality`, `movementType` y `movementDate` | Esa lista, según la especificación del Módulo 1 y lo pedido por el negocio el 2026-09-28 | [ ] | Los obligatorios están en `process-foreign-guest-data` FR-003 |
 | B16 | **`reservedByReservationRef` en el inventario**: el spec de inventario del Módulo 1 (2026-09-07) no lo trae | Que lo agreguen, solo cuando el estado es `Reserved` | [ ] | Sin él no se distingue el apartado propio de una reserva de uno ajeno, ni se libera solo lo apartado por ella (`check-room-availability`, `set-room-state` FR-010) |
 | B17 | **Nombres de los campos del inventario**: su spec dice ID (UUID), número, tipo y capacidad máxima; el diccionario dice `id`, `roomNumber`, `categoryRoom`, `maxCapacity` | Confirmar los nombres exactos | [ ] | |
@@ -48,14 +46,17 @@ C (equipo del Módulo 3), D (equipo del Módulo 2) y E (ajustes a documentos).
 | B11 | **Hora de inicio del día operativo** y zona horaria del hotel | **Fijas:** el día operativo es el día calendario de Colombia, de las 00:00 a las 23:59 (UTC-5). La lista del día se envía a las 00:00 | [x] | Decidido por el negocio el 2026-09-29 (`check-view-reservation` FR-012, `update-reservation` FR-018). Ya no son configurables |
 | B12 | **`maxCapacity` en el inventario**: que el Módulo 1 devuelva la capacidad máxima de cada habitación | Agregarlo a la consulta puntual y por categoría | [x] | Cubierto por su spec (2026-09-07): incluye la capacidad máxima de personas |
 | B13 | **Check-In y Check-Out por habitación**: que `habitacion.checkin` y `habitacion.checkout` traigan el `roomId` además de la `reservationRef` | Obligatorio en ambos mensajes | [ ] | Reservas con varias habitaciones (2026-09-28) |
-| B14 | **Lista de reservas del día**: que el Módulo 1 consuma por cola la lista (`DailyReservationList`) y sus actualizaciones (`ADDED`, `UPDATED`, `REMOVED`) y deje de consultar `GET /api/reservations` | Routing keys propuestas: `reserva.lista-del-dia` y `reserva.lista-del-dia.actualizacion` | [ ] | Spec `check-view-reservation`, historias 4 y 5 (2026-09-28) |
+| B14 | **Lista de reservas del día**: que el Módulo 1 consuma por cola la lista (`DailyReservationList`) y sus actualizaciones (`ADDED`, `UPDATED`, `REMOVED`) y deje de consultar `GET /api/reservations` | Una sola cola `m1.reservas.diarias.queue` con las routing keys `reserva.lista-del-dia` y `reserva.lista-del-dia.actualizacion` | [x] | Spec `check-view-reservation`, historias 4 y 5 (2026-09-28) |
+| B20 | **Consulta de reservas por fechas**: el Módulo 1 consulta las reservas de un rango (y habitación) al registrar un mantenimiento y al dar de baja una habitación | `GET /api/reservations` con `dateFrom`, `dateTo` y `roomId` (`check-view-reservation` FR-023) | [x] | Confirmado: parámetros `dateFrom`, `dateTo` y `roomId`. Falta confirmar los campos devueltos. El Módulo 2 solo informa; la lógica la aplica el Módulo 1 |
 
 ## C. Con el equipo del Módulo 3
 
 | # | Decisión | Propuesta | Decisión | Notas |
 |---|---|---|---|---|
-| C1 | **Contrato de la tarifa dinámica**: ruta, campos y autenticación | Proponer `POST /pricing/quotes` | [ ] | Plan `calculate-dynamic-rate` |
-| C2 | **Escala del importe** (decimales) y moneda | Definir con el Módulo 3 | [ ] | D2 guarda la moneda en la reserva |
+| C1 | **Contrato de la tarifa dinámica**: ruta, campos y autenticación | `POST /pricing/quotes` con `roomType`, `checkInDate`, `checkOutDate`; responde `quoteId`, `nightlyRates`, `lodgingAmount` (propuesto por el Módulo 3) | [x] | Ruta y campos acordados; falta la autenticación. Specs ajustados |
+| C1a | **Cotización por habitación**: se cotiza una vez por habitación | La consulta de la reserva devuelve la lista `quoteIds` (un `quoteId` por habitación; vacía en OTA) | [x] | Acordado con el Módulo 3 (2026-10-07) |
+| C1b | **Consulta de la reserva por el Módulo 3**: `GET /api/reservations/{reservationRef}` con `quoteIds`, `channel` y, solo si es OTA, `otaId`, `otaConfirmationCode` y `otaCommissionPercentage`; 404 si no existe; credencial de servicio (actor Módulo 3) | Adoptarlo (`check-view-reservation` FR-022) | [x] | Acordado con el Módulo 3; falta la autenticación (C4) |
+| C2 | **Escala del importe** (decimales) y moneda | La respuesta de `POST /pricing/quotes` trae `currency` (por ejemplo `COP`); el Módulo 2 la guarda en la habitación | [x] | Moneda acordada con el Módulo 3 (2026-10-07); falta definir la escala de los decimales |
 | C3 | **Porcentaje de comisión**: confirmar que lo expresan de 0 a 100 | 0 a 100, dividido entre 100 (C7) | [ ] | |
 | C4 | **Autenticación del Módulo 3** al llamar a `GET /api/otas/{otaId}` | Credencial de servicio (ver A7) | [ ] | |
 
@@ -92,7 +93,6 @@ C (equipo del Módulo 3), D (equipo del Módulo 2) y E (ajustes a documentos).
 |---|---|---|---|---|
 | D16 | **Formato de `processedBy`** en las cancelaciones | Usuario autenticado (Recepcionista) o identificador de la agencia | [ ] | |
 | D17 | **Cancelar una reserva OTA en `PENDING`** | Igual que `ACTIVE` | [ ] | El spec lo admite |
-| D18 | **400 cuando la cancelación sí se aplicó** (`ROOM_RELEASE_PENDING`) | Mantener lo que pide el spec; el cliente distingue por `errorCode` | [ ] | |
 | D19 | **Hora de cierre del día operativo** | **Fija:** al terminar las 23:59, hora de Colombia | [x] | Decidido por el negocio el 2026-09-29 (ver B11) |
 | D20 | **Reintentos de los consumidores de colas** | Definir cantidad y espera | [ ] | |
 | D21 | ~~Check-In de un huésped `NATIONAL` con datos migratorios~~ | **Resuelto 2026-09-28**: se registran los huéspedes extranjeros que envíe el Módulo 1 aunque el titular sea nacional | [x] | Los acompañantes pueden ser extranjeros |
@@ -117,7 +117,6 @@ C (equipo del Módulo 3), D (equipo del Módulo 2) y E (ajustes a documentos).
 | # | Decisión | Propuesta | Decisión | Notas |
 |---|---|---|---|---|
 | D27 | **Máximo de habitaciones por reserva** | 10 | [ ] | Usado en generar directa, generar OTA y actualizar |
-| D28 | **Vigencia del aviso de llegada tardía** | Solo reservas `DIRECT` (las OTA no lo tienen). Protege la reserva hasta el cierre del día siguiente a la llegada | [x] | Confirmado por el negocio el 2026-09-29; el 2026-10-06 se decidió que aplica solo a reservas directas; está en `update-reservation` |
 | D29 | **Reservas `PENDING` en la lista del día** | No se envían; viajan como `ADDED` si la OTA las confirma ese día | [ ] | El negocio pidió "reservas activas" |
 | D30 | **Largo máximo de `notes`** (observaciones) | 500 caracteres | [ ] | |
 | D32 | **Archivo SIRE por Recepcionista** | La Recepcionista genera el `.TXT` y lo envía a Migración fuera del sistema; Migración no es actor del sistema | [ ] | Cambio del 2026-09-28: antes Migración descargaba el archivo |
@@ -126,7 +125,7 @@ C (equipo del Módulo 3), D (equipo del Módulo 2) y E (ajustes a documentos).
 | D34 | **Persona que ingresa y sale en distintas habitaciones o fechas** | Un solo `ENTRY` y un solo `DEPARTURE` por huésped y reserva | [ ] | |
 | D35 | **Descarga individual de SIRE por movimiento** | La Recepcionista puede previsualizar y descargar un movimiento solo; cada descarga crea una `SireExport` de un registro y no marca nada | [x] | Decidido por el negocio el 2026-09-29 (`export-sire-file`, FR-010). Un archivo de una línea usa el mismo formato que el del periodo. Falta actualizar `export-sire-file/plan.md` |
 | D36 | **La información de las OTA no se edita en el hotel** | La `Ota` se registra sola al vincular la cuenta del hotel, con los datos que envía por su API (`name`, `hotelAccountId`, `commissionPercentage`); la Recepcionista solo la consulta. Las reservas `OTA` solo las modifica o cancela la Ota por su API | [ ] | Cambio del 2026-09-29 en `register-ota-information-commission` (US3, FR-008), `update-reservation` (FR-001a) y `cancel-reservation` (FR-002a). Pendiente: quitar `POST /api/otas` y `PUT /api/otas/{otaId}` de la Recepcionista y el Administrador en `base/plan.md`, definir el endpoint de registro de la Ota, y actualizar A8 y E11 |
-| D38 | **Tipo de documento del titular (`documentType`)**: el Módulo 1 lo pide en la lista de reservas del día | Valores `CC`, `CE`, `PASSPORT` y `OTHER`; se captura en reserva directa y modificación, y en OTA viene en el payload | [ ] | Confirmado: las OTA sí envían el tipo de documento en su payload. Pendiente confirmar con el Módulo 1 y con las OTA la lista de valores |
+| D38 | **Tipo de documento del titular (`documentType`)**: el Módulo 1 lo pide en la lista de reservas del día | Valores `RC`, `TI`, `CC`, `CE`, `PAS` o `NIT`; se captura en reserva directa y modificación, y en OTA viene en el payload | [ ] | Confirmado: las OTA sí envían el tipo de documento en su payload. Pendiente confirmar con el Módulo 1 y con las OTA la lista de valores |
 | D31 | **Llegada parcial de un grupo**: habitaciones sin Check-In al cierre del día | `NOT_ARRIVED` y se liberan; la reserva sigue `IN_PROGRESS` | [ ] | Sin efecto financiero en el Módulo 2; el ajuste del cobro es del Módulo 3 |
 
 ## E. Ajustes a documentos del equipo
@@ -135,7 +134,7 @@ Ninguno de estos cambios está hecho.
 
 | # | Documento | Ajuste | Motivo |
 |---|---|---|---|
-| E1 | `DIAGRAMA.drawio` (casos de uso) | Unir "Establecer estado de habitación" a generar directa, generar OTA y actualizar reservación | Solo está unido a cancelar; los specs lo usan en cuatro casos |
+| E1 | `DIAGRAMA.drawio` (casos de uso) | Quitar "Establecer estado de habitación" y sus uniones | El Módulo 2 ya no ordena estados de habitación |
 | E2 | `DIAGRAMA.drawio` | Quitar la línea de "Generar reservación por OTA" a "Calcular tarifa dinámica" | Decisión C5 |
 | E3 | `diccionario.md` y `guia_flujo_reservas.html` | Aclarar que el inventario se consulta siempre solo para elegir habitaciones y el estado físico solo si la estadía incluye hoy | El spec de disponibilidad dice esto último |
 | E4 | Specs de disponibilidad, inventario y otros | Listar los 8 estados de `Room` del diccionario, no solo 3 | Inconsistencia |
@@ -151,4 +150,4 @@ Ninguno de estos cambios está hecho.
 | E14 | Todos los `plan.md` y `base/plan.md` | Actualizar a los specs del 2026-09-28: varias habitaciones por reserva (`ReservationRoom`, `stayStatus`), `guestCount`, `notes`, Check-In/Out por habitación, nueva historia de envío diario al Módulo 1 dentro de `check-view-reservation`, y quitar al Módulo 1 como consumidor de `GET /api/reservations` | Los planes quedaron desactualizados; los números de FR de `generate-direct-reservation` y `update-reservation` cambiaron |
 | E15 | `mod-1-2-3.drawio` | Cambiar la flecha "Consultar reservas" (M1 → M2, REST) por "Lista de reservas del día" (M2 → M1, cola) | Decisión del negocio del 2026-09-28 |
 | E16 | `DIAGRAMA.drawio` (casos de uso) y `guia_flujo_reservas.html` | Quitar a Migración como actor de "Exportar archivo SIRE" y ponerlo a cargo de la Recepcionista; en `mod-1-2-3.drawio`, anotar que la flecha de check-out también lleva datos migratorios | Decisión del negocio del 2026-09-28 |
-| E17 | `base/plan.md`, `process-foreign-guest-data/plan.md` y `export-sire-file/plan.md` | Actualizar a `MigratoryMovement` por huésped y tipo, `foreignGuests` en check-in y check-out y actor Recepcionista | Decisión del negocio del 2026-09-28 |
+| E17 | `base/plan.md`, `process-foreign-guest-data/plan.md` y `export-sire-file/plan.md` | Actualizar a `MigratoryMovement` por huésped y tipo, un mensaje por huésped extranjero en su propia cola y actor Recepcionista | Decisión del negocio del 2026-09-28 |

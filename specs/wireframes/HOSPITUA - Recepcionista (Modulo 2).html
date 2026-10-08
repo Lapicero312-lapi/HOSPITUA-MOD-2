@@ -133,12 +133,11 @@
             <div id="mdPersErr" class="field" hidden style="margin-bottom:10px"><span class="err"></span></div>
             <h2 style="margin-top:6px">Titular</h2>
             <div class="row"><div class="field" style="flex:1"><label class="req">Nombre completo</label><input id="mdNombre"></div></div>
-            <div class="row"><div class="field" style="flex:1"><label class="req">Tipo de documento</label><select id="mdDocType"><option value="CC">Cédula de ciudadanía</option><option value="CE">Cédula de extranjería</option><option value="PASSPORT">Pasaporte</option><option value="OTHER">Otro</option></select></div><div class="field" style="flex:1"><label class="req">Documento</label><input id="mdDoc"></div></div>
+            <div class="row"><div class="field" style="flex:1"><label class="req">Tipo de documento</label><select id="mdDocType"><option value="RC">Registro Civil</option><option value="TI">Tarjeta de Identidad</option><option value="CC">Cédula de ciudadanía</option><option value="CE">Cédula de extranjería</option><option value="PAS">Pasaporte</option><option value="NIT">NIT</option></select></div><div class="field" style="flex:1"><label class="req">Documento</label><input id="mdDoc"></div></div>
             <div class="row">
               <div class="field"><label>Teléfono</label><input id="mdTel" placeholder="+57 300 000 0000"></div>
               <div class="field"><label>Email</label><input id="mdEmail" placeholder="nombre@correo.com"></div>
             </div>
-            <label class="check" style="margin-bottom:12px"><input type="checkbox" id="mdTardia"> Aviso de llegada tardía</label>
             <div class="field"><label>Observaciones</label>
               <textarea id="mdNotes" rows="3" maxlength="500"></textarea>
               <span class="note" id="mdNotesCount"></span>
@@ -190,7 +189,7 @@
           <div class="grid2">
             <div>
               <div class="row"><div class="field" style="flex:1"><label class="req">Nombre completo del titular</label><input id="ndNombre" placeholder="Ej. Laura Fernández Gómez"></div></div>
-              <div class="row"><div class="field" style="flex:1"><label class="req">Tipo de documento</label><select id="ndDocType"><option value="CC">Cédula de ciudadanía</option><option value="CE">Cédula de extranjería</option><option value="PASSPORT">Pasaporte</option><option value="OTHER">Otro</option></select></div><div class="field" style="flex:1"><label class="req">No. documento</label><input id="ndDoc" placeholder="Ej. 1.014.223.980"></div></div>
+              <div class="row"><div class="field" style="flex:1"><label class="req">Tipo de documento</label><select id="ndDocType"><option value="RC">Registro Civil</option><option value="TI">Tarjeta de Identidad</option><option value="CC">Cédula de ciudadanía</option><option value="CE">Cédula de extranjería</option><option value="PAS">Pasaporte</option><option value="NIT">NIT</option></select></div><div class="field" style="flex:1"><label class="req">No. documento</label><input id="ndDoc" placeholder="Ej. 1.014.223.980"></div></div>
               <div class="row">
                 <div class="field"><label>Teléfono</label><input id="ndTel" placeholder="+57 300 000 0000"></div>
                 <div class="field"><label>Email</label><input id="ndEmail" placeholder="nombre@correo.com"></div>
@@ -364,7 +363,7 @@ const otas = [
 const reservations = [
   {ref:'RSV-2026-00420', guest:'Andrés Molina', doc:'CC 80.221.334', pais:'Colombia', source:'DIRECT',
     start:'2026-09-28', end:'2026-09-29', status:'ACTIVE', guestCount:1, rooms:[{n:'102',cat:'Estándar',stay:'EXPECTED'}],
-    phone:'+57 310 220 4471', email:'andres.molina@correo.com', lateArrivalNotice:true, notes:'Llega en el último vuelo, 23:30.'},
+    phone:'+57 310 220 4471', email:'andres.molina@correo.com', notes:'Llega en el último vuelo, 23:30.'},
   {ref:'RSV-2026-00418', guest:'Camila Restrepo', doc:'CC 1.020.456.789', pais:'Colombia', source:'DIRECT',
     start:'2026-09-28', end:'2026-10-01', status:'ACTIVE', guestCount:2, rooms:[{n:'104',cat:'Estándar',stay:'EXPECTED'}],
     notes:''},
@@ -393,7 +392,7 @@ const reservations = [
     start:'2026-09-22', end:'2026-09-24', status:'NO_SHOW', guestCount:2, rooms:[{n:'203',cat:'Superior',stay:'NOT_ARRIVED'}],
     gross:713000, commissionPct:12, commissionStatus:'CALCULATED', notes:''},
   {ref:'RSV-2026-00402', guest:'Ricardo Peña Salas', doc:'CC 79.554.120', pais:'Colombia', source:'DIRECT',
-    start:'2026-09-15', end:'2026-09-16', status:'CANCELLED', guestCount:1, rooms:[{n:'103',cat:'Estándar',stay:'NOT_ARRIVED'}],
+    start:'2026-09-15', end:'2026-09-16', status:'NO_SHOW', guestCount:1, rooms:[{n:'103',cat:'Estándar',stay:'NOT_ARRIVED'}],
     notes:'', noShow:true},
 ];
 
@@ -435,14 +434,16 @@ function findRes(ref){ return reservations.find(r => r.ref === ref); }
 function overlaps(s1, e1, s2, e2){ return s1 < e2 && s2 < e1; }
 function quoteFor(cat, s, e){
   const nights = Math.max(0, nightsBetween(s, e));
-  const base = rateTable[cat];
-  const subtotal = nights * base;
-  const season = subtotal * SEASON_PCT;
-  return {nights, base, subtotal, season, gross: subtotal + season};
+  const rate = rateTable[cat] * (1 + SEASON_PCT);
+  const nightly = Array.from({length: nights}, (_, i) => ({date: addDays(s, i), rate}));
+  return {nights, nightly, gross: nights * rate};
+}
+function nightlyLines(q){
+  return q.nightly.map(n => `<div class="line"><span>${fmtDate(n.date)}</span><span>${money(n.rate)}</span></div>`).join('');
 }
 // Tarifas de las reservas directas: las entrega el Módulo 3 por habitación; el Módulo 2 no las suma.
-const DOC_PREFIX = {CC: 'CC', CE: 'CE', PASSPORT: 'Pasaporte', OTHER: ''};
-const docNumberOf = doc => (doc || '').replace(/^(CC|CE|Pasaporte)s*/, '');
+const DOC_PREFIX = {RC: 'RC', TI: 'TI', CC: 'CC', CE: 'CE', PAS: 'Pasaporte', NIT: 'NIT'};
+const docNumberOf = doc => (doc || '').replace(/^(RC|TI|CC|CE|NIT|Pasaporte)\s*/, '');
 const docLabel = (type, num) => (DOC_PREFIX[type] ? DOC_PREFIX[type] + ' ' : '') + num;
 function addDays(iso, n){
   const d = new Date(iso + 'T00:00:00Z');
@@ -471,10 +472,10 @@ exportsHist.forEach(h => { h.start = shiftDay(h.start); h.end = shiftDay(h.end);
 
 // Ciclo de vida según la fecha (lo que harían el Check-In/Check-Out del Módulo 1 y el cierre del día):
 // llega hoy = ACTIVE (espera el Check-In); ya llegó y no ha salido = IN_PROGRESS; ya pasó su salida = COMPLETED;
-// no se presentó = NO_SHOW (OTA) o CANCELLED (directa) y una OTA que nunca confirmó (PENDING) vence igual.
+// no se presentó = NO_SHOW (OTA o directa) y una OTA que nunca confirmó (PENDING) vence igual.
 // Como todavía no hay conexión con los demás módulos, lo que pasa con cada reserva que llega después del primer día
-// se sortea y se guarda para que no cambie al recargar: las directas con aviso de llegada tardía siempre llegan; a las
-// demás les toca llegar o no presentarse. Quien no se presenta queda NO_SHOW si es OTA y CANCELLED si es directa
+// se sortea y se guarda para que no cambie al recargar: a todas
+// les toca llegar o no presentarse. Quien no se presenta queda NO_SHOW
 // (cierre del día, sin registrar una Cancellation).
 let arrivals = {};
 try { localStorage.removeItem('hospitua.outcomes'); arrivals = JSON.parse(localStorage.getItem('hospitua.arrivals') || '{}'); } catch (err) { arrivals = {}; }
@@ -489,9 +490,9 @@ function deriveLifecycle(r){
   const ota = r.source === 'OTA';
   const setStay = st => r.rooms.forEach(x => { x.stay = st; });
   const noShow = () => {
-    r.status = ota ? 'NO_SHOW' : 'CANCELLED';
+    r.status = 'NO_SHOW';
     setStay('NOT_ARRIVED');
-    delete r.cancellation;   // el cierre del día no registra una Cancellation (update-reservation FR-021)
+    delete r.cancellation;   // un No-Show no registra una Cancellation (update-reservation FR-021)
   };
   const arrived = () => { if (r.end < TODAY){ r.status = 'COMPLETED'; setStay('CHECKED_OUT'); } else { r.status = 'IN_PROGRESS'; setStay('CHECKED_IN'); } };
   const waiting = status => { r.status = status; setStay('EXPECTED'); delete r.cancellation; };
@@ -503,7 +504,7 @@ function deriveLifecycle(r){
     if (r.start < TODAY) noShow(); else waiting(unconfirmed ? 'PENDING' : 'ACTIVE');
   } else if (r.start >= TODAY) waiting('ACTIVE');
   else if (startedBeforeDemo) arrived();
-  else if ((r.source === 'DIRECT' && r.lateArrivalNotice) || arrivalDraw(r).arrives) arrived();
+  else if (arrivalDraw(r).arrives) arrived();
   else noShow();
 }
 reservations.forEach(deriveLifecycle);
@@ -515,7 +516,7 @@ movementTemplates.forEach(t => {
 });
 const CREATE_HOURS = ['09:14', '11:02', '14:37', '16:48', '08:55'];
 reservations.forEach((r, i) => {
-  r.docType = /^Pasaporte/.test(r.doc) ? 'PASSPORT' : /^CE/.test(r.doc) ? 'CE' : 'CC';
+  r.docType = /^Pasaporte/.test(r.doc) ? 'PAS' : (r.doc.match(/^(RC|TI|CE|NIT)\b/) || [null, 'CC'])[1];
   r.rooms.forEach(rm => { if (r.source === 'DIRECT') rm.gross = quoteFor(rm.cat, r.start, r.end).gross; });
   if (r.source === 'OTA') r.commissionAmount = Math.round(r.gross * r.commissionPct / 100);
   if (!r.createdAt) r.createdAt = addDays(r.start, -(3 + (i % 5))) + ' ' + CREATE_HOURS[i % CREATE_HOURS.length];
@@ -548,7 +549,7 @@ const lockLong = {
   IN_PROGRESS: '🔒 Hospedaje en curso: la reserva no admite cambios de estadía ni cancelación.',
   COMPLETED: '🔒 Estadía finalizada. Reserva de solo consulta.',
   CANCELLED: '🔒 Reserva cancelada. Solo consulta.',
-  NO_SHOW: '🔒 Reserva OTA marcada como no presentada por el cierre del día. Solo consulta.',
+  NO_SHOW: '🔒 Reserva marcada como no presentada por el cierre del día. Solo consulta.',
 };
 const STATUS_ES = {ACTIVE:'Activa', PENDING:'Pendiente', IN_PROGRESS:'En curso', COMPLETED:'Completada', CANCELLED:'Cancelada', NO_SHOW:'No se presentó'};
 const STAY_ES = {EXPECTED:'Esperada', CHECKED_IN:'Con Check-In', CHECKED_OUT:'Con Check-Out', NOT_ARRIVED:'No llegó'};
@@ -799,7 +800,6 @@ function renderDetalle(){
   document.getElementById('dtStay').innerHTML =
     kv('Entrada', fmtDate(r.start)) + kv('Salida', fmtDate(r.end)) + kv('Noches', nights) + kv('Personas', r.guestCount) +
     (r.source === 'OTA' ? kv('Valor bruto', money(r.gross)) : '') +
-    (r.source === 'DIRECT' ? kv('Aviso de llegada tardía', r.lateArrivalNotice ? 'Sí' : 'No') : '') +
     kv('Observaciones', r.notes || '<span class="note">—</span>') +
     kv('Creada el', fmtDate(r.createdAt));
   document.getElementById('dtRooms').innerHTML = r.rooms.map(x => `<tr><td>Hab. ${x.n}</td><td>${x.cat}</td>
@@ -878,7 +878,6 @@ function renderModificar(){
   document.getElementById('mdTel').value = r.phone || '';
   document.getElementById('mdEmail').value = r.email || '';
   document.getElementById('mdNotes').value = r.notes || '';
-  document.getElementById('mdTardia').checked = !!r.lateArrivalNotice;
   mdRows = r.rooms.map(x => ({n: x.n, cat: x.cat, orig: x.n, origCat: x.cat}));
   refreshModificar();
 }
@@ -954,8 +953,7 @@ function refreshModificar(){
       const motivo = row.orig === null ? 'Habitación nueva' : row.cat !== row.origCat ? 'Cambia de categoría' : 'Cambian las fechas';
       return `<div style="padding-bottom:10px;margin-bottom:10px;border-bottom:1px solid var(--line-soft)">
         <div class="line"><b>${row.n ? 'Hab. ' + row.n + ' · ' : ''}${row.cat}</b><span class="note">${motivo}</span></div>
-        <div class="line"><span>${q.nights} noche(s) × ${money(q.base)}</span><span>${money(q.subtotal)}</span></div>
-        <div class="line"><span>Ajuste de temporada (+${SEASON_PCT * 100}%)</span><span>${money(q.season)}</span></div>
+        ${nightlyLines(q)}
         <div class="total"><span>Tarifa por habitación</span><span>${money(q.gross)}</span></div>
       </div>`;
     }).join('');
@@ -967,7 +965,7 @@ function refreshModificar(){
   const titularOk = document.getElementById('mdNombre').value.trim() && document.getElementById('mdDoc').value.trim();
   document.getElementById('mdSave').disabled = !valid || mdRows.some(row => !row.n) || !!persErr || !titularOk;
 }
-['mdEntrada', 'mdSalida', 'mdPersonas', 'mdNombre', 'mdDoc', 'mdTel', 'mdEmail', 'mdNotes', 'mdTardia']
+['mdEntrada', 'mdSalida', 'mdPersonas', 'mdNombre', 'mdDoc', 'mdTel', 'mdEmail', 'mdNotes']
   .forEach(id => document.getElementById(id).addEventListener('input', refreshModificar));
 document.getElementById('mdAddRoom').addEventListener('click', mdAddRoom);
 document.getElementById('mdSave').addEventListener('click', () => {
@@ -982,7 +980,6 @@ document.getElementById('mdSave').addEventListener('click', () => {
   r.phone = document.getElementById('mdTel').value.trim();
   r.email = document.getElementById('mdEmail').value.trim();
   r.notes = document.getElementById('mdNotes').value.trim();
-  r.lateArrivalNotice = document.getElementById('mdTardia').checked;
   backToList(r.ref, 'Reserva ' + r.ref + ' modificada correctamente.');
 });
 document.getElementById('mdBack').addEventListener('click', () => goDetalle(currentRef));
@@ -1040,8 +1037,7 @@ function refreshNuevaDirecta(){
   if (dateOk && qty > 0){
     const q = quoteFor(cat, s, e);
     tarifa.innerHTML = `
-      <div class="line"><span>${q.nights} noche(s) × ${money(q.base)}</span><span>${money(q.subtotal)}</span></div>
-      <div class="line"><span>Ajuste de temporada (+${SEASON_PCT * 100}%)</span><span>${money(q.season)}</span></div>
+      ${nightlyLines(q)}
       <div class="total"><span>Tarifa por habitación</span><span>${money(q.gross)}</span></div>`;
   } else {
     tarifa.innerHTML = '<p class="note">Ingrese fechas válidas para cotizar.</p>';
@@ -1071,7 +1067,6 @@ document.getElementById('ndSubmit').addEventListener('click', () => {
     rooms: picked.map(x => ({n: x.n, cat, stay: 'EXPECTED', gross: quoteFor(cat, s, e).gross})),
     phone: document.getElementById('ndTel').value.trim(), email: document.getElementById('ndEmail').value.trim(),
     createdAt: TODAY + ' ' + new Date().toTimeString().slice(0, 5),
-    lateArrivalNotice: false,
     notes: document.getElementById('ndNotes').value.trim()};
   reservations.unshift(r);
   ['ndNombre', 'ndDoc', 'ndPais', 'ndTel', 'ndEmail', 'ndNotes'].forEach(id => document.getElementById(id).value = '');

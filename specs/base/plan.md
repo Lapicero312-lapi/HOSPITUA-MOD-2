@@ -13,8 +13,8 @@ reservas (`Reservation.status`) y de `ReservationRoom.stayStatus`. Registra rese
 recibe del Módulo 1 los avisos de Check-In y Check-Out por habitación (con los huéspedes extranjeros
 ya procesados), y genera el reporte SIRE.
 Consulta al Módulo 1 (inventario y calendario de mantenimientos) y al Módulo 3 (tarifa dinámica), le
-envía por cola la lista de reservas del día y le ordena apartar (`Reserved`) o liberar (`Available`)
-una habitación **solo cuando la llegada es el día operativo en curso**.
+envía por cola la lista de reservas del día y sus actualizaciones. **No le ordena apartar ni liberar
+habitaciones**: el Módulo 1, dueño del estado de las habitaciones, decide qué hace con esa lista.
 
 Este plan fija lo que comparten las 13 features: stack, arquitectura hexagonal, estructura, modelo de
 datos, contratos de integración (REST y colas), manejo uniforme de errores (siempre 4xx, nunca 500),
@@ -70,13 +70,17 @@ objetivo global de carga)
 
 ## Arquitectura hexagonal
 
-El dominio no conoce ninguna tecnología. Las dependencias siempre apuntan hacia adentro:
+El backend tiene **un solo dominio general** (`src/domain/`), compartido por todas las features. No hay
+un dominio por módulo: las entidades del Módulo 2 (`Reservation`, `Guest`, `Ota`, `MigratoryMovement`...)
+están relacionadas entre sí y sus reglas se cruzan (una cancelación cambia el estado de la reserva y
+genera avisos al Módulo 1; un Check-In cambia la reserva y registra movimientos migratorios), así
+que viven juntas. Las dependencias siempre apuntan hacia adentro:
 `infrastructure` → `application` → `domain`.
 
 | Capa | Contiene | Puede importar |
 |---|---|---|
-| `domain/` | Entidades y objetos de valor, reglas de negocio, tabla de transiciones de `status`, errores de negocio | Solo TypeScript puro (y `decimal.js` para dinero). **Nada de Nest, TypeORM ni RabbitMQ** |
-| `application/` | Puertos de entrada (casos de uso), puertos de salida (lo que el módulo necesita) y los servicios que implementan los casos de uso | `domain/` |
+| `domain/` | **Todas** las entidades y objetos de valor del Módulo 2, sus relaciones, los enumerados, las reglas de negocio (invariantes y tabla de transiciones de `status`) y los errores de negocio. Ver "Modelo de dominio" | Solo TypeScript puro (y `decimal.js` para dinero). **Nada de Nest, TypeORM ni RabbitMQ** |
+| `application/` | Un caso de uso por feature de las specs (puertos de entrada y servicios) y los puertos de salida (repositorios, Módulo 1, Módulo 3, publicador de eventos, reloj) | `domain/` |
 | `infrastructure/in/` | Adaptadores de entrada: controladores REST, consumidores RabbitMQ, tareas programadas | `application/` (puertos de entrada) |
 | `infrastructure/out/` | Adaptadores de salida: repositorios TypeORM, clientes HTTP del Módulo 1 y 3, publicadores RabbitMQ, reloj | `application/` (implementan los puertos de salida) |
 
@@ -87,12 +91,150 @@ Reglas:
 2. Las entidades del dominio no son las de TypeORM. El adaptador de persistencia tiene sus propias clases
    de tabla y las convierte con un mapeador.
 3. Los módulos 1 y 3 se ven solo como puertos (`Module1Port`, `Module3Port`). Si cambia su API, solo se
-   cambia el adaptador.
+   cambia el adaptador. Sus datos (`Room`, `MaintenanceCalendar`, `RateQuote`, `ForeignGuestData`) son
+   objetos de integración en `application/`, no entidades del dominio.
 4. La inyección de dependencias de Nest une los puertos con sus adaptadores (símbolos como
    `RESERVATION_REPOSITORY`); el dominio nunca usa `@Injectable`.
-5. Las dependencias entre capas y entre módulos se verifican en CI con `eslint-plugin-boundaries`
-   (o `dependency-cruiser`).
-6. Un módulo de dominio no importa las clases internas de otro: solo sus puertos de entrada.
+5. Las dependencias entre capas se verifican en CI con `eslint-plugin-boundaries` (o
+   `dependency-cruiser`): `domain/` no importa nada de `application/` ni de `infrastructure/`.
+6. Los casos de uso no se llaman entre sí por sus clases internas: si uno necesita a otro (por ejemplo,
+   cancelar y modificar usan "Consultar y buscar reservas"), lo usa por su puerto de entrada.
+
+## Modelo de dominio
+
+Todas las entidades viven en `src/domain/`. Los tipos son los del dominio (TypeScript); las tablas
+están en "Modelo de datos base".
+
+### Entidades y atributos
+
+**Reservation** (raíz del agregado de la reserva)
+
+| Atributo | Tipo | Regla |
+|---|---|---|
+| `reservationRef` | texto, único | Identificador con el que los demás módulos la referencian |
+| `guestRef` | referencia a `Guest` | Titular, obligatorio |
+| `guestCount` | entero | Total de personas: suma de los `guestCount` de sus habitaciones |
+| `rooms` | lista de `ReservationRoom` | Entre 1 y 10, sin repetir `roomId` |
+| `startDate`, `endDate` | fecha sin hora | `endDate` > `startDate`; comunes a todas las habitaciones |
+| `source` | `ReservationSource` | `DIRECT` u `OTA` |
+| `otaId` | referencia a `Ota` | Solo si `source` es `OTA` |
+| `externalConfirmationCode` | texto | Solo `OTA`; único por agencia |
+| `grossAmount`, `currency` | dinero | Solo `OTA`: valor bruto que envía la agencia (`totalAmount` en su JSON); base de la comisión |
+| `commissionPercentage`, `commissionAmount` | decimal | `0` en `DIRECT`; en `OTA`, `grossAmount × commissionPercentage / 100` |
+| `commissionStatus` | `CommissionStatus` | Solo `OTA` |
+| `notes` | texto | Opcional, máximo 500 caracteres |
+| `status` | `ReservationStatus` | Solo cambia por la tabla de transiciones |
+| `statusReason` | texto | Motivo de la última transición (D6) |
+| `createdAt`, `updatedAt` | fecha y hora | `updatedAt` es el control de concurrencia optimista |
+
+**ReservationRoom** (parte del agregado `Reservation`; no existe sin su reserva)
+
+| Atributo | Tipo | Regla |
+|---|---|---|
+| `roomId` | id externo | `Room.id` del Módulo 1 |
+| `roomNumber` | texto | Copia del número del Módulo 1, guardada al asignarla |
+| `guestCount` | entero | Personas de esa habitación: ≥ 1 y ≤ `maxCapacity` |
+| `checkInForeignGuestCount`, `checkOutForeignGuestCount` | entero | Extranjeros que el Módulo 1 informó en el Check-In y en el Check-Out; solo informativos, se muestran a la Recepcionista |
+| `categoryRoom` | texto | Categoría de la habitación |
+| `roomGrossAmount`, `currency` | dinero | Solo `DIRECT`: el `lodgingAmount` y la moneda de la cotización del Módulo 3, sin cálculos |
+| `quoteId` | texto | Solo `DIRECT`: identificador de la cotización; el Módulo 3 lo usa para cobrar en el Check-Out |
+| `stayStatus` | `StayStatus` | Estado de esa habitación dentro de la reserva |
+
+**Guest** (titular de reservas)
+
+| Atributo | Tipo | Regla |
+|---|---|---|
+| `id` (`guestRef`) | id | |
+| `firstName`, `lastName` | texto | Obligatorios; el nombre completo (`fullName`) se arma uniéndolos |
+| `documentType` | `DocumentType` | Obligatorio |
+| `documentNumber` | texto | Obligatorio; identifica al huésped existente |
+| `nationality` | texto | Si no es Colombia, el huésped es extranjero (se deduce, no se guarda) |
+| `contactPhone`, `contactEmail` | texto | Opcionales |
+
+**Ota** (agencia; se registra sola por su API)
+
+| Atributo | Tipo | Regla |
+|---|---|---|
+| `id`, `name`, `hotelAccountId` | texto | Enviados por la OTA |
+| `commissionPercentage` | decimal de 0 a 100 | Porcentaje pactado por defecto |
+| `connectionStatus` | `CONNECTED` o `DISCONNECTED` | |
+| `linkedAt`, `lastSyncAt` | fecha y hora | |
+
+**Cancellation** (registro inmutable de la anulación): `cancellationId`, `reservationRef`,
+`cancellationDate`, `reason` (opcional), `channel` (`RECEPTION` | `OTA_API`), `processedBy`, `status`
+(`COMPLETED`).
+
+**MigratoryMovement** (entrada o salida de un huésped extranjero): `movementId`, `reservationRef`,
+`guestRef` (solo si es el titular), `movementType` (`ENTRY` | `DEPARTURE`), `movementDate`, `firstName`,
+`lastName`, `documentType`, `documentNumber`, `birthDate`, `nationality`, `originPlace`,
+`destinationPlace`. Identidad única: (`reservationRef`, `documentNumber`, `movementType`).
+
+**SireExport** (histórico de descargas del archivo SIRE): `id`, `exportDate`, `exportKind` (`PERIOD` |
+`SINGLE_MOVEMENT`), `recordsCount`, `dateRangeStart`, `dateRangeEnd`, `processedBy`. No marca los
+movimientos.
+
+**DailyReservationList** y **DailyReservationUpdate** (mensajes al Módulo 1): ver
+`check-view-reservation`. Se guardan en `daily_list_message` para no reenviar la lista y respetar el
+`sequenceNumber`.
+
+### Enumerados (objetos de valor)
+
+| Enumerado | Valores |
+|---|---|
+| `ReservationStatus` | `PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW` |
+| `StayStatus` | `EXPECTED`, `CHECKED_IN`, `CHECKED_OUT`, `NOT_ARRIVED` |
+| `ReservationSource` | `DIRECT`, `OTA` |
+| `CommissionStatus` | `CALCULATED`, `RECONCILED`, `PAID`, `DISPUTED` |
+| `DocumentType` | `RC`, `TI`, `CC`, `CE`, `PAS`, `NIT` |
+| `MovementType` | `ENTRY`, `DEPARTURE` |
+| `MigrationStatus` (derivado, no se guarda) | `AWAITING_CHECK_IN`, `COMPLETE`, `NOT_REQUIRED`, `NO_CHECK_IN` |
+
+### Relaciones
+
+| Relación | Cardinalidad | Notas |
+|---|---|---|
+| `Guest` → `Reservation` | 1 a N | Un huésped puede ser titular de varias reservas; cada reserva tiene un solo titular |
+| `Reservation` → `ReservationRoom` | 1 a 1..10 | Composición: las habitaciones se crean, cambian y borran solo a través de su reserva |
+| `Ota` → `Reservation` | 1 a N | Solo reservas `OTA`; `(otaId, externalConfirmationCode)` es único |
+| `Reservation` → `Cancellation` | 1 a 0..1 | Solo cancelaciones explícitas (Recepcionista u OTA); el No-Show no crea `Cancellation` |
+| `Reservation` → `MigratoryMovement` | 1 a N | Máximo un `ENTRY` y un `DEPARTURE` por huésped extranjero |
+| `Guest` → `MigratoryMovement` | 1 a 0..N | Solo cuando el titular es extranjero; los acompañantes no son `Guest` |
+| `SireExport` y `MigratoryMovement` | sin relación guardada | La exportación solo filtra por `movementDate` |
+| `ReservationRoom` → `Room` (Módulo 1) | N a 1, externa | Por `roomId`; el estado físico es del Módulo 1 |
+
+```mermaid
+erDiagram
+    GUEST ||--o{ RESERVATION : "es titular de"
+    OTA |o--o{ RESERVATION : "origina"
+    RESERVATION ||--|{ RESERVATION_ROOM : "tiene (1..10)"
+    RESERVATION ||--o| CANCELLATION : "se anula con"
+    RESERVATION ||--o{ MIGRATORY_MOVEMENT : "tiene"
+    GUEST |o--o{ MIGRATORY_MOVEMENT : "titular extranjero"
+    RESERVATION_ROOM }o--|| ROOM_M1 : "referencia (externa)"
+```
+
+### Agregados e invariantes
+
+- **Agregado `Reservation`** (raíz `Reservation`, con sus `ReservationRoom`). Todo cambio pasa por la
+  raíz y se guarda en una sola transacción. Invariantes:
+  - Entre 1 y 10 habitaciones, sin repetir `roomId`; el `guestCount` de cada habitación es ≥ 1 y ≤ su
+    `maxCapacity`, y el de la reserva es la suma.
+  - `status` y `stayStatus` solo cambian por la tabla de transiciones:
+    - Primera habitación en `CHECKED_IN` → la reserva pasa a `IN_PROGRESS`.
+    - Ninguna habitación en `EXPECTED` ni en `CHECKED_IN`, y al menos una `CHECKED_OUT` → `COMPLETED`.
+    - Cierre del día sin ningún Check-In → `NO_SHOW` (sea OTA o directa); sus habitaciones pasan a
+      `NOT_ARRIVED`.
+  - Solo se modifican o cancelan reservas en `ACTIVE` o `PENDING`; las `OTA` solo por su API.
+  - Las reservas `DIRECT` no guardan un total (se calcula al mostrarlo) y no tienen comisión; las `OTA` no tienen tarifa ni cotización por habitación.
+- **`Guest`** y **`Ota`**: agregados propios; la reserva los referencia por id.
+- **`Cancellation`**, **`MigratoryMovement`**, **`SireExport`**: registros propios que referencian a la reserva por `reservationRef`. Son inmutables una
+  vez creados.
+
+### Datos externos (no son entidades del dominio)
+
+`Room` y `MaintenanceCalendar` (Módulo 1), `RateQuote` (Módulo 3) y `ForeignGuestData` (lo envía el Módulo 1 en el Check-In y el Check-Out) son objetos de integración de los puertos. No se persisten:
+de `ForeignGuestData` se copian los datos al `MigratoryMovement`, y de `RateQuote` el `lodgingAmount`, el `quoteId` y la moneda a
+`ReservationRoom`.
 
 ## Comunicación entre módulos
 
@@ -101,26 +243,45 @@ Regla: **proactiva** (el módulo avisa un evento y no espera respuesta) → **co
 
 | Interacción | Dirección | Mecanismo | Tipo | Feature |
 |---|---|---|---|---|
-| Check-In por habitación (con huéspedes extranjeros) | M1 → M2 | Cola `habitacion.checkin` | Proactiva | `update-reservation`, `process-foreign-guest-data` |
-| Check-Out por habitación (con huéspedes extranjeros) | M1 → M2 | Cola `habitacion.checkout` | Proactiva | `update-reservation`, `process-foreign-guest-data` |
-| Lista de reservas del día y sus actualizaciones | M2 → M1 | Cola | Proactiva | `check-view-reservation` |
+| Check-In por habitación | M1 → M2 | Cola `m2.habitacion.checkin.queue` | Proactiva | `update-reservation` |
+| Check-Out por habitación | M1 → M2 | Cola `m2.habitacion.checkout.queue` | Proactiva | `update-reservation` |
+| Huéspedes extranjeros (un mensaje por huésped) | M1 → M2 | Cola `m2.huespedes.extranjeros.queue` | Proactiva | `process-foreign-guest-data` |
+| Lista de reservas del día y sus actualizaciones | M2 → M1 | Cola `m1.reservas.diarias.queue` | Proactiva | `check-view-reservation` |
 | Consultar inventario de habitaciones | M2 → M1 | REST GET | Reactiva | `consult-room-inventory` |
 | Consultar calendario de mantenimientos | M2 → M1 | REST GET | Reactiva | `consult-maintenance-calendar` |
-| Marcar habitación como reservada / liberar | M2 → M1 | REST POST/PUT | Reactiva | `set-room-state` |
 | Consultar % de comisión OTA | M3 → M2 | REST GET | Reactiva | `register-ota-information-commission` |
-| Consultar tarifa dinámica | M2 → M3 | REST POST (cuerpo JSON) | Reactiva | `calculate-dynamic-rate` |
+| Consultar tarifa dinámica (`POST /pricing/quotes`: `roomType`, `checkInDate`, `checkOutDate`; responde `quoteId`, `currency`, `nightlyRates`, `lodgingAmount`) | M2 → M3 | REST POST (cuerpo JSON) | Reactiva | `calculate-dynamic-rate` |
+| Consultar las reservas de un rango de fechas (y habitación) para validar un mantenimiento o dar de baja una habitación | M1 → M2 | REST GET | Reactiva | `check-view-reservation` (FR-023) |
+| Consultar una reserva por su referencia (`quoteIds`, canal y datos de la OTA) para liquidar en el Check-Out | M3 → M2 | REST GET | Reactiva | `check-view-reservation` (FR-022) |
 
-El Módulo 1 **ya no consulta las reservas** al Módulo 2 por REST: recibe la lista del día por cola. Las
+El Módulo 1 **ya no consulta la lista de reservas** al Módulo 2 por REST: la recibe por cola. Solo
+consulta las reservas entre una fecha de inicio y una de fin al registrar un mantenimiento o dar de baja una habitación (`check-view-reservation`,
+FR-023); la lógica sobre esas reservas la aplica el Módulo 1. Las
 interacciones M1 ↔ M3 (liquidación, tarifa base, registrar check-out) no involucran al Módulo 2.
 
 ### Convenciones de colas
 
-- Exchange compartido: `hospitua.events` (tipo topic).
-- Routing keys que **recibe** el Módulo 2: `habitacion.checkin`, `habitacion.checkout`.
-- Routing keys que **envía** el Módulo 2 (nombres propuestos, a acordar con el Módulo 1):
-  `reservas.lista-diaria`, `reservas.actualizacion-diaria`, `huesped.datos-devueltos`.
-- Mensaje JSON con: `eventId`, `eventType`, `occurredAt`, `sourceModule`, `payload`. Los mensajes del Módulo 2
-  al Módulo 1 llevan además `messageId` y `sequenceNumber` (creciente dentro del día, según el diccionario).
+- Exchange compartido: `hospitua.events` (tipo topic). Convención de nombres de cola:
+  `m<módulo destino>.<recurso>.<evento>.queue`.
+- Colas que **recibe** el Módulo 2 (las publica el Módulo 1):
+
+| Cola | Routing key | Mensaje |
+|---|---|---|
+| `m2.habitacion.checkin.queue` | `habitacion.checkin` | Una por habitación que ingresa |
+| `m2.habitacion.checkout.queue` | `habitacion.checkout` | Una por habitación que sale |
+| `m2.huespedes.extranjeros.queue` | `huesped.extranjero` | Una por huésped extranjero y movimiento |
+
+- Cola que **envía** el Módulo 2 (la consume el Módulo 1): `m1.reservas.diarias.queue`, con dos routing
+  keys que se publican por el mismo canal y proceso, para conservar el orden:
+
+| Routing key | Mensaje | `sequenceNumber` |
+|---|---|---|
+| `reserva.lista-del-dia` | `DailyReservationList`, una vez al día a las 00:00 | Siempre `1` |
+| `reserva.lista-del-dia.actualizacion` | `DailyReservationUpdate` (`ADDED`, `UPDATED`, `REMOVED`) | Creciente dentro del día operativo |
+
+- Mensaje JSON con: `eventId`, `eventType`, `occurredAt`, `sourceModule`, `payload`. Todo mensaje, en
+  los dos sentidos, lleva además `messageId` único y `sequenceNumber` creciente; quien recibe descarta
+  los `messageId` repetidos y aplica en orden. El `sequenceNumber` es global por cola y por día operativo.
 - Consumidores idempotentes (se ignoran los `eventId` repetidos), con reintentos y dead-letter queue.
 - La publicación de la lista del día y de sus actualizaciones respeta el orden: las actualizaciones
   esperan detrás de la lista (ver `check-view-reservation`).
@@ -134,7 +295,7 @@ por cola y no espera respuesta, el consumidor del Módulo 2 aplica estas reglas:
 |---|---|
 | Notificación válida | Procesa el cambio de la habitación y confirma el mensaje |
 | Duplicado (mismo `eventId`, o habitación ya en `CHECKED_IN`/`CHECKED_OUT`) | Confirma sin efectos (el "200 idempotente") |
-| Reserva inexistente, o en un estado que no admite el evento, o habitación ya `NOT_ARRIVED` | Registra un `ReconciliationIncident` y confirma el mensaje, sin reintentar (el "400 + incidencia") |
+| Reserva inexistente, o en un estado que no admite el evento, o habitación ya `NOT_ARRIVED` | Lo deja en el log (sin datos personales) y confirma el mensaje, sin reintentar (el "400") |
 | Payload ilegible, sin `reservationRef` o `roomId`, o con caracteres maliciosos | Envía el mensaje a la dead-letter queue, sin procesar (el "400" de payload inválido) |
 | Fallo temporal (base de datos caída, por ejemplo) | Reintenta con espera creciente y, agotados los reintentos, a la dead-letter queue |
 
@@ -142,8 +303,15 @@ Contenido del `payload` (según el diccionario y los specs):
 
 | Routing key | `payload` |
 |---|---|
-| `habitacion.checkin` | `reservationRef`, `roomId` y `foreignGuests` (lista de huéspedes extranjeros, cada uno con los 10 campos: nombres, apellidos, tipo y número de documento, fecha de nacimiento, nacionalidad, `movementType`, `movementDate`, `originPlace`, `destinationPlace`) |
-| `habitacion.checkout` | `reservationRef`, `roomId` y `foreignGuests` (misma forma, con `movementType` `DEPARTURE`) |
+| `habitacion.checkin` | `reservationRef`, `roomId` y `foreignGuestCount` (cuántos extranjeros ingresan a esa habitación; solo informativo) |
+| `habitacion.checkout` | `reservationRef`, `roomId` y `foreignGuestCount` (cuántos extranjeros salen de esa habitación; solo informativo) |
+| `huesped.extranjero` | `reservationRef`, `roomId` y los 10 campos del huésped: `firstName`, `lastName`, `documentType`, `documentNumber`, `birthDate`, `nationality`, `movementType` (`ENTRY` o `DEPARTURE`), `movementDate`, `originPlace`, `destinationPlace` |
+
+Los extranjeros viajan en su propia cola para que el Check-In y el Check-Out nunca esperen por datos
+migratorios; el mensaje de un huésped puede llegar antes o después de la notificación de su habitación
+y se asocia por `reservationRef`. La lista del día y sus actualizaciones llevan el detalle de
+`check-view-reservation` (FR-014): `source` viaja como `DIRECTA` o con el nombre de la agencia (por
+ejemplo `BOOKING`).
 
 ## Contratos REST
 
@@ -152,13 +320,12 @@ Contenido del `payload` (según el diccionario y los specs):
 | Recurso | Quién lo consume | Feature |
 |---|---|---|
 | `GET /api/reservations` con paginación de 10, filtros (búsqueda por `reservationRef`, documento o nombre; estado; canal; agencia; tipo de fecha `ARRIVAL`/`DEPARTURE`/`STAY` con `from` y `to`) y orden por `startDate` | Recepcionista, procesos internos | `check-view-reservation` |
-| `GET /api/reservations/{reservationRef}` (detalle) | Recepcionista | `check-view-reservation` |
+| `GET /api/reservations/{reservationRef}` (detalle) | Recepcionista; Módulo 3 con credencial de servicio (devuelve `quoteIds`, canal y, solo si es OTA, `otaId`, `otaConfirmationCode` y `otaCommissionPercentage`; 404 si no existe) | `check-view-reservation` |
 | `POST /api/reservations/direct/preview` y `POST /api/reservations/direct` (canal directo) | Recepcionista | `generate-direct-reservation` |
 | `POST /api/reservations/{reservationRef}/modification-preview` y `PATCH /api/reservations/{reservationRef}` | Recepcionista (solo directas); la OTA modifica las suyas por su canal | `update-reservation` |
 | `POST /api/reservations/{reservationRef}/cancellation` | Recepcionista (solo directas); la OTA cancela las suyas por su canal | `cancel-reservation` |
 | `POST /api/ota/reservations` y `POST /api/ota/reservations/{reservationRef}/confirmation` (pago o garantía) | Ota | `generate-ota-reservation` |
 | `POST /api/sire/exports` (periodo o movimiento individual; devuelve `.TXT` y cabecera `Export-Id`; es `POST` porque registra un `SireExport`, decisión D9) | Recepcionista | `export-sire-file` |
-| `GET /api/sire/exports/{exportId}/exclusions` | Recepcionista | `export-sire-file` |
 | `GET /api/otas` y `GET /api/otas/{otaId}` (solo lectura; devuelve `id`, `name`, `commissionPercentage`, estado de conexión) | Recepcionista, Módulo 3 | `register-ota-information-commission` |
 | `POST /api/ota-commissions/reconciliations` (conciliación de comisiones) | Módulo 3 (finanzas) | `register-ota-information-commission` |
 
@@ -171,12 +338,13 @@ rutas de alta ni edición manual (`POST`/`PUT /api/otas` quedan fuera).
 |---|---|---|
 | Inventario de habitaciones por `categoryRoom` (o `roomId`) | M1 GET | `consult-room-inventory` |
 | Calendario de mantenimientos por categoría y rango | M1 GET | `consult-maintenance-calendar` |
-| Establecer estado de habitación (`Reserved` o `Available`, con `requestId`, `sequenceNumber`, `originEvent`, `reservationRef`) y consulta del resultado por `requestId` | M1 POST/PUT | `set-room-state` |
-| Tarifa dinámica: cuerpo `categoryRoom`, `startDate`, `endDate`, respuesta `grossAmount`, `currency`, `calculatedAt` | M3 POST | `calculate-dynamic-rate` |
+| Tarifa dinámica: `POST /pricing/quotes` con `roomType`, `checkInDate`, `checkOutDate` (equivalen a `categoryRoom`, `startDate`, `endDate`); respuesta `quoteId`, `currency`, `nightlyRates`, `lodgingAmount` | M3 POST | `calculate-dynamic-rate` |
 
 **Errores**: cuerpo `{ "errorCode", "message", "timestamp", "path" }` con HTTP 400 (por defecto, también
 para recursos inexistentes, como piden los specs), 409 (conflicto de disponibilidad) o 429 (exportación
-SIRE). Ningún spec usa 404. El diccionario prohíbe 500 y cualquier 2xx o 3xx para un error.
+SIRE). La única excepción es la consulta de una reserva por referencia para el Módulo 3, que
+responde 404 si no existe, como lo espera ese módulo. El diccionario prohíbe 500 y cualquier 2xx o 3xx
+para un error.
 
 ## Project Structure
 
@@ -208,30 +376,46 @@ backend/
 └── src/
     ├── main.ts
     ├── app.module.ts
-    ├── shared/                   # ApiError, filtro global de excepciones, EventEnvelope,
-    │                             #   reloj del hotel (America/Bogota), correlación de logs, dinero (decimal.js)
-    ├── config/                   # configuración por entorno (@nestjs/config), RabbitMQ, TypeORM
-    ├── security/                 # JWT, guards y roles
-    ├── migrations/               # migraciones SQL de TypeORM
-    ├── reservation/              # un módulo por dominio, todos con la misma forma:
-    │   ├── domain/               #   agregado Reservation (con sus ReservationRoom dentro), ReservationStatus, transiciones
-    │   ├── application/
-    │   │   ├── ports/in/         #   casos de uso (crear, consultar, modificar, cancelar, check-in...)
-    │   │   ├── ports/out/        #   ReservationRepository, Module1Port, Module3Port, EventPublisher
-    │   │   └── services/
-    │   └── infrastructure/
-    │       ├── in/               #   controladores REST, consumidores RabbitMQ, tareas programadas
-    │       └── out/              #   repositorios TypeORM, clientes HTTP, publicadores
-    ├── guest/                    # Guest, GuestRef
-    ├── availability/             # verificar disponibilidad (M1 + reservas locales)
-    ├── pricing/                  # RateQuote y cliente del Módulo 3
-    ├── roomstate/                # RoomStateRequest, cola por Room, reintentos
-    ├── cancellation/             # Cancellation
-    ├── ota/                      # Ota (solo lectura), comisión OTA
-    ├── migration/                # MigratoryMovement, SireExport, SireExportExclusion, datos devueltos
-    ├── reconciliation/           # ReconciliationIncident
-    ├── jobs/                     # lista del día (00:00), cierre del día (23:59), reintentos
-    └── messaging/                # configuración de RabbitMQ, idempotencia (processed_event)
+    ├── domain/                   # DOMINIO GENERAL, único para todo el Módulo 2 (TypeScript puro)
+    │   ├── reservation/          #   Reservation (raíz), ReservationRoom, transiciones de status y stayStatus
+    │   ├── guest/                #   Guest
+    │   ├── ota/                  #   Ota, regla de comisión
+    │   ├── cancellation/         #   Cancellation
+    │   ├── migration/            #   MigratoryMovement, SireExport, MigrationStatus (derivado)
+    │   ├── shared/               #   enumerados, Money (decimal.js), día operativo, errores de negocio
+    │   └── index.ts              #   API pública del dominio
+    ├── application/
+    │   ├── ports/out/            # ReservationRepository, GuestRepository, ..., Module1Port, Module3Port,
+    │   │                         #   EventPublisher, Clock
+    │   ├── integration/          # objetos de integración: Room, MaintenanceCalendar, RateQuote, ForeignGuestData
+    │   └── use-cases/            # un caso de uso por feature de las specs (puerto de entrada + servicio):
+    │       ├── generate-direct-reservation/
+    │       ├── generate-ota-reservation/
+    │       ├── check-view-reservation/       # incluye la lista del día al Módulo 1
+    │       ├── update-reservation/           # incluye Check-In, Check-Out y cierre del día
+    │       ├── cancel-reservation/
+    │       ├── check-room-availability/
+    │       ├── consult-room-inventory/
+    │       ├── consult-maintenance-calendar/
+    │       ├── calculate-dynamic-rate/
+    │       ├── register-ota-information-commission/
+    │       ├── process-foreign-guest-data/
+    │       └── export-sire-file/
+    ├── infrastructure/
+    │   ├── in/
+    │   │   ├── rest/             # controladores REST
+    │   │   ├── messaging/        # consumidores RabbitMQ (Check-In y Check-Out)
+    │   │   └── jobs/             # lista del día (00:00), cierre del día (23:59), reintentos
+    │   ├── out/
+    │   │   ├── persistence/      # clases de tabla TypeORM, mapeadores y repositorios
+    │   │   ├── module1/          # cliente HTTP del Módulo 1
+    │   │   ├── module3/          # cliente HTTP del Módulo 3
+    │   │   ├── messaging/        # publicadores RabbitMQ, idempotencia (processed_event)
+    │   │   └── clock/            # reloj del hotel (America/Bogota)
+    │   ├── config/               # configuración por entorno (@nestjs/config), RabbitMQ, TypeORM
+    │   ├── security/             # JWT, guards y roles
+    │   └── shared/               # ApiError, filtro global de excepciones, EventEnvelope, correlación de logs
+    └── migrations/               # migraciones SQL de TypeORM
 test/
     ├── unit/                     # dominio y casos de uso, sin base de datos ni cola
     ├── integration/              # Testcontainers (PostgreSQL, RabbitMQ)
@@ -248,30 +432,28 @@ frontend/
 ```
 
 **Structure Decision**: aplicación web `backend/` + `frontend/` en un monorepo pnpm. El backend se
-organiza por dominio, y dentro de cada dominio por capas hexagonales, porque cada feature de las specs
-toca un concepto concreto. El frontend cubre solo a la Recepcionista; la Ota solo usa la API y el
-Módulo 1 tiene su propia interfaz.
+organiza **por capas hexagonales**, con un solo `domain/` general para todo el Módulo 2: las entidades
+están relacionadas y sus reglas se cruzan entre features, así que separarlas por módulo duplicaría
+reglas. Las features de las specs se reflejan en `application/use-cases/`. El frontend cubre solo a la
+Recepcionista; la Ota solo usa la API y el Módulo 1 tiene su propia interfaz.
 
 ## Diseño técnico base
 
 ### Modelo de datos base (PostgreSQL)
 
-| Tabla | Entidad | Notas |
-|---|---|---|
-| `reservation` | `Reservation` | `reservation_ref` único; `guest_id`, `start_date`, `end_date`, `source`, `status`, `status_reason` (D6), `created_at`; `updated_at` (`@UpdateDateColumn`); `gross_amount` y `gross_amount_currency` (solo reservas OTA: el `totalAmount` que envía la agencia, base de la comisión; vacíos en las directas, que no tienen total); `commission_percentage`, `commission_amount`, `commission_status`; único `(ota_id, external_confirmation_code)` |
-| `reservation_room` | `ReservationRoom` | Entre 1 y 10 por reserva; `room_id` (`Room.id` del Módulo 1), `category_room`, `room_gross_amount` y `currency` (tarifa de la habitación recibida del Módulo 3, D2; solo canal `DIRECT`), `stay_status` (`EXPECTED`, `CHECKED_IN`, `CHECKED_OUT`, `NOT_ARRIVED`) |
-| `guest` | `Guest` | Es extranjero si su `nationality` no es Colombia; no se guarda un tipo |
-| `ota` | `Ota` | `name`, `hotel_account_id`, `linked_at`, `commission_percentage`, `connection_status` (`CONNECTED`/`DISCONNECTED`), `last_sync_at`; se llena por la vinculación automática |
-| `cancellation` | `Cancellation` | Inmutable; `channel` `RECEPTION` u `OTA_API` |
-| `room_state_request` | `RoomStateRequest` | Único `(room_id, sequence_number)`; secuencia asignada de forma atómica por `Room` |
-| `reconciliation_incident` | `ReconciliationIncident` | `origin`: `CHECK_IN`, `CHECK_OUT` o `ROOM_STATE` |
-| `migratory_movement` | `MigratoryMovement` | Un `ENTRY` y un `DEPARTURE` por huésped y reserva; solo existen movimientos completos |
-| `sire_export`, `sire_export_exclusion` | `SireExport`, `SireExportExclusion` | `exportKind` `PERIOD` o `SINGLE_MOVEMENT`; `exportId` = `SireExport.id` |
-| `reservation_audit` | auditoría de actualizaciones | Inmutable |
-| `room_sequence` | último `sequenceNumber` por habitación | Una fila por `room_id`; se bloquea (`FOR UPDATE`) al asignar la secuencia |
-| `daily_list_message` | mensajes enviados al Módulo 1 | `messageId`, día operativo y `sequenceNumber`; evita reenviar la lista el mismo día |
-| `commission_audit` | auditoría de comisiones OTA | Inmutable: reserva, agencia, acción, importes y actor |
-| `processed_event` | idempotencia de colas | Clave `event_id` |
+| Tabla | Entidad | Clave y relaciones | Notas |
+|---|---|---|---|
+| `guest` | `Guest` | PK `id`; único `(document_type, document_number)` | `first_name`, `last_name`, `nationality`, `contact_phone`, `contact_email`. Es extranjero si su `nationality` no es Colombia; no se guarda un tipo |
+| `ota` | `Ota` | PK `id`; único `hotel_account_id` | `name`, `linked_at`, `commission_percentage`, `connection_status` (`CONNECTED`/`DISCONNECTED`), `last_sync_at`; se llena por la vinculación automática |
+| `reservation` | `Reservation` | PK `id`; único `reservation_ref`; FK `guest_id` → `guest`; FK `ota_id` → `ota` (nulo en directas); único `(ota_id, external_confirmation_code)` | `start_date`, `end_date`, `guest_count` (total), `source`, `status`, `status_reason` (D6), `notes`, `created_at`, `updated_at` (`@UpdateDateColumn`); `gross_amount` y `currency` (solo OTA); `commission_percentage`, `commission_amount`, `commission_status` |
+| `reservation_room` | `ReservationRoom` | PK `id`; FK `reservation_id` → `reservation` (borrado en cascada); único `(reservation_id, room_id)` | Entre 1 y 10 por reserva; `room_id` (`Room.id` del Módulo 1, sin FK), `room_number`, `category_room`, `guest_count`, `room_gross_amount`, `quote_id` y `currency` (solo `DIRECT`, D2), `stay_status`, `check_in_foreign_guest_count`, `check_out_foreign_guest_count` |
+| `cancellation` | `Cancellation` | PK `id`; FK `reservation_id` → `reservation`, único (0..1 por reserva) | Inmutable; `channel` `RECEPTION` u `OTA_API` |
+| `migratory_movement` | `MigratoryMovement` | PK `id`; FK `reservation_id` → `reservation`; FK `guest_id` → `guest` (nulo para acompañantes); único `(reservation_id, document_number, movement_type)` | Copia de los datos migratorios del Módulo 1 |
+| `sire_export` | `SireExport` | PK `id` | `export_kind` `PERIOD` o `SINGLE_MOVEMENT`; `exportId` = `SireExport.id`; sin relación con los movimientos |
+| `reservation_audit` | auditoría de actualizaciones | PK `id`; FK `reservation_id` | Inmutable |
+| `commission_audit` | auditoría de comisiones OTA | PK `id`; FK `reservation_id`; FK `ota_id` | Inmutable: acción, importes y actor |
+| `daily_list_message` | mensajes al Módulo 1 | PK `message_id`; único `(operational_date, sequence_number)` | Evita reenviar la lista el mismo día |
+| `processed_event` | idempotencia de colas | PK `event_id` | |
 
 `Reservation.status` (`PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`) se
 guarda como texto. `migrationStatus` es solo un dato de pantalla: se calcula, no se guarda. `Room`,
@@ -284,19 +466,17 @@ Módulo 2; solo viajan en objetos de integración.
    (`PENDING`→`ACTIVE`, `ACTIVE`→`IN_PROGRESS`, `IN_PROGRESS`→`COMPLETED`, `ACTIVE`/`PENDING`→`CANCELLED`,
    `ACTIVE`/`PENDING`→`NO_SHOW`) y un único servicio de aplicación (`ReservationStatusService`) la
    aplica con bloqueo optimista. `update-reservation` lo usa para confirmación OTA, Check-In, Check-Out,
-   No-Show y cancelación compensatoria; `cancel-reservation` lo invoca dentro de su propia transacción.
-2. **Saga para reservas con llegada hoy.** Crear la reserva, ordenar `Reserved` al Módulo 1 y, si
-   este rechaza o no responde, compensar cancelándola (`ROOM_REJECTED` o `ROOM_UNCONFIRMED`) y
-   neutralizando con `Available` de mayor `sequenceNumber` si el resultado fue ambiguo. **La
-   llamada al Módulo 1 no se hace dentro de una transacción de base de datos abierta.**
-3. **Órdenes al Módulo 1 con secuencia.** Toda orden pasa por `roomstate/`: `sequenceNumber` atómico
-   por `Room`, envío de una en una, estados `PENDING`/`COMPLETED`/`REJECTED`, consulta idempotente
-   del resultado por `requestId` y `ReconciliationIncident` si queda `UNRESOLVED`.
+   y No-Show; `cancel-reservation` lo invoca dentro de su propia transacción.
+2. **Sin órdenes de estado al Módulo 1.** El Módulo 2 no aparta ni libera habitaciones: crear,
+   modificar o cancelar una reserva solo se refleja en la lista del día (`ADDED`, `UPDATED`,
+   `REMOVED`) y la reserva nunca depende de una respuesta del Módulo 1. No hay saga ni compensación.
+3. **Avisos al Módulo 1 con orden.** Todo aviso lleva `messageId` y `sequenceNumber` creciente dentro
+   del día operativo, se publica después de confirmar el cambio y, si falla, queda pendiente y se
+   reintenta en orden.
 4. **Tareas programadas** (zona horaria `America/Bogota`, idempotentes, con bloqueo asesor): envío de la
-   lista del día y apartado de habitaciones a las 00:00; cierre del día al terminar las 23:59 (No-Show:
-   `NO_SHOW` en OTA, `CANCELLED` en directa, sin `Cancellation`; las directas con `lateArrivalNotice`
-   se aplazan al cierre del día siguiente; habitaciones no llegadas pasan a
-   `NOT_ARRIVED`); y reintento de órdenes `PENDING`. El día operativo es fijo y no es configurable.
+   lista del día a las 00:00; cierre del día al terminar las 23:59 (No-Show:
+   `NO_SHOW` para cualquier canal, sin `Cancellation`; habitaciones no llegadas pasan a
+   `NOT_ARRIVED`); y reintento de los avisos pendientes. El día operativo es fijo y no es configurable.
 5. **Errores uniformes.** Un filtro global de excepciones traduce toda excepción a `ApiError` 4xx; un
    conflicto de `updatedAt` (ediciones o cancelaciones simultáneas) es siempre 400 `CONCURRENT_UPDATE`.
    Ningún error no controlado sale como 500; el filtro genérico registra el detalle en el log y responde
@@ -316,12 +496,12 @@ Módulo 2; solo viajan en objetos de integración.
 
 | # | Decisión | Origen |
 |---|---|---|
-| D1 | **La confirmación de una cotización no confía en el importe de la pantalla.** Al confirmar, el servidor vuelve a cotizar con el Módulo 3 y lo compara con las tarifas por habitación que vio el solicitante; si difiere, responde 400 "La tarifa cambió, vuelva a cotizar". Nunca se guarda un monto enviado por el cliente y la `RateQuote` sigue sin persistirse. Lo aplican `generate-direct-reservation` y `update-reservation`. | `calculate-dynamic-rate` |
-| D2 | **La tarifa se guarda por habitación, sin total:** `reservation_room` guarda `room_gross_amount` y `currency` tal como las entrega el Módulo 3 (FR-002). El Módulo 2 no suma ni calcula nada con ellas. | `calculate-dynamic-rate` |
+| D1 | **La confirmación de una cotización no confía en el importe de la pantalla.** Al confirmar, el servidor vuelve a cotizar con el Módulo 3 y lo compara con las tarifas por habitación que vio el solicitante; si difiere, responde 400 "La tarifa cambió, vuelva a cotizar". Nunca se guarda un monto enviado por el cliente; de la `RateQuote` solo se guardan `lodgingAmount` y `quoteId` en la habitación. Lo aplican `generate-direct-reservation` y `update-reservation`. | `calculate-dynamic-rate` |
+| D2 | **La tarifa se guarda por habitación, sin total guardado:** `reservation_room` guarda `room_gross_amount` (el `lodgingAmount`), `quote_id` y `currency` tal como las entrega el Módulo 3 (FR-002); el `quote_id` permite al Módulo 3 cobrar en el Check-Out exactamente el valor cotizado. Su única operación con ellas es sumarlas para mostrar el total de la reserva, que no se guarda. | `calculate-dynamic-rate` |
 | D3 | **Restricción de exclusión en PostgreSQL** sobre `reservation_room` y las fechas de su reserva (o sobre una tabla de ocupación equivalente): `EXCLUDE USING gist (room_id WITH =, daterange(start_date, end_date) WITH &&) WHERE (status IN ('PENDING','ACTIVE','IN_PROGRESS'))`, con la extensión `btree_gist` creada en la migración base. Impide dos reservas activas solapadas en la misma habitación aun con concurrencia; una violación se traduce en 409 `NO_AVAILABILITY` (o en probar la siguiente habitación candidata). El diseño exacto (copiar fechas y estado a la tabla de ocupación) se cierra en el plan de `check-room-availability`. | `check-room-availability` |
 | D4 | **El spec `consult-room-inventory` se ajustó**: la consulta por categoría admite listado completo o filtrado por estado, porque las estadías futuras necesitan todas las habitaciones de la categoría. Pendiente acordar con el Módulo 1 que su API permita ambos modos. | `check-room-availability` |
 | D5 | **Datos migratorios completos:** el Módulo 2 da por hecho que el Módulo 1 los envía completos y correctos; no los valida ni los devuelve. | `process-foreign-guest-data` |
-| D6 | **Motivo de las transiciones:** columna `status_reason` en `reservation` (`ROOM_REJECTED`, `ROOM_UNCONFIRMED`). | `update-reservation` |
+| D6 | **Motivo de las transiciones:** columna `status_reason` en `reservation`. | `update-reservation` |
 | D7 | **Periodo de la exportación SIRE:** se filtra por la `movementDate` del movimiento migratorio. | `process-foreign-guest-data`, `export-sire-file` |
 | D8 | **API de modificación en dos pasos:** `POST .../modification-preview` (no persiste) y `PATCH` (confirma, con `updatedAt` y las tarifas esperadas por habitación). Propuesta de los planes; el spec no define su forma. | `update-reservation` |
 | D9 | **La exportación SIRE es `POST`**, no `GET`, porque crea un registro `SireExport` (un `GET` no debe tener efectos). | `export-sire-file` |
@@ -367,7 +547,6 @@ Módulo 2; solo viajan en objetos de integración.
 - [ ] T012 [P] Implementar los puertos `Module1Port` y `Module3Port` con sus adaptadores HTTP (timeouts) y objetos de integración
 - [ ] T013 Configurar RabbitMQ con `@golevelup/nestjs-rabbitmq`: exchange `hospitua.events`, colas, routing keys, reintentos y dead-letter
 - [ ] T014 Crear `EventEnvelope`, `processed_event` y la idempotencia en `messaging/`
-- [ ] T015 [P] Crear `ReconciliationIncident` y su servicio de registro
 - [ ] T016 Configurar la infraestructura de pruebas (Jest, supertest y Testcontainers de PostgreSQL y RabbitMQ)
 - [ ] T017 [P] Esqueleto del frontend: enrutamiento, cliente HTTP, TanStack Query y manejo de errores de API
 - [ ] T018 Configurar autenticación y autorización (Passport + JWT, guards) con los roles `RECEPTIONIST`, `OTA`, `FINANCE`, `MODULE1` y `MODULE3` (los dos últimos, de servicio a servicio)
@@ -384,9 +563,8 @@ Módulo 2; solo viajan en objetos de integración.
 1. **Consultas y servicios base**: `check-view-reservation`, `consult-room-inventory`,
    `consult-maintenance-calendar`, `calculate-dynamic-rate`.
 2. **Disponibilidad**: `check-room-availability` (usa las tres consultas anteriores).
-3. **Integración con el Módulo 1**: `set-room-state`.
-4. **Datos migratorios y punto de estado**: primero `process-foreign-guest-data`, y después `update-reservation`
-   (modificación, Check-In, Check-Out y cierre del día; depende de disponibilidad, tarifa, `set-room-state`
+3. **Datos migratorios y punto de estado**: primero `process-foreign-guest-data`, y después `update-reservation`
+   (modificación, Check-In, Check-Out y cierre del día; depende de disponibilidad, tarifa
    y del registro del movimiento migratorio).
 5. **Creación de reservas y comisión**: `generate-direct-reservation`, `register-ota-information-commission` (antes que la de OTA) y
    `generate-ota-reservation`.
@@ -408,14 +586,14 @@ quedaron decididas. La tabla registra cada decisión y lo que falta ajustar en o
 | # | Contradicción | Decisión |
 |---|---|---|
 | C1 | Los specs dicen que el Módulo 1 "envía a la API del Módulo 2" el Check-In y el Check-Out y que este "responde HTTP 200/400". La especificación técnica y el diagrama de integración los definen como **cola**, donde no hay respuesta HTTP al Módulo 1. | **DECIDIDO: solo cola.** Reglas en "Traducción de respuestas HTTP a cola". |
-| C2 | El diagrama de integración muestra "Datos de huéspedes extranjeros" como **cola separada**; los specs los reciben **dentro** de la notificación de Check-In y de Check-Out. | **DECIDIDO: dentro de `habitacion.checkin` y `habitacion.checkout`** (lista `foreignGuests`), sin routing key nueva. |
+| C2 | El diagrama de integración muestra "Datos de huéspedes extranjeros" como **cola separada**; los specs los recibían **dentro** de la notificación de Check-In y de Check-Out. | **DECIDIDO: cola separada** (`m2.huespedes.extranjeros.queue`, un mensaje por huésped); el Check-In y el Check-Out solo traen `foreignGuestCount`. |
 | C3 | (a) "Consultar estado de canales OTA" (M3 → M2) no existe en los specs; el diagrama tiene "Consultar % de comisión OTA" (M3 → M2, REST GET). (b) "Error de huésped no encontrado" (M1 → M2) no aparece en ningún spec. | **DECIDIDO (a): se adopta como "Consultar % de comisión OTA"**, REST GET; el Módulo 2 expone `GET /api/otas/{otaId}`. **DECIDIDO (b): fuera del plan** hasta que el Módulo 1 confirme su función y exista un spec. |
 | C4 | "Consultar calendario de mantenimientos" no está en la especificación técnica ni en el diagrama de integración, pero sí en los specs y el diccionario. | **DECIDIDO: REST GET reactiva (M2 → M1)**, igual que el inventario. |
 | C5 | El diagrama de casos de uso muestra que "Generar reservación por OTA" incluye "Calcular tarifa dinámica"; el spec y el diccionario dicen que **no** se recalcula: usa el valor bruto que envía la OTA. | **DECIDIDO: según el spec y el diccionario.** El Módulo 2 no llama al Módulo 3 en la reserva OTA, para que la comisión cuadre con lo que cobró la agencia. |
 | C6 | El diccionario nombra `grossAmount` en `Reservation`; algunos specs usaban `totalAmount`. | **DECIDIDO: un solo nombre interno, `grossAmount`** (columna `gross_amount`, solo en reservas OTA: las directas guardan la tarifa por habitación, D2). `totalAmount` queda solo como nombre del campo en el JSON que envía la OTA. |
 | C7 | Fórmula de comisión sin `/100`, con validación 0–100%. | **DECIDIDO: porcentaje de 0 a 100 y se divide entre 100.** `commissionAmount = grossAmount × commissionPercentage / 100`, con `decimal.js`, 2 decimales y redondeo `ROUND_HALF_UP`; el valor queda positivo en el Módulo 2 (el signo lo aplica el Módulo 3). Pendiente confirmar con el Módulo 3 cómo expresa el porcentaje. |
-| C8 | El estado `Reserved` del Módulo 1 es una solicitud pendiente de aprobación por su equipo, pero todo el flujo del día de llegada depende de él. | **DECIDIDO: se implementa según los specs, sin interruptor.** Hasta que el Módulo 1 lo agregue, esas reservas fallarán y se cancelarán por compensación. |
-| C9 | Para reservas con llegada hoy, el spec exige "todo o nada" con la respuesta del Módulo 1 y, a la vez, que la compensación cancele la reserva recién creada. | **DECIDIDO: guardar primero, ordenar después y compensar si falla** (regla transversal 2). |
+| C8 | El estado `Reserved` del Módulo 1 es una solicitud pendiente de aprobación por su equipo. | **REEMPLAZADO:** el Módulo 1 maneja `Reserved` y `Available` por su cuenta al recibir la lista del día; el Módulo 2 ya no depende de ese estado. |
+| C9 | Para reservas con llegada hoy, el spec exigía "todo o nada" con la respuesta del Módulo 1 y compensación. | **REEMPLAZADO:** ya no hay órdenes ni compensación; la reserva se crea sin depender del Módulo 1 (regla transversal 2). |
 | C10 | Las tareas programadas no tienen mecanismo definido y con varias instancias podrían ejecutarse dos veces. | **DECIDIDO: `@nestjs/schedule` con bloqueo asesor de PostgreSQL** (`pg_try_advisory_lock`, consulta nativa). Si otra instancia tiene el bloqueo, se salta esa ejecución. El día operativo es fijo (00:00–23:59, Colombia). La idempotencia que piden los specs sigue siendo la garantía principal. |
 | C11 | El plan estaba escrito para Java y Spring Boot. | **DECIDIDO: NestJS, TypeScript, TypeORM, `@golevelup/nestjs-rabbitmq`, pnpm y arquitectura hexagonal.** Se eliminó el proyecto Spring/Gradle del repositorio. |
 
@@ -426,9 +604,9 @@ Estos ajustes **no** están hechos; los specs y los diagramas son del equipo y s
 | Documento | Cambio | Decisión |
 |---|---|---|
 | Los 13 `plan.md` de las features | Quitar las referencias a Java, Spring, JPA, Flyway, JUnit y Maven; usar la arquitectura hexagonal y el stack de este plan | C11, D10 |
-| `mod-1-2-3.drawio` | Reflejar la lista del día por cola (M2 → M1), los datos dentro de `habitacion.checkin`/`checkout` y la consulta del calendario (M2 → M1) | C2, C4 |
+| `mod-1-2-3.drawio` | Reflejar la lista del día por cola (M2 → M1), los extranjeros en su propia cola y la consulta del calendario (M2 → M1) | C2, C4 |
 | `DIAGRAMA.drawio` (casos de uso) | Quitar la línea "Generar reservación por OTA" → "Calcular tarifa dinámica" | C5 |
-| Equipo del Módulo 1 | Agregar el estado `Reserved`; acordar los nombres de las colas que envía el Módulo 2; ver [acuerdos-con-modulo-1.md](./acuerdos-con-modulo-1.md) | C8, C2 |
+| Equipo del Módulo 1 | Cambiar `Reserved` y `Available` por su cuenta con la lista del día; acordar los nombres de las colas que envía el Módulo 2; ver [acuerdos-con-modulo-1.md](./acuerdos-con-modulo-1.md) | C8, C2 |
 | Equipo del Módulo 3 | Confirmar cómo expresa el porcentaje de comisión (0 a 100) | C7 |
 
 ## Notes
