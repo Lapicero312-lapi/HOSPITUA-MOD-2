@@ -213,8 +213,7 @@ crea una reserva y que todos devuelven una respuesta JSON de error estructurada.
   y `status` con estados permitidos: `PENDING`, `ACTIVE`,
   `IN_PROGRESS`, `COMPLETED`, `CANCELLED`,
   `NO_SHOW`. En este flujo se crea en `PENDING` y pasa a `ACTIVE` con la confirmación de la agencia.
-  Una reserva OTA no tiene aviso de llegada tardía (`lateArrivalNotice`): ese aviso solo existe en
-  las reservas directas, y el cierre del día marca `NO_SHOW` a la OTA sin Check-In el día de llegada.
+  El cierre del día marca `NO_SHOW` a la OTA sin Check-In el día de llegada.
 - **ReservationRoom**: Cada habitación de la reserva. Atributos: `reservationRef`, `roomId`,
   `roomNumber`, `categoryRoom` y `stayStatus` (nace en `EXPECTED`). En canal OTA no tiene valor por
   habitación: el valor es el `totalAmount` de la reserva.

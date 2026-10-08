@@ -137,7 +137,7 @@ por cola y no espera respuesta, el consumidor del Módulo 2 aplica estas reglas:
 |---|---|
 | Notificación válida | Procesa el cambio de la habitación y confirma el mensaje |
 | Duplicado (mismo `eventId`, o habitación ya en `CHECKED_IN`/`CHECKED_OUT`) | Confirma sin efectos (el "200 idempotente") |
-| Reserva inexistente, o en un estado que no admite el evento, o habitación ya `NOT_ARRIVED` | Registra un `ReconciliationIncident` y confirma el mensaje, sin reintentar (el "400 + incidencia") |
+| Reserva inexistente, o en un estado que no admite el evento, o habitación ya `NOT_ARRIVED` | Lo deja en el log (sin datos personales) y confirma el mensaje, sin reintentar (el "400") |
 | Payload ilegible, sin `reservationRef` o `roomId`, o con caracteres maliciosos | Envía el mensaje a la dead-letter queue, sin procesar (el "400" de payload inválido) |
 | Fallo temporal (base de datos caída, por ejemplo) | Reintenta con espera creciente y, agotados los reintentos, a la dead-letter queue |
 
@@ -232,7 +232,6 @@ backend/
     ├── cancellation/             # Cancellation
     ├── ota/                      # Ota (solo lectura), comisión OTA
     ├── migration/                # MigratoryMovement, SireExport, SireExportExclusion, datos devueltos
-    ├── reconciliation/           # ReconciliationIncident
     ├── jobs/                     # lista del día (00:00), cierre del día (23:59), reintentos
     └── messaging/                # configuración de RabbitMQ, idempotencia (processed_event)
 test/
@@ -266,7 +265,6 @@ Módulo 1 tiene su propia interfaz.
 | `guest` | `Guest` | Es extranjero si su `nationality` no es Colombia; no se guarda un tipo |
 | `ota` | `Ota` | `name`, `hotel_account_id`, `linked_at`, `commission_percentage`, `connection_status` (`CONNECTED`/`DISCONNECTED`), `last_sync_at`; se llena por la vinculación automática |
 | `cancellation` | `Cancellation` | Inmutable; `channel` `RECEPTION` u `OTA_API` |
-| `reconciliation_incident` | `ReconciliationIncident` | `origin`: `CHECK_IN` o `CHECK_OUT` |
 | `migratory_movement` | `MigratoryMovement` | Un `ENTRY` y un `DEPARTURE` por huésped y reserva; solo existen movimientos completos |
 | `sire_export`, `sire_export_exclusion` | `SireExport`, `SireExportExclusion` | `exportKind` `PERIOD` o `SINGLE_MOVEMENT`; `exportId` = `SireExport.id` |
 | `reservation_audit` | auditoría de actualizaciones | Inmutable |
@@ -294,8 +292,7 @@ Módulo 2; solo viajan en objetos de integración.
    reintenta en orden.
 4. **Tareas programadas** (zona horaria `America/Bogota`, idempotentes, con bloqueo asesor): envío de la
    lista del día a las 00:00; cierre del día al terminar las 23:59 (No-Show:
-   `NO_SHOW` en OTA, `CANCELLED` en directa, sin `Cancellation`; las directas con `lateArrivalNotice`
-   se aplazan al cierre del día siguiente; habitaciones no llegadas pasan a
+   `NO_SHOW` en OTA, `CANCELLED` en directa, sin `Cancellation`; habitaciones no llegadas pasan a
    `NOT_ARRIVED`); y reintento de los avisos pendientes. El día operativo es fijo y no es configurable.
 5. **Errores uniformes.** Un filtro global de excepciones traduce toda excepción a `ApiError` 4xx; un
    conflicto de `updatedAt` (ediciones o cancelaciones simultáneas) es siempre 400 `CONCURRENT_UPDATE`.
@@ -367,7 +364,6 @@ Módulo 2; solo viajan en objetos de integración.
 - [ ] T012 [P] Implementar los puertos `Module1Port` y `Module3Port` con sus adaptadores HTTP (timeouts) y objetos de integración
 - [ ] T013 Configurar RabbitMQ con `@golevelup/nestjs-rabbitmq`: exchange `hospitua.events`, colas, routing keys, reintentos y dead-letter
 - [ ] T014 Crear `EventEnvelope`, `processed_event` y la idempotencia en `messaging/`
-- [ ] T015 [P] Crear `ReconciliationIncident` y su servicio de registro
 - [ ] T016 Configurar la infraestructura de pruebas (Jest, supertest y Testcontainers de PostgreSQL y RabbitMQ)
 - [ ] T017 [P] Esqueleto del frontend: enrutamiento, cliente HTTP, TanStack Query y manejo de errores de API
 - [ ] T018 Configurar autenticación y autorización (Passport + JWT, guards) con los roles `RECEPTIONIST`, `OTA`, `FINANCE`, `MODULE1` y `MODULE3` (los dos últimos, de servicio a servicio)

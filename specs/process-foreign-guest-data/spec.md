@@ -127,8 +127,7 @@ verifica que se entreguen los tres, con su tipo de movimiento y su fecha.
 - ¿Qué sucede si llega un `DEPARTURE` de un huésped sin `ENTRY` registrado? Se registra normalmente
   y queda disponible para el reporte; no bloquea nada.
 - ¿Qué sucede si la notificación trae más huéspedes extranjeros que el `guestCount` de la reserva? Se
-  registran todos y se crea una `ReconciliationIncident` (`CHECK_IN` o `CHECK_OUT`) para que una
-  persona revise la discrepancia con el Módulo 1.
+  registran todos y se deja la discrepancia en el log.
 - ¿Qué sucede si el mismo huésped viene repetido en la misma notificación? Se procesa una sola vez,
   por su `documentNumber`.
 - ¿Qué sucede si los datos migratorios contienen caracteres no soportados o patrones maliciosos? El
@@ -194,10 +193,6 @@ verifica que se entreguen los tres, con su tipo de movimiento y su fecha.
   migratorios copiados de `ForeignGuestData` (`firstName`, `lastName`, `documentType`,
   `documentNumber`, `birthDate`, `nationality`, `originPlace`, `destinationPlace`).
   Identidad única: (`reservationRef`, `documentNumber`, `movementType`).
-- **ReconciliationIncident**: Registro de una discrepancia con el Módulo 1 que una persona debe
-  revisar. Aquí se crea cuando hay más extranjeros que `guestCount`. Atributos: `incidentId`,
-  `origin` (`CHECK_IN` | `CHECK_OUT`), `reservationRef`, `reason`, `createdAt` y `resolutionStatus`
-  (`OPEN` | `RESOLVED`).
 - **Guest**: Titular de la reserva. Atributos: `id`, `fullName`, `documentNumber`, y `nationality`.
 - **Reservation**: Estadía asociada a los huéspedes. Atributos: `reservationRef`, `guestRef`,
   `guestCount` y `status` (`PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`).

@@ -44,10 +44,6 @@ las mismas reglas de transición y de concurrencia.
    - Los datos personales del `Guest` titular, salvo `nationality`: el país de origen se fija al
      crear la reserva y no se edita desde "Actualizar reservación".
    - Las observaciones (`notes`).
-   - Solo en reservas `DIRECT`: el aviso de llegada tardía del huésped (`lateArrivalNotice`). La
-     Recepcionista lo marca aquí, al modificar la reserva, cuando el huésped se comunica con ella para
-     avisar que llegará tarde; no se pide al crear la reserva. Las reservas `OTA` no admiten este
-     aviso.
 3. Si cambian las fechas o se agrega o cambia una habitación, el sistema ejecuta "Verificar
    disponibilidades" para cada habitación que quedaría en la reserva, enviando la `reservationRef`
    de la reserva editada, para que esta no se cruce consigo misma.
@@ -57,7 +53,7 @@ las mismas reglas de transición y de concurrencia.
 5. Si cambian las fechas, se agrega una habitación o una habitación cambia de categoría, el sistema
    ejecuta "Calcular tarifa dinámica" en el Módulo 3 para cada habitación afectada (todas si cambian las
    fechas; solo la agregada o la de categoría distinta en los demás casos) y obtiene la nueva tarifa de
-   cada una. Un cambio solo de `guestCount`, de datos personales, de `notes` o de `lateArrivalNotice`, y
+   cada una. Un cambio solo de `guestCount`, de datos personales o de `notes`, y
    también cambiar una habitación por otra de la misma categoría, no recotiza ni muestra tarifa: el
    precio depende de la categoría y de las fechas, no del número de habitación.
 6. El solicitante revisa el resumen y confirma; el sistema persiste los cambios.
@@ -119,24 +115,16 @@ El Check-Out también se notifica **por habitación**.
 1. El sistema ejecuta un proceso automático al cierre del día operativo. El día operativo es el día
    calendario de Colombia, fijo: va de las 00:00 a las 23:59 (zona horaria de Colombia, UTC-5) y el
    cierre ocurre al terminar las 23:59.
-2. El sistema recorre las `Reservation` cuya `startDate` corresponde al día procesado y, además, las
-   `DIRECT` del día anterior con `lateArrivalNotice` activo: el aviso de llegada tardía protege la
-   reserva solo hasta el cierre del día siguiente a su llegada, y a esas reservas ya no se les aplica
-   la protección.
-3. **No-Show total**: para cada una en `ACTIVE` o `PENDING` (ninguna habitación ingresó), salvo las
-   `DIRECT` del día procesado con `lateArrivalNotice` activo, cambia el `status`: a `NO_SHOW` si el
-   `source` es `OTA`, o a `CANCELLED` si es `DIRECT`, y marca todas sus habitaciones como
-   `NOT_ARRIVED`. Una reserva `OTA` nunca tiene aviso de llegada tardía, así que siempre se procesa.
+2. El sistema recorre las `Reservation` cuya `startDate` corresponde al día procesado.
+3. **No-Show total**: para cada una en `ACTIVE` o `PENDING` (ninguna habitación ingresó) cambia el
+   `status`: a `NO_SHOW` si el `source` es `OTA`, o a `CANCELLED` si es `DIRECT`, y marca todas sus
+   habitaciones como `NOT_ARRIVED`.
 4. **Habitaciones no llegadas**: para cada una en `IN_PROGRESS` que tenga habitaciones todavía en
-   `EXPECTED` (y, si es `DIRECT` del día procesado, sin `lateArrivalNotice` activo), marca esas
-   habitaciones como
-   `NOT_ARRIVED`, sin cambiar el `status` de la reserva. Si con eso ya no queda ninguna habitación
+   `EXPECTED`, marca esas habitaciones como `NOT_ARRIVED`, sin cambiar el `status` de la reserva. Si con eso ya no queda ninguna habitación
    en `CHECKED_IN` (todas las que ingresaron ya salieron), cambia la reserva a `COMPLETED`.
 5. En el No-Show total, el sistema avisa al Módulo 1 mediante "Enviar reservas del día al Módulo 1"
    (`REMOVED` con motivo `NO_SHOW`).
-6. Se ignoran las reservas en estados finales, las habitaciones ya ingresadas y las reservas
-   `DIRECT` con llegada el día procesado cuyo huésped avisó una llegada tardía (esas se procesan en el
-   cierre del día siguiente, según el paso 2).
+6. Se ignoran las reservas en estados finales y las habitaciones ya ingresadas.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -240,19 +228,6 @@ los cambios. Se repite con datos personales (sin recálculo) y sobre reservas `I
       habitaciones elegidas." (5) o "Debe haber al menos {cantidad de habitaciones} persona(s): una
       por habitación." (1), sin guardar nada
 
-13. **Scenario**: Avisar una llegada tardía en una reserva directa (Happy Path)
-    - **Given** una `Reservation` `DIRECT` en `ACTIVE` o `PENDING` con `lateArrivalNotice` en `false`
-    - **When** la Recepcionista marca el aviso de llegada tardía y confirma
-    - **Then** el sistema guarda `lateArrivalNotice` en `true` sin recotizar, sin verificar
-      disponibilidad ni invocar al Módulo 3; si la llegada es hoy, avisa al Módulo 1 con una
-      actualización `UPDATED` que lleva el aviso
-
-14. **Scenario**: Intento de avisar una llegada tardía en una reserva OTA (Error)
-    - **Given** una `Reservation` con `source` `OTA`
-    - **When** se intenta marcar `lateArrivalNotice` (por la Recepcionista o por la Ota)
-    - **Then** el sistema responde **HTTP 400** con el mensaje "Las reservas de agencia no admiten
-      aviso de llegada tardía." y no guarda nada
-
 ---
 
 ### User Story 2 - Sincronización del Estado por Notificaciones de Check-In y Check-Out (Priority: P2)
@@ -312,14 +287,13 @@ pase a `COMPLETED`, sin afectar el estado de las `Room`, que gestiona el Módulo
    - **Given** una `Reservation` en `PENDING`, `COMPLETED`, `CANCELLED` o `NO_SHOW`
    - **When** el Módulo 1 envía una notificación de Check-In retrasada o prematura
    - **Then** el sistema no cambia el estado, responde **HTTP 400 (Bad Request)** indicando que la
-     reserva no admite un Check-In en su estado actual, y registra una incidencia de conciliación
-     con el Módulo 1
+     reserva no admite un Check-In en su estado actual y deja el caso en el log
 
 6. **Scenario**: Check-In de una habitación que no pertenece a la reserva (Error)
    - **Given** una `Reservation` en `ACTIVE` con las `Room` A y B
    - **When** el Módulo 1 notifica el Check-In de la reserva con la `Room` D
    - **Then** el sistema no cambia nada, responde **HTTP 400** con el mensaje "La habitación
-     notificada no pertenece a la reserva." y registra una incidencia de conciliación
+     notificada no pertenece a la reserva." y lo deja en el log
 
 7. **Scenario**: Check-Out de la última habitación (Happy Path)
    - **Given** una `Reservation` en `IN_PROGRESS` cuya única habitación en `CHECKED_IN` es la `Room`
@@ -339,13 +313,13 @@ pase a `COMPLETED`, sin afectar el estado de las `Room`, que gestiona el Módulo
      `EXPECTED`
    - **When** el Módulo 1 notifica el Check-Out de la `Room` B
    - **Then** el sistema no cambia nada, responde **HTTP 400** con el mensaje "La habitación
-     notificada aún no registra un ingreso." y registra una incidencia de conciliación
+     notificada aún no registra un ingreso." y lo deja en el log
 
 10. **Scenario**: Rechazo de Check-Out para reservas sin ingreso (Error)
     - **Given** una `Reservation` en `ACTIVE` o `PENDING`
     - **When** el Módulo 1 envía una notificación de Check-Out
     - **Then** el sistema prohíbe el cambio de estado, responde **HTTP 400** informando que la
-      reserva aún no registra un ingreso, y registra una incidencia de conciliación con el Módulo 1
+      reserva aún no registra un ingreso, y lo deja en el log
 
 11. **Scenario**: Check-Out duplicado (idempotente)
     - **Given** una habitación de la reserva ya en `CHECKED_OUT`
@@ -358,12 +332,10 @@ pase a `COMPLETED`, sin afectar el estado de las `Room`, que gestiona el Módulo
 
 El sistema, sin intervención humana, identifica al cierre del día las reservas esperadas que no
 registraron ingreso físico, las marca como `NO_SHOW` (canal OTA) o
-`CANCELLED` (canal directo), salvo las reservas directas cuyo huésped
-avisó una llegada tardía, que quedan protegidas hasta el cierre del día siguiente. En las reservas con varias habitaciones donde
+`CANCELLED` (canal directo). En las reservas con varias habitaciones donde
 solo llegó una parte del grupo, marca como `NOT_ARRIVED` las habitaciones que no ingresaron, sin
 cambiar el estado de la reserva. El Módulo 1 libera las habitaciones por su cuenta. Por tratarse de un único proceso automático en lote, el
-camino exitoso por canal, las llegadas parciales, la protección de las reservas directas con
-llegada tardía y el manejo de fallos individuales se consolidan en esta misma historia de usuario.
+camino exitoso por canal, las llegadas parciales y el manejo de fallos individuales se consolidan en esta misma historia de usuario.
 
 **Why this priority**: Es una automatización necesaria para mantener la salud del inventario y las
 métricas de ocupación, aunque no bloquea la operación diaria de reservas. La distinción por canal
@@ -372,8 +344,7 @@ conserva el registro de las reservas OTA para conciliar comisiones con la agenci
 **Independent Test**: Se simula el cierre del día y se verifica que el proceso recorra las reservas
 del día, marque como `NO_SHOW` las de canal OTA y como `CANCELLED` las de canal directo que no
 tuvieron ingreso, marque `NOT_ARRIVED` las habitaciones sin ingreso de las reservas `IN_PROGRESS`,
-ignore las directas del día con llegada tardía avisada, procese las del día anterior que siguen sin
-ingreso, sin enviar ninguna orden de liberación al Módulo 1.
+sin enviar ninguna orden de liberación al Módulo 1.
 
 **Acceptance Scenarios**:
 
@@ -387,7 +358,7 @@ ingreso, sin enviar ninguna orden de liberación al Módulo 1.
 
 2. **Scenario**: Cancelación automática de una reserva directa sin presentarse (Happy Path)
    - **Given** una `Reservation` con `source` `DIRECT`, con `startDate` de hoy, que sigue en
-     `ACTIVE` y cuyo huésped no avisó una llegada tardía
+     `ACTIVE`
    - **When** el sistema ejecuta el proceso de fin de día
    - **Then** el sistema cambia la reserva a `CANCELLED`, sin generar comisión ni registro de
      `Cancellation`, marca sus habitaciones como `NOT_ARRIVED` y avisa `REMOVED` (motivo
@@ -404,26 +375,7 @@ ingreso, sin enviar ninguna orden de liberación al Módulo 1.
    - **When** se ejecuta el proceso de fin de día
    - **Then** el sistema la ignora y mantiene su estado, porque todo el grupo ingresó
 
-5. **Scenario**: Protección de una reserva directa con llegada tardía avisada
-   - **Given** una `Reservation` `DIRECT` de hoy en `ACTIVE` cuyo huésped avisó una llegada tardía
-   - **When** se ejecuta el proceso de fin de día
-   - **Then** el sistema la ignora y la mantiene en `ACTIVE`, sin liberar sus habitaciones
-
-6. **Scenario**: Llegada tardía que nunca se presentó
-   - **Given** una `Reservation` `DIRECT` con `startDate` de ayer, `lateArrivalNotice` activo, que
-     sigue en `ACTIVE`
-   - **When** se ejecuta el proceso de fin de día de hoy
-   - **Then** el sistema la procesa como No-Show total (`CANCELLED`, por ser directa), sin registrar
-     una `Cancellation`, porque el aviso de llegada tardía solo protege
-     hasta el cierre del día siguiente a la llegada
-
-7. **Scenario**: Una reserva OTA nunca está protegida por un aviso de llegada tardía
-   - **Given** una `Reservation` `OTA` con `startDate` de hoy, que sigue en `ACTIVE` o `PENDING`
-   - **When** se ejecuta el proceso de fin de día
-   - **Then** el sistema la cambia a `NO_SHOW` en ese mismo cierre, porque las reservas OTA no admiten
-     aviso de llegada tardía
-
-8. **Scenario**: Fallo aislado dentro del lote (Error)
+5. **Scenario**: Fallo aislado dentro del lote (Error)
    - **Given** un lote de reservas donde una presenta datos corruptos
    - **When** el sistema las procesa una por una
    - **Then** el sistema captura el error del registro corrupto, deja un log de advertencia
@@ -481,22 +433,22 @@ ingreso, sin enviar ninguna orden de liberación al Módulo 1.
   "Procesar datos de huéspedes extranjeros".
 - ¿Qué sucede si la reserva notificada no existe en el Módulo 2? El sistema responde **HTTP 400**
   con el mensaje "La reserva notificada no existe en el sistema de reservas." (Check-In) o
-  "Referencia de reserva no encontrada" (Check-Out), y registra la incidencia de conciliación,
-  porque el Módulo 1 ya ejecutó físicamente el proceso.
+  "Referencia de reserva no encontrada" (Check-Out), y lo deja en el log;
+  el Módulo 1 ya ejecutó físicamente el proceso.
 - ¿Qué sucede si la reserva está en `CANCELLED`, `NO_SHOW`, `PENDING` o `COMPLETED` al llegar un
-  Check-In? Responde **HTTP 400** sin cambiar el estado y registra una incidencia de conciliación,
-  para que una persona resuelva la discrepancia con el Módulo 1 (la habitación quedó ocupada sin una
-  reserva vigente).
+  Check-In? Responde **HTTP 400** sin cambiar el estado y lo deja en el log: la
+  habitación quedó ocupada en el Módulo 1 sin una reserva vigente, y la Recepcionista decide qué hacer
+  (por ejemplo, crear una reserva nueva).
 - ¿Qué sucede si llega el Check-In de una habitación marcada `NOT_ARRIVED` (el huésped llegó
-  después del cierre del día)? El sistema responde **HTTP 400** sin cambiar estados y registra una
-  incidencia de conciliación, porque la habitación ya fue liberada.
+  después del cierre del día)? El sistema responde **HTTP 400** sin cambiar estados y lo deja en el log,
+  porque la habitación ya fue liberada y la reserva de esa habitación se perdió.
 - ¿Qué sucede si la notificación de Check-In llega antes de la fecha de inicio de la estadía? El
   sistema la procesa normalmente, porque el Check-In físico ya ocurrió en el Módulo 1, que es quien
   valida las fechas de ingreso.
 - ¿Qué sucede si la notificación de Check-Out llega con horas de retraso por un problema de red? El
   sistema la procesa normalmente si la habitación sigue `CHECKED_IN`, de forma transaccional.
 - ¿Qué sucede si se notifica el Check-Out de una reserva `CANCELLED` o `NO_SHOW`? El sistema la
-  rechaza con **HTTP 400** y registra la incidencia, porque nunca tuvo un ingreso.
+  rechaza con **HTTP 400** y lo deja en el log, porque nunca tuvo un ingreso.
 - ¿Qué sucede si todas las habitaciones que ingresaron ya salieron pero queda alguna en
   `EXPECTED`? La reserva sigue en `IN_PROGRESS` hasta el cierre del día de su llegada, que marca
   esas habitaciones como `NOT_ARRIVED` y pasa la reserva a `COMPLETED`.
@@ -520,12 +472,9 @@ ingreso, sin enviar ninguna orden de liberación al Módulo 1.
 - **FR-001**: El sistema debe permitir, sobre una `Reservation` en `ACTIVE` o `PENDING`, editar las
   fechas, agregar, quitar o cambiar habitaciones, cambiar `guestCount`, corregir los datos
   personales del `Guest` titular (`fullName`, `documentType`, `documentNumber`, `contactPhone`,
-  `contactEmail` — no `nationality`), editar `notes` (máximo 500 caracteres) y, solo en reservas
-  `DIRECT`, marcar o desmarcar `lateArrivalNotice`.
+  `contactEmail` — no `nationality`), y editar `notes` (máximo 500 caracteres).
 - **FR-001a**: El sistema debe rechazar con **HTTP 400** que la Recepcionista modifique una reserva
-  de canal `OTA`: esas reservas solo las modifica la Ota que las originó, por su API. Una reserva
-  `OTA` tampoco admite `lateArrivalNotice`: marcarlo se rechaza con **HTTP 400** y el mensaje "Las
-  reservas de agencia no admiten aviso de llegada tardía."
+  de canal `OTA`: esas reservas solo las modifica la Ota que las originó, por su API.
 
 - **FR-002**: El sistema debe validar la disponibilidad mediante "Verificar disponibilidades" de
   cada habitación que quedaría en la reserva cuando cambien las fechas, y de cada habitación nueva
@@ -539,8 +488,8 @@ ingreso, sin enviar ninguna orden de liberación al Módulo 1.
   nada financiero: el valor a pagar lo calcula el Módulo 3 al recibir el Check-Out del Módulo 1), y exigir
   la confirmación del solicitante antes de persistir. Cambiar una habitación por otra de la misma categoría, sin cambiar
   las fechas, no recotiza ni muestra tarifa.
-- **FR-004**: El sistema debe permitir modificar `guestCount`, los datos personales del `Guest`,
-  `notes` y `lateArrivalNotice` sin invocar al Módulo 3 ni exigir disponibilidad.
+- **FR-004**: El sistema debe permitir modificar `guestCount`, los datos personales del `Guest`
+  y `notes` sin invocar al Módulo 3 ni exigir disponibilidad.
 - **FR-004a**: El sistema debe exigir que las fechas de una reserva modificada cumplan que la fecha
   de entrada sea igual o posterior al día operativo en curso en el momento de modificarla (no a una
   fecha fija) y que la fecha de salida sea posterior a la de entrada, respondiendo **HTTP 400** con el
@@ -582,7 +531,7 @@ ingreso, sin enviar ninguna orden de liberación al Módulo 1.
   `CHECKED_IN` y, si es la primera en ingresar, la reserva a `IN_PROGRESS`. Si la habitación ya está
   en `CHECKED_IN`, la notificación es un duplicado idempotente (200 sin efectos). En cualquier otro caso (reserva inexistente o en otro
   estado, habitación ajena o `NOT_ARRIVED`) debe responder **HTTP 400** sin cambiar estados y
-  registrar una incidencia de conciliación con el Módulo 1, porque el efecto físico ya ocurrió allá.
+  dejarlo en el log, porque el efecto físico ya ocurrió en el Módulo 1.
 - **FR-016**: El sistema debe recibir y validar, en la misma notificación de Check-In y de
   Check-Out, los datos migratorios de cada huésped extranjero de la habitación (`ENTRY` en el
   Check-In, `DEPARTURE` en el Check-Out), registrándolos mediante "Procesar datos de huéspedes
@@ -591,18 +540,16 @@ ingreso, sin enviar ninguna orden de liberación al Módulo 1.
   `IN_PROGRESS` y la habitación en `CHECKED_IN`; debe cambiar la habitación a `CHECKED_OUT` y, si ya
   no queda ninguna habitación en `CHECKED_IN` ni en `EXPECTED`, la reserva a `COMPLETED`. Si la
   habitación ya está en `CHECKED_OUT` debe responder 200 sin efectos (idempotencia), y en cualquier
-  otro caso debe responder **HTTP 400** y registrar una incidencia de conciliación. No debe
+  otro caso debe responder **HTTP 400** y dejarlo en el log. No debe
   modificar el estado de la `Room`, que gestiona el Módulo 1.
 - **FR-018**: El sistema debe ejecutar un proceso automático al cierre del día operativo (día
   calendario de Colombia, 00:00 a 23:59, UTC-5), que recorra las `Reservation` cuya `startDate` corresponda al día
-  procesado y las `DIRECT` del día anterior con `lateArrivalNotice` activo, excluyendo las `DIRECT` del
-  día procesado cuyo huésped avisó una llegada tardía.
+  procesado.
 - **FR-019**: En ese proceso, para cada reserva en `ACTIVE` o `PENDING`, el sistema debe cambiar el
   `status` según el canal (`NO_SHOW` si el `source` es `OTA`, `CANCELLED` si es `DIRECT`) y marcar
   todas sus habitaciones como `NOT_ARRIVED`; para cada reserva en `IN_PROGRESS`, debe marcar como
   `NOT_ARRIVED` las habitaciones en `EXPECTED` y pasar la reserva a `COMPLETED` si ya no queda
-  ninguna en `CHECKED_IN`. Una reserva `OTA` nunca queda excluida, porque no tiene aviso de llegada
-  tardía.
+  ninguna en `CHECKED_IN`.
 - **FR-020**: El sistema no debe ordenar al Módulo 1 que libere habitaciones: las habitaciones marcadas
   `NOT_ARRIVED` y las reservas `NO_SHOW` se quitan de la lista del día (`REMOVED`) y el Módulo 1 decide
   qué hace con ellas.
@@ -626,8 +573,7 @@ ingreso, sin enviar ninguna orden de liberación al Módulo 1.
 
 - **Reservation**: Entidad principal actualizada. Atributos: `reservationRef`, `guestRef`,
   `guestCount`, `startDate`, `endDate`, `updatedAt`,
-  `source` (`DIRECT` | `OTA`), `lateArrivalNotice` (booleano; solo existe en reservas `DIRECT`, nace
-  en `false`), `notes` y `status` (`PENDING`, `ACTIVE`,
+  `source` (`DIRECT` | `OTA`), `notes` y `status` (`PENDING`, `ACTIVE`,
   `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`).
 - **ReservationRoom**: Habitación de la reserva. Atributos: `reservationRef`, `roomId`,
   `roomNumber`, `categoryRoom`, `roomGrossAmount` (tarifa de la habitación, solo canal `DIRECT`),
@@ -647,10 +593,6 @@ ingreso, sin enviar ninguna orden de liberación al Módulo 1.
   Atributos: `movementId`, `reservationRef`, `movementType` (`ENTRY` | `DEPARTURE`), `movementDate`,
   los datos migratorios del huésped. El
   detalle de sus atributos está en "Procesar datos de huéspedes extranjeros".
-- **ReconciliationIncident**: Registro de una discrepancia entre el Módulo 1 y el Módulo 2 que una
-  persona debe resolver (por ejemplo, una habitación ocupada sin una reserva vigente). Atributos:
-  `incidentId`, `origin` (`CHECK_IN` | `CHECK_OUT` | `ROOM_STATE`), `reservationRef`, `roomId`,
-  `reason`, `createdAt` y `resolutionStatus` (`OPEN` | `RESOLVED`).
 
 ## Success Criteria *(mandatory)*
 
@@ -668,13 +610,11 @@ ingreso, sin enviar ninguna orden de liberación al Módulo 1.
   actualizan la habitación y la reserva según FR-015 y FR-017, y el 100% de la información
   migratoria completa enviada en el Check-In y en el Check-Out se registra en `MigratoryMovement` sin
   intervención manual.
-- **SC-006**: El 100% de las notificaciones que no pueden aplicarse dejan una incidencia de
-  conciliación registrada, con cero errores **HTTP 500** ante payloads mal formados o reservas
+- **SC-006**: El 100% de las notificaciones que no pueden aplicarse quedan en el log, con cero errores **HTTP 500** ante payloads mal formados o reservas
   inexistentes.
 - **SC-007**: El 100% de las reservas y habitaciones sin ingreso al
   finalizar el día quedan marcadas (`NO_SHOW` o `CANCELLED` la reserva, `NOT_ARRIVED` la
   habitación), y ninguna reserva queda en `ACTIVE` más allá del cierre
-  de su día de llegada, salvo las reservas `DIRECT` con llegada tardía avisada, que pueden
-  permanecer hasta el cierre del día siguiente.
+  de su día de llegada.
 - **SC-008**: El 100% de las modificaciones de reservas de la lista del día llegan al Módulo 1 como
   actualización de la lista.
