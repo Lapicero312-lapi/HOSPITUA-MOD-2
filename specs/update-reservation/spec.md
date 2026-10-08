@@ -484,7 +484,7 @@ sin enviar ninguna orden de liberación al Módulo 1.
 - **FR-003**: El sistema debe invocar "Calcular tarifa dinámica" del Módulo 3 por cada habitación
   afectada cuando cambien las fechas, se agregue una habitación o una habitación cambie de categoría,
   mostrar la tarifa de cada una con el mismo detalle de la cotización que al crear la reserva, sin
-  mostrar la tarifa nueva, sin sumar tarifas ni calcular diferencias o totales (el Módulo 2 no calcula
+  mostrar la tarifa nueva, sin calcular diferencias (el Módulo 2 no calcula
   nada financiero: el valor a pagar lo calcula el Módulo 3 al recibir el Check-Out del Módulo 1), y exigir
   la confirmación del solicitante antes de persistir. Cambiar una habitación por otra de la misma categoría, sin cambiar
   las fechas, no recotiza ni muestra tarifa.

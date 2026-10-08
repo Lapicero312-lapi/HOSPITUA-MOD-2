@@ -18,10 +18,10 @@ servicio**: el Módulo 2 verifica la disponibilidad mediante "Verificar disponib
 forma síncrona el servicio externo del Módulo 3, recibe una cotización (`RateQuote`) y
 **relaciona la tarifa recibida con la habitación de la reserva** (`ReservationRoom.roomGrossAmount`) y
 guarda el identificador de la cotización (`ReservationRoom.quoteId`), de manera estrictamente
-informativa. El Módulo 2 **no calcula nada** con ese importe: no suma las
-tarifas de las habitaciones, no calcula diferencias, no agrega impuestos y no aplica comisiones.
-Lo único que hace con la tarifa es guardarla junto a su habitación y mostrarla. El Módulo 2 no calcula
-nada relacionado con finanzas: nunca muestra un total de la reserva ni una diferencia entre lo que se
+informativa. La **única operación** que hace el Módulo 2 con esos importes es calcular el **total de la reserva**:
+la suma de los `lodgingAmount` de sus habitaciones, que muestra al cliente. No calcula nada más: no
+calcula diferencias, no agrega impuestos y no aplica comisiones. El total se calcula al mostrarlo y no
+se guarda; cada habitación conserva su propia tarifa. Nunca se muestra una diferencia entre lo que se
 pagaba antes y lo que se paga ahora. Cuánto se paga en realidad lo calcula el Módulo 3 al facturar,
 cuando el Módulo 1 le envía el Check-Out; el IVA también lo fija el Módulo 3 en ese momento.
 
@@ -42,7 +42,8 @@ Reglas de la integración que enmarcan este caso de uso:
   entrega al Módulo 3, en la lista `quoteIds`, cuando este consulta la reserva (FR-010). Una reserva con
   varias habitaciones tiene una cotización por cada una.
 - **Sin cálculos en el Módulo 2**: el Módulo 2 almacena la tarifa tal cual la recibe, sin
-  transformarla, sin sumarla y sin compararla con tarifas anteriores.
+  transformarla y sin compararla con tarifas anteriores. La única operación permitida es sumar los
+  `lodgingAmount` de las habitaciones de una reserva para mostrar su total.
 - **Separación de responsabilidades**: la disponibilidad de la habitación se verifica **antes** de
   invocar al Módulo 3 mediante "Verificar disponibilidades" (reservas locales y calendario del
   Módulo 1). El Módulo 3 calcula el precio sobre la categoría y nunca verifica ni modifica el estado
@@ -79,8 +80,8 @@ capacidad de las habitaciones (esa información está en la pantalla "Habitacion
 **Reservas con varias habitaciones**: el servicio del Módulo 3 cotiza una categoría para un rango de
 fechas. Por eso el Módulo 2 lo invoca **una vez por cada habitación** de la reserva (con la
 `categoryRoom` de esa habitación y las fechas comunes de la reserva) y guarda cada resultado en el
-`roomGrossAmount` de su `ReservationRoom`. La reserva no tiene un total: cada habitación lleva su
-tarifa. En una recotización, solo invoca al Módulo 3 por las habitaciones afectadas (todas si
+`roomGrossAmount` de su `ReservationRoom`. La reserva no guarda un total: cada habitación lleva su
+tarifa, y el total de la reserva se calcula como la suma de ellas al mostrarlo. En una recotización, solo invoca al Módulo 3 por las habitaciones afectadas (todas si
 cambian las fechas; solo la nueva o la de categoría distinta si cambian las habitaciones; cambiar una
 habitación por otra de la misma categoría no recotiza, porque el precio no depende del número de
 habitación); una habitación quitada
@@ -146,7 +147,7 @@ Cuando la recepcionista modifica las fechas o la categoría de una reserva `ACTI
 volver a consultar la tarifa de las habitaciones afectadas. Consume el mismo servicio del Módulo 3,
 con los mismos tres parámetros, y recibe la nueva `RateQuote` de cada habitación. El Módulo 2
 muestra al solicitante la tarifa de cada habitación afectada con el mismo detalle de la cotización que
-al crear la reserva, sin mostrar la tarifa anterior, sin sumar tarifas ni calcular diferencias. Una
+al crear la reserva, sin mostrar la tarifa anterior ni calcular diferencias. Una
 habitación quitada no se muestra. Solo persiste el cambio localmente tras la confirmación.
 
 **Why this priority**: Las modificaciones de estadía son frecuentes y tienen impacto económico
@@ -181,7 +182,7 @@ cambio no se aplica y que la respuesta es un **HTTP 400** controlado.
    - **When** la recepcionista cambia esa habitación a `Suite`, o agrega una habitación
    - **Then** el Módulo 2 invoca "Calcular tarifa dinámica" solo por la habitación de categoría
      distinta o por la agregada, y muestra su tarifa con el desglose de la cotización, igual que al
-     crear la reserva, sin tarifa anterior, sin sumar tarifas ni calcular diferencias ni totales
+     crear la reserva, sin tarifa anterior ni diferencias
 
 4. **Scenario**: Cambio de habitación por otra de la misma categoría
    - **Given** una reserva en estado `ACTIVE` con la habitación 204 `Superior`
@@ -215,8 +216,9 @@ cambio no se aplica y que la respuesta es un **HTTP 400** controlado.
   `checkOutDate`, que equivalen a la `categoryRoom` y a las fechas de la reserva.
 - **FR-002**: El sistema debe mapear el objeto `RateQuote` retornado por el Módulo 3 y guardar su
   `lodgingAmount`, de forma estrictamente informativa, en el `roomGrossAmount` de la habitación
-  cotizada, y su `quoteId` en el `quoteId` de esa habitación. El sistema no debe sumar las tarifas de
-  las habitaciones ni guardar un total en la reserva.
+  cotizada, y su `quoteId` en el `quoteId` de esa habitación. El sistema no debe guardar un total en la
+  reserva; debe calcular el total de la reserva como la suma de los `lodgingAmount` de sus
+  habitaciones y mostrarlo al cliente. Es la única operación aritmética que hace con las tarifas.
 - **FR-002a**: El sistema debe invocar el servicio una vez por cada habitación que necesite
   cotización (todas en una reserva nueva o en un cambio de fechas; las nuevas o de categoría distinta en un
   cambio de habitaciones) y tratar la cotización de la reserva como todo o nada: si una sola
