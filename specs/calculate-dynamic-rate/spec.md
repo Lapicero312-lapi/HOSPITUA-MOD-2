@@ -33,13 +33,14 @@ Reglas de la integración que enmarcan este caso de uso:
   llegada (`checkInDate`) y la fecha de salida (`checkOutDate`). Son los nombres de la API del Módulo 3;
   en el Módulo 2 equivalen a `categoryRoom`, `startDate` y `endDate`.
 - **Contrato de salida (lo que el Módulo 2 recibe del Módulo 3)**: una cotización `RateQuote` con su
-  identificador (`quoteId`), la tarifa de cada noche (`nightlyRates`, una lista de `date` y `rate`) y
-  el valor de hospedaje de toda la estadía (`lodgingAmount`). La respuesta no trae moneda (decisión C2
-  pendiente).
+  identificador (`quoteId`), la moneda (`currency`, por ejemplo `COP`), la tarifa de cada noche
+  (`nightlyRates`, una lista de `date` y `rate`) y el valor de hospedaje de toda la estadía
+  (`lodgingAmount`).
 - **La tarifa que se muestra es la que se cobra**: el Módulo 3 calcula el hospedaje en el momento de
   la reserva, el cliente ve el `lodgingAmount` antes de confirmar y en el Check-Out el Módulo 3 cobra
-  exactamente ese valor. Para poder hacerlo, el Módulo 2 guarda el `quoteId` de cada habitación y lo
-  entrega al Módulo 3 cuando este consulta la reserva (FR-010).
+  exactamente ese valor. Para poder hacerlo, el Módulo 2 guarda el `quoteId` de cada habitación y los
+  entrega al Módulo 3, en la lista `quoteIds`, cuando este consulta la reserva (FR-010). Una reserva con
+  varias habitaciones tiene una cotización por cada una.
 - **Sin cálculos en el Módulo 2**: el Módulo 2 almacena la tarifa tal cual la recibe, sin
   transformarla, sin sumarla y sin compararla con tarifas anteriores.
 - **Separación de responsabilidades**: la disponibilidad de la habitación se verifica **antes** de
@@ -249,7 +250,7 @@ cambio no se aplica y que la respuesta es un **HTTP 400** controlado.
   resultante), sin capacidad de las habitaciones, separada del flujo de reserva, sin invocar al
   Módulo 3 y sin que sus valores se persistan ni se usen como `roomGrossAmount` de ninguna reserva.
 
-- **FR-010**: El sistema debe entregar el `quoteId` de cada habitación al Módulo 3 cuando este consulta
+- **FR-010**: El sistema debe entregar al Módulo 3 la lista `quoteIds`, con el `quoteId` de cada habitación, cuando este consulta
   la reserva por su `reservationRef` (ver `check-view-reservation`, FR-022), para que cobre en el
   Check-Out exactamente el valor cotizado. Una reserva de canal `OTA` no tiene `quoteId`: su valor lo
   informa la agencia.
@@ -272,12 +273,12 @@ cambio no se aplica y que la respuesta es un **HTTP 400** controlado.
 - **ReservationRoom** (entidad local del Módulo 2): Habitación de la reserva. Atributos relevantes:
   `roomId`, `categoryRoom` (se envía al Módulo 3 como `roomType`), `roomGrossAmount` (el
   `lodgingAmount` de la `RateQuote` de esa habitación), `quoteId` (el de esa `RateQuote`; vacío en
-  reservas `OTA`) y `currency`.
+  reservas `OTA`) y `currency` (la de esa `RateQuote`).
 - **RateQuote** (entidad de paso / contrato consumido del Módulo 3): Representa la cotización que el
   Módulo 2 recibe y mapea, sin ser su propietario. Atributos: `quoteId` (identificador de la
-  cotización), `nightlyRates` (lista de `date` y `rate`, la tarifa de cada noche) y `lodgingAmount`
+  cotización), `currency` (moneda del importe), `nightlyRates` (lista de `date` y `rate`, la tarifa de cada noche) y `lodgingAmount`
   (valor de hospedaje de toda la estadía de esa habitación, calculado por el motor dinámico). El
-  Módulo 2 no persiste esta entidad como registro propio: extrae `lodgingAmount` y `quoteId` hacia la
+  Módulo 2 no persiste esta entidad como registro propio: extrae `lodgingAmount`, `currency` y `quoteId` hacia la
   `ReservationRoom`.
 - **Room**: Se referencia únicamente a través de su categoría (`categoryRoom`) para construir el
   contrato de entrada del servicio de tarificación. Sus estados en el Módulo 1 son `Available`,

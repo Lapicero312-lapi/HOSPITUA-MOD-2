@@ -572,7 +572,7 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
     `contactPhone` y `contactEmail`.
 - **FR-015**: El sistema no debe incluir datos financieros (`grossAmount`, comisión) en la lista ni
   en las actualizaciones: no los necesita el Módulo 1. La consulta por referencia del Módulo 3 (FR-022)
-  es aparte y sí entrega el `quoteId` y el porcentaje de comisión.
+  es aparte y sí entrega los `quoteIds` y el porcentaje de comisión.
 - **FR-016**: Después del envío de la lista, el sistema debe enviar una actualización
   `DailyReservationUpdate` por cada cambio confirmado que afecte a la lista del día: `ADDED` cuando
   una reserva entra (creación directa para hoy, confirmación OTA con llegada hoy, cambio de llegada
@@ -602,9 +602,10 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
   la aplica el Módulo 1. Es de solo lectura.
 - **FR-022**: El sistema debe permitir que el Módulo 3 consulte una reserva por su `reservationRef`
   con una credencial de servicio (actor `Modulo3`), para que genere la liquidación en el Check-Out. La
-  respuesta lleva `reservationRef`, `channel` (`DIRECT` | `OTA`) y, por cada `ReservationRoom`, su
-  `categoryRoom` y su `quoteId` (solo `DIRECT`). Si el canal es `OTA`, también lleva
-  `otaConfirmationCode` (el `externalConfirmationCode`) y `otaCommissionPercentage` (el
+  respuesta lleva `reservationRef`, `channel` (`DIRECT` | `OTA`) y `quoteIds`, la lista con el
+  `quoteId` de cada `ReservationRoom` (una cotización por habitación; la lista va vacía en las
+  reservas `OTA`, que no tienen cotización). Solo si el canal es `OTA`, también lleva `otaId` (el `id`
+  de la `Ota`), `otaConfirmationCode` (el `externalConfirmationCode`) y `otaCommissionPercentage` (el
   `commissionPercentage` congelado). No incluye otros datos financieros ni datos del huésped. Si la reserva no existe, responde **HTTP 404 (Not Found)**. Es de solo lectura y
   no modifica nada.
 
