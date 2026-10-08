@@ -11,8 +11,8 @@ La ley exige reportar a Migración Colombia los huéspedes extranjeros que aloja
 información migratoria completa y el tipo de movimiento: **entrada** (cuando ingresan al hotel) y
 **salida** (cuando lo dejan). Esos datos se capturan en persona, en el Check-In y en el Check-Out, y
 por eso los procesa el Módulo 1, que es quien opera la recepción física. El Módulo 1 los envía al
-Módulo 2 **ya procesados y completos**, dentro de las notificaciones de Check-In y de Check-Out; el
-Módulo 2 no tiene una pantalla propia para pedirlos ni los completa ni los corrige. La Recepcionista
+Módulo 2 **ya procesados y completos**, por una cola propia de huéspedes extranjeros, separada de las
+notificaciones de Check-In y de Check-Out; el Módulo 2 no tiene una pantalla propia para pedirlos ni los completa ni los corrige. La Recepcionista
 luego genera con esos datos el archivo `.TXT` y lo envía a Migración (ver "Exportar archivo SIRE").
 
 Una reserva puede alojar a varios huéspedes extranjeros (un grupo o una familia), y todos deben
@@ -33,71 +33,73 @@ destino y tipo de movimiento), los guarda y luego los empaqueta en el archivo `.
 
 ### Flujo de Usuario de Alto Nivel
 
-1. El **Módulo 1** notifica el **Check-In** de una habitación de una reserva e incluye en la misma
-   notificación la lista de los huéspedes extranjeros que ingresaron a esa habitación
-   (`foreignGuests`), cada uno con sus `ForeignGuestData` y con `movementType` `ENTRY` y su
-   `movementDate`. El cambio de estado de la habitación y de la reserva lo ejecuta "Actualizar
-   reservación".
-2. El Módulo 1 notifica el **Check-Out** de una habitación e incluye la lista de los huéspedes
-   extranjeros que salieron de esa habitación, cada uno con `movementType` `DEPARTURE` y su
-   `movementDate`.
-3. Por cada huésped de la lista, el sistema registra un `MigratoryMovement`. Hay un movimiento por
+1. El **Módulo 1** notifica el **Check-In** de una habitación de una reserva (cola
+   `m2.habitacion.checkin.queue`, con `reservationRef`, `roomId` y `foreignGuestCount`, la cantidad de
+   extranjeros que ingresan). El cambio de estado de la habitación y de la reserva lo ejecuta
+   "Actualizar reservación".
+2. Por **cada huésped extranjero** que ingresó a esa habitación, el Módulo 1 envía **un mensaje** por la
+   cola `m2.huespedes.extranjeros.queue`, con `reservationRef`, `roomId`, sus `ForeignGuestData`,
+   `movementType` `ENTRY` y su `movementDate`. Los mensajes de los extranjeros pueden llegar antes o
+   después de la notificación de Check-In: el sistema los asocia por `reservationRef`.
+3. El Módulo 1 notifica el **Check-Out** de una habitación (cola `m2.habitacion.checkout.queue`) y envía
+   un mensaje por cada huésped extranjero que salió, con `movementType` `DEPARTURE` y su `movementDate`.
+4. Por cada mensaje de un huésped extranjero, el sistema registra un `MigratoryMovement`. Hay un movimiento por
    cada combinación de reserva, huésped y tipo de movimiento: un huésped que ingresa y sale tiene
    dos, uno `ENTRY` y uno `DEPARTURE`.
-4. Si la notificación no trae huéspedes extranjeros (por ejemplo, una reserva de huéspedes
-   colombianos), el sistema no registra ningún movimiento y no exige nada.
-5. Solo un payload inutilizable (sin identificador de reserva o con caracteres maliciosos) se rechaza
+5. Si la notificación indica `foreignGuestCount` en cero (por ejemplo, una reserva de huéspedes
+   colombianos), no llega ningún mensaje de extranjeros y el sistema no registra ni exige nada.
+   El Check-In y el Check-Out nunca esperan los mensajes de los extranjeros.
+6. Solo un payload inutilizable (sin identificador de reserva o con caracteres maliciosos) se rechaza
    con **HTTP 400 (Bad Request)** sin registrar nada.
-6. Cuando "Exportar archivo SIRE" (ejecutado por la Recepcionista) necesita los datos, invoca este
+7. Cuando "Exportar archivo SIRE" (ejecutado por la Recepcionista) necesita los datos, invoca este
    caso de uso para obtener los movimientos del periodo.
 
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Recepción de Datos Migratorios Procesados por el Módulo 1 (Priority: P1)
 
-El sistema recibe, dentro de las notificaciones de Check-In y de Check-Out del Módulo 1, los datos
-migratorios ya procesados de cada huésped extranjero y los registra como `MigratoryMovement` de
-entrada o de salida. Por tratarse de un único paso integrado con esas notificaciones, el camino
-exitoso, los grupos, los reenvíos duplicados y los huéspedes colombianos se consolidan en esta misma
-historia de usuario.
+El sistema recibe, por la cola de huéspedes extranjeros del Módulo 1, los datos migratorios ya
+procesados de cada huésped extranjero (un mensaje por huésped) y los registra como
+`MigratoryMovement` de entrada o de salida. El camino exitoso, los grupos, los reenvíos duplicados y
+los huéspedes colombianos se consolidan en esta misma historia de usuario.
 
 **Why this priority**: Sin estos datos consolidados, el hotel no puede cumplir con el reporte
-migratorio obligatorio. Recibirlos en las mismas notificaciones evita duplicar pantallas de captura
+migratorio obligatorio. Recibirlos del Módulo 1 evita duplicar pantallas de captura
 en el Módulo 2.
 
-**Independent Test**: Se envía una notificación simulada de Check-In con dos huéspedes extranjeros
-y se verifica que queden dos movimientos `ENTRY`. Se envía el Check-Out y se verifica que queden dos
-movimientos `DEPARTURE`. Se reenvía la misma notificación y se verifica que no se duplican.
+**Independent Test**: Se envían dos mensajes de huéspedes extranjeros con `ENTRY` y se verifica que
+queden dos movimientos `ENTRY`. Se envían los dos con `DEPARTURE` y se verifica que queden dos
+movimientos `DEPARTURE`. Se reenvían los mismos mensajes y se verifica que no se duplican.
 
 **Acceptance Scenarios**:
 
 1. **Scenario**: Movimiento de entrada de un huésped (Happy Path)
    - **Given** una `Reservation` cuyo titular es extranjero, en Check-In
-   - **When** el sistema recibe la notificación del Módulo 1 con un huésped y `movementType` `ENTRY`
+   - **When** el sistema recibe el mensaje del Módulo 1 con un huésped y `movementType` `ENTRY`
    - **Then** el sistema registra un `MigratoryMovement` `ENTRY`, disponible para "Exportar archivo
      SIRE"
 
 2. **Scenario**: Grupo de extranjeros en una misma reserva
    - **Given** una `Reservation` con 3 personas, de las cuales 2 son extranjeras
-   - **When** la notificación de Check-In trae a los 2 huéspedes extranjeros
+   - **When** el Módulo 1 envía los mensajes de los 2 huéspedes extranjeros
    - **Then** el sistema registra dos `MigratoryMovement` `ENTRY`, uno por cada huésped, y no registra
      ninguno para la persona colombiana
 
 3. **Scenario**: Movimiento de salida (Happy Path)
    - **Given** un huésped con su movimiento `ENTRY` registrado
-   - **When** la notificación de Check-Out trae a ese huésped con `movementType` `DEPARTURE` y su
+   - **When** el Módulo 1 envía el mensaje de ese huésped con `movementType` `DEPARTURE` y su
      fecha
    - **Then** el sistema registra un `MigratoryMovement` `DEPARTURE` sin modificar el `ENTRY`; el
      huésped queda con dos movimientos
 
 4. **Scenario**: Reserva de huéspedes colombianos
    - **Given** una `Reservation` cuyo titular es colombiano
-   - **When** la notificación de Check-In llega sin `foreignGuests`
+   - **When** la notificación de Check-In llega con `foreignGuestCount` en cero
    - **Then** el sistema omite el procesamiento migratorio y no exige ningún dato
 
 5. **Scenario**: Notificación repetida (idempotente)
    - **Given** un `MigratoryMovement` ya registrado
-   - **When** el Módulo 1 envía de nuevo los mismos datos
+   - **When** el Módulo 1 envía de nuevo el mismo mensaje
    - **Then** el sistema responde 200 sin duplicar ni modificar el movimiento
 
 ---
@@ -126,14 +128,19 @@ verifica que se entreguen los tres, con su tipo de movimiento y su fecha.
 
 - ¿Qué sucede si llega un `DEPARTURE` de un huésped sin `ENTRY` registrado? Se registra normalmente
   y queda disponible para el reporte; no bloquea nada.
-- ¿Qué sucede si la notificación trae más huéspedes extranjeros que el `guestCount` de la reserva? Se
-  registran todos y se deja la discrepancia en el log.
-- ¿Qué sucede si el mismo huésped viene repetido en la misma notificación? Se procesa una sola vez,
-  por su `documentNumber`.
+- ¿Qué sucede si llegan más huéspedes extranjeros que el `guestCount` de la reserva o que el
+  `foreignGuestCount` del Check-In? Se registran todos. El `foreignGuestCount` es solo informativo: el
+  sistema lo guarda en la habitación y la Recepcionista lo ve en la pantalla, junto a los extranjeros
+  ya registrados, pero no se usa para validar ni para esperar mensajes.
+- ¿Qué sucede si el mensaje de un huésped llega antes que el Check-In de su habitación? Se registra
+  igual, porque el movimiento se asocia por `reservationRef`. Si la reserva todavía no se puede
+  localizar, el mensaje se reintenta con espera creciente y, agotados los reintentos, va a la
+  dead-letter queue.
+- ¿Qué sucede si el mismo huésped viene repetido? Se procesa una sola vez, por su `documentNumber`.
 - ¿Qué sucede si los datos migratorios contienen caracteres no soportados o patrones maliciosos? El
   sistema sanea la entrada, la rechaza con **HTTP 400** y el mensaje "Caracteres no válidos en los
   datos migratorios."
-- ¿Qué sucede si la notificación llega vacía o sin el identificador de la reserva? El sistema
+- ¿Qué sucede si un mensaje llega vacío o sin el identificador de la reserva? El sistema
   responde con **HTTP 400** indicando que el payload es inválido, sin producir errores de
   infraestructura **HTTP 500**.
 - ¿Qué sucede si el mismo huésped tiene más de una estadía? Cada estadía tiene sus propios
@@ -146,13 +153,14 @@ verifica que se entreguen los tres, con su tipo de movimiento y su fecha.
 
 ### Functional Requirements
 
-- **FR-001**: El sistema debe recibir los datos migratorios ya procesados dentro de las
-  notificaciones de Check-In y de Check-Out del Módulo 1, como una lista de huéspedes extranjeros
-  (`foreignGuests`), cada uno con sus `ForeignGuestData`, su `movementType` (`ENTRY` en el Check-In,
-  `DEPARTURE` en el Check-Out) y su `movementDate`.
+- **FR-001**: El sistema debe recibir los datos migratorios ya procesados por la cola
+  `m2.huespedes.extranjeros.queue`, con un mensaje por huésped extranjero que lleva `messageId`,
+  `sequenceNumber`, `reservationRef`, `roomId`, sus `ForeignGuestData`, su `movementType` (`ENTRY` en
+  el Check-In, `DEPARTURE` en el Check-Out) y su `movementDate`. Los descarta si su `messageId` ya
+  se procesó.
 - **FR-002**: El sistema no debe exigir datos migratorios cuando la reserva tiene titular colombiano
-  y la notificación no trae huéspedes extranjeros; sí debe registrar los huéspedes extranjeros que la
-  notificación traiga aunque el titular sea colombiano.
+  y no llegan mensajes de extranjeros; sí debe registrar los huéspedes extranjeros cuyos mensajes
+  lleguen aunque el titular sea colombiano.
 - **FR-003**: El sistema debe dar por hecho que los datos migratorios de cada huésped llegan
   completos y correctos, porque el Módulo 1 los valida antes de enviarlos. No debe validarlos,
   completarlos ni corregirlos, y no debe devolverlos al Módulo 1.
@@ -160,8 +168,9 @@ verifica que se entreguen los tres, con su tipo de movimiento y su fecha.
   huésped (`documentNumber`) y `movementType`, sin sobrescribir los de otras estadías ni los del
   otro tipo de movimiento del mismo huésped. Un movimiento repetido no se duplica.
 - **FR-005**: El sistema debe conservar el Check-In o el Check-Out y responder 200 al registrar los
-  movimientos de la notificación.
-- **FR-006**: El sistema debe procesar cada huésped de la lista de forma independiente.
+  movimientos de los mensajes recibidos.
+- **FR-006**: El sistema debe procesar cada mensaje de huésped de forma independiente, sin esperar el
+  Check-In ni el Check-Out de su habitación.
 - **FR-007**: El sistema debe entregar a "Exportar archivo SIRE" los movimientos del periodo, con
   toda la información de cada huésped.
 - **FR-008**: El sistema no debe capturar datos migratorios desde una pantalla propia del Módulo 2:
@@ -173,14 +182,14 @@ verifica que se entreguen los tres, con su tipo de movimiento y su fecha.
 ### Non-Functional Requirements
 
 - **NFR-001**: El registro de los datos migratorios no debe superar los 500 milisegundos por
-  notificación, con hasta 10 huéspedes extranjeros por notificación.
+  notificación, por mensaje de huésped.
 - **NFR-002**: Los datos migratorios (documento y fecha de nacimiento) no deben escribirse en los
   registros de log.
 
 ### Key Entities *(include if feature involves data)*
 
 - **ForeignGuestData**: Datos migratorios ya procesados de un huésped extranjero, capturados por el
-  Módulo 1 y enviados con la notificación. Atributos: `firstName`, `lastName`, `documentType`,
+  Módulo 1 y enviados en su propio mensaje. Atributos: `firstName`, `lastName`, `documentType`,
   `documentNumber`, `birthDate`, `nationality`, `movementType` (`ENTRY` | `DEPARTURE`),
   `movementDate` (fecha sin hora: `checkInDate` en la entrada, `checkOutDate` en la salida),
   `originPlace` (lugar de procedencia) y `destinationPlace` (lugar de destino). SIRE exige los dos
@@ -211,4 +220,4 @@ verifica que se entreguen los tres, con su tipo de movimiento y su fecha.
 - **SC-003**: Cero errores **HTTP 500** por payloads mal formados; el 100% se responde con
   **HTTP 400**.
 - **SC-004**: Ningún huésped extranjero de un grupo queda sin reportar por el error de otro huésped
-  de la misma notificación.
+  de la misma habitación.

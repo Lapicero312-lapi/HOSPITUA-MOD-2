@@ -14,8 +14,8 @@ Para que la lógica sea la misma en ambos lados, necesitamos que el Módulo 1 co
 1. **Datos migratorios completos.** Los huéspedes extranjeros llegan ya procesados y completos, y el
    Módulo 2 da por hecho que llegan bien: no los valida ni los devuelve. Además de los
    campos anteriores, ahora se exige **procedencia y destino**.
-2. **Check-In y Check-Out por habitación**, con el `roomId` y la lista de huéspedes extranjeros en la
-   misma notificación.
+2. **Check-In y Check-Out por habitación**, con el `roomId` y el `foreignGuestCount`; los huéspedes
+   extranjeros viajan en su propia cola, un mensaje por huésped.
 3. **La lista de reservas del día llega por cola.** El Módulo 1 solo consulta al Módulo 2 las reservas entre una fecha de inicio y una de fin (y, si quiere, de una habitación) cuando registra un mantenimiento, para saber si cae sobre alguna reserva. La lógica sobre qué hacer con esa reserva la aplica el Módulo 1.
 4. **El Módulo 1 maneja `Reserved` y `Available` por su cuenta.** El Módulo 2 solo envía la lista de
    reservas del día y sus actualizaciones; el Módulo 1 decide qué hace con las habitaciones y no recibe
@@ -38,15 +38,19 @@ Para que la lógica sea la misma en ambos lados, necesitamos que el Módulo 1 co
 
 ## 3. Lo que el Módulo 1 nos envía
 
-### 3.1 Check-In y Check-Out (`habitacion.checkin` y `habitacion.checkout`) — B9, B13, B15
+### 3.1 Check-In, Check-Out y huéspedes extranjeros — B9, B13, B15
 
-Una notificación por habitación. Cada una debe traer:
+Tres colas del Módulo 1 al Módulo 2:
 
-- `reservationRef` y `roomId` (obligatorios los dos; el `roomId` debe pertenecer a la reserva).
-- `foreignGuests`: la lista de huéspedes **extranjeros** que ingresan (Check-In) o salen (Check-Out) por esa
-  habitación. Incluye a los acompañantes, no solo al titular.
+| Cola | Mensaje |
+|---|---|
+| `m2.habitacion.checkin.queue` | Una por habitación que ingresa: `messageId`, `sequenceNumber`, `reservationRef`, `roomId` y `foreignGuestCount` (cuántos extranjeros ingresan por esa habitación). |
+| `m2.habitacion.checkout.queue` | Igual, para la salida de esa habitación. |
+| `m2.huespedes.extranjeros.queue` | **Un mensaje por huésped extranjero**: `messageId`, `sequenceNumber`, `reservationRef`, `roomId` y los diez campos. Incluye a los acompañantes, no solo al titular. |
 
-Cada huésped de `foreignGuests` debe traer **los diez campos**:
+El `roomId` debe pertenecer a la reserva. El `foreignGuestCount` es informativo: el Módulo 2 lo muestra a
+la Recepcionista y no lo usa para validar. Cada mensaje de huésped extranjero debe traer **los diez
+campos**:
 
 | Campo | Detalle |
 |---|---|
@@ -61,6 +65,9 @@ Cada huésped de `foreignGuests` debe traer **los diez campos**:
 Reglas:
 
 - **Ya procesados y completos.** El Módulo 1 no arma ni envía el huésped si le falta un dato.
+- **Orden de llegada.** El mensaje de un extranjero puede llegar antes o después de la notificación de su
+  habitación: el Módulo 2 lo asocia por `reservationRef`. El Check-In y el Check-Out nunca esperan esos
+  mensajes.
 - **Sin devoluciones.** El Módulo 2 registra los datos tal como llegan. Es idempotente: recibir de nuevo un
   huésped ya registrado no lo duplica.
 - Un huésped tiene, por reserva, un solo `ENTRY` y un solo `DEPARTURE`, aunque cambie de habitación.
@@ -89,10 +96,11 @@ Reglas:
   - `UPDATED`: cambia un dato de la reserva de la lista.
   - `REMOVED`: sale, con motivo `CANCELLED`, `DATE_CHANGED` o `NO_SHOW`.
   - Llevan `messageId` y `sequenceNumber` creciente dentro del día.
-- **Por cada reserva**: `reservationRef`, `status`, `source`, `externalConfirmationCode` (solo OTA),
-  `startDate`, `endDate`, noches, `guestCount`, `notes` y `updatedAt`; por cada
-  habitación `roomId`, `roomNumber` y `categoryRoom`; y el titular con `guestRef`, `fullName`,
-  `documentType`, `documentNumber`, `nationality`, `contactPhone` y `contactEmail`.
+- **Por cada reserva**: `reservationRef`, `status`, `source` (`DIRECTA` o el nombre de la agencia, por
+  ejemplo `BOOKING`), `externalConfirmationCode` (solo OTA), `startDate`, `endDate`, noches,
+  `guestCount` (total), `notes` y `updatedAt`; por cada habitación `roomId`, `roomNumber`,
+  `categoryRoom` y `guestCount` (personas de esa habitación); y el titular con `guestRef`, `firstName`,
+  `lastName`, `fullName` (para mostrar), `documentType`, `documentNumber`, `nationality`, `contactPhone` y `contactEmail`.
 - **Sin datos financieros** (ni tarifas ni comisión). Es **informativa**: no aparta ni libera
   habitaciones y no cambia estados.
 - No se envían actualizaciones por el Check-In, el Check-Out ni por cambios de reservas cuya llegada no es
@@ -141,11 +149,11 @@ Su spec ya cubre gran parte de lo que pedimos. Esto es lo que coincide y lo que 
 | B4 | Categoría inexistente | Lista vacía, no error | Cubierto por su spec (sin resultados devuelve lista vacía) |
 | B5 | Calendario: fecha o fecha y hora, y fin inclusivo o no | Fecha, con fin inclusivo | Pendiente |
 | B6 | Calendario por categoría o por varios `roomId` | Sí, para evitar una llamada por habitación | Pendiente |
-| B9 | Mensajes de Check-In y Check-Out con la lista `foreignGuests` | Dentro de cada mensaje (incluye Check-Out) | Pendiente |
+| B9 | Check-In y Check-Out sin la lista de extranjeros | Solo `foreignGuestCount`; los extranjeros por su propia cola | Decidido (propuesta del Módulo 1) |
 | B11 | Hora de inicio del día operativo y zona horaria | **Decidido:** 00:00 a 23:59, Colombia (UTC-5) | Decidido, falta que lo confirmen |
 | B12 | `maxCapacity` en el inventario | Agregarlo a la consulta puntual y por categoría | Cubierto por su spec (incluye capacidad máxima) |
 | B13 | Check-In y Check-Out con `roomId` además de `reservationRef` | Obligatorio en ambos | Pendiente |
-| B14 | El Módulo 1 consume por cola la lista del día y sus actualizaciones y deja de consultar `GET /api/reservations` | Routing keys propuestas: `reserva.lista-del-dia` y `reserva.lista-del-dia.actualizacion` | Pendiente |
+| B14 | El Módulo 1 consume por cola la lista del día y sus actualizaciones y deja de consultar `GET /api/reservations` | Una sola cola `m1.reservas.diarias.queue` con las routing keys `reserva.lista-del-dia` y `reserva.lista-del-dia.actualizacion` | Decidido (propuesta del Módulo 1) |
 | B15 | Campos de `ForeignGuestData` | Los diez campos de la sección 3.1, con procedencia y destino | Pendiente |
 | B16 | Agregar `reservedByReservationRef` al inventario | Solo cuando el estado es `Reserved` | Pendiente |
 | B17 | Nombres exactos de los campos del inventario | `id`, `roomNumber`, `categoryRoom`, `maxCapacity`, `status` | Pendiente |
@@ -197,10 +205,10 @@ favor respondan con datos concretos (nombres, valores, ejemplos); si algo no exi
 
 ### F. Check-In y Check-Out
 
-14. ¿Cómo nos notifican el Check-In y el Check-Out (cola, nombre del mensaje)? ¿Uno por habitación?
-    ¿Incluyen el identificador de la habitación además de la reserva?
-15. ¿Pueden incluir, en la misma notificación, la lista de huéspedes extranjeros de esa habitación (los
-    acompañantes también)? ¿Cómo identifican que un huésped es extranjero?
+14. ¿Cómo nos notifican el Check-In y el Check-Out? Definido: colas `m2.habitacion.checkin.queue` y
+    `m2.habitacion.checkout.queue`, una por habitación, con `roomId` y `foreignGuestCount`.
+15. Los extranjeros viajan en `m2.huespedes.extranjeros.queue`, un mensaje por huésped (los
+    acompañantes también). ¿Cómo identifican que un huésped es extranjero?
 16. Por cada extranjero necesitamos: nombres, apellidos, tipo y número de documento, fecha de
     nacimiento, nacionalidad, tipo de movimiento (entrada o salida), fecha del movimiento, **lugar de
     procedencia y lugar de destino**. ¿Los capturan todos hoy? ¿Cuáles no y por qué?

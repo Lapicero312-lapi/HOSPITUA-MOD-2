@@ -526,7 +526,9 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
     `OTA`), `startDate`, `endDate`, número de noches, `guestCount` (total), `notes`, `createdAt`.
   - Habitaciones (`ReservationRoom`): por cada una, `roomNumber`, `categoryRoom`,
     `guestCount` (personas de la habitación), `roomGrossAmount` (tarifa, informativa; vacía en reservas
-    `OTA`) y `stayStatus`.
+    `OTA`), `stayStatus` y, cuando el Módulo 1 ya los informó, los extranjeros del Check-In y del
+    Check-Out (`checkInForeignGuestCount` y `checkOutForeignGuestCount`), para que la Recepcionista vea
+    cuántos huéspedes extranjeros acaba de enviar el Módulo 1.
   - Titular (`Guest`): `firstName`, `lastName`, `documentType`, `documentNumber`, `nationality`,
     `contactPhone`, `contactEmail`.
   - Si la reserva está `CANCELLED` por una solicitud explícita: `cancellationDate`, `channel`,
@@ -630,8 +632,8 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
   `notes`, `createdAt`, `updatedAt` y `status` (`PENDING`, `ACTIVE`,
   `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`).
 - **ReservationRoom**: Cada habitación de la reserva. Atributos: `reservationRef`, `roomId`,
-  `roomNumber`, `categoryRoom`, `guestCount` y `stayStatus` (`EXPECTED` | `CHECKED_IN` |
-  `CHECKED_OUT` | `NOT_ARRIVED`).
+  `roomNumber`, `categoryRoom`, `guestCount`, `stayStatus` (`EXPECTED` | `CHECKED_IN` |
+  `CHECKED_OUT` | `NOT_ARRIVED`), `checkInForeignGuestCount` y `checkOutForeignGuestCount`.
 - **Guest**: Titular de la reserva. Atributos: `id`, `firstName`, `lastName` (el nombre completo, `fullName`, se arma uniéndolos), `documentType` (tipo de documento: `RC`, `TI`, `CC`, `CE`, `PAS` o `NIT`),
   `documentNumber`, `nationality`, `contactPhone`, `contactEmail`.
 - **Cancellation**: Se muestra en el detalle de una reserva cancelada. Atributos: `cancellationDate`,
