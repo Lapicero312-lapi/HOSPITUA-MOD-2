@@ -58,10 +58,9 @@
         ACTIVE --> CANCELLED : Cancelación Manual / OTA
         PENDING --> CANCELLED : Cancelación Manual / OTA
 
-        %% Validación Automática de Fin de Día (según el canal)
-        ACTIVE --> NO_SHOW : Fin de Día sin ingreso (canal OTA)
-        PENDING --> NO_SHOW : Fin de Día sin ingreso (canal OTA)
-        ACTIVE --> CANCELLED : Fin de Día sin ingreso (canal directo)
+        %% Validación Automática de Fin de Día
+        ACTIVE --> NO_SHOW : Fin de Día sin ingreso
+        PENDING --> NO_SHOW : Fin de Día sin ingreso
 
         %% Fin de ciclo
         CANCELLED --> [*]
@@ -125,7 +124,7 @@
             </tr>
             <tr>
                 <td><strong>Fin de Día (No-Show)</strong></td>
-                <td>Proceso automático sobre las reservas de hoy sin ingreso: canal OTA pasa a <code>NO_SHOW</code> y se conserva para conciliar comisiones con la agencia; canal directo pasa a <code>CANCELLED</code>.</td>
+                <td>Proceso automático sobre las reservas de hoy sin ingreso: pasan a <code>NO_SHOW</code>, sea de canal OTA o directo.</td>
                 <td><strong>M2 notifica a M1:</strong> Envía <code>REMOVED</code> (motivo <code>NO_SHOW</code>) si no hubo ningún ingreso. M1 libera las habitaciones por su cuenta.</td>
             </tr>
             <tr>

@@ -233,7 +233,7 @@ favor respondan con datos concretos (nombres, valores, ejemplos); si algo no exi
 - **La lista del día sale a las 00:00**, no a una hora configurable.
 - **El Módulo 1 ya no consulta la lista de reservas**: solo consulta las reservas entre una fecha de inicio y una de fin (y, si quiere, de una habitación) al registrar un mantenimiento o al dar de baja una habitación.
 - **La lista del día trae el tipo de documento del titular** (`documentType`) y la fecha de última actualización de la reserva (`updatedAt`, que reemplaza al antiguo `version`). Ya no se envía el tipo `NATIONAL`/`FOREIGN`: el extranjero se identifica por nacionalidad distinta de Colombia.
-- **Ya no existe el aviso de llegada tardía.** El cierre del día marca `NO_SHOW` (OTA) o `CANCELLED` (directa) a toda reserva con llegada ese día que no tuvo Check-In, y el Módulo 2 la quita de la lista del día (`REMOVED`).
+- **Ya no existe el aviso de llegada tardía.** El cierre del día marca `NO_SHOW` (sea OTA o directa) a toda reserva con llegada ese día que no tuvo Check-In, y el Módulo 2 la quita de la lista del día (`REMOVED`).
 - Las tarifas de las habitaciones se quedan en el Módulo 2: la lista no las incluye.
 - Las reservas OTA las modifica y cancela solo la propia OTA por su API; no afecta el contrato con el
   Módulo 1, pero explica que una cancelación OTA llega como `REMOVED` con motivo `CANCELLED`.

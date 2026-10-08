@@ -117,8 +117,7 @@ El Check-Out también se notifica **por habitación**.
    cierre ocurre al terminar las 23:59.
 2. El sistema recorre las `Reservation` cuya `startDate` corresponde al día procesado.
 3. **No-Show total**: para cada una en `ACTIVE` o `PENDING` (ninguna habitación ingresó) cambia el
-   `status`: a `NO_SHOW` si el `source` es `OTA`, o a `CANCELLED` si es `DIRECT`, y marca todas sus
-   habitaciones como `NOT_ARRIVED`.
+   `status` a `NO_SHOW`, sea cual sea el canal, y marca todas sus habitaciones como `NOT_ARRIVED`.
 4. **Habitaciones no llegadas**: para cada una en `IN_PROGRESS` que tenga habitaciones todavía en
    `EXPECTED`, marca esas habitaciones como `NOT_ARRIVED`, sin cambiar el `status` de la reserva. Si con eso ya no queda ninguna habitación
    en `CHECKED_IN` (todas las que ingresaron ya salieron), cambia la reserva a `COMPLETED`.
@@ -331,38 +330,28 @@ pase a `COMPLETED`, sin afectar el estado de las `Room`, que gestiona el Módulo
 ### User Story 3 - Cierre Automático del Día: No-Show (Priority: P2)
 
 El sistema, sin intervención humana, identifica al cierre del día las reservas esperadas que no
-registraron ingreso físico, las marca como `NO_SHOW` (canal OTA) o
-`CANCELLED` (canal directo). En las reservas con varias habitaciones donde
+registraron ingreso físico (una reserva que no se presentó), las marca como `NO_SHOW`, sea OTA o
+directa. En las reservas con varias habitaciones donde
 solo llegó una parte del grupo, marca como `NOT_ARRIVED` las habitaciones que no ingresaron, sin
 cambiar el estado de la reserva. El Módulo 1 libera las habitaciones por su cuenta. Por tratarse de un único proceso automático en lote, el
-camino exitoso por canal, las llegadas parciales y el manejo de fallos individuales se consolidan en esta misma historia de usuario.
+camino exitoso, las llegadas parciales y el manejo de fallos individuales se consolidan en esta misma historia de usuario.
 
 **Why this priority**: Es una automatización necesaria para mantener la salud del inventario y las
-métricas de ocupación, aunque no bloquea la operación diaria de reservas. La distinción por canal
-conserva el registro de las reservas OTA para conciliar comisiones con la agencia.
+métricas de ocupación, aunque no bloquea la operación diaria de reservas.
 
 **Independent Test**: Se simula el cierre del día y se verifica que el proceso recorra las reservas
-del día, marque como `NO_SHOW` las de canal OTA y como `CANCELLED` las de canal directo que no
+del día, marque como `NO_SHOW` las reservas, de cualquier canal, que no
 tuvieron ingreso, marque `NOT_ARRIVED` las habitaciones sin ingreso de las reservas `IN_PROGRESS`,
 sin enviar ninguna orden de liberación al Módulo 1.
 
 **Acceptance Scenarios**:
 
-1. **Scenario**: Cambio automático a No-Show de una reserva OTA (Happy Path)
-   - **Given** una `Reservation` con `source` `OTA`, con `startDate` de hoy, que sigue en `ACTIVE` o
-     `PENDING`
+1. **Scenario**: Cambio automático a No-Show de una reserva que no se presentó (Happy Path)
+   - **Given** una `Reservation`, de canal `OTA` o `DIRECT`, con `startDate` de hoy, que sigue en
+     `ACTIVE` o `PENDING`
    - **When** el sistema ejecuta el proceso de fin de día
    - **Then** el sistema cambia la reserva a `NO_SHOW`, marca todas sus habitaciones como
-     `NOT_ARRIVED`, la conserva para la conciliación de comisiones y avisa
-     `REMOVED` (motivo `NO_SHOW`) en la lista del día
-
-2. **Scenario**: Cancelación automática de una reserva directa sin presentarse (Happy Path)
-   - **Given** una `Reservation` con `source` `DIRECT`, con `startDate` de hoy, que sigue en
-     `ACTIVE`
-   - **When** el sistema ejecuta el proceso de fin de día
-   - **Then** el sistema cambia la reserva a `CANCELLED`, sin generar comisión ni registro de
-     `Cancellation`, marca sus habitaciones como `NOT_ARRIVED` y avisa `REMOVED` (motivo
-     `NO_SHOW`) en la lista del día
+     `NOT_ARRIVED` y avisa `REMOVED` (motivo `NO_SHOW`) en la lista del día
 
 3. **Scenario**: Llegada parcial de un grupo
    - **Given** una `Reservation` de hoy en `IN_PROGRESS` con la `Room` A en `CHECKED_IN` y la `Room`
@@ -501,8 +490,7 @@ sin enviar ninguna orden de liberación al Módulo 1.
 - **FR-006**: El sistema debe ser el punto de cambio de `status` de la reserva para la confirmación
   OTA, el Check-In, el Check-Out y el No-Show, aceptando las
   transiciones `PENDING`→`ACTIVE`, `ACTIVE`→`IN_PROGRESS`, `IN_PROGRESS`→`COMPLETED`, `ACTIVE` o
-  `PENDING`→`CANCELLED` (No-Show de canal directo), y `ACTIVE` o
-  `PENDING`→`NO_SHOW` (No-Show de canal OTA); cualquier otra transición debe rechazarse con **HTTP
+  `PENDING`→`NO_SHOW` (No-Show de cualquier canal); cualquier otra transición debe rechazarse con **HTTP
   400**. La cancelación explícita la ejecuta "Cancelar reservación" directamente, con las mismas
   transiciones y el mismo control de concurrencia.
 - **FR-007**: El sistema debe llevar el `stayStatus` de cada `ReservationRoom` con las transiciones
@@ -546,16 +534,15 @@ sin enviar ninguna orden de liberación al Módulo 1.
   calendario de Colombia, 00:00 a 23:59, UTC-5), que recorra las `Reservation` cuya `startDate` corresponda al día
   procesado.
 - **FR-019**: En ese proceso, para cada reserva en `ACTIVE` o `PENDING`, el sistema debe cambiar el
-  `status` según el canal (`NO_SHOW` si el `source` es `OTA`, `CANCELLED` si es `DIRECT`) y marcar
+  `status` a `NO_SHOW` (sea cual sea el canal) y marcar
   todas sus habitaciones como `NOT_ARRIVED`; para cada reserva en `IN_PROGRESS`, debe marcar como
   `NOT_ARRIVED` las habitaciones en `EXPECTED` y pasar la reserva a `COMPLETED` si ya no queda
   ninguna en `CHECKED_IN`.
 - **FR-020**: El sistema no debe ordenar al Módulo 1 que libere habitaciones: las habitaciones marcadas
   `NOT_ARRIVED` y las reservas `NO_SHOW` se quitan de la lista del día (`REMOVED`) y el Módulo 1 decide
   qué hace con ellas.
-- **FR-021**: El sistema debe conservar en el Módulo 2 las reservas OTA marcadas como `NO_SHOW` para
-  la conciliación de comisiones con la agencia, y no debe registrar una `Cancellation` para las
-  reservas directas que pasan a `CANCELLED` por el cierre del día.
+- **FR-021**: El sistema no debe registrar una `Cancellation` por un No-Show: la reserva queda en
+  `NO_SHOW`, no en `CANCELLED`.
 - **FR-022**: El sistema debe procesar cada registro del lote del cierre del día con manejo
   individual de excepciones, de modo que un error de validación no interrumpa el lote ni exponga
   errores **HTTP 500**.
@@ -613,7 +600,7 @@ sin enviar ninguna orden de liberación al Módulo 1.
 - **SC-006**: El 100% de las notificaciones que no pueden aplicarse quedan en el log, con cero errores **HTTP 500** ante payloads mal formados o reservas
   inexistentes.
 - **SC-007**: El 100% de las reservas y habitaciones sin ingreso al
-  finalizar el día quedan marcadas (`NO_SHOW` o `CANCELLED` la reserva, `NOT_ARRIVED` la
+  finalizar el día quedan marcadas (`NO_SHOW` la reserva, `NOT_ARRIVED` la
   habitación), y ninguna reserva queda en `ACTIVE` más allá del cierre
   de su día de llegada.
 - **SC-008**: El 100% de las modificaciones de reservas de la lista del día llegan al Módulo 1 como

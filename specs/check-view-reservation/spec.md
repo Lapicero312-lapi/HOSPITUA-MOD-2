@@ -110,7 +110,7 @@ completo (ver FR-006), incluidas todas sus habitaciones y la cantidad de persona
    - `UPDATED`: cambia un dato enviado de una reserva que ya está en la lista: habitaciones
      (agregar, quitar o cambiar), `guestCount`, `endDate`, datos del titular o `notes`.
    - `REMOVED`: una reserva sale de la lista: se cancela (`CANCELLED`), una modificación mueve su
-     llegada a otro día, o el cierre del día la marca `NO_SHOW` o `CANCELLED`.
+     llegada a otro día, o el cierre del día la marca `NO_SHOW`.
 2. Las actualizaciones `ADDED` y `UPDATED` llevan el detalle completo y vigente de la reserva, no
    solo el campo que cambió. La actualización `REMOVED` lleva la `reservationRef` y el motivo
    (`CANCELLED`, `DATE_CHANGED`, `NO_SHOW`).
@@ -394,7 +394,7 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
 
 6. **Scenario**: No-Show al cierre del día (`REMOVED`)
    - **Given** una reserva de la lista del día que sigue `ACTIVE` sin Check-In
-   - **When** el cierre del día la marca `NO_SHOW` (OTA) o `CANCELLED` (directa)
+   - **When** el cierre del día la marca `NO_SHOW`
    - **Then** el Módulo 1 recibe una actualización `REMOVED` con el motivo `NO_SHOW`
 
 7. **Scenario**: Orden de entrega

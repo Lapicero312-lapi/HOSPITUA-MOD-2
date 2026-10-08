@@ -392,7 +392,7 @@ const reservations = [
     start:'2026-09-22', end:'2026-09-24', status:'NO_SHOW', guestCount:2, rooms:[{n:'203',cat:'Superior',stay:'NOT_ARRIVED'}],
     gross:713000, commissionPct:12, commissionStatus:'CALCULATED', notes:''},
   {ref:'RSV-2026-00402', guest:'Ricardo Peña Salas', doc:'CC 79.554.120', pais:'Colombia', source:'DIRECT',
-    start:'2026-09-15', end:'2026-09-16', status:'CANCELLED', guestCount:1, rooms:[{n:'103',cat:'Estándar',stay:'NOT_ARRIVED'}],
+    start:'2026-09-15', end:'2026-09-16', status:'NO_SHOW', guestCount:1, rooms:[{n:'103',cat:'Estándar',stay:'NOT_ARRIVED'}],
     notes:'', noShow:true},
 ];
 
@@ -472,10 +472,10 @@ exportsHist.forEach(h => { h.start = shiftDay(h.start); h.end = shiftDay(h.end);
 
 // Ciclo de vida según la fecha (lo que harían el Check-In/Check-Out del Módulo 1 y el cierre del día):
 // llega hoy = ACTIVE (espera el Check-In); ya llegó y no ha salido = IN_PROGRESS; ya pasó su salida = COMPLETED;
-// no se presentó = NO_SHOW (OTA) o CANCELLED (directa) y una OTA que nunca confirmó (PENDING) vence igual.
+// no se presentó = NO_SHOW (OTA o directa) y una OTA que nunca confirmó (PENDING) vence igual.
 // Como todavía no hay conexión con los demás módulos, lo que pasa con cada reserva que llega después del primer día
 // se sortea y se guarda para que no cambie al recargar: a todas
-// les toca llegar o no presentarse. Quien no se presenta queda NO_SHOW si es OTA y CANCELLED si es directa
+// les toca llegar o no presentarse. Quien no se presenta queda NO_SHOW
 // (cierre del día, sin registrar una Cancellation).
 let arrivals = {};
 try { localStorage.removeItem('hospitua.outcomes'); arrivals = JSON.parse(localStorage.getItem('hospitua.arrivals') || '{}'); } catch (err) { arrivals = {}; }
@@ -490,9 +490,9 @@ function deriveLifecycle(r){
   const ota = r.source === 'OTA';
   const setStay = st => r.rooms.forEach(x => { x.stay = st; });
   const noShow = () => {
-    r.status = ota ? 'NO_SHOW' : 'CANCELLED';
+    r.status = 'NO_SHOW';
     setStay('NOT_ARRIVED');
-    delete r.cancellation;   // el cierre del día no registra una Cancellation (update-reservation FR-021)
+    delete r.cancellation;   // un No-Show no registra una Cancellation (update-reservation FR-021)
   };
   const arrived = () => { if (r.end < TODAY){ r.status = 'COMPLETED'; setStay('CHECKED_OUT'); } else { r.status = 'IN_PROGRESS'; setStay('CHECKED_IN'); } };
   const waiting = status => { r.status = status; setStay('EXPECTED'); delete r.cancellation; };
@@ -549,7 +549,7 @@ const lockLong = {
   IN_PROGRESS: '🔒 Hospedaje en curso: la reserva no admite cambios de estadía ni cancelación.',
   COMPLETED: '🔒 Estadía finalizada. Reserva de solo consulta.',
   CANCELLED: '🔒 Reserva cancelada. Solo consulta.',
-  NO_SHOW: '🔒 Reserva OTA marcada como no presentada por el cierre del día. Solo consulta.',
+  NO_SHOW: '🔒 Reserva marcada como no presentada por el cierre del día. Solo consulta.',
 };
 const STATUS_ES = {ACTIVE:'Activa', PENDING:'Pendiente', IN_PROGRESS:'En curso', COMPLETED:'Completada', CANCELLED:'Cancelada', NO_SHOW:'No se presentó'};
 const STAY_ES = {EXPECTED:'Esperada', CHECKED_IN:'Con Check-In', CHECKED_OUT:'Con Check-Out', NOT_ARRIVED:'No llegó'};

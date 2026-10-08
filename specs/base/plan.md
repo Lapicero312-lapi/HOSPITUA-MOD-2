@@ -292,7 +292,7 @@ Módulo 2; solo viajan en objetos de integración.
    reintenta en orden.
 4. **Tareas programadas** (zona horaria `America/Bogota`, idempotentes, con bloqueo asesor): envío de la
    lista del día a las 00:00; cierre del día al terminar las 23:59 (No-Show:
-   `NO_SHOW` en OTA, `CANCELLED` en directa, sin `Cancellation`; habitaciones no llegadas pasan a
+   `NO_SHOW` para cualquier canal, sin `Cancellation`; habitaciones no llegadas pasan a
    `NOT_ARRIVED`); y reintento de los avisos pendientes. El día operativo es fijo y no es configurable.
 5. **Errores uniformes.** Un filtro global de excepciones traduce toda excepción a `ApiError` 4xx; un
    conflicto de `updatedAt` (ediciones o cancelaciones simultáneas) es siempre 400 `CONCURRENT_UPDATE`.
