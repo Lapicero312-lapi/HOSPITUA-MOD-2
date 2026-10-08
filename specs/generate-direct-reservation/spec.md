@@ -25,16 +25,16 @@ llegada futura solo bloquean la disponibilidad en el Módulo 2 hasta el día de 
 ### Flujo de Usuario de Alto Nivel
 
 1. La **Recepcionista** indica las fechas de estadía (`startDate` y `endDate`, comunes a toda la
-   reserva), la cantidad de personas (`guestCount`), una única `categoryRoom` para toda la reserva y
-   la cantidad de habitaciones de esa categoría (entre 1 y 10). El sistema asigna automáticamente las
+   reserva), una única `categoryRoom` para toda la reserva, la cantidad de habitaciones de esa categoría
+   (entre 1 y 10) y la cantidad de personas de cada habitación (`guestCount` de la habitación). El sistema asigna automáticamente las
    `Room` específicas disponibles de esa categoría; la Recepcionista no elige el número de habitación
    ni puede combinar categorías distintas en una misma reserva desde esta pantalla (para eso existe
    "Actualizar reservación", que sí permite cambiar una habitación por otra de distinta categoría).
 2. El sistema ejecuta "Verificar disponibilidades" para **cada** habitación: cruza las fechas contra
    las reservas locales del Módulo 2 y consulta al Módulo 1 el calendario de mantenimientos y el
    inventario en tiempo real. Si una sola habitación no está disponible, no se puede continuar.
-3. El sistema valida que `guestCount` sea mayor o igual a la cantidad de habitaciones y menor o
-   igual a la suma de la capacidad máxima (`maxCapacity`) de las habitaciones elegidas.
+3. El sistema valida que el `guestCount` de cada habitación sea al menos 1 y no supere su capacidad
+   máxima (`maxCapacity`). El `guestCount` de la reserva es la suma de los de sus habitaciones.
 4. Si todas las habitaciones están disponibles, el sistema solicita al Módulo 3 el cálculo del
    valor de hospedaje bruto de cada habitación mediante "Calcular tarifa dinámica", obtiene un
    `RateQuote` por habitación y muestra al huésped, de forma informativa, la tarifa de cada una.
@@ -118,8 +118,8 @@ reserva y se devuelve un error controlado.
 5. **Scenario**: Reserva de un grupo con varias habitaciones (Happy Path)
    - **Given** que las `Room` 101 y 102 (capacidad máxima 2 cada una) están disponibles en las
      fechas indicadas
-   - **When** la Recepcionista registra una reserva con las dos habitaciones y `guestCount` 4,
-     cotiza y confirma
+   - **When** la Recepcionista registra una reserva con las dos habitaciones y 2 personas en
+     cada una (4 en total), cotiza y confirma
    - **Then** el sistema persiste una sola `Reservation` en `ACTIVE` con dos `ReservationRoom` en
      `EXPECTED`, cada una con su `roomGrossAmount`, sin total en la reserva
 
@@ -131,10 +131,10 @@ reserva y se devuelve un error controlado.
 
 7. **Scenario**: Cantidad de personas fuera de la capacidad (Error)
    - **Given** dos habitaciones disponibles con capacidad máxima 2 cada una
-   - **When** la Recepcionista ingresa `guestCount` 5, o `guestCount` 1
+   - **When** la Recepcionista ingresa 3 personas en una de las habitaciones, o 0 personas en una
    - **Then** el sistema no crea la reserva y responde **HTTP 400** con el mensaje "La cantidad de
-     personas supera la capacidad de las habitaciones de la reserva." (5) o "La cantidad de
-     personas no puede ser menor a la cantidad de habitaciones." (1)
+     personas supera la capacidad de la habitación." (3) o "Cada habitación debe tener al menos
+     una persona." (0)
 
 9. **Scenario**: Fecha de entrada anterior a hoy (Error)
    - **Given** que el día operativo en curso, cuando se genera la reserva, es el 2026-09-28
@@ -158,8 +158,9 @@ reserva y se devuelve un error controlado.
   400** con el mensaje "La habitación ya forma parte de la reserva."
 - ¿Qué sucede si se envían más de 10 habitaciones o ninguna? El sistema responde **HTTP 400** con el
   mensaje "Una reserva debe tener entre 1 y 10 habitaciones."
-- ¿Qué sucede si `guestCount` no es un número entero positivo? El sistema responde **HTTP 400** con
-  el mensaje "La cantidad de personas debe ser un número entero mayor que cero."
+- ¿Qué sucede si el `guestCount` de una habitación no es un número entero positivo? El sistema
+  responde **HTTP 400** con el mensaje "La cantidad de personas debe ser un número entero mayor que
+  cero."
 - ¿Qué sucede si el Módulo 3 cotiza unas habitaciones y falla en otra? El sistema no crea la
   reserva y responde con el error de cotización no disponible; no se permite una reserva con
   habitaciones sin valor.
@@ -182,8 +183,8 @@ reserva y se devuelve un error controlado.
   **HTTP 400** con el mensaje "La fecha de entrada no puede ser anterior a hoy." o "La fecha de
   salida debe ser posterior a la de entrada.", según el caso, sin consultar disponibilidad.
 - **FR-002**: El sistema debe exigir entre 1 y 10 habitaciones distintas por reserva y un
-  `guestCount` entero, mayor o igual a la cantidad de habitaciones y menor o igual a la suma de la
-  `maxCapacity` de las habitaciones elegidas. `notes` es opcional, con máximo 500 caracteres.
+  `guestCount` entero por habitación, mayor o igual a 1 y menor o igual a su `maxCapacity`. El
+  `guestCount` de la reserva es la suma de los de sus habitaciones. `notes` es opcional, con máximo 500 caracteres.
 - **FR-003**: El sistema debe exigir como requisito obligatorio invocar al Módulo 3 ("Calcular
   tarifa dinámica") para obtener el valor de hospedaje bruto de cada habitación antes de registrar
   la reserva.
@@ -213,16 +214,16 @@ reserva y se devuelve un error controlado.
 ### Key Entities *(include if feature involves data)*
 
 - **Reservation**: Contrato de reserva de canal directo. Atributos: `reservationRef`, `guestRef`,
-  `guestCount`, `startDate`, `endDate`, `notes`,
+  `guestCount` (suma de los de sus habitaciones), `startDate`, `endDate`, `notes`,
   `commissionPercentage` (`0`), `commissionAmount` (`0`), `externalConfirmationCode`
   (`null`), `source` (`DIRECT`), `createdAt`, y `status` con estados permitidos:
   `PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`. En este flujo se crea
   siempre en `ACTIVE`.
 - **ReservationRoom**: Cada habitación de la reserva. Atributos: `reservationRef`, `roomId`,
-  `roomNumber`, `categoryRoom`, `roomGrossAmount` (tarifa de la habitación calculada por el Módulo 3,
-  informativa), `quoteId` (identificador de esa cotización), `currency` y `stayStatus` (nace en
+  `roomNumber`, `categoryRoom`, `guestCount` (personas de la habitación), `roomGrossAmount` (tarifa de
+  la habitación calculada por el Módulo 3, informativa), `quoteId` (identificador de esa cotización), `currency` y `stayStatus` (nace en
   `EXPECTED`).
-- **Guest**: Huésped titular. Atributos: `id`, `fullName`, `documentType` (`CC`, `CE`, `PASSPORT` u `OTHER`), `documentNumber`,
+- **Guest**: Huésped titular. Atributos: `id`, `firstName`, `lastName`, `documentType` (`RC`, `TI`, `CC`, `CE`, `PAS` o `NIT`), `documentNumber`,
   `nationality` (texto libre, obligatorio; no hay una lista fija de países; el huésped es extranjero
   si `nationality` no es "Colombia", sin distinguir mayúsculas ni tildes — no se guarda como un
   atributo propio, se deriva de `nationality` cuando hace falta), `contactPhone`, `contactEmail`.

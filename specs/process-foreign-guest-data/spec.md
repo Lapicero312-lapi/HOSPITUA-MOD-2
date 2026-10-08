@@ -193,7 +193,7 @@ verifica que se entreguen los tres, con su tipo de movimiento y su fecha.
   migratorios copiados de `ForeignGuestData` (`firstName`, `lastName`, `documentType`,
   `documentNumber`, `birthDate`, `nationality`, `originPlace`, `destinationPlace`).
   Identidad única: (`reservationRef`, `documentNumber`, `movementType`).
-- **Guest**: Titular de la reserva. Atributos: `id`, `fullName`, `documentNumber`, y `nationality`.
+- **Guest**: Titular de la reserva. Atributos: `id`, `firstName`, `lastName`, `documentNumber` y `nationality`.
 - **Reservation**: Estadía asociada a los huéspedes. Atributos: `reservationRef`, `guestRef`,
   `guestCount` y `status` (`PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`).
 - **Room**: Se referencia solo como contexto de la notificación del Módulo 1 (`roomId` de la

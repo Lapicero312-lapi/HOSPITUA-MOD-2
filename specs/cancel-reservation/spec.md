@@ -164,7 +164,7 @@ se bloquea con un error controlado.
   `roomId`, `roomNumber` y `stayStatus`.
 - **Room**: Habitación física, propiedad del Módulo 1. Atributos: `id`, `roomNumber`, `categoryRoom`
   y `status` (`Available` | `Reserved` | `Occupied`). Solo se menciona: el Módulo 2 no la modifica.
-- **Guest**: Titular de la reserva. Atributos: `id`, `fullName`, `documentNumber`, `contactEmail`.
+- **Guest**: Titular de la reserva. Atributos: `id`, `firstName`, `lastName`, `documentNumber`, `contactEmail`.
 
 ## Success Criteria *(mandatory)*
 

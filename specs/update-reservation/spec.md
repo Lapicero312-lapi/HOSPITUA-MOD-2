@@ -40,16 +40,16 @@ las mismas reglas de transición y de concurrencia.
    - Las habitaciones de la reserva: agregar una habitación, quitar una habitación (la reserva
      debe conservar al menos una) o cambiar una habitación por otra, de la misma o de otra
      categoría.
-   - La cantidad de personas (`guestCount`).
+   - La cantidad de personas de cada habitación (`guestCount` de la habitación).
    - Los datos personales del `Guest` titular, salvo `nationality`: el país de origen se fija al
      crear la reserva y no se edita desde "Actualizar reservación".
    - Las observaciones (`notes`).
 3. Si cambian las fechas o se agrega o cambia una habitación, el sistema ejecuta "Verificar
    disponibilidades" para cada habitación que quedaría en la reserva, enviando la `reservationRef`
    de la reserva editada, para que esta no se cruce consigo misma.
-4. Si cambia `guestCount` o cambian las habitaciones, el sistema valida que `guestCount` sea al menos
-   igual a la cantidad de habitaciones y no supere la suma de la capacidad máxima (`maxCapacity`)
-   de las habitaciones que quedarían en la reserva.
+4. Si cambia el `guestCount` de una habitación o cambian las habitaciones, el sistema valida que el
+   `guestCount` de cada habitación sea al menos 1 y no supere su capacidad máxima (`maxCapacity`).
+   El `guestCount` de la reserva es la suma de los de sus habitaciones.
 5. Si cambian las fechas, se agrega una habitación o una habitación cambia de categoría, el sistema
    ejecuta "Calcular tarifa dinámica" en el Módulo 3 para cada habitación afectada (todas si cambian las
    fechas; solo la agregada o la de categoría distinta en los demás casos) y obtiene la nueva tarifa de
@@ -195,16 +195,16 @@ los cambios. Se repite con datos personales (sin recálculo) y sobre reservas `I
 8. **Scenario**: Agregar una habitación a la reserva
    - **Given** una `Reservation` en `ACTIVE` con la `Room` A y 2 personas, y la `Room` C disponible en
      sus fechas
-   - **When** el solicitante agrega la `Room` C, cambia `guestCount` a 4 y confirma la tarifa
+   - **When** el solicitante agrega la `Room` C, indica 2 personas para la `Room` C y confirma la tarifa
      calculada por el Módulo 3 para la `Room` C
-   - **Then** el sistema agrega la `Room` C a la reserva en `EXPECTED`, actualiza `guestCount` y guarda
+   - **Then** el sistema agrega la `Room` C a la reserva en `EXPECTED` con sus 2 personas, actualiza el total y guarda
      el `roomGrossAmount` de la `Room` C; si la llegada es hoy, avisa
      al Módulo 1 con una actualización `UPDATED` de la lista del día
 
 9. **Scenario**: Quitar una habitación de la reserva
    - **Given** una `Reservation` en `ACTIVE` con las `Room` A y C y 4 personas
-   - **When** el solicitante quita la `Room` C, cambia `guestCount` a 2 y confirma
-   - **Then** el sistema quita la `Room` C (con su tarifa) y actualiza `guestCount`; si la llegada es
+   - **When** el solicitante quita la `Room` C y confirma
+   - **Then** el sistema quita la `Room` C (con su tarifa y sus personas) y actualiza el total; si la llegada es
      hoy, avisa al Módulo 1 con una actualización `UPDATED` de la lista del día
 
 10. **Scenario**: Intento de quitar la única habitación (Error)
@@ -216,16 +216,16 @@ los cambios. Se repite con datos personales (sin recálculo) y sobre reservas `I
 11. **Scenario**: Cambio solo de la cantidad de personas
     - **Given** una `Reservation` en `ACTIVE` con 2 habitaciones de capacidad máxima 2 cada una y
       3 personas
-    - **When** el solicitante cambia `guestCount` a 4
+    - **When** el solicitante cambia a 2 las personas de la segunda habitación
     - **Then** el sistema guarda el cambio sin invocar al Módulo 3 ni verificar disponibilidad; si la
       llegada es hoy, avisa al Módulo 1 con una actualización `UPDATED`
 
 12. **Scenario**: Cantidad de personas fuera de la capacidad (Error)
     - **Given** una `Reservation` con 2 habitaciones de capacidad máxima 2 cada una
-    - **When** el solicitante cambia `guestCount` a 5, o a 1
-    - **Then** el sistema responde **HTTP 400** con el mensaje "Máximo {capacidad} personas para las
-      habitaciones elegidas." (5) o "Debe haber al menos {cantidad de habitaciones} persona(s): una
-      por habitación." (1), sin guardar nada
+    - **When** el solicitante cambia a 3 las personas de una habitación, o a 0
+    - **Then** el sistema responde **HTTP 400** con el mensaje "La cantidad de personas supera la
+      capacidad de la habitación." (3) o "Cada habitación debe tener al menos una persona." (0), sin
+      guardar nada
 
 ---
 
@@ -397,9 +397,9 @@ sin enviar ninguna orden de liberación al Módulo 1.
 - ¿Qué sucede si al cambiar las fechas una sola de las habitaciones no está disponible? El cambio
   completo se rechaza con **HTTP 400** indicando qué habitación no está disponible; no se aplican
   cambios parciales.
-- ¿Qué sucede si se quitan habitaciones y `guestCount` queda por encima de la capacidad de las que
-  quedan? El sistema responde **HTTP 400** con el mensaje de capacidad y no guarda nada; el
-  solicitante debe ajustar `guestCount` en la misma modificación.
+- ¿Qué sucede si se agregan o cambian habitaciones y el `guestCount` de alguna supera su capacidad? El
+  sistema responde **HTTP 400** con el mensaje de capacidad y no guarda nada; el solicitante debe
+  ajustar las personas en la misma modificación.
 - ¿Cómo maneja el sistema dos ediciones simultáneas de la misma reserva? Usa control de concurrencia
   optimista con el atributo `updatedAt`: la segunda recibe **HTTP 400** indicando que debe recargar.
 - ¿Qué sucede con el Módulo 1 cuando solo cambian las fechas? Por lo general nada. Las únicas
@@ -459,8 +459,8 @@ sin enviar ninguna orden de liberación al Módulo 1.
 ### Functional Requirements
 
 - **FR-001**: El sistema debe permitir, sobre una `Reservation` en `ACTIVE` o `PENDING`, editar las
-  fechas, agregar, quitar o cambiar habitaciones, cambiar `guestCount`, corregir los datos
-  personales del `Guest` titular (`fullName`, `documentType`, `documentNumber`, `contactPhone`,
+  fechas, agregar, quitar o cambiar habitaciones, cambiar el `guestCount` de cada habitación, corregir los datos
+  personales del `Guest` titular (`firstName`, `lastName`, `documentType`, `documentNumber`, `contactPhone`,
   `contactEmail` — no `nationality`), y editar `notes` (máximo 500 caracteres).
 - **FR-001a**: El sistema debe rechazar con **HTTP 400** que la Recepcionista modifique una reserva
   de canal `OTA`: esas reservas solo las modifica la Ota que las originó, por su API.
@@ -477,16 +477,16 @@ sin enviar ninguna orden de liberación al Módulo 1.
   nada financiero: el valor a pagar lo calcula el Módulo 3 al recibir el Check-Out del Módulo 1), y exigir
   la confirmación del solicitante antes de persistir. Cambiar una habitación por otra de la misma categoría, sin cambiar
   las fechas, no recotiza ni muestra tarifa.
-- **FR-004**: El sistema debe permitir modificar `guestCount`, los datos personales del `Guest`
+- **FR-004**: El sistema debe permitir modificar el `guestCount` de las habitaciones, los datos personales del `Guest`
   y `notes` sin invocar al Módulo 3 ni exigir disponibilidad.
 - **FR-004a**: El sistema debe exigir que las fechas de una reserva modificada cumplan que la fecha
   de entrada sea igual o posterior al día operativo en curso en el momento de modificarla (no a una
   fecha fija) y que la fecha de salida sea posterior a la de entrada, respondiendo **HTTP 400** con el
   mensaje correspondiente en caso contrario.
-- **FR-005**: El sistema debe validar, al crear o cambiar habitaciones o `guestCount`, que la
-  reserva conserve entre 1 y 10 habitaciones, sin habitaciones repetidas, y que `guestCount` sea
-  mayor o igual a la cantidad de habitaciones y menor o igual a la suma de `maxCapacity` de sus
-  habitaciones, respondiendo **HTTP 400** con el mensaje correspondiente en caso contrario.
+- **FR-005**: El sistema debe validar, al crear o cambiar habitaciones o su `guestCount`, que la
+  reserva conserve entre 1 y 10 habitaciones, sin habitaciones repetidas, y que el `guestCount` de
+  cada habitación sea al menos 1 y no supere su `maxCapacity` (el de la reserva es la suma),
+  respondiendo **HTTP 400** con el mensaje correspondiente en caso contrario.
 - **FR-006**: El sistema debe ser el punto de cambio de `status` de la reserva para la confirmación
   OTA, el Check-In, el Check-Out y el No-Show, aceptando las
   transiciones `PENDING`→`ACTIVE`, `ACTIVE`→`IN_PROGRESS`, `IN_PROGRESS`→`COMPLETED`, `ACTIVE` o
@@ -559,14 +559,14 @@ sin enviar ninguna orden de liberación al Módulo 1.
 ### Key Entities *(include if feature involves data)*
 
 - **Reservation**: Entidad principal actualizada. Atributos: `reservationRef`, `guestRef`,
-  `guestCount`, `startDate`, `endDate`, `updatedAt`,
+  `guestCount` (suma de los de sus habitaciones), `startDate`, `endDate`, `updatedAt`,
   `source` (`DIRECT` | `OTA`), `notes` y `status` (`PENDING`, `ACTIVE`,
   `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`).
 - **ReservationRoom**: Habitación de la reserva. Atributos: `reservationRef`, `roomId`,
   `roomNumber`, `categoryRoom`, `roomGrossAmount` (tarifa de la habitación, solo canal `DIRECT`),
   `quoteId` (cotización que dio esa tarifa, solo canal `DIRECT`) y `stayStatus`
   (`EXPECTED` | `CHECKED_IN` | `CHECKED_OUT` | `NOT_ARRIVED`).
-- **Guest**: Titular de la reserva. Atributos: `id`, `fullName`, `documentType`, `documentNumber`, `nationality`,
+- **Guest**: Titular de la reserva. Atributos: `id`, `firstName`, `lastName`, `documentType`, `documentNumber`, `nationality`,
   `contactPhone`, `contactEmail`.
 - **Room**: Habitación física controlada por el Módulo 1, referenciada para la disponibilidad: el
   Módulo 1 la pasa a `Occupied` en el Check-In y la libera en el Check-Out, y maneja `Reserved` y

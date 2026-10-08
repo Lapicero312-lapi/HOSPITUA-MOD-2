@@ -83,7 +83,8 @@ se informe como inhabilitada, indicando las fechas del cruce.
 - **FR-001**: El sistema debe consultar el calendario de mantenimientos del Módulo 1 para el
   `roomId` y el rango de fechas recibidos.
 - **FR-002**: El sistema debe considerar cruce cualquier mantenimiento que se solape, total o
-  parcialmente, con el rango de la estadía solicitada.
+  parcialmente, con el rango de la estadía solicitada. Todos los mantenimientos son bloqueantes: si
+  hay un cruce, la reserva no se puede crear.
 - **FR-003**: El sistema debe informar a "Verificar disponibilidades" si la `Room` estará
   inhabilitada, incluyendo el periodo del cruce.
 - **FR-004**: El sistema debe ser de solo lectura: no debe crear, modificar ni cancelar

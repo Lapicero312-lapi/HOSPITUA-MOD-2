@@ -22,19 +22,19 @@ Módulo 1. El Módulo 2 no aparta ni libera habitaciones: el Módulo 1 decide qu
 ### Flujo de Usuario de Alto Nivel
 
 1. La **Ota** envía a la API del Módulo 2 una solicitud de reserva en JSON, que incluye las fechas
-   de estadía (comunes a toda la reserva), la cantidad de personas (`guestCount`), una lista de
-   entre 1 y 10 habitaciones (cada una con un `roomId` específico o solo con la `categoryRoom`
-   deseada), los datos del `Guest` titular (incluido el tipo de documento, `documentType`), las observaciones opcionales (`notes`), el valor bruto
+   de estadía (comunes a toda la reserva), una lista de entre 1 y 10 habitaciones (cada una con un
+   `roomId` específico o solo con la `categoryRoom` deseada, y su `guestCount`), los datos del
+   `Guest` titular (`firstName`, `lastName`, `documentType`, `documentNumber`, `nationality` y contacto), las observaciones opcionales (`notes`), el valor bruto
    total del hospedaje (`totalAmount`, de todas las habitaciones) y el `externalConfirmationCode` de
    la agencia.
 2. El sistema valida la estructura JSON y que estén presentes todos los campos obligatorios,
-   incluido el `externalConfirmationCode`, y valida que `guestCount` sea mayor o igual a la cantidad
-   de habitaciones.
+   incluido el `externalConfirmationCode`, y valida que cada habitación traiga un `guestCount` de al
+   menos 1.
 3. El sistema ejecuta "Verificar disponibilidades" para cada habitación: cruza las fechas contra las
    reservas locales y consulta al Módulo 1 el calendario de mantenimientos y el inventario en tiempo
    real. Para las habitaciones pedidas solo por categoría, asigna una `Room` disponible de esa
    categoría (la de menor `roomNumber`), sin repetir una habitación ya asignada a la misma reserva.
-   Con las habitaciones asignadas, valida que `guestCount` no supere la suma de su `maxCapacity`.
+   Con las habitaciones asignadas, valida que el `guestCount` de cada habitación no supere su `maxCapacity`.
 4. Si todas las habitaciones están disponibles, el sistema ejecuta "Registrar confirmación y comisión de ota",
    que calcula el `commissionAmount` con la fórmula `totalAmount × commissionPercentage`, con el
    porcentaje configurado para esa agencia.
@@ -119,7 +119,7 @@ crea una reserva y que todos devuelven una respuesta JSON de error estructurada.
 6. **Scenario**: Reserva por OTA de varias habitaciones pedidas por categoría (Happy Path)
    - **Given** que la categoría `DOUBLE` tiene disponibles las `Room` 201, 202 y 203 en las fechas
    - **When** la **Ota** envía una reserva con dos habitaciones de categoría `DOUBLE` y
-     `guestCount` 4
+     2 personas en cada una
    - **Then** el sistema asigna las `Room` 201 y 202, persiste una sola `Reservation` en `PENDING`
      con dos `ReservationRoom`, calcula la comisión sobre el `totalAmount` completo y retorna HTTP
      201 con las habitaciones asignadas
@@ -131,7 +131,7 @@ crea una reserva y que todos devuelven una respuesta JSON de error estructurada.
 
 8. **Scenario**: Cantidad de personas fuera de la capacidad (Error)
    - **Given** dos habitaciones disponibles con capacidad máxima 2 cada una
-   - **When** la **Ota** envía `guestCount` 6
+   - **When** la **Ota** envía 3 personas en una habitación de capacidad máxima 2
    - **Then** el sistema no crea la reserva y retorna HTTP 400 con `errorCode` `INVALID_GUEST_COUNT`
      y el mensaje "La cantidad de personas supera la capacidad de las habitaciones de la reserva."
 
@@ -157,7 +157,7 @@ crea una reserva y que todos devuelven una respuesta JSON de error estructurada.
 - ¿Qué sucede si una habitación de la lista no trae ni `roomId` ni `categoryRoom`? El sistema
   responde **HTTP 400** con `errorCode` `INVALID_ROOMS` indicando la posición de la habitación
   incompleta.
-- ¿Qué sucede si falta `guestCount` o no es un entero mayor que cero? El sistema responde **HTTP
+- ¿Qué sucede si a una habitación le falta `guestCount` o no es un entero mayor que cero? El sistema responde **HTTP
   400** con `errorCode` `INVALID_GUEST_COUNT`.
 - ¿Qué sucede si `notes` supera los 500 caracteres? El sistema responde **HTTP 400** con
   `errorCode` `INVALID_NOTES`.
@@ -177,9 +177,8 @@ crea una reserva y que todos devuelven una respuesta JSON de error estructurada.
   "Verificar disponibilidades" antes de registrarla, asignar una `Room` disponible de la categoría a
   cada habitación pedida solo por categoría, y rechazar la reserva completa si una sola no tiene
   disponibilidad.
-- **FR-003a**: El sistema debe exigir entre 1 y 10 habitaciones distintas y un `guestCount` entero,
-  mayor o igual a la cantidad de habitaciones y menor o igual a la suma de la `maxCapacity` de las
-  habitaciones asignadas; `notes` es opcional, con máximo 500 caracteres.
+- **FR-003a**: El sistema debe exigir entre 1 y 10 habitaciones distintas y un `guestCount` entero
+  por habitación, mayor o igual a 1 y menor o igual a su `maxCapacity`; `notes` es opcional, con máximo 500 caracteres.
 - **FR-004**: Al persistir la reserva, el sistema debe registrar `source` como `OTA` y calcular la
   comisión pactada (`commissionAmount`) con la fórmula `totalAmount × commissionPercentage`,
   mediante "Registrar confirmación y comisión de ota".
@@ -207,7 +206,7 @@ crea una reserva y que todos devuelven una respuesta JSON de error estructurada.
 
 - **Reservation**: Contrato de reserva registrado desde el canal externo. Atributos:
   `reservationRef`,
-  `guestRef`, `guestCount`, `startDate`, `endDate`, `totalAmount` (valor bruto total de todas las
+  `guestRef`, `guestCount` (suma de los de sus habitaciones), `startDate`, `endDate`, `totalAmount` (valor bruto total de todas las
   habitaciones enviado por la OTA), `commissionAmount`, `externalConfirmationCode`, `notes`,
   `source` (`OTA`), `createdAt`,
   y `status` con estados permitidos: `PENDING`, `ACTIVE`,
@@ -215,9 +214,10 @@ crea una reserva y que todos devuelven una respuesta JSON de error estructurada.
   `NO_SHOW`. En este flujo se crea en `PENDING` y pasa a `ACTIVE` con la confirmación de la agencia.
   El cierre del día marca `NO_SHOW` a la OTA sin Check-In el día de llegada.
 - **ReservationRoom**: Cada habitación de la reserva. Atributos: `reservationRef`, `roomId`,
-  `roomNumber`, `categoryRoom` y `stayStatus` (nace en `EXPECTED`). En canal OTA no tiene valor por
+  `roomNumber`, `categoryRoom`, `guestCount` (personas de la habitación) y `stayStatus` (nace en
+  `EXPECTED`). En canal OTA no tiene valor por
   habitación: el valor es el `totalAmount` de la reserva.
-- **Guest**: Huésped titular. Atributos: `id`, `fullName`, `documentType` (`CC`, `CE`, `PASSPORT` u `OTHER`), `documentNumber`,
+- **Guest**: Huésped titular. Atributos: `id`, `firstName`, `lastName`, `documentType` (`RC`, `TI`, `CC`, `CE`, `PAS` o `NIT`), `documentNumber`,
   `nationality`, `contactPhone`, `contactEmail`, extraídos del payload de la OTA.
 - **Ota**: Intermediario externo que origina la reserva. Atributos: `id`, `name` y
   `commissionPercentage`.

@@ -70,13 +70,17 @@ objetivo global de carga)
 
 ## Arquitectura hexagonal
 
-El dominio no conoce ninguna tecnología. Las dependencias siempre apuntan hacia adentro:
+El backend tiene **un solo dominio general** (`src/domain/`), compartido por todas las features. No hay
+un dominio por módulo: las entidades del Módulo 2 (`Reservation`, `Guest`, `Ota`, `MigratoryMovement`...)
+están relacionadas entre sí y sus reglas se cruzan (una cancelación cambia el estado de la reserva y
+genera avisos al Módulo 1; un Check-In cambia la reserva y registra movimientos migratorios), así
+que viven juntas. Las dependencias siempre apuntan hacia adentro:
 `infrastructure` → `application` → `domain`.
 
 | Capa | Contiene | Puede importar |
 |---|---|---|
-| `domain/` | Entidades y objetos de valor, reglas de negocio, tabla de transiciones de `status`, errores de negocio | Solo TypeScript puro (y `decimal.js` para dinero). **Nada de Nest, TypeORM ni RabbitMQ** |
-| `application/` | Puertos de entrada (casos de uso), puertos de salida (lo que el módulo necesita) y los servicios que implementan los casos de uso | `domain/` |
+| `domain/` | **Todas** las entidades y objetos de valor del Módulo 2, sus relaciones, los enumerados, las reglas de negocio (invariantes y tabla de transiciones de `status`) y los errores de negocio. Ver "Modelo de dominio" | Solo TypeScript puro (y `decimal.js` para dinero). **Nada de Nest, TypeORM ni RabbitMQ** |
+| `application/` | Un caso de uso por feature de las specs (puertos de entrada y servicios) y los puertos de salida (repositorios, Módulo 1, Módulo 3, publicador de eventos, reloj) | `domain/` |
 | `infrastructure/in/` | Adaptadores de entrada: controladores REST, consumidores RabbitMQ, tareas programadas | `application/` (puertos de entrada) |
 | `infrastructure/out/` | Adaptadores de salida: repositorios TypeORM, clientes HTTP del Módulo 1 y 3, publicadores RabbitMQ, reloj | `application/` (implementan los puertos de salida) |
 
@@ -87,12 +91,149 @@ Reglas:
 2. Las entidades del dominio no son las de TypeORM. El adaptador de persistencia tiene sus propias clases
    de tabla y las convierte con un mapeador.
 3. Los módulos 1 y 3 se ven solo como puertos (`Module1Port`, `Module3Port`). Si cambia su API, solo se
-   cambia el adaptador.
+   cambia el adaptador. Sus datos (`Room`, `MaintenanceCalendar`, `RateQuote`, `ForeignGuestData`) son
+   objetos de integración en `application/`, no entidades del dominio.
 4. La inyección de dependencias de Nest une los puertos con sus adaptadores (símbolos como
    `RESERVATION_REPOSITORY`); el dominio nunca usa `@Injectable`.
-5. Las dependencias entre capas y entre módulos se verifican en CI con `eslint-plugin-boundaries`
-   (o `dependency-cruiser`).
-6. Un módulo de dominio no importa las clases internas de otro: solo sus puertos de entrada.
+5. Las dependencias entre capas se verifican en CI con `eslint-plugin-boundaries` (o
+   `dependency-cruiser`): `domain/` no importa nada de `application/` ni de `infrastructure/`.
+6. Los casos de uso no se llaman entre sí por sus clases internas: si uno necesita a otro (por ejemplo,
+   cancelar y modificar usan "Consultar y buscar reservas"), lo usa por su puerto de entrada.
+
+## Modelo de dominio
+
+Todas las entidades viven en `src/domain/`. Los tipos son los del dominio (TypeScript); las tablas
+están en "Modelo de datos base".
+
+### Entidades y atributos
+
+**Reservation** (raíz del agregado de la reserva)
+
+| Atributo | Tipo | Regla |
+|---|---|---|
+| `reservationRef` | texto, único | Identificador con el que los demás módulos la referencian |
+| `guestRef` | referencia a `Guest` | Titular, obligatorio |
+| `guestCount` | entero | Total de personas: suma de los `guestCount` de sus habitaciones |
+| `rooms` | lista de `ReservationRoom` | Entre 1 y 10, sin repetir `roomId` |
+| `startDate`, `endDate` | fecha sin hora | `endDate` > `startDate`; comunes a todas las habitaciones |
+| `source` | `ReservationSource` | `DIRECT` u `OTA` |
+| `otaId` | referencia a `Ota` | Solo si `source` es `OTA` |
+| `externalConfirmationCode` | texto | Solo `OTA`; único por agencia |
+| `grossAmount`, `currency` | dinero | Solo `OTA`: valor bruto que envía la agencia (`totalAmount` en su JSON); base de la comisión |
+| `commissionPercentage`, `commissionAmount` | decimal | `0` en `DIRECT`; en `OTA`, `grossAmount × commissionPercentage / 100` |
+| `commissionStatus` | `CommissionStatus` | Solo `OTA` |
+| `notes` | texto | Opcional, máximo 500 caracteres |
+| `status` | `ReservationStatus` | Solo cambia por la tabla de transiciones |
+| `statusReason` | texto | Motivo de la última transición (D6) |
+| `createdAt`, `updatedAt` | fecha y hora | `updatedAt` es el control de concurrencia optimista |
+
+**ReservationRoom** (parte del agregado `Reservation`; no existe sin su reserva)
+
+| Atributo | Tipo | Regla |
+|---|---|---|
+| `roomId` | id externo | `Room.id` del Módulo 1 |
+| `roomNumber` | texto | Copia del número del Módulo 1, guardada al asignarla |
+| `guestCount` | entero | Personas de esa habitación: ≥ 1 y ≤ `maxCapacity` |
+| `categoryRoom` | texto | Categoría de la habitación |
+| `roomGrossAmount`, `currency` | dinero | Solo `DIRECT`: el `lodgingAmount` y la moneda de la cotización del Módulo 3, sin cálculos |
+| `quoteId` | texto | Solo `DIRECT`: identificador de la cotización; el Módulo 3 lo usa para cobrar en el Check-Out |
+| `stayStatus` | `StayStatus` | Estado de esa habitación dentro de la reserva |
+
+**Guest** (titular de reservas)
+
+| Atributo | Tipo | Regla |
+|---|---|---|
+| `id` (`guestRef`) | id | |
+| `firstName`, `lastName` | texto | Obligatorios; el nombre completo (`fullName`) se arma uniéndolos |
+| `documentType` | `DocumentType` | Obligatorio |
+| `documentNumber` | texto | Obligatorio; identifica al huésped existente |
+| `nationality` | texto | Si no es Colombia, el huésped es extranjero (se deduce, no se guarda) |
+| `contactPhone`, `contactEmail` | texto | Opcionales |
+
+**Ota** (agencia; se registra sola por su API)
+
+| Atributo | Tipo | Regla |
+|---|---|---|
+| `id`, `name`, `hotelAccountId` | texto | Enviados por la OTA |
+| `commissionPercentage` | decimal de 0 a 100 | Porcentaje pactado por defecto |
+| `connectionStatus` | `CONNECTED` o `DISCONNECTED` | |
+| `linkedAt`, `lastSyncAt` | fecha y hora | |
+
+**Cancellation** (registro inmutable de la anulación): `cancellationId`, `reservationRef`,
+`cancellationDate`, `reason` (opcional), `channel` (`RECEPTION` | `OTA_API`), `processedBy`, `status`
+(`COMPLETED`).
+
+**MigratoryMovement** (entrada o salida de un huésped extranjero): `movementId`, `reservationRef`,
+`guestRef` (solo si es el titular), `movementType` (`ENTRY` | `DEPARTURE`), `movementDate`, `firstName`,
+`lastName`, `documentType`, `documentNumber`, `birthDate`, `nationality`, `originPlace`,
+`destinationPlace`. Identidad única: (`reservationRef`, `documentNumber`, `movementType`).
+
+**SireExport** (histórico de descargas del archivo SIRE): `id`, `exportDate`, `exportKind` (`PERIOD` |
+`SINGLE_MOVEMENT`), `recordsCount`, `dateRangeStart`, `dateRangeEnd`, `processedBy`. No marca los
+movimientos.
+
+**DailyReservationList** y **DailyReservationUpdate** (mensajes al Módulo 1): ver
+`check-view-reservation`. Se guardan en `daily_list_message` para no reenviar la lista y respetar el
+`sequenceNumber`.
+
+### Enumerados (objetos de valor)
+
+| Enumerado | Valores |
+|---|---|
+| `ReservationStatus` | `PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW` |
+| `StayStatus` | `EXPECTED`, `CHECKED_IN`, `CHECKED_OUT`, `NOT_ARRIVED` |
+| `ReservationSource` | `DIRECT`, `OTA` |
+| `CommissionStatus` | `CALCULATED`, `RECONCILED`, `PAID`, `DISPUTED` |
+| `DocumentType` | `RC`, `TI`, `CC`, `CE`, `PAS`, `NIT` |
+| `MovementType` | `ENTRY`, `DEPARTURE` |
+| `MigrationStatus` (derivado, no se guarda) | `AWAITING_CHECK_IN`, `COMPLETE`, `NOT_REQUIRED`, `NO_CHECK_IN` |
+
+### Relaciones
+
+| Relación | Cardinalidad | Notas |
+|---|---|---|
+| `Guest` → `Reservation` | 1 a N | Un huésped puede ser titular de varias reservas; cada reserva tiene un solo titular |
+| `Reservation` → `ReservationRoom` | 1 a 1..10 | Composición: las habitaciones se crean, cambian y borran solo a través de su reserva |
+| `Ota` → `Reservation` | 1 a N | Solo reservas `OTA`; `(otaId, externalConfirmationCode)` es único |
+| `Reservation` → `Cancellation` | 1 a 0..1 | Solo cancelaciones explícitas (Recepcionista u OTA); el No-Show no crea `Cancellation` |
+| `Reservation` → `MigratoryMovement` | 1 a N | Máximo un `ENTRY` y un `DEPARTURE` por huésped extranjero |
+| `Guest` → `MigratoryMovement` | 1 a 0..N | Solo cuando el titular es extranjero; los acompañantes no son `Guest` |
+| `SireExport` y `MigratoryMovement` | sin relación guardada | La exportación solo filtra por `movementDate` |
+| `ReservationRoom` → `Room` (Módulo 1) | N a 1, externa | Por `roomId`; el estado físico es del Módulo 1 |
+
+```mermaid
+erDiagram
+    GUEST ||--o{ RESERVATION : "es titular de"
+    OTA |o--o{ RESERVATION : "origina"
+    RESERVATION ||--|{ RESERVATION_ROOM : "tiene (1..10)"
+    RESERVATION ||--o| CANCELLATION : "se anula con"
+    RESERVATION ||--o{ MIGRATORY_MOVEMENT : "tiene"
+    GUEST |o--o{ MIGRATORY_MOVEMENT : "titular extranjero"
+    RESERVATION_ROOM }o--|| ROOM_M1 : "referencia (externa)"
+```
+
+### Agregados e invariantes
+
+- **Agregado `Reservation`** (raíz `Reservation`, con sus `ReservationRoom`). Todo cambio pasa por la
+  raíz y se guarda en una sola transacción. Invariantes:
+  - Entre 1 y 10 habitaciones, sin repetir `roomId`; el `guestCount` de cada habitación es ≥ 1 y ≤ su
+    `maxCapacity`, y el de la reserva es la suma.
+  - `status` y `stayStatus` solo cambian por la tabla de transiciones:
+    - Primera habitación en `CHECKED_IN` → la reserva pasa a `IN_PROGRESS`.
+    - Ninguna habitación en `EXPECTED` ni en `CHECKED_IN`, y al menos una `CHECKED_OUT` → `COMPLETED`.
+    - Cierre del día sin ningún Check-In → `NO_SHOW` (sea OTA o directa); sus habitaciones pasan a
+      `NOT_ARRIVED`.
+  - Solo se modifican o cancelan reservas en `ACTIVE` o `PENDING`; las `OTA` solo por su API.
+  - Las reservas `DIRECT` no guardan un total (se calcula al mostrarlo) y no tienen comisión; las `OTA` no tienen tarifa ni cotización por habitación.
+- **`Guest`** y **`Ota`**: agregados propios; la reserva los referencia por id.
+- **`Cancellation`**, **`MigratoryMovement`**, **`SireExport`**: registros propios que referencian a la reserva por `reservationRef`. Son inmutables una
+  vez creados.
+
+### Datos externos (no son entidades del dominio)
+
+`Room` y `MaintenanceCalendar` (Módulo 1), `RateQuote` (Módulo 3) y `ForeignGuestData` (lo envía el Módulo 1 en el Check-In y el Check-Out) son objetos de integración de los puertos. No se persisten:
+de `ForeignGuestData` se copian los datos al `MigratoryMovement`, y de `RateQuote` el `lodgingAmount`, el `quoteId` y la moneda a
+`ReservationRoom`.
 
 ## Comunicación entre módulos
 
@@ -161,7 +302,6 @@ Contenido del `payload` (según el diccionario y los specs):
 | `POST /api/reservations/{reservationRef}/cancellation` | Recepcionista (solo directas); la OTA cancela las suyas por su canal | `cancel-reservation` |
 | `POST /api/ota/reservations` y `POST /api/ota/reservations/{reservationRef}/confirmation` (pago o garantía) | Ota | `generate-ota-reservation` |
 | `POST /api/sire/exports` (periodo o movimiento individual; devuelve `.TXT` y cabecera `Export-Id`; es `POST` porque registra un `SireExport`, decisión D9) | Recepcionista | `export-sire-file` |
-| `GET /api/sire/exports/{exportId}/exclusions` | Recepcionista | `export-sire-file` |
 | `GET /api/otas` y `GET /api/otas/{otaId}` (solo lectura; devuelve `id`, `name`, `commissionPercentage`, estado de conexión) | Recepcionista, Módulo 3 | `register-ota-information-commission` |
 | `POST /api/ota-commissions/reconciliations` (conciliación de comisiones) | Módulo 3 (finanzas) | `register-ota-information-commission` |
 
@@ -212,28 +352,46 @@ backend/
 └── src/
     ├── main.ts
     ├── app.module.ts
-    ├── shared/                   # ApiError, filtro global de excepciones, EventEnvelope,
-    │                             #   reloj del hotel (America/Bogota), correlación de logs, dinero (decimal.js)
-    ├── config/                   # configuración por entorno (@nestjs/config), RabbitMQ, TypeORM
-    ├── security/                 # JWT, guards y roles
-    ├── migrations/               # migraciones SQL de TypeORM
-    ├── reservation/              # un módulo por dominio, todos con la misma forma:
-    │   ├── domain/               #   agregado Reservation (con sus ReservationRoom dentro), ReservationStatus, transiciones
-    │   ├── application/
-    │   │   ├── ports/in/         #   casos de uso (crear, consultar, modificar, cancelar, check-in...)
-    │   │   ├── ports/out/        #   ReservationRepository, Module1Port, Module3Port, EventPublisher
-    │   │   └── services/
-    │   └── infrastructure/
-    │       ├── in/               #   controladores REST, consumidores RabbitMQ, tareas programadas
-    │       └── out/              #   repositorios TypeORM, clientes HTTP, publicadores
-    ├── guest/                    # Guest, GuestRef
-    ├── availability/             # verificar disponibilidad (M1 + reservas locales)
-    ├── pricing/                  # RateQuote y cliente del Módulo 3
-    ├── cancellation/             # Cancellation
-    ├── ota/                      # Ota (solo lectura), comisión OTA
-    ├── migration/                # MigratoryMovement, SireExport, SireExportExclusion, datos devueltos
-    ├── jobs/                     # lista del día (00:00), cierre del día (23:59), reintentos
-    └── messaging/                # configuración de RabbitMQ, idempotencia (processed_event)
+    ├── domain/                   # DOMINIO GENERAL, único para todo el Módulo 2 (TypeScript puro)
+    │   ├── reservation/          #   Reservation (raíz), ReservationRoom, transiciones de status y stayStatus
+    │   ├── guest/                #   Guest
+    │   ├── ota/                  #   Ota, regla de comisión
+    │   ├── cancellation/         #   Cancellation
+    │   ├── migration/            #   MigratoryMovement, SireExport, MigrationStatus (derivado)
+    │   ├── shared/               #   enumerados, Money (decimal.js), día operativo, errores de negocio
+    │   └── index.ts              #   API pública del dominio
+    ├── application/
+    │   ├── ports/out/            # ReservationRepository, GuestRepository, ..., Module1Port, Module3Port,
+    │   │                         #   EventPublisher, Clock
+    │   ├── integration/          # objetos de integración: Room, MaintenanceCalendar, RateQuote, ForeignGuestData
+    │   └── use-cases/            # un caso de uso por feature de las specs (puerto de entrada + servicio):
+    │       ├── generate-direct-reservation/
+    │       ├── generate-ota-reservation/
+    │       ├── check-view-reservation/       # incluye la lista del día al Módulo 1
+    │       ├── update-reservation/           # incluye Check-In, Check-Out y cierre del día
+    │       ├── cancel-reservation/
+    │       ├── check-room-availability/
+    │       ├── consult-room-inventory/
+    │       ├── consult-maintenance-calendar/
+    │       ├── calculate-dynamic-rate/
+    │       ├── register-ota-information-commission/
+    │       ├── process-foreign-guest-data/
+    │       └── export-sire-file/
+    ├── infrastructure/
+    │   ├── in/
+    │   │   ├── rest/             # controladores REST
+    │   │   ├── messaging/        # consumidores RabbitMQ (Check-In y Check-Out)
+    │   │   └── jobs/             # lista del día (00:00), cierre del día (23:59), reintentos
+    │   ├── out/
+    │   │   ├── persistence/      # clases de tabla TypeORM, mapeadores y repositorios
+    │   │   ├── module1/          # cliente HTTP del Módulo 1
+    │   │   ├── module3/          # cliente HTTP del Módulo 3
+    │   │   ├── messaging/        # publicadores RabbitMQ, idempotencia (processed_event)
+    │   │   └── clock/            # reloj del hotel (America/Bogota)
+    │   ├── config/               # configuración por entorno (@nestjs/config), RabbitMQ, TypeORM
+    │   ├── security/             # JWT, guards y roles
+    │   └── shared/               # ApiError, filtro global de excepciones, EventEnvelope, correlación de logs
+    └── migrations/               # migraciones SQL de TypeORM
 test/
     ├── unit/                     # dominio y casos de uso, sin base de datos ni cola
     ├── integration/              # Testcontainers (PostgreSQL, RabbitMQ)
@@ -250,27 +408,28 @@ frontend/
 ```
 
 **Structure Decision**: aplicación web `backend/` + `frontend/` en un monorepo pnpm. El backend se
-organiza por dominio, y dentro de cada dominio por capas hexagonales, porque cada feature de las specs
-toca un concepto concreto. El frontend cubre solo a la Recepcionista; la Ota solo usa la API y el
-Módulo 1 tiene su propia interfaz.
+organiza **por capas hexagonales**, con un solo `domain/` general para todo el Módulo 2: las entidades
+están relacionadas y sus reglas se cruzan entre features, así que separarlas por módulo duplicaría
+reglas. Las features de las specs se reflejan en `application/use-cases/`. El frontend cubre solo a la
+Recepcionista; la Ota solo usa la API y el Módulo 1 tiene su propia interfaz.
 
 ## Diseño técnico base
 
 ### Modelo de datos base (PostgreSQL)
 
-| Tabla | Entidad | Notas |
-|---|---|---|
-| `reservation` | `Reservation` | `reservation_ref` único; `guest_id`, `start_date`, `end_date`, `source`, `status`, `status_reason` (D6), `created_at`; `updated_at` (`@UpdateDateColumn`); `gross_amount` y `gross_amount_currency` (solo reservas OTA: el `totalAmount` que envía la agencia, base de la comisión; vacíos en las directas, que no tienen total); `commission_percentage`, `commission_amount`, `commission_status`; único `(ota_id, external_confirmation_code)` |
-| `reservation_room` | `ReservationRoom` | Entre 1 y 10 por reserva; `room_id` (`Room.id` del Módulo 1), `category_room`, `room_gross_amount`, `quote_id` y `currency` (tarifa de la habitación recibida del Módulo 3 y el identificador de su cotización, D2; solo canal `DIRECT`), `stay_status` (`EXPECTED`, `CHECKED_IN`, `CHECKED_OUT`, `NOT_ARRIVED`) |
-| `guest` | `Guest` | Es extranjero si su `nationality` no es Colombia; no se guarda un tipo |
-| `ota` | `Ota` | `name`, `hotel_account_id`, `linked_at`, `commission_percentage`, `connection_status` (`CONNECTED`/`DISCONNECTED`), `last_sync_at`; se llena por la vinculación automática |
-| `cancellation` | `Cancellation` | Inmutable; `channel` `RECEPTION` u `OTA_API` |
-| `migratory_movement` | `MigratoryMovement` | Un `ENTRY` y un `DEPARTURE` por huésped y reserva; solo existen movimientos completos |
-| `sire_export`, `sire_export_exclusion` | `SireExport`, `SireExportExclusion` | `exportKind` `PERIOD` o `SINGLE_MOVEMENT`; `exportId` = `SireExport.id` |
-| `reservation_audit` | auditoría de actualizaciones | Inmutable |
-| `daily_list_message` | mensajes enviados al Módulo 1 | `messageId`, día operativo y `sequenceNumber`; evita reenviar la lista el mismo día |
-| `commission_audit` | auditoría de comisiones OTA | Inmutable: reserva, agencia, acción, importes y actor |
-| `processed_event` | idempotencia de colas | Clave `event_id` |
+| Tabla | Entidad | Clave y relaciones | Notas |
+|---|---|---|---|
+| `guest` | `Guest` | PK `id`; único `(document_type, document_number)` | `first_name`, `last_name`, `nationality`, `contact_phone`, `contact_email`. Es extranjero si su `nationality` no es Colombia; no se guarda un tipo |
+| `ota` | `Ota` | PK `id`; único `hotel_account_id` | `name`, `linked_at`, `commission_percentage`, `connection_status` (`CONNECTED`/`DISCONNECTED`), `last_sync_at`; se llena por la vinculación automática |
+| `reservation` | `Reservation` | PK `id`; único `reservation_ref`; FK `guest_id` → `guest`; FK `ota_id` → `ota` (nulo en directas); único `(ota_id, external_confirmation_code)` | `start_date`, `end_date`, `guest_count` (total), `source`, `status`, `status_reason` (D6), `notes`, `created_at`, `updated_at` (`@UpdateDateColumn`); `gross_amount` y `currency` (solo OTA); `commission_percentage`, `commission_amount`, `commission_status` |
+| `reservation_room` | `ReservationRoom` | PK `id`; FK `reservation_id` → `reservation` (borrado en cascada); único `(reservation_id, room_id)` | Entre 1 y 10 por reserva; `room_id` (`Room.id` del Módulo 1, sin FK), `room_number`, `category_room`, `guest_count`, `room_gross_amount`, `quote_id` y `currency` (solo `DIRECT`, D2), `stay_status` |
+| `cancellation` | `Cancellation` | PK `id`; FK `reservation_id` → `reservation`, único (0..1 por reserva) | Inmutable; `channel` `RECEPTION` u `OTA_API` |
+| `migratory_movement` | `MigratoryMovement` | PK `id`; FK `reservation_id` → `reservation`; FK `guest_id` → `guest` (nulo para acompañantes); único `(reservation_id, document_number, movement_type)` | Copia de los datos migratorios del Módulo 1 |
+| `sire_export` | `SireExport` | PK `id` | `export_kind` `PERIOD` o `SINGLE_MOVEMENT`; `exportId` = `SireExport.id`; sin relación con los movimientos |
+| `reservation_audit` | auditoría de actualizaciones | PK `id`; FK `reservation_id` | Inmutable |
+| `commission_audit` | auditoría de comisiones OTA | PK `id`; FK `reservation_id`; FK `ota_id` | Inmutable: acción, importes y actor |
+| `daily_list_message` | mensajes al Módulo 1 | PK `message_id`; único `(operational_date, sequence_number)` | Evita reenviar la lista el mismo día |
+| `processed_event` | idempotencia de colas | PK `event_id` | |
 
 `Reservation.status` (`PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`) se
 guarda como texto. `migrationStatus` es solo un dato de pantalla: se calcula, no se guarda. `Room`,

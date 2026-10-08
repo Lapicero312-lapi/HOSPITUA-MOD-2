@@ -151,7 +151,7 @@ Su spec ya cubre gran parte de lo que pedimos. Esto es lo que coincide y lo que 
 | B17 | Nombres exactos de los campos del inventario | `id`, `roomNumber`, `categoryRoom`, `maxCapacity`, `status` | Pendiente |
 | B18 | Poder excluir habitaciones `Inactive` y filtrar por varios estados | Sí | Pendiente |
 | B19 | Qué estados impiden reservar una estadía futura | `PendingCleaning` e `InCleaning` no bloquean (decidido); confirmar los demás | Parcial |
-| B20 | Tipo de documento del titular (`documentType`) en la lista del día | Valores `CC`, `CE`, `PASSPORT` y `OTHER` | Pendiente: confirmar la lista de valores |
+| B20 | Tipo de documento del titular (`documentType`) en la lista del día | Valores `RC`, `TI`, `CC`, `CE`, `PAS` o `NIT` | Pendiente: confirmar la lista de valores |
 
 ## 6.1 Preguntas para el Módulo 1
 

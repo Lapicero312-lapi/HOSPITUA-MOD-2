@@ -133,7 +133,7 @@
             <div id="mdPersErr" class="field" hidden style="margin-bottom:10px"><span class="err"></span></div>
             <h2 style="margin-top:6px">Titular</h2>
             <div class="row"><div class="field" style="flex:1"><label class="req">Nombre completo</label><input id="mdNombre"></div></div>
-            <div class="row"><div class="field" style="flex:1"><label class="req">Tipo de documento</label><select id="mdDocType"><option value="CC">Cédula de ciudadanía</option><option value="CE">Cédula de extranjería</option><option value="PASSPORT">Pasaporte</option><option value="OTHER">Otro</option></select></div><div class="field" style="flex:1"><label class="req">Documento</label><input id="mdDoc"></div></div>
+            <div class="row"><div class="field" style="flex:1"><label class="req">Tipo de documento</label><select id="mdDocType"><option value="RC">Registro Civil</option><option value="TI">Tarjeta de Identidad</option><option value="CC">Cédula de ciudadanía</option><option value="CE">Cédula de extranjería</option><option value="PAS">Pasaporte</option><option value="NIT">NIT</option></select></div><div class="field" style="flex:1"><label class="req">Documento</label><input id="mdDoc"></div></div>
             <div class="row">
               <div class="field"><label>Teléfono</label><input id="mdTel" placeholder="+57 300 000 0000"></div>
               <div class="field"><label>Email</label><input id="mdEmail" placeholder="nombre@correo.com"></div>
@@ -189,7 +189,7 @@
           <div class="grid2">
             <div>
               <div class="row"><div class="field" style="flex:1"><label class="req">Nombre completo del titular</label><input id="ndNombre" placeholder="Ej. Laura Fernández Gómez"></div></div>
-              <div class="row"><div class="field" style="flex:1"><label class="req">Tipo de documento</label><select id="ndDocType"><option value="CC">Cédula de ciudadanía</option><option value="CE">Cédula de extranjería</option><option value="PASSPORT">Pasaporte</option><option value="OTHER">Otro</option></select></div><div class="field" style="flex:1"><label class="req">No. documento</label><input id="ndDoc" placeholder="Ej. 1.014.223.980"></div></div>
+              <div class="row"><div class="field" style="flex:1"><label class="req">Tipo de documento</label><select id="ndDocType"><option value="RC">Registro Civil</option><option value="TI">Tarjeta de Identidad</option><option value="CC">Cédula de ciudadanía</option><option value="CE">Cédula de extranjería</option><option value="PAS">Pasaporte</option><option value="NIT">NIT</option></select></div><div class="field" style="flex:1"><label class="req">No. documento</label><input id="ndDoc" placeholder="Ej. 1.014.223.980"></div></div>
               <div class="row">
                 <div class="field"><label>Teléfono</label><input id="ndTel" placeholder="+57 300 000 0000"></div>
                 <div class="field"><label>Email</label><input id="ndEmail" placeholder="nombre@correo.com"></div>
@@ -442,8 +442,8 @@ function nightlyLines(q){
   return q.nightly.map(n => `<div class="line"><span>${fmtDate(n.date)}</span><span>${money(n.rate)}</span></div>`).join('');
 }
 // Tarifas de las reservas directas: las entrega el Módulo 3 por habitación; el Módulo 2 no las suma.
-const DOC_PREFIX = {CC: 'CC', CE: 'CE', PASSPORT: 'Pasaporte', OTHER: ''};
-const docNumberOf = doc => (doc || '').replace(/^(CC|CE|Pasaporte)s*/, '');
+const DOC_PREFIX = {RC: 'RC', TI: 'TI', CC: 'CC', CE: 'CE', PAS: 'Pasaporte', NIT: 'NIT'};
+const docNumberOf = doc => (doc || '').replace(/^(RC|TI|CC|CE|NIT|Pasaporte)\s*/, '');
 const docLabel = (type, num) => (DOC_PREFIX[type] ? DOC_PREFIX[type] + ' ' : '') + num;
 function addDays(iso, n){
   const d = new Date(iso + 'T00:00:00Z');
@@ -516,7 +516,7 @@ movementTemplates.forEach(t => {
 });
 const CREATE_HOURS = ['09:14', '11:02', '14:37', '16:48', '08:55'];
 reservations.forEach((r, i) => {
-  r.docType = /^Pasaporte/.test(r.doc) ? 'PASSPORT' : /^CE/.test(r.doc) ? 'CE' : 'CC';
+  r.docType = /^Pasaporte/.test(r.doc) ? 'PAS' : (r.doc.match(/^(RC|TI|CE|NIT)\b/) || [null, 'CC'])[1];
   r.rooms.forEach(rm => { if (r.source === 'DIRECT') rm.gross = quoteFor(rm.cat, r.start, r.end).gross; });
   if (r.source === 'OTA') r.commissionAmount = Math.round(r.gross * r.commissionPct / 100);
   if (!r.createdAt) r.createdAt = addDays(r.start, -(3 + (i % 5))) + ' ' + CREATE_HOURS[i % CREATE_HOURS.length];

@@ -108,7 +108,7 @@ completo (ver FR-006), incluidas todas sus habitaciones y la cantidad de persona
      llegada hoy, una OTA confirma hoy una reserva con llegada hoy (`PENDING` → `ACTIVE`), o una
      modificación cambia la llegada a hoy.
    - `UPDATED`: cambia un dato enviado de una reserva que ya está en la lista: habitaciones
-     (agregar, quitar o cambiar), `guestCount`, `endDate`, datos del titular o `notes`.
+     (agregar, quitar o cambiar), personas de una habitación, `endDate`, datos del titular o `notes`.
    - `REMOVED`: una reserva sale de la lista: se cancela (`CANCELLED`), una modificación mueve su
      llegada a otro día, o el cierre del día la marca `NO_SHOW`.
 2. Las actualizaciones `ADDED` y `UPDATED` llevan el detalle completo y vigente de la reserva, no
@@ -224,7 +224,7 @@ busca un código inexistente y uno con caracteres inválidos confirmando el **HT
    - **Given** una `Reservation` con dos habitaciones y 5 personas
    - **When** la Recepcionista busca su `reservationRef` exacta
    - **Then** el sistema muestra el detalle completo: `status`, fechas, noches, `guestCount`, las
-     dos habitaciones con su `roomId`, `categoryRoom` y `stayStatus`, el titular y el canal
+     dos habitaciones con su `roomId`, `categoryRoom`, `guestCount` y `stayStatus`, el titular y el canal
 
 2. **Scenario**: Búsqueda por código de la OTA
    - **Given** una `Reservation` de canal `OTA` con `externalConfirmationCode` `BK-99812`
@@ -376,7 +376,7 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
 
 3. **Scenario**: Cambio de datos de una reserva de la lista (`UPDATED`)
    - **Given** una reserva de la lista del día con 1 habitación y 2 personas
-   - **When** la Recepcionista agrega una habitación y cambia `guestCount` a 4
+   - **When** la Recepcionista agrega una habitación con 2 personas
    - **Then** el Módulo 1 recibe una actualización `UPDATED` con el detalle completo vigente: 2
      habitaciones y 4 personas
 
@@ -523,11 +523,12 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
   la o las reservas encontradas ignorando los demás filtros, y permitir abrir desde ahí el detalle
   completo de una reserva:
   - Datos de la reserva: `reservationRef`, `status`, `source`, `externalConfirmationCode` (solo
-    `OTA`), `startDate`, `endDate`, número de noches, `guestCount`, `notes`, `createdAt`.
+    `OTA`), `startDate`, `endDate`, número de noches, `guestCount` (total), `notes`, `createdAt`.
   - Habitaciones (`ReservationRoom`): por cada una, `roomNumber`, `categoryRoom`,
-    `roomGrossAmount` (tarifa, informativa; vacía en reservas `OTA`) y `stayStatus`.
-  - Titular (`Guest`): `fullName`, `documentType`, `documentNumber`, `nationality`, `contactPhone`,
-    `contactEmail`.
+    `guestCount` (personas de la habitación), `roomGrossAmount` (tarifa, informativa; vacía en reservas
+    `OTA`) y `stayStatus`.
+  - Titular (`Guest`): `firstName`, `lastName`, `documentType`, `documentNumber`, `nationality`,
+    `contactPhone`, `contactEmail`.
   - Si la reserva está `CANCELLED` por una solicitud explícita: `cancellationDate`, `channel`,
     `reason` y `processedBy` de la `Cancellation`.
 - **FR-007**: El sistema debe exponer la misma búsqueda como servicio interno para las demás
@@ -560,16 +561,18 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
   un proceso automático que envíe al Módulo 1 la lista de las
   `Reservation` con `startDate` igual al día operativo y `status` `ACTIVE`.
 - **FR-013**: La lista debe tener una cabecera con `operationalDate`, `generatedAt`,
-  `totalReservations`, `totalRooms` y `totalGuests` (suma de `guestCount`), y debe enviarse aunque no
+  `totalReservations`, `totalRooms` y `totalGuests` (suma de los `guestCount` de las reservas), y debe enviarse aunque no
   haya reservas, con cero reservas y totales en `0`. Debe enviarse una sola vez por día operativo: si
   el proceso se ejecuta de nuevo el mismo día, no debe reenviarla.
 - **FR-014**: Por cada reserva, la lista y las actualizaciones `ADDED` y `UPDATED` deben incluir:
   - Reserva: `reservationRef`, `status`, `source`, `externalConfirmationCode` (solo `OTA`),
-    `startDate`, `endDate` (fecha de salida), número de noches, `guestCount` (cantidad de personas),
-    `notes` (observaciones) y `updatedAt`.
-  - Habitaciones: por cada `ReservationRoom`, `roomId`, `roomNumber` y `categoryRoom`.
-  - Titular (`Guest`): `guestRef`, `fullName`, `documentType`, `documentNumber`, `nationality`,
-    `contactPhone` y `contactEmail`.
+    `startDate`, `endDate` (fecha de salida), número de noches, `guestCount` (total de personas),
+    `notes` (observaciones) y `updatedAt`. El campo `source` viaja como `DIRECTA` para las reservas
+    directas o con el nombre de la agencia (por ejemplo `BOOKING` o `EXPEDIA`) para las `OTA`.
+  - Habitaciones: por cada `ReservationRoom`, `roomId`, `roomNumber`, `categoryRoom` y `guestCount`
+    (personas de esa habitación; la suma es el `guestCount` de la reserva).
+  - Titular (`Guest`): `guestRef`, `firstName`, `lastName`, `fullName` (para mostrar),
+    `documentType`, `documentNumber`, `nationality`, `contactPhone` y `contactEmail`.
 - **FR-015**: El sistema no debe incluir datos financieros (`grossAmount`, comisión) en la lista ni
   en las actualizaciones: no los necesita el Módulo 1. La consulta por referencia del Módulo 3 (FR-022)
   es aparte y sí entrega los `quoteIds` y el porcentaje de comisión.
@@ -622,14 +625,14 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
 
 ### Key Entities *(include if feature involves data)*
 
-- **Reservation**: Entidad consultada. Atributos: `reservationRef`, `guestRef`, `guestCount`,
+- **Reservation**: Entidad consultada. Atributos: `reservationRef`, `guestRef`, `guestCount` (suma de los de sus habitaciones),
   `startDate`, `endDate`, `source` (`DIRECT` | `OTA`), `externalConfirmationCode`,
   `notes`, `createdAt`, `updatedAt` y `status` (`PENDING`, `ACTIVE`,
   `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`).
 - **ReservationRoom**: Cada habitación de la reserva. Atributos: `reservationRef`, `roomId`,
-  `roomNumber`, `categoryRoom` y `stayStatus` (`EXPECTED` | `CHECKED_IN` | `CHECKED_OUT` |
-  `NOT_ARRIVED`).
-- **Guest**: Titular de la reserva. Atributos: `id`, `fullName`, `documentType` (tipo de documento: `CC`, `CE`, `PASSPORT` u `OTHER`),
+  `roomNumber`, `categoryRoom`, `guestCount` y `stayStatus` (`EXPECTED` | `CHECKED_IN` |
+  `CHECKED_OUT` | `NOT_ARRIVED`).
+- **Guest**: Titular de la reserva. Atributos: `id`, `firstName`, `lastName` (el nombre completo, `fullName`, se arma uniéndolos), `documentType` (tipo de documento: `RC`, `TI`, `CC`, `CE`, `PAS` o `NIT`),
   `documentNumber`, `nationality`, `contactPhone`, `contactEmail`.
 - **Cancellation**: Se muestra en el detalle de una reserva cancelada. Atributos: `cancellationDate`,
   `channel`, `reason` y `processedBy`.
