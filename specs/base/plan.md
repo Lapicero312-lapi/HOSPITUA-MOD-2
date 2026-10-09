@@ -1,7 +1,7 @@
 # Implementation Plan: Base del Módulo 2 (plataforma compartida)
 
 **Date**: 2026-10-03  
-**Spec**: [diccionario.md](../diccionario.md) (contrato de integración) y los `spec.md` de las 13 features  
+**Spec**: [diccionario.md](../diccionario.md) (contrato de integración) y los `spec.md` de las 12 features  
 en `specs/*/`. Este plan no implementa una feature: deja lista la base que todos los planes de
 feature reutilizan.
 
@@ -16,14 +16,10 @@ Consulta al Módulo 1 (inventario y calendario de mantenimientos) y al Módulo 3
 envía por cola la lista de reservas del día y sus actualizaciones. **No le ordena apartar ni liberar
 habitaciones**: el Módulo 1, dueño del estado de las habitaciones, decide qué hace con esa lista.
 
-Este plan fija lo que comparten las 13 features: stack, arquitectura hexagonal, estructura, modelo de
+Este plan fija lo que comparten las 12 features: stack, arquitectura hexagonal, estructura, modelo de
 datos, contratos de integración (REST y colas), manejo uniforme de errores (siempre 4xx, nunca 500),
 tareas programadas y pruebas. Cada plan de feature (`specs/[feature]/plan.md`) depende de este y solo
 describe lo propio.
-
-> **Estado de los planes de feature:** los `plan.md` de las 13 features se escribieron para Java y
-> Spring. Hasta que se revisen, **este plan manda** en cualquier tema técnico (lenguaje, librerías,
-> estructura de carpetas y pruebas).
 
 ## Technical Context
 
@@ -35,7 +31,7 @@ describe lo propio.
   `@nestjs/passport` + `@nestjs/jwt`, `@nestjs/swagger`, `nestjs-pino`, `decimal.js`, `luxon`
 - **Storage**: PostgreSQL
 - **Messaging**: RabbitMQ
-- **Architecture**: hexagonal (puertos y adaptadores), un módulo por dominio
+- **Architecture**: hexagonal (puertos y adaptadores), con un solo dominio general (`src/domain/`)
 - **Package manager**: pnpm (monorepo con `pnpm-workspace.yaml`)
 - **Testing**: Jest, supertest, Testcontainers para Node; Vitest + Testing Library en el frontend
 - **Target Platform**: servidor Linux/Windows + navegador web
@@ -59,14 +55,14 @@ objetivo global de carga)
 | Migraciones de esquema | Migraciones de TypeORM escritas en SQL, versionadas en `backend/src/migrations` | El esquema no se genera solo desde las clases: se revisa y se versiona |
 | Librería de RabbitMQ | `@golevelup/nestjs-rabbitmq` (aprobado) | Exchange topic, reintentos con espera creciente y dead-letter sin armarlos a mano |
 | Gestor de paquetes | pnpm (aprobado) | Instalación rápida, dependencias estrictas y filtros por paquete (`pnpm --filter backend test`) |
-| Bloqueo optimista | `@VersionColumn` de TypeORM | Edición y cancelación simultáneas (`CONCURRENT_UPDATE`) |
+| Control de concurrencia | Comparación de `updatedAt` (`@UpdateDateColumn` de TypeORM, con precisión de microsegundos) al guardar | Edición y cancelación simultáneas (`CONCURRENT_UPDATE`) |
 | Dinero | `decimal.js`, columnas `numeric(14,2)`, redondeo `ROUND_HALF_UP`; **nunca `number`** | Comisión exacta |
 | Fechas | Fechas puras `AAAA-MM-DD` (texto `date` en la base) y `luxon` para el día operativo en `America/Bogota` | Evita corrimientos por zona horaria. Se guardan e intercambian como `AAAA-MM-DD`; las pantallas las muestran como `dd/mm/aaaa` |
 | Autenticación y autorización | Passport + JWT y guards por rol | Las specs exigen interfaces seguras y que cada Ota vea solo sus reservas |
-| Tareas programadas | `@nestjs/schedule` con `timeZone: 'America/Bogota'` | Apartado del inicio del día, cierre del día y reintentos |
+| Tareas programadas | `@nestjs/schedule` con `timeZone: 'America/Bogota'` | Envío de la lista del día (00:00), cierre del día (23:59) y reintento de avisos pendientes |
 | Exclusión mutua de tareas con varias instancias | Bloqueo asesor de PostgreSQL (C10) | Evitar que dos instancias ejecuten el mismo cierre del día |
 | Timeouts y reintentos REST | `@nestjs/axios` con timeout; `cockatiel` si se necesitan reintentos o corte de circuito | No asumir disponibilidad ante caídas |
-| Logs y correlación | `nestjs-pino` + `AsyncLocalStorage` (identificador de correlación por solicitud) | Seguir un mensaje o una orden de punta a punta |
+| Logs y correlación | `nestjs-pino` + `AsyncLocalStorage` (identificador de correlación por solicitud) | Seguir un mensaje o una solicitud de punta a punta |
 
 ## Arquitectura hexagonal
 
@@ -111,7 +107,7 @@ están en "Modelo de datos base".
 
 | Atributo | Tipo | Regla |
 |---|---|---|
-| `reservationRef` | texto, único | Identificador con el que los demás módulos la referencian |
+| `reservationRef` | texto, único | Formato `RSV-` + 8 caracteres hexadecimales en mayúscula (por ejemplo `RSV-3F9A1C7B`). Lo genera el Módulo 2 al crear la reserva; si el generado ya existe, genera otro. Es el identificador con el que los demás módulos la referencian |
 | `guestRef` | referencia a `Guest` | Titular, obligatorio |
 | `guestCount` | entero | Total de personas: suma de los `guestCount` de sus habitaciones |
 | `rooms` | lista de `ReservationRoom` | Entre 1 y 10, sin repetir `roomId` |
@@ -618,16 +614,16 @@ Módulo 2; solo viajan en objetos de integración.
 | D7 | **Periodo de la exportación SIRE:** se filtra por la `movementDate` del movimiento migratorio. | `process-guest-data`, `export-sire-file` |
 | D8 | **API de modificación en dos pasos:** `POST .../modification-preview` (no persiste) y `PATCH` (confirma, con `updatedAt` y las tarifas esperadas por habitación). Propuesta de los planes; el spec no define su forma. | `update-reservation` |
 | D9 | **La exportación SIRE es `POST`**, no `GET`, porque crea un registro `SireExport` (un `GET` no debe tener efectos). | `export-sire-file` |
-| D10 | **Arquitectura hexagonal** con un módulo Nest por dominio y las capas `domain`, `application` e `infrastructure` (in/out). Verificada en CI. | Este plan |
+| D10 | **Arquitectura hexagonal** con un solo `domain/` general para todo el Módulo 2 y las capas `application` (un caso de uso por feature) e `infrastructure` (in/out). Verificada en CI. | Este plan |
 | D11 | **Migraciones escritas en SQL**, no generadas desde las clases de TypeORM, para controlar `EXCLUDE`, índices parciales y bloqueos. | Este plan |
 
 ## Estrategia de testing base
 
 - **Unitarios** (Jest): dominio y casos de uso sin base de datos ni cola; reglas de negocio, tabla de
   transiciones, cálculo de comisión (`decimal.js`), reglas del día operativo.
-- **Integración** (Jest + Testcontainers): PostgreSQL y RabbitMQ reales; concurrencia optimista,
-  unicidad de `(room_id, sequence_number)`, restricción anti-solape, idempotencia de consumidores,
-  dead-letter.
+- **Integración** (Jest + Testcontainers): PostgreSQL y RabbitMQ reales; concurrencia optimista
+  (`updatedAt`), unicidad de `(operational_date, sequence_number)` en los avisos al Módulo 1,
+  restricción anti-solape, idempotencia de consumidores (`messageId`), dead-letter.
 - **Contrato**: adaptadores de `Module1Port` y `Module3Port` contra respuestas simuladas (por ejemplo
   `nock` o `msw`): éxito, rechazo, timeout y respuesta ambigua; y forma de los mensajes de cola.
 - **API** (supertest): controladores con los casos de uso reales y el filtro global de errores.
@@ -660,18 +656,18 @@ Módulo 2; solo viajan en objetos de integración.
 - [ ] T012 [P] Implementar los puertos `Module1Port` y `Module3Port` con sus adaptadores HTTP (timeouts) y objetos de integración
 - [ ] T013 Configurar RabbitMQ con `@golevelup/nestjs-rabbitmq`: exchange `hospitua.events`, colas, routing keys, reintentos y dead-letter
 - [ ] T014 Crear `processed_message` y la idempotencia por `messageId` en `messaging/`
-- [ ] T016 Configurar la infraestructura de pruebas (Jest, supertest y Testcontainers de PostgreSQL y RabbitMQ)
-- [ ] T017 [P] Esqueleto del frontend: enrutamiento, cliente HTTP, TanStack Query y manejo de errores de API
-- [ ] T018 Configurar autenticación y autorización (Passport + JWT, guards) con los roles `RECEPTIONIST`, `OTA`, `FINANCE`, `MODULE1` y `MODULE3` (los dos últimos, de servicio a servicio)
-- [ ] T019 Configurar logs (`nestjs-pino`) y correlación de solicitudes
-- [ ] T020 Configurar el bloqueo asesor de PostgreSQL y el planificador (`@nestjs/schedule`, `America/Bogota`) para las tareas programadas
-- [ ] T021 Configurar OpenAPI (`@nestjs/swagger`) y la verificación de dependencias entre capas en CI
+- [ ] T015 Configurar la infraestructura de pruebas (Jest, supertest y Testcontainers de PostgreSQL y RabbitMQ)
+- [ ] T016 [P] Esqueleto del frontend: enrutamiento, cliente HTTP, TanStack Query y manejo de errores de API
+- [ ] T017 Configurar autenticación y autorización (Passport + JWT, guards) con los roles `RECEPTIONIST`, `OTA`, `MODULE1` y `MODULE3` (los dos últimos, de servicio a servicio)
+- [ ] T018 Configurar logs (`nestjs-pino`) y correlación de solicitudes
+- [ ] T019 Configurar el bloqueo asesor de PostgreSQL y el planificador (`@nestjs/schedule`, `America/Bogota`) para las tareas programadas
+- [ ] T020 Configurar OpenAPI (`@nestjs/swagger`) y la verificación de dependencias entre capas en CI
 
 **Checkpoint**: Base lista; los planes de feature pueden implementarse.
 
 ---
 
-## Orden recomendado de los 13 planes de feature
+## Orden recomendado de los 12 planes de feature
 
 1. **Consultas y servicios base**: `check-view-reservation`, `consult-room-inventory`,
    `consult-maintenance-calendar`, `calculate-dynamic-rate`.
@@ -679,10 +675,10 @@ Módulo 2; solo viajan en objetos de integración.
 3. **Datos migratorios y punto de estado**: primero `process-guest-data`, y después `update-reservation`
    (modificación, Check-In, Check-Out y cierre del día; depende de disponibilidad, tarifa
    y del registro del movimiento migratorio).
-5. **Creación de reservas y comisión**: `generate-direct-reservation`, `register-ota-information-commission` (antes que la de OTA) y
+4. **Creación de reservas y comisión**: `generate-direct-reservation`, `register-ota-information-commission` (antes que la de OTA) y
    `generate-ota-reservation`.
-6. **Cancelación**: `cancel-reservation`.
-7. **Cumplimiento legal**: `export-sire-file` (depende de `process-guest-data`).
+5. **Cancelación**: `cancel-reservation`.
+6. **Cumplimiento legal**: `export-sire-file` (depende de `process-guest-data`).
 
 ## Dependencies & Execution Order
 
