@@ -713,5 +713,6 @@ quedaron decididas. La tabla registra cada decisión.
 
 - `[P]` marca tareas paralelizables; `[US1]` (en los planes de feature) las liga a su historia de usuario.
 - Cada plan de feature debe indicar en su encabezado: `Plan base: ../base/plan.md`.
+- Cómo escribir el plan de cada caso de uso: [guia-planes-por-caso-de-uso.md](guia-planes-por-caso-de-uso.md).
 - No se programa una feature hasta que su SPEC esté validado y su PLAN revisado.
 - Commit por tarea o grupo lógico, con Gitflow.
