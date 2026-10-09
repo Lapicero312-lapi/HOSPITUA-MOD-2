@@ -669,7 +669,8 @@ tablas se unen por sus claves. Hay tres excepciones a propósito:
     `commission_status` nulos, y `commission_percentage = 0` y `commission_amount = 0`.
   - `OTA`: `ota_id`, `external_confirmation_code`, `gross_amount`, `currency` y
     `commission_status` no nulos.
-- Índices: `(status, start_date)`, `(end_date)`, `(ota_id)`.
+- Índices: `(status, start_date)`, `(end_date)`, `(ota_id)` y `(external_confirmation_code)` para la
+  búsqueda por el código de la OTA.
 
 **`reservation_room`** — habitación dentro de la reserva
 
