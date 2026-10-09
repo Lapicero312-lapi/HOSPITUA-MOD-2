@@ -164,10 +164,15 @@ están en "Modelo de datos base".
 `cancellationDate`, `reason` (opcional), `channel` (`RECEPTION` | `OTA_API`), `processedBy`, `status`
 (`COMPLETED`).
 
-**MigratoryMovement** (entrada o salida de un huésped extranjero): `movementId`, `reservationRef`,
-`guestRef` (solo si es el titular), `movementType` (`ENTRY` | `DEPARTURE`), `movementDate`, `firstName`,
-`lastName`, `documentType`, `documentNumber`, `birthDate`, `nationality`, `originPlace`,
-`destinationPlace`. Identidad única: (`reservationRef`, `documentNumber`, `movementType`).
+**GuestData** (datos de cada huésped, colombiano o extranjero, guardados una sola vez por reserva):
+`reservationRef`, `firstName`, `lastName`, `documentType`, `documentNumber`, `birthDate`,
+`nationality`, `originPlace`, `destinationPlace`. Identidad única: (`reservationRef`, `documentNumber`).
+Si el huésped llega de nuevo en el Check-Out, se actualiza con los datos del último mensaje.
+
+**MigratoryMovement** (entrada o salida de un huésped): `movementId`, `reservationRef`,
+`documentNumber` (referencia a su `GuestData`), `guestRef` (solo si es el titular), `movementType`
+(`ENTRY` | `DEPARTURE`), `movementDate`. Sin datos personales copiados. Identidad única:
+(`reservationRef`, `documentNumber`, `movementType`).
 
 **SireExport** (histórico de descargas del archivo SIRE): `id`, `exportDate`, `exportKind` (`PERIOD` |
 `SINGLE_MOVEMENT`), `recordsCount`, `dateRangeStart`, `dateRangeEnd`, `processedBy`. No marca los
@@ -197,7 +202,9 @@ movimientos.
 | `Reservation` → `ReservationRoom` | 1 a 1..10 | Composición: las habitaciones se crean, cambian y borran solo a través de su reserva |
 | `Ota` → `Reservation` | 1 a N | Solo reservas `OTA`; `(otaId, externalConfirmationCode)` es único |
 | `Reservation` → `Cancellation` | 1 a 0..1 | Solo cancelaciones explícitas (Recepcionista u OTA); el No-Show no crea `Cancellation` |
-| `Reservation` → `MigratoryMovement` | 1 a N | Máximo un `ENTRY` y un `DEPARTURE` por huésped extranjero |
+| `Reservation` → `GuestData` | 1 a N | Un `GuestData` por huésped de la reserva, único por `documentNumber` |
+| `GuestData` → `MigratoryMovement` | 1 a 1..2 | Máximo un `ENTRY` y un `DEPARTURE` por huésped |
+| `Reservation` → `MigratoryMovement` | 1 a N | Los movimientos de todos sus huéspedes |
 | `Guest` → `MigratoryMovement` | 1 a 0..N | Solo cuando el titular es extranjero; los acompañantes no son `Guest` |
 | `SireExport` y `MigratoryMovement` | sin relación guardada | La exportación solo filtra por `movementDate` |
 | `ReservationRoom` → `Room` (Módulo 1) | N a 1, externa | Por `roomId`; el estado físico es del Módulo 1 |
@@ -449,7 +456,8 @@ Recepcionista; la Ota solo usa la API y el Módulo 1 tiene su propia interfaz.
 | `reservation` | `Reservation` | PK `id`; único `reservation_ref`; FK `guest_id` → `guest`; FK `ota_id` → `ota` (nulo en directas); único `(ota_id, external_confirmation_code)` | `start_date`, `end_date`, `guest_count` (total), `source`, `status`, `status_reason` (D6), `notes`, `created_at`, `updated_at` (`@UpdateDateColumn`); `gross_amount` y `currency` (solo OTA); `commission_percentage`, `commission_amount`, `commission_status` |
 | `reservation_room` | `ReservationRoom` | PK `id`; FK `reservation_id` → `reservation` (borrado en cascada); único `(reservation_id, room_id)` | Entre 1 y 10 por reserva; `room_id` (`Room.id` del Módulo 1, sin FK), `room_number`, `category_room`, `guest_count`, `room_gross_amount`, `quote_id` y `currency` (solo `DIRECT`, D2), `stay_status`, `check_in_foreign_guest_count`, `check_out_foreign_guest_count` |
 | `cancellation` | `Cancellation` | PK `id`; FK `reservation_id` → `reservation`, único (0..1 por reserva) | Inmutable; `channel` `RECEPTION` u `OTA_API` |
-| `migratory_movement` | `MigratoryMovement` | PK `id`; FK `reservation_id` → `reservation`; FK `guest_id` → `guest` (nulo para acompañantes); único `(reservation_id, document_number, movement_type)` | Copia de los datos de todos los huéspedes que envía el Módulo 1. La vista de huéspedes alojados se arma desde esta tabla |
+| `guest_data` | `GuestData` | PK `id`; FK `reservation_id` → `reservation`; único `(reservation_id, document_number)` | Datos de todos los huéspedes que envía el Módulo 1, guardados una vez; el Check-Out actualiza con el último mensaje |
+| `migratory_movement` | `MigratoryMovement` | PK `id`; FK `guest_data_id` → `guest_data`; FK `reservation_id` → `reservation`; FK `guest_id` → `guest` (nulo para acompañantes); único `(reservation_id, document_number, movement_type)` | Solo tipo y fecha. La vista de huéspedes alojados y el SIRE unen esta tabla con `guest_data` |
 | `sire_export` | `SireExport` | PK `id` | `export_kind` `PERIOD` o `SINGLE_MOVEMENT`; `exportId` = `SireExport.id`; sin relación con los movimientos |
 | `reservation_audit` | auditoría de actualizaciones | PK `id`; FK `reservation_id` | Inmutable |
 | `commission_audit` | auditoría de comisiones OTA | PK `id`; FK `reservation_id`; FK `ota_id` | Inmutable: acción, importes y actor |

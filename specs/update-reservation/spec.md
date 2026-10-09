@@ -577,8 +577,8 @@ sin enviar ninguna orden de liberación al Módulo 1.
   `quoteId` nuevo reemplaza al anterior en la habitación.
 - **MigratoryMovement**: Movimiento de entrada o salida de un huésped (colombiano o extranjero),
   registrado en el Check-In y en el Check-Out mediante "Procesar datos de huéspedes".
-  Atributos: `movementId`, `reservationRef`, `movementType` (`ENTRY` | `DEPARTURE`), `movementDate`,
-  los datos migratorios del huésped. El
+  Atributos: `movementId`, `reservationRef`, `documentNumber`, `movementType` (`ENTRY` | `DEPARTURE`)
+  y `movementDate`. Los datos del huésped se guardan una sola vez en `GuestData`. El
   detalle de sus atributos está en "Procesar datos de huéspedes".
 
 ## Success Criteria *(mandatory)*
