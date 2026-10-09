@@ -36,7 +36,7 @@ Módulo 1. El Módulo 2 no aparta ni libera habitaciones: el Módulo 1 decide qu
    categoría (la de menor `roomNumber`), sin repetir una habitación ya asignada a la misma reserva.
    Con las habitaciones asignadas, valida que el `guestCount` de cada habitación no supere su `maxCapacity`.
 4. Si todas las habitaciones están disponibles, el sistema ejecuta "Registrar confirmación y comisión de ota",
-   que calcula el `commissionAmount` con la fórmula `totalAmount × commissionPercentage`, con el
+   que calcula el `commissionAmount` con la fórmula `totalAmount × commissionPercentage / 100`, con el
    porcentaje configurado para esa agencia.
 5. El sistema registra el valor bruto recibido tal cual, sin recalcular la tarifa: en este flujo no
    interviene "Calcular tarifa dinámica".
@@ -180,7 +180,7 @@ crea una reserva y que todos devuelven una respuesta JSON de error estructurada.
 - **FR-003a**: El sistema debe exigir entre 1 y 10 habitaciones distintas y un `guestCount` entero
   por habitación, mayor o igual a 1 y menor o igual a su `maxCapacity`; `notes` es opcional, con máximo 500 caracteres.
 - **FR-004**: Al persistir la reserva, el sistema debe registrar `source` como `OTA` y calcular la
-  comisión pactada (`commissionAmount`) con la fórmula `totalAmount × commissionPercentage`,
+  comisión pactada (`commissionAmount`) con la fórmula `totalAmount × commissionPercentage / 100`,
   mediante "Registrar confirmación y comisión de ota".
 - **FR-005**: El sistema debe registrar el valor bruto enviado por la OTA en `totalAmount` sin
   recalcularlo y sin invocar "Calcular tarifa dinámica".

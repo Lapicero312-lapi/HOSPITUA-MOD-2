@@ -226,7 +226,8 @@ reserva y se devuelve un error controlado.
   `EXPECTED`).
 - **Guest**: Huésped titular. Atributos: `id`, `firstName`, `lastName`, `documentType` (`RC`, `TI`, `CC`, `CE`, `PAS` o `NIT`), `documentNumber`,
   `nationality` (texto libre, obligatorio; no hay una lista fija de países; el huésped es extranjero
-  si `nationality` no es "Colombia", sin distinguir mayúsculas ni tildes — no se guarda como un
+  si `nationality` no es exactamente `Colombia`; la nacionalidad se escribe con el nombre del país,
+  por ejemplo `Colombia`, `Venezuela` o `Estados Unidos` — no se guarda como un
   atributo propio, se deriva de `nationality` cuando hace falta), `contactPhone`, `contactEmail`.
 - **RateQuote**: Cotización del valor de hospedaje de una habitación calculada por el Módulo 3, con
   carácter informativo. Atributos: `quoteId`, `nightlyRates` (lista de `date` y `rate`) y

@@ -55,7 +55,8 @@ movimiento), los guarda y, al exportar, selecciona los extranjeros y los empaque
    movimiento por cada combinación de reserva, huésped y tipo de movimiento: un huésped que ingresa y
    sale tiene dos, uno `ENTRY` y uno `DEPARTURE`, ligados al mismo `GuestData`.
 4. El sistema identifica como **extranjero** a todo huésped cuya `nationality` sea distinta de
-   `Colombia` (el Módulo 1 escribe la nacionalidad de un colombiano exactamente así).
+   `Colombia`. La nacionalidad se escribe con el nombre del país, por ejemplo `Colombia`, `Venezuela`
+   o `Estados Unidos`, y así se guarda y se exporta al SIRE.
    Esta marca se deduce de la nacionalidad y no se guarda aparte.
 5. Solo un payload inutilizable (sin identificador de reserva o con caracteres maliciosos) se rechaza
    con **HTTP 400 (Bad Request)** sin registrar nada.
