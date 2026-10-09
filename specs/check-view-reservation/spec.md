@@ -569,13 +569,15 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
   el proceso se ejecuta de nuevo el mismo día, no debe reenviarla.
 - **FR-014**: Por cada reserva, la lista y las actualizaciones `ADDED` y `UPDATED` deben incluir:
   - Reserva: `reservationRef`, `status`, `source`, `externalConfirmationCode` (solo `OTA`),
-    `startDate`, `endDate` (fecha de salida), número de noches, `guestCount` (total de personas),
+    `startDate` (fecha de entrada), `endDate` (fecha de salida), `guestCount` (total de personas),
     `notes` (observaciones) y `updatedAt`. El campo `source` viaja como `DIRECTA` para las reservas
     directas o con el nombre de la agencia (por ejemplo `BOOKING` o `EXPEDIA`) para las `OTA`.
-  - Habitaciones: por cada `ReservationRoom`, `roomId`, `roomNumber`, `categoryRoom` y `guestCount`
-    (personas de esa habitación; la suma es el `guestCount` de la reserva).
-  - Titular (`Guest`): `guestRef`, `firstName`, `lastName`, `fullName` (para mostrar),
+  - Habitaciones (`rooms`): por cada `ReservationRoom`, `roomId`, `roomNumber`, `categoryRoom` y
+    `guestCount` (personas de esa habitación; la suma es el `guestCount` de la reserva).
+  - Titular (`guest`): `guestRef`, `firstName`, `lastName`, `fullName` (para mostrar),
     `documentType`, `documentNumber`, `nationality`, `contactPhone` y `contactEmail`.
+
+  El formato exacto de cada mensaje está en "Formato de los mensajes al Módulo 1".
 - **FR-015**: El sistema no debe incluir datos financieros (`grossAmount`, comisión) en la lista ni
   en las actualizaciones: no los necesita el Módulo 1. La consulta por referencia del Módulo 3 (FR-022)
   es aparte y sí entrega los `quoteIds` y el porcentaje de comisión.
@@ -614,6 +616,108 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
   de la `Ota`), `otaConfirmationCode` (el `externalConfirmationCode`) y `otaCommissionPercentage` (el
   `commissionPercentage` congelado). No incluye otros datos financieros ni datos del huésped. Si la reserva no existe, responde **HTTP 404 (Not Found)**. Es de solo lectura y
   no modifica nada.
+
+### Formato de los mensajes al Módulo 1
+
+Los dos mensajes viajan por la cola `m1.reservas.diarias.queue`. Las fechas sin hora van como
+`AAAA-MM-DD` y las fechas con hora en ISO 8601 con zona horaria. Los valores de los ejemplos son
+ilustrativos.
+
+**Lista del día** (routing key `reserva.lista-del-dia`, una vez por día operativo a las 00:00):
+
+```json
+{
+  "messageId": "UUIDv4",
+  "sequenceNumber": 1,
+  "operationalDate": "2026-10-09",
+  "generatedAt": "2026-10-09T00:00:02-05:00",
+  "totalReservations": 1,
+  "totalRooms": 1,
+  "totalGuests": 2,
+  "reservations": [
+    {
+      "reservationRef": "RSV-3F9A1C7B",
+      "status": "ACTIVE",
+      "source": "DIRECTA",
+      "startDate": "2026-10-09",
+      "endDate": "2026-10-12",
+      "guestCount": 2,
+      "notes": "Llegada tarde",
+      "updatedAt": "2026-10-08T15:42:10.123456-05:00",
+      "rooms": [
+        { "roomId": "uuid", "roomNumber": "201", "categoryRoom": "DOBLE", "guestCount": 2 }
+      ],
+      "guest": {
+        "guestRef": "uuid",
+        "firstName": "Ana",
+        "lastName": "Pérez",
+        "fullName": "Ana Pérez",
+        "documentType": "CC",
+        "documentNumber": "123",
+        "nationality": "Colombia",
+        "contactPhone": "+57 300 000 0000",
+        "contactEmail": "ana@correo.com"
+      }
+    }
+  ]
+}
+```
+
+Una reserva `OTA` lleva además `externalConfirmationCode`, y su `source` es el nombre de la agencia.
+Si no hay reservas, la lista se envía con `"reservations": []` y los totales en `0`.
+
+**Actualización `ADDED` o `UPDATED`** (routing key `reserva.lista-del-dia.actualizacion`). El
+campo `reservation` lleva el detalle completo de FR-014, no solo lo que cambió:
+
+```json
+{
+  "messageId": "UUIDv4",
+  "sequenceNumber": 2,
+  "operationalDate": "2026-10-09",
+  "updateType": "UPDATED",
+  "occurredAt": "2026-10-09T09:15:00-05:00",
+  "reservationRef": "RSV-3F9A1C7B",
+  "reservation": {
+    "reservationRef": "RSV-3F9A1C7B",
+    "status": "ACTIVE",
+    "source": "DIRECTA",
+    "startDate": "2026-10-09",
+    "endDate": "2026-10-13",
+    "guestCount": 2,
+    "notes": "Llegada tarde",
+    "updatedAt": "2026-10-09T09:15:00.000000-05:00",
+    "rooms": [
+      { "roomId": "uuid", "roomNumber": "201", "categoryRoom": "DOBLE", "guestCount": 2 }
+    ],
+    "guest": {
+      "guestRef": "uuid",
+      "firstName": "Ana",
+      "lastName": "Pérez",
+      "fullName": "Ana Pérez",
+      "documentType": "CC",
+      "documentNumber": "123",
+      "nationality": "Colombia",
+      "contactPhone": "+57 300 000 0000",
+      "contactEmail": "ana@correo.com"
+    }
+  }
+}
+```
+
+**Actualización `REMOVED`** (misma routing key). No lleva `reservation`; `removalReason` es
+`CANCELLED`, `DATE_CHANGED` o `NO_SHOW`:
+
+```json
+{
+  "messageId": "UUIDv4",
+  "sequenceNumber": 3,
+  "operationalDate": "2026-10-09",
+  "updateType": "REMOVED",
+  "occurredAt": "2026-10-09T23:59:00-05:00",
+  "reservationRef": "RSV-8D02E5A4",
+  "removalReason": "NO_SHOW"
+}
+```
 
 ### Non-Functional Requirements
 
