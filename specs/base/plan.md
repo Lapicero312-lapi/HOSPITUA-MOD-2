@@ -790,6 +790,9 @@ Inmutable. Índice `(reservation_id)`.
 
 - Único `(operational_date, sequence_number)`.
 - Único parcial `(operational_date) WHERE message_kind = 'LIST'`: una sola lista por día.
+- `CHECK`: una `LIST` no lleva `update_type`, `reservation_id` ni `removal_reason`; un `UPDATE` lleva
+  `update_type` y `reservation_id`; `removal_reason` solo va, y es obligatorio, cuando `update_type` es
+  `REMOVED`.
 - Índice `(publish_status, operational_date, sequence_number)` para reintentar en orden.
 
 **`processed_message`** — mensajes recibidos del Módulo 1 (idempotencia)
