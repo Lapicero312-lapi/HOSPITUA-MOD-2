@@ -287,10 +287,12 @@ interacciones M1 ↔ M3 (liquidación, tarifa base, registrar check-out) no invo
 | `reserva.lista-del-dia` | `DailyReservationList`, una vez al día a las 00:00 | Siempre `1` |
 | `reserva.lista-del-dia.actualizacion` | `DailyReservationUpdate` (`ADDED`, `UPDATED`, `REMOVED`) | Creciente dentro del día operativo |
 
-- Mensaje JSON con: `eventId`, `eventType`, `occurredAt`, `sourceModule`, `payload`. Todo mensaje, en
-  los dos sentidos, lleva además `messageId` único y `sequenceNumber` creciente; quien recibe descarta
-  los `messageId` repetidos y aplica en orden. El `sequenceNumber` es global por cola y por día operativo.
-- Consumidores idempotentes (se ignoran los `eventId` repetidos), con reintentos y dead-letter queue.
+- Mensajes JSON **planos**, sin envoltura: los campos van en la raíz y el tipo de mensaje lo da la
+  routing key. Todo mensaje, en los dos sentidos, lleva `messageId` (UUID que se genera una sola vez,
+  cuando ocurre el hecho, se guarda con el envío pendiente y se repite igual en los reintentos) y
+  `sequenceNumber`. Las reglas de cada lado están en las specs: `check-view-reservation` (FR-018) para
+  la lista del día y `update-reservation` (FR-023) para el Check-In y el Check-Out.
+- Consumidores idempotentes (se ignoran los `messageId` repetidos), con reintentos y dead-letter queue.
 - La publicación de la lista del día y de sus actualizaciones respeta el orden: las actualizaciones
   esperan detrás de la lista (ver `check-view-reservation`).
 
@@ -302,7 +304,7 @@ por cola y no espera respuesta, el consumidor del Módulo 2 aplica estas reglas:
 | Caso en el spec | Comportamiento del consumidor |
 |---|---|
 | Notificación válida | Procesa el cambio de la habitación y confirma el mensaje |
-| Duplicado (mismo `eventId`, o habitación ya en `CHECKED_IN`/`CHECKED_OUT`) | Confirma sin efectos (el "200 idempotente") |
+| Duplicado (mismo `messageId`, o habitación ya en `CHECKED_IN`/`CHECKED_OUT`) | Confirma sin efectos (el "200 idempotente") |
 | Reserva inexistente, o en un estado que no admite el evento, o habitación ya `NOT_ARRIVED` | Lo deja en el log (sin datos personales) y confirma el mensaje, sin reintentar (el "400") |
 | Payload ilegible, sin `reservationRef` o `roomId`, o con caracteres maliciosos | Envía el mensaje a la dead-letter queue, sin procesar (el "400" de payload inválido) |
 | Fallo temporal (base de datos caída, por ejemplo) | Reintenta con espera creciente y, agotados los reintentos, a la dead-letter queue |
@@ -448,7 +450,7 @@ rutas de alta ni edición manual (`POST`/`PUT /api/otas` quedan fuera).
 | Servicio | Método | Feature |
 |---|---|---|
 | Inventario de habitaciones por `categoryRoom` (o `roomId`) | M1 GET | `consult-room-inventory` |
-| Calendario de mantenimientos por categoría y rango | M1 GET | `consult-maintenance-calendar` |
+| Calendario de mantenimientos: `roomId`, `startDate`, `endDate`; respuesta `roomId`, `available` y `conflicts` (lista de `maintenanceStart` y `maintenanceEnd` de cada mantenimiento que se cruza; vacía si no hay cruce). Hay cruce si se solapa total o parcialmente; uno que termina justo antes de la llegada no cruza. 404 si la habitación no existe, 400 si el `roomId` o el rango son inválidos. Menos de 1 segundo por consulta. Se consulta una vez por cada habitación candidata de la categoría pedida | M1 GET | `consult-maintenance-calendar` |
 | Tarifa dinámica: `POST /pricing/quotes` con `roomType`, `checkInDate`, `checkOutDate` (equivalen a `categoryRoom`, `startDate`, `endDate`); respuesta `quoteId`, `currency`, `nightlyRates`, `lodgingAmount` | M3 POST | `calculate-dynamic-rate` |
 
 **Errores**: cuerpo `{ "errorCode", "message", "timestamp", "path" }` con HTTP 400 (por defecto, también
@@ -565,7 +567,7 @@ Recepcionista; la Ota solo usa la API y el Módulo 1 tiene su propia interfaz.
 | `reservation_audit` | auditoría de actualizaciones | PK `id`; FK `reservation_id` | Inmutable |
 | `commission_audit` | auditoría de comisiones OTA | PK `id`; FK `reservation_id`; FK `ota_id` | Inmutable: acción, importes y actor |
 | `daily_list_message` | mensajes al Módulo 1 | PK `message_id`; único `(operational_date, sequence_number)` | Evita reenviar la lista el mismo día |
-| `processed_event` | idempotencia de colas | PK `event_id` | |
+| `processed_message` | idempotencia de colas | PK `message_id` | |
 
 `Reservation.status` (`PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`) se
 guarda como texto. `migrationStatus` es solo un dato de pantalla: se calcula, no se guarda. `Room`,
@@ -595,9 +597,9 @@ Módulo 2; solo viajan en objetos de integración.
    un error controlado sin datos de infraestructura.
 6. **Clientes de otros módulos** detrás de puertos (`Module1Port`, `Module3Port`) con timeout.
    Ante fallo, cada feature decide, pero nunca se asume disponibilidad ni tarifa por defecto o a cero.
-7. **Mensajería.** `EventEnvelope` con `eventId`, `eventType`, `occurredAt`, `sourceModule`,
-   `payload`. El consumidor registra el `eventId` en `processed_event` dentro de la misma
-   transacción que el cambio. Reintentos con backoff y dead-letter queue.
+7. **Mensajería.** Mensajes planos con `messageId` y `sequenceNumber`. El consumidor registra el
+   `messageId` en `processed_message` dentro de la misma transacción que el cambio. Reintentos con
+   backoff y dead-letter queue.
 8. **Nomenclatura del diccionario**: `Reservation.status`, `roomNumber`, `startDate`/`endDate`,
    `externalConfirmationCode`, `grossAmount`, `categoryRoom`, `reservationRef`; estados del Módulo 1
    en PascalCase (`Available`, `Reserved`, `Occupied`, ...).
@@ -658,7 +660,7 @@ Módulo 2; solo viajan en objetos de integración.
 - [ ] T011 Implementar `ReservationStatusService` con la tabla de transiciones en el dominio y bloqueo optimista (depende de T008, T009)
 - [ ] T012 [P] Implementar los puertos `Module1Port` y `Module3Port` con sus adaptadores HTTP (timeouts) y objetos de integración
 - [ ] T013 Configurar RabbitMQ con `@golevelup/nestjs-rabbitmq`: exchange `hospitua.events`, colas, routing keys, reintentos y dead-letter
-- [ ] T014 Crear `EventEnvelope`, `processed_event` y la idempotencia en `messaging/`
+- [ ] T014 Crear `processed_message` y la idempotencia por `messageId` en `messaging/`
 - [ ] T016 Configurar la infraestructura de pruebas (Jest, supertest y Testcontainers de PostgreSQL y RabbitMQ)
 - [ ] T017 [P] Esqueleto del frontend: enrutamiento, cliente HTTP, TanStack Query y manejo de errores de API
 - [ ] T018 Configurar autenticación y autorización (Passport + JWT, guards) con los roles `RECEPTIONIST`, `OTA`, `FINANCE`, `MODULE1` y `MODULE3` (los dos últimos, de servicio a servicio)
