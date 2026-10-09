@@ -30,9 +30,9 @@ Módulo 1. El Módulo 2 no aparta ni libera habitaciones: el Módulo 1 decide qu
 2. El sistema valida la estructura JSON y que estén presentes todos los campos obligatorios,
    incluido el `externalConfirmationCode`, y valida que cada habitación traiga un `guestCount` de al
    menos 1.
-3. El sistema ejecuta "Verificar disponibilidades" para cada habitación: cruza las fechas contra las
-   reservas locales y consulta al Módulo 1 el calendario de mantenimientos y el inventario en tiempo
-   real. Para las habitaciones pedidas solo por categoría, asigna una `Room` disponible de esa
+3. El sistema ejecuta "Verificar disponibilidades" para cada habitación: obtiene del Módulo 1 las
+   habitaciones vendibles de la categoría, cruza las fechas contra las reservas locales y consulta al
+   Módulo 1 el calendario de mantenimientos. Para las habitaciones pedidas solo por categoría, asigna una `Room` disponible de esa
    categoría (la de menor `roomNumber`), sin repetir una habitación ya asignada a la misma reserva.
    Con las habitaciones asignadas, valida que el `guestCount` de cada habitación no supere su `maxCapacity`.
 4. Si todas las habitaciones están disponibles, el sistema ejecuta "Registrar confirmación y comisión de ota",
