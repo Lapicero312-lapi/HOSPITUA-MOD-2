@@ -690,7 +690,7 @@ Módulo 2; solo viajan en objetos de integración.
 ## Contradicciones detectadas y decisiones tomadas
 
 Las contradicciones entre la especificación técnica, los specs, el diccionario y los diagramas
-quedaron decididas. La tabla registra cada decisión y lo que falta ajustar en otros documentos.
+quedaron decididas. La tabla registra cada decisión.
 
 | # | Contradicción | Decisión |
 |---|---|---|
@@ -700,27 +700,13 @@ quedaron decididas. La tabla registra cada decisión y lo que falta ajustar en o
 | C4 | "Consultar calendario de mantenimientos" no está en la especificación técnica ni en el diagrama de integración, pero sí en los specs y el diccionario. | **DECIDIDO: REST GET reactiva (M2 → M1)**, igual que el inventario. |
 | C5 | El diagrama de casos de uso muestra que "Generar reservación por OTA" incluye "Calcular tarifa dinámica"; el spec y el diccionario dicen que **no** se recalcula: usa el valor bruto que envía la OTA. | **DECIDIDO: según el spec y el diccionario.** El Módulo 2 no llama al Módulo 3 en la reserva OTA, para que la comisión cuadre con lo que cobró la agencia. |
 | C6 | El diccionario nombra `grossAmount` en `Reservation`; algunos specs usaban `totalAmount`. | **DECIDIDO: un solo nombre interno, `grossAmount`** (columna `gross_amount`, solo en reservas OTA: las directas guardan la tarifa por habitación, D2). `totalAmount` queda solo como nombre del campo en el JSON que envía la OTA. |
-| C7 | Fórmula de comisión sin `/100`, con validación 0–100%. | **DECIDIDO: porcentaje de 0 a 100 y se divide entre 100.** `commissionAmount = grossAmount × commissionPercentage / 100`, con `decimal.js`, 2 decimales y redondeo `ROUND_HALF_UP`; el valor queda positivo en el Módulo 2 (el signo lo aplica el Módulo 3). Pendiente confirmar con el Módulo 3 cómo expresa el porcentaje. |
-| C8 | El estado `Reserved` del Módulo 1 es una solicitud pendiente de aprobación por su equipo. | **REEMPLAZADO:** el Módulo 1 maneja `Reserved` y `Available` por su cuenta al recibir la lista del día; el Módulo 2 ya no depende de ese estado. |
-| C9 | Para reservas con llegada hoy, el spec exigía "todo o nada" con la respuesta del Módulo 1 y compensación. | **REEMPLAZADO:** ya no hay órdenes ni compensación; la reserva se crea sin depender del Módulo 1 (regla transversal 2). |
+| C7 | Fórmula de comisión sin `/100`, con validación 0–100%. | **DECIDIDO: porcentaje de 0 a 100 y se divide entre 100.** `commissionAmount = grossAmount × commissionPercentage / 100`, con `decimal.js`, 2 decimales y redondeo `ROUND_HALF_UP`; el valor queda positivo en el Módulo 2 (el signo lo aplica el Módulo 3). |
 | C10 | Las tareas programadas no tienen mecanismo definido y con varias instancias podrían ejecutarse dos veces. | **DECIDIDO: `@nestjs/schedule` con bloqueo asesor de PostgreSQL** (`pg_try_advisory_lock`, consulta nativa). Si otra instancia tiene el bloqueo, se salta esa ejecución. El día operativo es fijo (00:00–23:59, Colombia). La idempotencia que piden los specs sigue siendo la garantía principal. |
 | C11 | El plan estaba escrito para Java y Spring Boot. | **DECIDIDO: NestJS, TypeScript, TypeORM, `@golevelup/nestjs-rabbitmq`, pnpm y arquitectura hexagonal.** Se eliminó el proyecto Spring/Gradle del repositorio. |
-
-### Cambios pendientes en otros documentos
-
-Estos ajustes **no** están hechos; los specs y los diagramas son del equipo y se acuerdan aparte.
-
-| Documento | Cambio | Decisión |
-|---|---|---|
-| Los 13 `plan.md` de las features | Quitar las referencias a Java, Spring, JPA, Flyway, JUnit y Maven; usar la arquitectura hexagonal y el stack de este plan | C11, D10 |
-| `mod-1-2-3.drawio` | Reflejar la lista del día por cola (M2 → M1), los extranjeros en su propia cola y la consulta del calendario (M2 → M1) | C2, C4 |
-| `DIAGRAMA.drawio` (casos de uso) | Quitar la línea "Generar reservación por OTA" → "Calcular tarifa dinámica" | C5 |
-| Equipo del Módulo 1 | Cambiar `Reserved` y `Available` por su cuenta con la lista del día; las colas ya están definidas en "Convenciones de colas" | C8, C2 |
-| Equipo del Módulo 3 | Confirmar cómo expresa el porcentaje de comisión (0 a 100) | C7 |
 
 ## Notes
 
 - `[P]` marca tareas paralelizables; `[US1]` (en los planes de feature) las liga a su historia de usuario.
 - Cada plan de feature debe indicar en su encabezado: `Plan base: ../base/plan.md`.
-- No se programa una feature hasta que su SPEC esté validado y su PLAN revisado (`sdd-guide.MD`).
+- No se programa una feature hasta que su SPEC esté validado y su PLAN revisado.
 - Commit por tarea o grupo lógico, con Gitflow.
