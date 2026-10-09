@@ -1,6 +1,6 @@
 # Implementation Plan: Base del Módulo 2 (plataforma compartida)
 
-**Date**: 2026-10-03  
+**Date**: 2026-10-09  
 **Spec**: [diccionario.md](../diccionario.md) (contrato de integración) y los `spec.md` de las 12 features  
 en `specs/*/`. Este plan no implementa una feature: deja lista la base que todos los planes de
 feature reutilizan.
@@ -353,10 +353,12 @@ para un error.
 specs/
 ├── diccionario.md
 ├── base/
-│   └── plan.md                  # Este archivo
-└── [feature]/
+│   ├── plan.md                           # Este archivo
+│   └── guia-planes-por-caso-de-uso.md    # Cómo escribir el plan de cada caso de uso
+├── template/                             # Plantillas de spec y de plan
+└── [caso-de-uso]/                        # Uno por cada una de las 12 features
     ├── spec.md
-    └── plan.md                  # Referencia a specs/base/plan.md
+    └── plan.md                           # Plan del caso de uso; referencia a ../base/plan.md
 ```
 
 ### Source Code (repository root)
