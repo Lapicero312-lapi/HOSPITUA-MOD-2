@@ -22,7 +22,7 @@ no es un actor del sistema.
 1. La **Recepcionista** se autentica y abre la pantalla de exportación SIRE.
 2. La Recepcionista define el periodo del reporte (`startDate` y `endDate`), que se compara con la
    fecha de cada movimiento migratorio (`movementDate`).
-3. El sistema ejecuta "Procesar datos de huéspedes extranjeros" para obtener los movimientos del
+3. El sistema ejecuta "Procesar datos de huéspedes" para obtener los movimientos del
    periodo, tanto de entrada (`ENTRY`) como de salida (`DEPARTURE`), **seleccionando solo los de
    huéspedes extranjeros** (nacionalidad distinta de Colombia). Los movimientos de huéspedes
    colombianos se omiten. Todos están completos, porque el Módulo 1 los envía ya procesados. El sistema no lleva

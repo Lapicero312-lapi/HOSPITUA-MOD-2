@@ -1,4 +1,4 @@
-# Feature Specification: Procesar Datos de Huéspedes Extranjeros
+# Feature Specification: Procesar Datos de Huéspedes
 
 **Created**: 2026-09-23
 **Updated**: 2026-10-08
@@ -23,7 +23,8 @@ extranjeros (nacionalidad distinta de Colombia). La Recepcionista luego envía e
 Una reserva puede alojar a varios huéspedes (un grupo o una familia), y todos los extranjeros deben
 reportarse, no solo el titular de la reserva. El negocio necesita un procesamiento que reciba los datos
 de cada huésped (`GuestData`), registre un movimiento (`MigratoryMovement`) de entrada o de salida por
-cada uno y, al exportar, seleccione los extranjeros.
+cada uno, al exportar seleccione los extranjeros y le permita a la Recepcionista **consultar los
+huéspedes que se han alojado** en el hotel.
 
 **Qué hace el Módulo 1 y qué hace el Módulo 2**: el Módulo 1 captura y valida los datos de todos los
 ocupantes y asigna por su cuenta el tipo de movimiento y su fecha, sin pedírselos a la Recepcionista:
@@ -54,6 +55,8 @@ movimiento), los guarda y, al exportar, selecciona los extranjeros y los empaque
 6. Cuando "Exportar archivo SIRE" (ejecutado por la Recepcionista) necesita los datos, invoca este caso de
    uso para obtener los movimientos del periodo. El caso de uso **selecciona únicamente los de
    huéspedes extranjeros** y deja fuera a los colombianos.
+7. La **Recepcionista** consulta en la vista de huéspedes alojados a todos los huéspedes registrados,
+   colombianos y extranjeros, con filtros, búsqueda y su detalle. La vista es de solo consulta.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -135,6 +138,81 @@ y se verifica que se entreguen solo los tres extranjeros, con su tipo de movimie
    - **Then** el sistema entrega una lista vacía y "Exportar archivo SIRE" informa que no hay
      movimientos de extranjeros que reportar
 
+### User Story 3 - Consulta de Huéspedes Alojados (Priority: P2)
+
+La Recepcionista necesita ver qué personas se han alojado en el hotel, colombianas y extranjeras, con
+los datos que envió el Módulo 1: quién está hoy en el hotel, quién ya salió, en qué reserva y habitación
+estuvo, y sus datos de identidad. Es una vista de **solo consulta**: no captura ni corrige datos, porque
+esos son del Módulo 1. El listado, los filtros, la búsqueda y el detalle se consolidan en esta misma
+historia de usuario.
+
+**Why this priority**: Permite responder preguntas de recepción (por ejemplo, si un huésped sigue en el
+hotel o cuándo salió) y verificar lo que envió el Módulo 1, sin depender del archivo SIRE, que solo
+muestra extranjeros. No bloquea la operación diaria.
+
+**Independent Test**: Se registran huéspedes colombianos y extranjeros en varias reservas, algunos con
+salida y otros todavía en el hotel. Se abre la vista, se aplica cada filtro y la búsqueda, se abre el
+detalle de un huésped y se verifica que los datos coinciden con los recibidos del Módulo 1 y que la
+vista no permite modificar nada.
+
+**Acceptance Scenarios**:
+
+1. **Scenario**: Listado de huéspedes alojados (Happy Path)
+   - **Given** huéspedes registrados en distintas reservas
+   - **When** la Recepcionista abre la vista de huéspedes alojados
+   - **Then** el sistema muestra la página 1 con hasta 10 huéspedes, ordenados por fecha de entrada de
+     la más reciente a la más antigua, cada uno con su nombre, documento, nacionalidad (con la marca de
+     extranjero cuando aplica), reserva, habitación, fecha de entrada y fecha de salida, o "En el
+     hotel" si todavía no salió
+
+2. **Scenario**: Filtrar por extranjeros o colombianos
+   - **Given** huéspedes colombianos y extranjeros registrados
+   - **When** la Recepcionista filtra por extranjeros
+   - **Then** el sistema muestra solo los de nacionalidad distinta de Colombia; con el filtro de
+     colombianos, solo los de nacionalidad Colombia
+
+3. **Scenario**: Filtrar quién está en el hotel
+   - **Given** huéspedes con entrada y sin salida, y otros con entrada y salida
+   - **When** la Recepcionista filtra por "En el hotel"
+   - **Then** el sistema muestra solo los que tienen entrada registrada y todavía no tienen salida; con
+     "Ya salió", solo los que ya tienen salida
+
+4. **Scenario**: Filtrar por periodo
+   - **Given** huéspedes con estadías en distintas fechas
+   - **When** la Recepcionista indica un rango de fechas
+   - **Then** el sistema muestra los huéspedes cuya estadía se cruza con ese rango
+
+5. **Scenario**: Búsqueda por documento o por nombre
+   - **Given** un huésped registrado
+   - **When** la Recepcionista busca por su número de documento, o por al menos 3 letras de su nombre o
+     apellido
+   - **Then** el sistema muestra las estadías de ese huésped (una por reserva); por documento, la
+     coincidencia es exacta, y por nombre, parcial y sin distinguir mayúsculas ni tildes
+
+6. **Scenario**: Detalle de un huésped
+   - **Given** un huésped del listado
+   - **When** la Recepcionista abre su detalle
+   - **Then** el sistema muestra todos sus datos (tipo y número de documento, nombre, apellido, fecha de
+     nacimiento, nacionalidad, procedencia y destino), la reserva con un enlace a su detalle, la
+     habitación, y sus movimientos de entrada y salida con su fecha
+
+7. **Scenario**: Sin resultados
+   - **Given** filtros que ningún huésped cumple
+   - **When** la Recepcionista los aplica
+   - **Then** el sistema muestra el listado vacío con el mensaje "No hay huéspedes que coincidan con los
+     filtros."
+
+8. **Scenario**: Filtros inválidos (Error)
+   - **Given** un rango de fechas invertido o mayor a un año, o una búsqueda por nombre de menos de 3
+     caracteres
+   - **When** la Recepcionista aplica los filtros
+   - **Then** el sistema responde **HTTP 400** con el mensaje del filtro inválido, sin consultar
+
+9. **Scenario**: Acceso de otros actores (Error)
+   - **Given** la Ota, el Módulo 1 o el Módulo 3
+   - **When** intentan usar esta vista
+   - **Then** el sistema la rechaza con **HTTP 403**: la vista es exclusiva de la Recepcionista
+
 ### Casos Borde
 
 - ¿Qué sucede si llega un `DEPARTURE` de un huésped sin `ENTRY` registrado? Se registra normalmente
@@ -156,6 +234,12 @@ y se verifica que se entreguen solo los tres extranjeros, con su tipo de movimie
   movimiento es del huésped y la estadía, no de la habitación.
 - ¿Qué sucede si un huésped tiene nacionalidad vacía? El Módulo 1 no la envía vacía; si llegara, el
   huésped no se trata como extranjero y no entra al archivo SIRE.
+- ¿Cómo aparece en la vista un huésped que se ha alojado varias veces? Con una fila por cada estadía
+  (cada reserva), porque cada una tiene sus propias fechas de entrada y salida.
+- ¿Qué pasa en la vista con un huésped que tiene salida pero no entrada registrada? Aparece con su
+  fecha de salida y la entrada vacía.
+- ¿Qué pasa en la vista con una reserva cancelada o en `NO_SHOW`? Sus huéspedes no aparecen, porque
+  nunca hubo Check-In ni movimientos.
 
 ## Requirements *(mandatory)*
 
@@ -181,11 +265,31 @@ y se verifica que se entreguen solo los tres extranjeros, con su tipo de movimie
 - **FR-008**: El sistema debe entregar a "Exportar archivo SIRE" los movimientos del periodo
   **únicamente de huéspedes extranjeros**, con toda la información de cada huésped. Los movimientos de
   huéspedes colombianos se conservan, pero no se entregan.
-- **FR-009**: El sistema no debe capturar datos de huéspedes desde una pantalla propia del Módulo 2: la
-  captura y el procesamiento presencial son responsabilidad del Módulo 1.
+- **FR-009**: El sistema no debe capturar, editar ni corregir datos de huéspedes desde una pantalla del
+  Módulo 2: la captura y el procesamiento presencial son responsabilidad del Módulo 1. La vista de
+  huéspedes alojados (FR-011 a FR-016) es solo de consulta.
 - **FR-010**: El sistema debe interceptar los errores estructurales o de seguridad del payload (sin
   identificador de reserva, formato de payload inválido, caracteres maliciosos) y responder con
   **HTTP 400 (Bad Request)**, prohibiendo que escalen a **HTTP 500**.
+- **FR-011**: El sistema debe ofrecer a la Recepcionista una vista de huéspedes alojados con una fila
+  por huésped y reserva (`GuestStay`), armada a partir de sus `MigratoryMovement`: nombre y apellido,
+  tipo y número de documento, nacionalidad con la marca de extranjero (nacionalidad distinta de
+  Colombia), `reservationRef`, habitación, fecha de entrada y fecha de salida, o "En el hotel" si aún
+  no tiene salida.
+- **FR-012**: El sistema debe paginar el listado de a 10 filas, ordenado por fecha de entrada de la más
+  reciente a la más antigua.
+- **FR-013**: El sistema debe permitir filtrar, combinando los filtros con la regla "Y", por:
+  nacionalidad (todos, extranjeros o colombianos), situación (todos, en el hotel o ya salió) y periodo
+  (rango de fechas de máximo un año: la estadía se cruza con el rango), y buscar por número de
+  documento (coincidencia exacta) o por nombre o apellido (coincidencia parcial, sin distinguir
+  mayúsculas ni tildes, mínimo 3 caracteres).
+- **FR-014**: El sistema debe mostrar el detalle de un huésped con todos sus `GuestData`, la reserva
+  (con enlace a su detalle en "Consultar y buscar reservas"), la habitación y sus movimientos de entrada
+  y salida.
+- **FR-015**: La vista debe ser de solo lectura y exclusiva de la Recepcionista; cualquier otro actor
+  recibe **HTTP 403**. Con filtros inválidos debe responder **HTTP 400** con el mensaje correspondiente.
+- **FR-016**: La vista no debe mostrar a los huéspedes de reservas sin Check-In (`CANCELLED`, `NO_SHOW`,
+  `PENDING` o `ACTIVE` sin ingreso), porque no tienen movimientos.
 
 ### Non-Functional Requirements
 
@@ -193,6 +297,8 @@ y se verifica que se entreguen solo los tres extranjeros, con su tipo de movimie
   hasta 10 huéspedes por notificación.
 - **NFR-002**: Los datos personales de los huéspedes (documento y fecha de nacimiento) no deben escribirse
   en los registros de log.
+- **NFR-003**: Una página de la vista de huéspedes alojados, con cualquier combinación de filtros, debe
+  responder en menos de 1 segundo con hasta 50 000 movimientos registrados.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -206,10 +312,15 @@ y se verifica que se entreguen solo los tres extranjeros, con su tipo de movimie
 - **MigratoryMovement**: Movimiento de entrada o de salida de un huésped en una estadía, colombiano o
   extranjero. Solo los de extranjeros entran al archivo SIRE. Atributos: `movementId`, `reservationRef`,
   `guestRef` (solo si el huésped es el titular; los acompañantes no son `Guest` del Módulo 2),
-  `movementType` (`ENTRY` | `DEPARTURE`), `movementDate`, los datos copiados de `GuestData`
+  `roomId` (habitación de la notificación de Check-In o de Check-Out), `movementType` (`ENTRY` | `DEPARTURE`), `movementDate`, los datos copiados de `GuestData`
   (`firstName`, `lastName`, `documentType`, `documentNumber`, `birthDate`, `nationality`,
   `originPlace`, `destinationPlace`). Identidad única: (`reservationRef`, `documentNumber`,
   `movementType`).
+- **GuestStay** (derivada, no se guarda): Fila de la vista de huéspedes alojados, una por huésped y
+  reserva. Se arma con el `ENTRY` y el `DEPARTURE` del huésped en esa reserva: datos del huésped,
+  `reservationRef`, `roomId`, fecha de entrada (`movementDate` del `ENTRY`) y fecha de salida
+  (`movementDate` del `DEPARTURE`, vacía si aún está en el hotel). Es extranjero si su `nationality` es
+  distinta de Colombia.
 - **Guest**: Titular de la reserva. Atributos: `id`, `firstName`, `lastName`, `documentNumber` y `nationality`.
 - **Reservation**: Estadía asociada a los huéspedes. Atributos: `reservationRef`, `guestRef`,
   `guestCount` y `status` (`PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`).
@@ -230,3 +341,5 @@ y se verifica que se entreguen solo los tres extranjeros, con su tipo de movimie
   **HTTP 400**.
 - **SC-004**: Ningún huésped de un grupo queda sin registrar por el error de otro huésped de la misma
   notificación.
+- **SC-005**: La Recepcionista encuentra a un huésped por su documento en la vista de huéspedes alojados
+  en menos de 10 segundos, y el 100% de los huéspedes con Check-In aparecen en ella.

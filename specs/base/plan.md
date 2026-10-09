@@ -165,7 +165,7 @@ están en "Modelo de datos base".
 (`COMPLETED`).
 
 **MigratoryMovement** (entrada o salida de un huésped extranjero): `movementId`, `reservationRef`,
-`guestRef` (solo si es el titular), `movementType` (`ENTRY` | `DEPARTURE`), `movementDate`, `firstName`,
+`guestRef` (solo si es el titular), `roomId`, `movementType` (`ENTRY` | `DEPARTURE`), `movementDate`, `firstName`,
 `lastName`, `documentType`, `documentNumber`, `birthDate`, `nationality`, `originPlace`,
 `destinationPlace`. Identidad única: (`reservationRef`, `documentNumber`, `movementType`).
 
@@ -245,7 +245,7 @@ Regla: **proactiva** (el módulo avisa un evento y no espera respuesta) → **co
 |---|---|---|---|---|
 | Check-In por habitación | M1 → M2 | Cola `m2.habitacion.checkin.queue` | Proactiva | `update-reservation` |
 | Check-Out por habitación | M1 → M2 | Cola `m2.habitacion.checkout.queue` | Proactiva | `update-reservation` |
-| Huéspedes extranjeros (un mensaje por huésped) | M1 → M2 | Cola `m2.huespedes.extranjeros.queue` | Proactiva | `process-foreign-guest-data` |
+| Huéspedes extranjeros (un mensaje por huésped) | M1 → M2 | Cola `m2.huespedes.extranjeros.queue` | Proactiva | `process-guest-data` |
 | Lista de reservas del día y sus actualizaciones | M2 → M1 | Cola `m1.reservas.diarias.queue` | Proactiva | `check-view-reservation` |
 | Consultar inventario de habitaciones | M2 → M1 | REST GET | Reactiva | `consult-room-inventory` |
 | Consultar calendario de mantenimientos | M2 → M1 | REST GET | Reactiva | `consult-maintenance-calendar` |
@@ -325,6 +325,7 @@ ejemplo `BOOKING`).
 | `POST /api/reservations/{reservationRef}/modification-preview` y `PATCH /api/reservations/{reservationRef}` | Recepcionista (solo directas); la OTA modifica las suyas por su canal | `update-reservation` |
 | `POST /api/reservations/{reservationRef}/cancellation` | Recepcionista (solo directas); la OTA cancela las suyas por su canal | `cancel-reservation` |
 | `POST /api/ota/reservations` y `POST /api/ota/reservations/{reservationRef}/confirmation` (pago o garantía) | Ota | `generate-ota-reservation` |
+| `GET /api/guest-stays` (vista de huéspedes alojados: paginación de 10, filtros de nacionalidad, situación y periodo, búsqueda por documento o nombre) y `GET /api/reservations/{reservationRef}/guests/{documentNumber}` (detalle de un huésped) | Recepcionista | `process-guest-data` |
 | `POST /api/sire/exports` (periodo o movimiento individual; devuelve `.TXT` y cabecera `Export-Id`; es `POST` porque registra un `SireExport`, decisión D9) | Recepcionista | `export-sire-file` |
 | `GET /api/otas` y `GET /api/otas/{otaId}` (solo lectura; devuelve `id`, `name`, `commissionPercentage`, estado de conexión) | Recepcionista, Módulo 3 | `register-ota-information-commission` |
 | `POST /api/ota-commissions/reconciliations` (conciliación de comisiones) | Módulo 3 (finanzas) | `register-ota-information-commission` |
@@ -399,7 +400,7 @@ backend/
     │       ├── consult-maintenance-calendar/
     │       ├── calculate-dynamic-rate/
     │       ├── register-ota-information-commission/
-    │       ├── process-foreign-guest-data/
+    │       ├── process-guest-data/
     │       └── export-sire-file/
     ├── infrastructure/
     │   ├── in/
@@ -448,7 +449,7 @@ Recepcionista; la Ota solo usa la API y el Módulo 1 tiene su propia interfaz.
 | `reservation` | `Reservation` | PK `id`; único `reservation_ref`; FK `guest_id` → `guest`; FK `ota_id` → `ota` (nulo en directas); único `(ota_id, external_confirmation_code)` | `start_date`, `end_date`, `guest_count` (total), `source`, `status`, `status_reason` (D6), `notes`, `created_at`, `updated_at` (`@UpdateDateColumn`); `gross_amount` y `currency` (solo OTA); `commission_percentage`, `commission_amount`, `commission_status` |
 | `reservation_room` | `ReservationRoom` | PK `id`; FK `reservation_id` → `reservation` (borrado en cascada); único `(reservation_id, room_id)` | Entre 1 y 10 por reserva; `room_id` (`Room.id` del Módulo 1, sin FK), `room_number`, `category_room`, `guest_count`, `room_gross_amount`, `quote_id` y `currency` (solo `DIRECT`, D2), `stay_status`, `check_in_foreign_guest_count`, `check_out_foreign_guest_count` |
 | `cancellation` | `Cancellation` | PK `id`; FK `reservation_id` → `reservation`, único (0..1 por reserva) | Inmutable; `channel` `RECEPTION` u `OTA_API` |
-| `migratory_movement` | `MigratoryMovement` | PK `id`; FK `reservation_id` → `reservation`; FK `guest_id` → `guest` (nulo para acompañantes); único `(reservation_id, document_number, movement_type)` | Copia de los datos migratorios del Módulo 1 |
+| `migratory_movement` | `MigratoryMovement` | PK `id`; FK `reservation_id` → `reservation`; FK `guest_id` → `guest` (nulo para acompañantes); único `(reservation_id, document_number, movement_type)` | Copia de los datos de todos los huéspedes que envía el Módulo 1; `room_id` de la notificación. La vista de huéspedes alojados se arma desde esta tabla |
 | `sire_export` | `SireExport` | PK `id` | `export_kind` `PERIOD` o `SINGLE_MOVEMENT`; `exportId` = `SireExport.id`; sin relación con los movimientos |
 | `reservation_audit` | auditoría de actualizaciones | PK `id`; FK `reservation_id` | Inmutable |
 | `commission_audit` | auditoría de comisiones OTA | PK `id`; FK `reservation_id`; FK `ota_id` | Inmutable: acción, importes y actor |
@@ -500,9 +501,9 @@ Módulo 2; solo viajan en objetos de integración.
 | D2 | **La tarifa se guarda por habitación, sin total guardado:** `reservation_room` guarda `room_gross_amount` (el `lodgingAmount`), `quote_id` y `currency` tal como las entrega el Módulo 3 (FR-002); el `quote_id` permite al Módulo 3 cobrar en el Check-Out exactamente el valor cotizado. Su única operación con ellas es sumarlas para mostrar el total de la reserva, que no se guarda. | `calculate-dynamic-rate` |
 | D3 | **Restricción de exclusión en PostgreSQL** sobre `reservation_room` y las fechas de su reserva (o sobre una tabla de ocupación equivalente): `EXCLUDE USING gist (room_id WITH =, daterange(start_date, end_date) WITH &&) WHERE (status IN ('PENDING','ACTIVE','IN_PROGRESS'))`, con la extensión `btree_gist` creada en la migración base. Impide dos reservas activas solapadas en la misma habitación aun con concurrencia; una violación se traduce en 409 `NO_AVAILABILITY` (o en probar la siguiente habitación candidata). El diseño exacto (copiar fechas y estado a la tabla de ocupación) se cierra en el plan de `check-room-availability`. | `check-room-availability` |
 | D4 | **El spec `consult-room-inventory` se ajustó**: la consulta por categoría admite listado completo o filtrado por estado, porque las estadías futuras necesitan todas las habitaciones de la categoría. Pendiente acordar con el Módulo 1 que su API permita ambos modos. | `check-room-availability` |
-| D5 | **Datos migratorios completos:** el Módulo 2 da por hecho que el Módulo 1 los envía completos y correctos; no los valida ni los devuelve. | `process-foreign-guest-data` |
+| D5 | **Datos migratorios completos:** el Módulo 2 da por hecho que el Módulo 1 los envía completos y correctos; no los valida ni los devuelve. | `process-guest-data` |
 | D6 | **Motivo de las transiciones:** columna `status_reason` en `reservation`. | `update-reservation` |
-| D7 | **Periodo de la exportación SIRE:** se filtra por la `movementDate` del movimiento migratorio. | `process-foreign-guest-data`, `export-sire-file` |
+| D7 | **Periodo de la exportación SIRE:** se filtra por la `movementDate` del movimiento migratorio. | `process-guest-data`, `export-sire-file` |
 | D8 | **API de modificación en dos pasos:** `POST .../modification-preview` (no persiste) y `PATCH` (confirma, con `updatedAt` y las tarifas esperadas por habitación). Propuesta de los planes; el spec no define su forma. | `update-reservation` |
 | D9 | **La exportación SIRE es `POST`**, no `GET`, porque crea un registro `SireExport` (un `GET` no debe tener efectos). | `export-sire-file` |
 | D10 | **Arquitectura hexagonal** con un módulo Nest por dominio y las capas `domain`, `application` e `infrastructure` (in/out). Verificada en CI. | Este plan |
@@ -563,13 +564,13 @@ Módulo 2; solo viajan en objetos de integración.
 1. **Consultas y servicios base**: `check-view-reservation`, `consult-room-inventory`,
    `consult-maintenance-calendar`, `calculate-dynamic-rate`.
 2. **Disponibilidad**: `check-room-availability` (usa las tres consultas anteriores).
-3. **Datos migratorios y punto de estado**: primero `process-foreign-guest-data`, y después `update-reservation`
+3. **Datos migratorios y punto de estado**: primero `process-guest-data`, y después `update-reservation`
    (modificación, Check-In, Check-Out y cierre del día; depende de disponibilidad, tarifa
    y del registro del movimiento migratorio).
 5. **Creación de reservas y comisión**: `generate-direct-reservation`, `register-ota-information-commission` (antes que la de OTA) y
    `generate-ota-reservation`.
 6. **Cancelación**: `cancel-reservation`.
-7. **Cumplimiento legal**: `export-sire-file` (depende de `process-foreign-guest-data`).
+7. **Cumplimiento legal**: `export-sire-file` (depende de `process-guest-data`).
 
 ## Dependencies & Execution Order
 
