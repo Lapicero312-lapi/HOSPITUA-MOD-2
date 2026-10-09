@@ -577,7 +577,7 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
   - Titular (`guest`): `guestRef`, `firstName`, `lastName`, `fullName` (para mostrar),
     `documentType`, `documentNumber`, `nationality`, `contactPhone` y `contactEmail`.
 
-  El formato exacto de cada mensaje está en el plan técnico (`specs/base/plan.md`, "Formato de los mensajes al Módulo 1").
+  El formato exacto de cada mensaje está en el plan de este caso de uso ([plan.md](plan.md)).
 - **FR-015**: El sistema no debe incluir datos financieros (`grossAmount`, comisión) en la lista ni
   en las actualizaciones: no los necesita el Módulo 1. La consulta por referencia del Módulo 3 (FR-022)
   es aparte y sí entrega los `quoteIds` y el porcentaje de comisión.
