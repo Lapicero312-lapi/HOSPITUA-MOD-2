@@ -327,7 +327,8 @@ ejemplo `BOOKING`).
 
 | Recurso | Quién lo consume | Feature |
 |---|---|---|
-| `GET /api/reservations` con paginación de 10, filtros (búsqueda por `reservationRef`, documento o nombre; estado; canal; agencia; tipo de fecha `ARRIVAL`/`DEPARTURE`/`STAY` con `from` y `to`) y orden por `startDate` | Recepcionista, procesos internos | `check-view-reservation` |
+| `GET /api/reservations` con paginación de 10, filtros (`search` por código, documento o nombre; `status`; `source`; `otaId`; rango de estadía `dateFrom` y `dateTo`) y `order` por `startDate`. Con rol `MODULE1` es la consulta por fechas de FR-023 | Recepcionista, procesos internos; Módulo 1 | `check-view-reservation` |
+| `GET /api/reservations/day-summary` (llegadas y salidas esperadas hoy) | Recepcionista | `check-view-reservation` |
 | `GET /api/reservations/{reservationRef}` (detalle) | Recepcionista; Módulo 3 con credencial de servicio (devuelve `quoteIds`, canal y, solo si es OTA, `otaId`, `otaConfirmationCode` y `otaCommissionPercentage`; 404 si no existe) | `check-view-reservation` |
 | `POST /api/reservations/direct/preview` y `POST /api/reservations/direct` (canal directo) | Recepcionista | `generate-direct-reservation` |
 | `POST /api/reservations/{reservationRef}/modification-preview` y `PATCH /api/reservations/{reservationRef}` | Recepcionista (solo directas); la OTA modifica las suyas por su canal | `update-reservation` |
@@ -462,7 +463,8 @@ Recepcionista; la Ota solo usa la API y el Módulo 1 tiene su propia interfaz.
 | `sire_export` | `SireExport` | PK `id` | `export_kind` `PERIOD` o `SINGLE_MOVEMENT`; `exportId` = `SireExport.id`; sin relación con los movimientos |
 | `reservation_audit` | auditoría de actualizaciones | PK `id`; FK `reservation_id` | Inmutable |
 | `commission_audit` | auditoría de comisiones OTA | PK `id`; FK `reservation_id`; FK `ota_id` | Inmutable: acción, importes y actor |
-| `daily_list_message` | mensajes al Módulo 1 | PK `message_id`; único `(operational_date, sequence_number)` | Evita reenviar la lista el mismo día |
+| `daily_list_message` | mensajes al Módulo 1 | PK `message_id`; único `(operational_date, sequence_number)` | Evita reenviar la lista el mismo día; guarda el payload y el estado de publicación (`PENDING`, `PUBLISHED`, `FAILED`) |
+| `daily_sequence` | numeración del día | PK `operational_date` | `last_sequence` y `list_generated`; se bloquea para asignar `sequenceNumber` sin huecos ni repetidos |
 | `processed_event` | idempotencia de colas | PK `event_id` | |
 
 `Reservation.status` (`PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`) se
