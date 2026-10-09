@@ -9,6 +9,7 @@ Glosario técnico-funcional compartido por los tres módulos del proyecto **HOSP
 #### Convenciones transversales
 
 * **Nomenclatura** : Los atributos y las entidades se escriben en `camelCase` técnico (por ejemplo `roomNumber`, `categoryRoom`, `startDate`, `endDate`, `roomGrossAmount`, `reservationRef`). Los estados del Módulo 1 se escriben tal como los define este diccionario (PascalCase) y los estados propios del Módulo 2 en `MAYÚSCULAS_CON_GUION_BAJO`.
+* **Referencia de reserva (reservationRef)** : Identificador único de una reserva, con el formato `RSV-` seguido de 8 caracteres hexadecimales en mayúscula (un UUID corto), por ejemplo `RSV-3F9A1C7B`. Lo genera el Módulo 2 al crear la reserva, sea directa u OTA, y los demás módulos la referencian con él. No se confunde con el `externalConfirmationCode`, que es el código que asigna la OTA.
 * **Gobernanza** : Este diccionario es el contrato de integración oficial entre los tres módulos. En lo que pertenece al Módulo 1 y al Módulo 3 (nombres, atributos y estados) manda el diccionario y los specs del Módulo 2 se adaptan a él. Lo propio del Módulo 2 se documenta aquí con la misma nomenclatura que sus specs.
 * **Control de errores** : Todo error debe responderse con un código de la familia HTTP 4xx (400 *Bad Request* por defecto), de forma controlada y con un mensaje claro. Están prohibidos los errores HTTP 500 y cualquier respuesta 2xx o 3xx para un error.
 
