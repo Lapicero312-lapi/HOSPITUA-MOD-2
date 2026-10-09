@@ -335,7 +335,7 @@ rutas de alta ni edición manual (`POST`/`PUT /api/otas` quedan fuera).
 
 | Servicio | Método | Feature |
 |---|---|---|
-| Habitaciones vendibles por `categoryRoom` (o una por `roomId`): `id`, `roomNumber`, `categoryRoom`, `maxCapacity`; sin estado | M1 GET | `consult-room-inventory` |
+| Habitaciones vendibles por `categoryRoom` o por `roomId` (contrato en [`consult-room-inventory/plan.md`](../consult-room-inventory/plan.md)) | M1 GET | `consult-room-inventory` |
 | Calendario de mantenimientos por `roomId` y rango de fechas (contrato en [`consult-maintenance-calendar/plan.md`](../consult-maintenance-calendar/plan.md)) | M1 GET | `consult-maintenance-calendar` |
 | Tarifa dinámica por habitación (contrato en [`calculate-dynamic-rate/plan.md`](../calculate-dynamic-rate/plan.md)) | M3 POST | `calculate-dynamic-rate` |
 
