@@ -211,18 +211,7 @@ movimientos.
 | `SireExport` y `MigratoryMovement` | sin relación guardada | La exportación solo filtra por `movementDate` |
 | `ReservationRoom` → `Room` (Módulo 1) | N a 1, externa | Por `roomId`; el estado físico es del Módulo 1 |
 
-```mermaid
-erDiagram
-    GUEST ||--o{ RESERVATION : "es titular de"
-    OTA |o--o{ RESERVATION : "origina"
-    RESERVATION ||--|{ RESERVATION_ROOM : "tiene (1..10)"
-    RESERVATION ||--o| CANCELLATION : "se anula con"
-    RESERVATION ||--o{ GUEST_DATA : "aloja"
-    GUEST_DATA ||--|{ MIGRATORY_MOVEMENT : "entra y sale (1..2)"
-    RESERVATION ||--o{ MIGRATORY_MOVEMENT : "tiene"
-    GUEST |o--o{ MIGRATORY_MOVEMENT : "titular"
-    RESERVATION_ROOM }o--|| ROOM_M1 : "referencia (externa)"
-```
+El diagrama con las tablas, sus columnas y sus relaciones está en "Modelo de datos base (PostgreSQL)".
 
 ### Agregados e invariantes
 
@@ -470,16 +459,156 @@ Recepcionista; la Ota solo usa la API y el Módulo 1 tiene su propia interfaz.
 
 ```mermaid
 erDiagram
-    guest ||--o{ reservation : "es titular de"
-    ota |o--o{ reservation : "origina"
-    reservation ||--|{ reservation_room : "tiene (1..10)"
-    reservation ||--o| cancellation : "se anula con"
-    reservation ||--o{ guest_data : "aloja"
-    guest_data ||--|{ migratory_movement : "entra y sale (1..2)"
-    reservation ||--o{ commission_audit : "registra"
-    ota ||--o{ commission_audit : "registra"
-    reservation |o--o{ daily_list_message : "se avisa en"
+    guest {
+        uuid id PK
+        varchar first_name
+        varchar last_name
+        varchar document_type "RC TI CC CE PAS NIT"
+        varchar document_number "UK con document_type"
+        varchar nationality "nombre del pais"
+        varchar contact_phone "nulo"
+        varchar contact_email "nulo"
+        timestamptz created_at
+        timestamptz updated_at
+    }
+    ota {
+        uuid id PK
+        varchar name UK
+        varchar hotel_account_id UK
+        numeric commission_percentage "0 a 100"
+        varchar connection_status "CONNECTED DISCONNECTED"
+        timestamptz linked_at
+        timestamptz last_sync_at
+        timestamptz created_at
+        timestamptz updated_at
+    }
+    reservation {
+        uuid id PK
+        char reservation_ref UK "RSV- mas 8 hex"
+        uuid guest_id FK
+        varchar source "DIRECT OTA"
+        uuid ota_id FK "nulo en DIRECT"
+        varchar external_confirmation_code "UK con ota_id; solo OTA"
+        date start_date
+        date end_date
+        smallint guest_count
+        varchar status "6 estados"
+        varchar status_reason "nulo"
+        varchar notes "nulo; max 500"
+        numeric gross_amount "solo OTA"
+        char currency "solo OTA"
+        numeric commission_percentage
+        numeric commission_amount
+        varchar commission_status "solo OTA"
+        timestamptz created_at
+        timestamptz updated_at "concurrencia"
+    }
+    reservation_room {
+        uuid id PK
+        uuid reservation_id FK "UK con room_id"
+        uuid room_id "Room del Modulo 1, sin FK"
+        varchar room_number
+        varchar category_room
+        smallint guest_count
+        numeric room_gross_amount "solo DIRECT"
+        varchar quote_id "solo DIRECT"
+        char currency "solo DIRECT"
+        varchar stay_status "4 estados"
+        date start_date "copia para D3"
+        date end_date "copia para D3"
+        boolean blocks_inventory "D3"
+    }
+    cancellation {
+        uuid id PK
+        uuid reservation_id FK, UK
+        timestamptz cancellation_date
+        varchar reason "nulo"
+        varchar channel "RECEPTION OTA_API"
+        varchar processed_by
+        varchar status "COMPLETED"
+    }
+    guest_data {
+        uuid id PK
+        uuid reservation_id FK "UK con document_number"
+        varchar document_type
+        varchar document_number
+        varchar first_name
+        varchar last_name
+        date birth_date
+        varchar nationality "nombre del pais"
+        varchar origin_place "nulo en colombianos"
+        varchar destination_place "nulo en colombianos"
+        timestamptz created_at
+    }
+    migratory_movement {
+        uuid id PK
+        uuid guest_data_id FK "UK con movement_type"
+        varchar movement_type "ENTRY DEPARTURE"
+        date movement_date
+        timestamptz created_at
+    }
+    sire_export {
+        uuid id PK
+        timestamptz export_date
+        varchar export_kind "PERIOD SINGLE_MOVEMENT"
+        integer records_count
+        date date_range_start "nulo si SINGLE_MOVEMENT"
+        date date_range_end "nulo si SINGLE_MOVEMENT"
+        varchar processed_by
+    }
+    commission_audit {
+        uuid id PK
+        uuid reservation_id FK
+        uuid ota_id FK
+        varchar action "CALCULATED RECONCILED PAID DISPUTED"
+        varchar previous_status "nulo"
+        numeric gross_amount
+        numeric commission_percentage
+        numeric commission_amount
+        varchar channel "OTA_API MODULE3"
+        varchar performed_by
+        timestamptz occurred_at
+    }
+    daily_list_message {
+        uuid message_id PK
+        date operational_date "UK con sequence_number"
+        integer sequence_number
+        varchar message_kind "LIST UPDATE"
+        varchar update_type "nulo en LIST"
+        uuid reservation_id FK "nulo en LIST"
+        varchar removal_reason "solo REMOVED"
+        jsonb payload
+        varchar publish_status "PENDING PUBLISHED FAILED"
+        smallint attempts
+        timestamptz created_at
+        timestamptz published_at "nulo"
+    }
+    processed_message {
+        uuid message_id PK
+        varchar queue
+        bigint sequence_number
+        timestamptz processed_at
+    }
+
+    guest ||--o{ reservation : "guest_id"
+    ota |o--o{ reservation : "ota_id"
+    reservation ||--|{ reservation_room : "reservation_id"
+    reservation ||--o| cancellation : "reservation_id"
+    reservation ||--o{ guest_data : "reservation_id"
+    guest_data ||--|{ migratory_movement : "guest_data_id"
+    reservation ||--o{ commission_audit : "reservation_id"
+    ota ||--o{ commission_audit : "ota_id"
+    reservation |o--o{ daily_list_message : "reservation_id"
 ```
+
+**Normalización.** El modelo está en tercera forma normal: cada dato se guarda en una sola tabla y las
+tablas se unen por sus claves. Hay tres excepciones a propósito:
+
+- `reservation_room.start_date`, `end_date` y `blocks_inventory` copian datos de la reserva para que
+  la base de datos impida el solape (D3).
+- `reservation_room.room_number` y `category_room` copian datos del Módulo 1, que no está en esta base.
+- `commission_audit` guarda los importes de cada acción, porque es un historial y no debe cambiar si
+  la reserva cambia después.
 
 **`guest`** — titular de reservas
 
