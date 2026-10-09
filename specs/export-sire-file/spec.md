@@ -187,10 +187,11 @@ controlado.
   exportación), `exportDate`,
   `exportKind` (`PERIOD` | `SINGLE_MOVEMENT`), `recordsCount`, `dateRangeStart`, `dateRangeEnd`
   y `processedBy` (la Recepcionista).
-- **MigratoryMovement**: Movimiento de un huésped en una estadía, del que se toman todos los campos
-  de cada línea del archivo. Solo entran al archivo los de huéspedes extranjeros. Siempre está completo. Atributos: `movementId`,
-  `reservationRef`, `movementType` (`ENTRY` | `DEPARTURE`), `movementDate`, `firstName`, `lastName`,
-  `documentType`, `documentNumber`, `birthDate`, `nationality`, `originPlace`, y `destinationPlace`.
+- **MigratoryMovement**: Movimiento de un huésped en una estadía. Cada línea del archivo une el
+  movimiento con los datos de su `GuestData`. Solo entran al archivo los de huéspedes extranjeros. Siempre está completo. Atributos del movimiento: `movementId`,
+  `reservationRef`, `documentNumber`, `movementType` (`ENTRY` | `DEPARTURE`) y `movementDate`. Los datos
+  del huésped (`firstName`, `lastName`, `documentType`, `documentNumber`, `birthDate`, `nationality`,
+  `originPlace` y `destinationPlace`) salen de `GuestData`.
 
 ## Success Criteria *(mandatory)*
 

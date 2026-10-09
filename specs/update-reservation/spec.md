@@ -80,7 +80,8 @@ en momentos distintos.
 2. El Módulo 1 envía al Módulo 2 una notificación (cola `m2.habitacion.checkin.queue`) con el
    `messageId`, el `sequenceNumber`, la `reservationRef`, el `roomId` de la habitación que ingresó y
    la lista `guests` con **todos los huéspedes** que ingresaron a esa habitación (colombianos y
-   extranjeros), cada uno con sus datos y `movementType` `ENTRY`.
+   extranjeros), cada uno con sus datos, y el `movementType` `ENTRY` y el `movementDate` a nivel de
+   mensaje.
 3. El sistema localiza la reserva mediante "Consultar reservas", valida que el `roomId` pertenezca a
    la reserva y que la reserva esté en `ACTIVE` o `IN_PROGRESS`.
 4. El sistema cambia el `stayStatus` de esa habitación (`ReservationRoom`) de `EXPECTED` a
@@ -99,8 +100,8 @@ El Check-Out también se notifica **por habitación**.
 1. El **Módulo 1** ejecuta el Check-Out físico de una habitación: la libera y cierra su estadía.
 2. El Módulo 1 envía al Módulo 2 una notificación (cola `m2.habitacion.checkout.queue`) con el
    `messageId`, el `sequenceNumber`, la `reservationRef`, el `roomId` y la lista `guests` con **todos
-   los huéspedes** que salieron de esa habitación, cada uno con sus datos y `movementType`
-   `DEPARTURE`.
+   los huéspedes** que salieron de esa habitación, cada uno con sus datos, y el `movementType`
+   `DEPARTURE` y el `movementDate` a nivel de mensaje.
 3. El sistema localiza la reserva mediante "Consultar reservas", valida que el `roomId` pertenezca a
    la reserva, que la reserva esté en `IN_PROGRESS` y que esa habitación esté en `CHECKED_IN`.
 4. El sistema cambia el `stayStatus` de esa habitación a `CHECKED_OUT`.
@@ -266,15 +267,15 @@ pase a `COMPLETED`, sin afectar el estado de las `Room`, que gestiona el Módulo
 3. **Scenario**: Recepción de los datos de los huéspedes en el Check-In
    - **Given** una `Reservation` con tres huéspedes, dos extranjeros y uno colombiano, en proceso de
      Check-In
-   - **When** la notificación de Check-In trae a los tres, con sus datos, `movementType` `ENTRY` y la
-     fecha de ingreso
+   - **When** la notificación de Check-In (con `movementType` `ENTRY` y la fecha de ingreso) trae a
+     los tres, con sus datos
    - **Then** el sistema registra, mediante "Procesar datos de huéspedes", un
      `MigratoryMovement` de entrada por cada uno; solo los dos extranjeros entrarán a la exportación SIRE
 
 3a. **Scenario**: Recepción de los datos de los huéspedes en el Check-Out
    - **Given** una habitación en `CHECKED_IN` con tres huéspedes
-   - **When** la notificación de Check-Out trae a los tres con `movementType` `DEPARTURE` y la fecha
-     de salida
+   - **When** la notificación de Check-Out (con `movementType` `DEPARTURE` y la fecha de salida)
+     trae a los tres
    - **Then** el sistema registra un `MigratoryMovement` de salida por cada uno, sin modificar sus
      movimientos de entrada
 
@@ -577,8 +578,8 @@ sin enviar ninguna orden de liberación al Módulo 1.
   `quoteId` nuevo reemplaza al anterior en la habitación.
 - **MigratoryMovement**: Movimiento de entrada o salida de un huésped (colombiano o extranjero),
   registrado en el Check-In y en el Check-Out mediante "Procesar datos de huéspedes".
-  Atributos: `movementId`, `reservationRef`, `movementType` (`ENTRY` | `DEPARTURE`), `movementDate`,
-  los datos migratorios del huésped. El
+  Atributos: `movementId`, `reservationRef`, `documentNumber`, `movementType` (`ENTRY` | `DEPARTURE`)
+  y `movementDate`. Los datos del huésped se guardan una sola vez en `GuestData`. El
   detalle de sus atributos está en "Procesar datos de huéspedes".
 
 ## Success Criteria *(mandatory)*
