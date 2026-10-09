@@ -523,11 +523,11 @@ backend/
     │   │   ├── persistence/      # clases de tabla TypeORM, mapeadores y repositorios
     │   │   ├── module1/          # cliente HTTP del Módulo 1
     │   │   ├── module3/          # cliente HTTP del Módulo 3
-    │   │   ├── messaging/        # publicadores RabbitMQ, idempotencia (processed_event)
+    │   │   ├── messaging/        # publicadores RabbitMQ, idempotencia (processed_message)
     │   │   └── clock/            # reloj del hotel (America/Bogota)
     │   ├── config/               # configuración por entorno (@nestjs/config), RabbitMQ, TypeORM
     │   ├── security/             # JWT, guards y roles
-    │   └── shared/               # ApiError, filtro global de excepciones, EventEnvelope, correlación de logs
+    │   └── shared/               # ApiError, filtro global de excepciones, correlación de logs
     └── migrations/               # migraciones SQL de TypeORM
 test/
     ├── unit/                     # dominio y casos de uso, sin base de datos ni cola
