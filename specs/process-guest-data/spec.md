@@ -38,12 +38,12 @@ movimiento), los guarda y, al exportar, selecciona los extranjeros y los empaque
 ### Flujo de Usuario de Alto Nivel
 
 1. El **Módulo 1** notifica el **Check-In** de una habitación de una reserva (cola
-   `m2.habitacion.checkin.queue`) con la `reservationRef`, el `roomId` y la lista `guests` con **todos
+   `m2.habitacion.checkin.queue`) con la `reservationRef` y la lista `guests` con **todos
    los huéspedes** que ingresaron a esa habitación, cada uno con sus `GuestData` (los diez campos),
    `movementType` `ENTRY` y su `movementDate`. El cambio de estado de la habitación y de la reserva lo
    ejecuta "Actualizar reservación".
 2. El Módulo 1 notifica el **Check-Out** de una habitación (cola `m2.habitacion.checkout.queue`) con la
-   `reservationRef`, el `roomId` y la lista `guests` con todos los huéspedes que salieron de esa
+   `reservationRef` y la lista `guests` con todos los huéspedes que salieron de esa
    habitación, con `movementType` `DEPARTURE` y su `movementDate`.
 3. Por cada huésped de la lista, el sistema registra un `MigratoryMovement`, sea colombiano o extranjero.
    Hay un movimiento por cada combinación de reserva, huésped y tipo de movimiento: un huésped que
@@ -324,9 +324,6 @@ vista no permite modificar nada.
 - **Guest**: Titular de la reserva. Atributos: `id`, `firstName`, `lastName`, `documentNumber` y `nationality`.
 - **Reservation**: Estadía asociada a los huéspedes. Atributos: `reservationRef`, `guestRef`,
   `guestCount` y `status` (`PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`).
-- **Room**: Se referencia solo como contexto de los mensajes del Módulo 1 (`roomId` de la
-  habitación del Check-In o del Check-Out). Atributos: `id`, `status` (`Available` | `Reserved` |
-  `Occupied`). Esta funcionalidad no modifica su estado.
 
 ## Success Criteria *(mandatory)*
 
