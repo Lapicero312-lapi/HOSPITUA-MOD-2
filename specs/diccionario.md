@@ -93,7 +93,7 @@ Glosario técnico-funcional compartido por los tres módulos del proyecto **HOSP
   * `NOT_REQUIRED` : Reserva `IN_PROGRESS` o `COMPLETED` sin huéspedes extranjeros.
   * `NO_CHECK_IN` : Reserva `CANCELLED` o `NO_SHOW`; nunca hubo ingreso.
 * **Exportación SIRE (SireExport)** : Histórico de exportaciones del reporte. Cada descarga, del periodo o de un solo movimiento, genera una. Atributos: `id` (identificador único de la exportación), `exportDate`, `exportKind` (`PERIOD` | `SINGLE_MOVEMENT`), `recordsCount`, `dateRangeStart`, `dateRangeEnd` y `processedBy` (la Recepcionista).
-* **Configuración SIRE del hotel** : Datos que el sistema usa para armar cada línea del archivo: código del hotel en SIRE (`hotelSireCode`), código de la ciudad (`hotelCityCode`), separador de campos, formato de fecha y las tablas de códigos de documento, nacionalidad y lugares. Salen del manual de cargue de SIRE (portal de SIRE, con la cuenta del hotel) y no se fijan en el código.
+* **Configuración SIRE del hotel** : Datos que el sistema usa para armar cada línea del archivo: código del hotel en SIRE (`hotelSireCode`), código de la ciudad (`hotelCityCode`), separador de campos y formato de fecha. El tipo de documento y la nacionalidad se exportan tal cual, sin tablas de códigos. Salen del manual de cargue de SIRE (portal de SIRE, con la cuenta del hotel) y no se fijan en el código.
 
 ---
 

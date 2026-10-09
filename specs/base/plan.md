@@ -148,7 +148,7 @@ están en "Modelo de datos base".
 | `id` (`guestRef`) | id | |
 | `firstName`, `lastName` | texto | Obligatorios; el nombre completo (`fullName`) se arma uniéndolos |
 | `documentType` | `DocumentType` | Obligatorio |
-| `documentNumber` | texto | Obligatorio; identifica al huésped existente |
+| `documentNumber` | texto | Obligatorio |
 | `nationality` | texto | Si no es Colombia, el huésped es extranjero (se deduce, no se guarda) |
 | `contactPhone`, `contactEmail` | texto | Opcionales |
 
@@ -200,7 +200,7 @@ movimientos.
 
 | Relación | Cardinalidad | Notas |
 |---|---|---|
-| `Guest` → `Reservation` | 1 a N | Un huésped puede ser titular de varias reservas; cada reserva tiene un solo titular |
+| `Reservation` → `Guest` | 1 a 1 | Cada reserva guarda su propio titular. Si la misma persona tiene varias reservas, tiene un `Guest` en cada una; corregir sus datos en una reserva no cambia las demás |
 | `Reservation` → `ReservationRoom` | 1 a 1..10 | Composición: las habitaciones se crean, cambian y borran solo a través de su reserva |
 | `Ota` → `Reservation` | 1 a N | Solo reservas `OTA`; `(otaId, externalConfirmationCode)` es único |
 | `Reservation` → `Cancellation` | 1 a 0..1 | Solo cancelaciones explícitas (Recepcionista u OTA); el No-Show no crea `Cancellation` |
@@ -226,7 +226,8 @@ El diagrama con las tablas, sus columnas y sus relaciones está en "Modelo de da
       `NOT_ARRIVED`.
   - Solo se modifican o cancelan reservas en `ACTIVE` o `PENDING`; las `OTA` solo por su API.
   - Las reservas `DIRECT` no guardan un total (se calcula al mostrarlo) y no tienen comisión; las `OTA` no tienen tarifa ni cotización por habitación.
-- **`Guest`** y **`Ota`**: agregados propios; la reserva los referencia por id.
+- **`Guest`**: parte del agregado `Reservation` (su titular); se crea y se corrige solo a través de su reserva.
+- **`Ota`**: agregado propio; la reserva la referencia por id.
 - **`Cancellation`**, **`GuestData`**, **`MigratoryMovement`**, **`SireExport`**: registros propios que referencian a la reserva por `reservationRef`. Son inmutables una
   vez creados.
 
@@ -450,7 +451,8 @@ Recepcionista; la Ota solo usa la API y el Módulo 1 tiene su propia interfaz.
 - Estados y tipos: texto con un `CHECK` de los valores permitidos (no se usan tipos `enum` de
   PostgreSQL, para poder agregar valores con una migración simple).
 - `nationality` guarda el nombre del país tal como llega (`Colombia`, `Venezuela`, `Estados Unidos`);
-  el huésped es extranjero si no es exactamente `Colombia`. Así se exporta al SIRE.
+  el huésped es extranjero si no es exactamente `Colombia`. Al SIRE se exportan tal cual la nacionalidad
+  (nombre del país) y el tipo de documento (`CC`, `PAS`, ...), sin tablas de códigos.
 - Extensiones creadas en la migración base: `btree_gist` (anti-solape, D3), `pg_trgm` y `unaccent`
   (búsqueda por nombre sin distinguir mayúsculas ni tildes).
 - Datos que **no** se guardan en tablas: `Room` y `MaintenanceCalendar` (Módulo 1) y `RateQuote`
@@ -461,10 +463,11 @@ Recepcionista; la Ota solo usa la API y el Módulo 1 tiene su propia interfaz.
 erDiagram
     guest {
         uuid id PK
+        uuid reservation_id FK, UK "un titular por reserva"
         varchar first_name
         varchar last_name
         varchar document_type "RC TI CC CE PAS NIT"
-        varchar document_number "UK con document_type"
+        varchar document_number
         varchar nationality "nombre del pais"
         varchar contact_phone "nulo"
         varchar contact_email "nulo"
@@ -485,7 +488,6 @@ erDiagram
     reservation {
         uuid id PK
         char reservation_ref UK "RSV- mas 8 hex"
-        uuid guest_id FK
         varchar source "DIRECT OTA"
         uuid ota_id FK "nulo en DIRECT"
         varchar external_confirmation_code "UK con ota_id; solo OTA"
@@ -590,7 +592,7 @@ erDiagram
         timestamptz processed_at
     }
 
-    guest ||--o{ reservation : "guest_id"
+    reservation ||--|| guest : "reservation_id"
     ota |o--o{ reservation : "ota_id"
     reservation ||--|{ reservation_room : "reservation_id"
     reservation ||--o| cancellation : "reservation_id"
@@ -610,11 +612,12 @@ tablas se unen por sus claves. Hay tres excepciones a propósito:
 - `commission_audit` guarda los importes de cada acción, porque es un historial y no debe cambiar si
   la reserva cambia después.
 
-**`guest`** — titular de reservas
+**`guest`** — titular de una reserva (cada reserva tiene el suyo)
 
 | Columna | Tipo | Nulo | Regla |
 |---|---|---|---|
 | `id` | `uuid` | no | PK (`guestRef`) |
+| `reservation_id` | `uuid` | no | FK → `reservation`, borrado en cascada; único (un titular por reserva) |
 | `first_name`, `last_name` | `varchar(100)` | no | |
 | `document_type` | `varchar(3)` | no | `RC`, `TI`, `CC`, `CE`, `PAS`, `NIT` |
 | `document_number` | `varchar(30)` | no | |
@@ -623,7 +626,7 @@ tablas se unen por sus claves. Hay tres excepciones a propósito:
 | `contact_email` | `varchar(254)` | sí | |
 | `created_at`, `updated_at` | `timestamptz` | no | |
 
-Único `(document_type, document_number)`. Índice trigram sobre `unaccent(first_name || ' ' || last_name)`.
+Índices: `(document_number)` para la búsqueda por documento y trigram sobre `unaccent(first_name || ' ' || last_name)`. No es único por documento: la misma persona puede ser titular de varias reservas, con sus datos en cada una (corregirlos en una reserva no cambia las demás).
 
 **`ota`** — agencia; se registra sola por su API
 
@@ -644,7 +647,6 @@ tablas se unen por sus claves. Hay tres excepciones a propósito:
 |---|---|---|---|
 | `id` | `uuid` | no | PK |
 | `reservation_ref` | `char(12)` | no | Único; `CHECK (reservation_ref ~ '^RSV-[0-9A-F]{8}$')`; si el generado ya existe, se genera otro |
-| `guest_id` | `uuid` | no | FK → `guest` |
 | `source` | `varchar(6)` | no | `DIRECT`, `OTA` |
 | `ota_id` | `uuid` | sí | FK → `ota`; solo `OTA` |
 | `external_confirmation_code` | `varchar(50)` | sí | Solo `OTA` |
@@ -667,7 +669,7 @@ tablas se unen por sus claves. Hay tres excepciones a propósito:
     `commission_status` nulos, y `commission_percentage = 0` y `commission_amount = 0`.
   - `OTA`: `ota_id`, `external_confirmation_code`, `gross_amount`, `currency` y
     `commission_status` no nulos.
-- Índices: `(status, start_date)`, `(end_date)`, `(guest_id)`, `(ota_id)`.
+- Índices: `(status, start_date)`, `(end_date)`, `(ota_id)`.
 
 **`reservation_room`** — habitación dentro de la reserva
 
@@ -717,7 +719,8 @@ tablas se unen por sus claves. Hay tres excepciones a propósito:
 | `origin_place`, `destination_place` | `varchar(100)` | sí | Vacíos para colombianos |
 | `created_at` | `timestamptz` | no | Sin `updated_at`: se crea en el Check-In y no se modifica |
 
-Único `(reservation_id, document_number)`. Índices: `(document_number)` y trigram sobre
+Único `(reservation_id, document_number)`, **sin** el tipo de documento a propósito: en el Check-Out
+el huésped se identifica solo por su número (`process-guest-data`). Índices: `(document_number)` y trigram sobre
 `unaccent(first_name || ' ' || last_name)`. No hay `CHECK` de procedencia y destino: el Módulo 2 da
 por hecho que el Módulo 1 los envía completos para los extranjeros (D5).
 
@@ -746,7 +749,9 @@ huésped cuyo documento coincide con el `guest` de la reserva.
 | `date_range_start`, `date_range_end` | `date` | sí | Obligatorios si es `PERIOD` |
 | `processed_by` | `varchar(100)` | no | La Recepcionista |
 
-Sin relación con los movimientos: la exportación solo filtra por `movement_date` (D7).
+- `CHECK`: si es `SINGLE_MOVEMENT`, `records_count = 1` y sin fechas; si es `PERIOD`, las dos fechas
+  con `date_range_start <= date_range_end`. El límite de un año lo valida la aplicación.
+- Sin relación con los movimientos: la exportación solo filtra por `movement_date` (D7).
 
 **`commission_audit`** — registro auditable de cada comisión (FR-010 de `register-ota-information-commission`)
 

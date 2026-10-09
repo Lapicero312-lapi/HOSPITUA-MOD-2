@@ -25,7 +25,7 @@ Módulo 1. El Módulo 2 no aparta ni libera habitaciones: el Módulo 1 decide qu
    de estadía (comunes a toda la reserva), una lista de entre 1 y 10 habitaciones (cada una con un
    `roomId` específico o solo con la `categoryRoom` deseada, y su `guestCount`), los datos del
    `Guest` titular (`firstName`, `lastName`, `documentType`, `documentNumber`, `nationality` y contacto), las observaciones opcionales (`notes`), el valor bruto
-   total del hospedaje (`totalAmount`, de todas las habitaciones) y el `externalConfirmationCode` de
+   total del hospedaje (`totalAmount`, de todas las habitaciones) con su moneda (`currency`) y el `externalConfirmationCode` de
    la agencia.
 2. El sistema valida la estructura JSON y que estén presentes todos los campos obligatorios,
    incluido el `externalConfirmationCode`, y valida que cada habitación traiga un `guestCount` de al
@@ -207,7 +207,7 @@ crea una reserva y que todos devuelven una respuesta JSON de error estructurada.
 - **Reservation**: Contrato de reserva registrado desde el canal externo. Atributos:
   `reservationRef`,
   `guestRef`, `guestCount` (suma de los de sus habitaciones), `startDate`, `endDate`, `totalAmount` (valor bruto total de todas las
-  habitaciones enviado por la OTA), `commissionAmount`, `externalConfirmationCode`, `notes`,
+  habitaciones enviado por la OTA), `currency` (moneda del `totalAmount`, enviada por la OTA), `commissionAmount`, `externalConfirmationCode`, `notes`,
   `source` (`OTA`), `createdAt`,
   y `status` con estados permitidos: `PENDING`, `ACTIVE`,
   `IN_PROGRESS`, `COMPLETED`, `CANCELLED`,
