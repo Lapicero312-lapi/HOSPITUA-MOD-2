@@ -438,7 +438,6 @@ campo `reservation` lleva el detalle completo de FR-014, no solo lo que cambió:
 | `POST /api/reservations/{reservationRef}/modification-preview` y `PATCH /api/reservations/{reservationRef}` | Recepcionista (solo directas); la OTA modifica las suyas por su canal | `update-reservation` |
 | `POST /api/reservations/{reservationRef}/cancellation` | Recepcionista (solo directas); la OTA cancela las suyas por su canal | `cancel-reservation` |
 | `POST /api/ota/reservations` y `POST /api/ota/reservations/{reservationRef}/confirmation` (pago o garantía) | Ota | `generate-ota-reservation` |
-| `PUT /api/ota/registration` (la OTA se registra o actualiza su `name`, su `hotelAccountId` y su `commissionPercentage`; la identifica su credencial) y `POST /api/ota/connection` (aviso de desvinculación o de nueva vinculación: `DISCONNECTED` o `CONNECTED`). Todo mensaje de la OTA actualiza su `lastSyncAt` | Ota | `register-ota-information-commission` |
 | `GET /api/guest-stays` (vista de huéspedes alojados: paginación de 10, filtros de nacionalidad, situación y periodo, búsqueda por documento o nombre) y `GET /api/reservations/{reservationRef}/guests/{documentNumber}` (detalle de un huésped) | Recepcionista | `process-guest-data` |
 | `POST /api/sire/exports` (periodo o movimiento individual; devuelve `.TXT` y cabecera `Export-Id`; es `POST` porque registra un `SireExport`, decisión D9) | Recepcionista | `export-sire-file` |
 | `GET /api/otas` y `GET /api/otas/{otaId}` (solo lectura; devuelve `id`, `name`, `commissionPercentage`, estado de conexión) | Recepcionista, Módulo 3 | `register-ota-information-commission` |
@@ -446,6 +445,12 @@ campo `reservation` lleva el detalle completo de FR-014, no solo lo que cambió:
 
 Las agencias OTA se registran **automáticamente** al vincular la cuenta por API: el Módulo 2 no tiene
 rutas de alta ni edición manual (`POST`/`PUT /api/otas` quedan fuera).
+
+> **Pendiente: caso de uso "Configurar OTA".** Cada OTA se tiene que configurar para integrarse con el
+> Módulo 2. Un caso de uso futuro, con su propia spec y su propio plan, definirá cómo la OTA se registra
+> y actualiza sus datos y su comisión, cómo avisa su desvinculación y su nueva vinculación, y por qué
+> rutas modifica y cancela sus reservas. Hasta entonces, este plan solo fija las rutas de crear y
+> confirmar reservas OTA.
 
 **El Módulo 2 consume** (a través de los puertos `Module1Port` y `Module3Port`):
 
