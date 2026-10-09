@@ -141,8 +141,8 @@ y se verifica que se entreguen solo los tres extranjeros, con su tipo de movimie
 ### User Story 3 - Consulta de Huéspedes Alojados (Priority: P2)
 
 La Recepcionista necesita ver qué personas se han alojado en el hotel, colombianas y extranjeras, con
-los datos que envió el Módulo 1: quién está hoy en el hotel, quién ya salió, en qué reserva y habitación
-estuvo, y sus datos de identidad. Es una vista de **solo consulta**: no captura ni corrige datos, porque
+los datos que envió el Módulo 1: quién está hoy en el hotel, quién ya salió, a qué reserva perteneció y
+sus datos de identidad. Es una vista de **solo consulta**: no captura ni corrige datos, porque
 esos son del Módulo 1. El listado, los filtros, la búsqueda y el detalle se consolidan en esta misma
 historia de usuario.
 
@@ -162,8 +162,8 @@ vista no permite modificar nada.
    - **When** la Recepcionista abre la vista de huéspedes alojados
    - **Then** el sistema muestra la página 1 con hasta 10 huéspedes, ordenados por fecha de entrada de
      la más reciente a la más antigua, cada uno con su nombre, documento, nacionalidad (con la marca de
-     extranjero cuando aplica), reserva, habitación, fecha de entrada y fecha de salida, o "En el
-     hotel" si todavía no salió
+     extranjero cuando aplica), reserva, fecha de entrada y fecha de salida, o "En el hotel" si
+     todavía no salió
 
 2. **Scenario**: Filtrar por extranjeros o colombianos
    - **Given** huéspedes colombianos y extranjeros registrados
@@ -193,8 +193,8 @@ vista no permite modificar nada.
    - **Given** un huésped del listado
    - **When** la Recepcionista abre su detalle
    - **Then** el sistema muestra todos sus datos (tipo y número de documento, nombre, apellido, fecha de
-     nacimiento, nacionalidad, procedencia y destino), la reserva con un enlace a su detalle, la
-     habitación, y sus movimientos de entrada y salida con su fecha
+     nacimiento, nacionalidad, procedencia y destino), la reserva con un enlace a su detalle, y
+     sus movimientos de entrada y salida con su fecha
 
 7. **Scenario**: Sin resultados
    - **Given** filtros que ningún huésped cumple
@@ -274,8 +274,8 @@ vista no permite modificar nada.
 - **FR-011**: El sistema debe ofrecer a la Recepcionista una vista de huéspedes alojados con una fila
   por huésped y reserva (`GuestStay`), armada a partir de sus `MigratoryMovement`: nombre y apellido,
   tipo y número de documento, nacionalidad con la marca de extranjero (nacionalidad distinta de
-  Colombia), `reservationRef`, habitación, fecha de entrada y fecha de salida, o "En el hotel" si aún
-  no tiene salida.
+  Colombia), `reservationRef`, fecha de entrada y fecha de salida, o "En el hotel" si aún no tiene
+  salida.
 - **FR-012**: El sistema debe paginar el listado de a 10 filas, ordenado por fecha de entrada de la más
   reciente a la más antigua.
 - **FR-013**: El sistema debe permitir filtrar, combinando los filtros con la regla "Y", por:
@@ -284,8 +284,8 @@ vista no permite modificar nada.
   documento (coincidencia exacta) o por nombre o apellido (coincidencia parcial, sin distinguir
   mayúsculas ni tildes, mínimo 3 caracteres).
 - **FR-014**: El sistema debe mostrar el detalle de un huésped con todos sus `GuestData`, la reserva
-  (con enlace a su detalle en "Consultar y buscar reservas"), la habitación y sus movimientos de entrada
-  y salida.
+  (con enlace a su detalle en "Consultar y buscar reservas") y sus movimientos de entrada y
+  salida.
 - **FR-015**: La vista debe ser de solo lectura y exclusiva de la Recepcionista; cualquier otro actor
   recibe **HTTP 403**. Con filtros inválidos debe responder **HTTP 400** con el mensaje correspondiente.
 - **FR-016**: La vista no debe mostrar a los huéspedes de reservas sin Check-In (`CANCELLED`, `NO_SHOW`,
@@ -312,13 +312,13 @@ vista no permite modificar nada.
 - **MigratoryMovement**: Movimiento de entrada o de salida de un huésped en una estadía, colombiano o
   extranjero. Solo los de extranjeros entran al archivo SIRE. Atributos: `movementId`, `reservationRef`,
   `guestRef` (solo si el huésped es el titular; los acompañantes no son `Guest` del Módulo 2),
-  `roomId` (habitación de la notificación de Check-In o de Check-Out), `movementType` (`ENTRY` | `DEPARTURE`), `movementDate`, los datos copiados de `GuestData`
+  `movementType` (`ENTRY` | `DEPARTURE`), `movementDate`, los datos copiados de `GuestData`
   (`firstName`, `lastName`, `documentType`, `documentNumber`, `birthDate`, `nationality`,
   `originPlace`, `destinationPlace`). Identidad única: (`reservationRef`, `documentNumber`,
   `movementType`).
 - **GuestStay** (derivada, no se guarda): Fila de la vista de huéspedes alojados, una por huésped y
   reserva. Se arma con el `ENTRY` y el `DEPARTURE` del huésped en esa reserva: datos del huésped,
-  `reservationRef`, `roomId`, fecha de entrada (`movementDate` del `ENTRY`) y fecha de salida
+  `reservationRef`, fecha de entrada (`movementDate` del `ENTRY`) y fecha de salida
   (`movementDate` del `DEPARTURE`, vacía si aún está en el hotel). Es extranjero si su `nationality` es
   distinta de Colombia.
 - **Guest**: Titular de la reserva. Atributos: `id`, `firstName`, `lastName`, `documentNumber` y `nationality`.

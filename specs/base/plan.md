@@ -165,7 +165,7 @@ están en "Modelo de datos base".
 (`COMPLETED`).
 
 **MigratoryMovement** (entrada o salida de un huésped extranjero): `movementId`, `reservationRef`,
-`guestRef` (solo si es el titular), `roomId`, `movementType` (`ENTRY` | `DEPARTURE`), `movementDate`, `firstName`,
+`guestRef` (solo si es el titular), `movementType` (`ENTRY` | `DEPARTURE`), `movementDate`, `firstName`,
 `lastName`, `documentType`, `documentNumber`, `birthDate`, `nationality`, `originPlace`,
 `destinationPlace`. Identidad única: (`reservationRef`, `documentNumber`, `movementType`).
 
@@ -449,7 +449,7 @@ Recepcionista; la Ota solo usa la API y el Módulo 1 tiene su propia interfaz.
 | `reservation` | `Reservation` | PK `id`; único `reservation_ref`; FK `guest_id` → `guest`; FK `ota_id` → `ota` (nulo en directas); único `(ota_id, external_confirmation_code)` | `start_date`, `end_date`, `guest_count` (total), `source`, `status`, `status_reason` (D6), `notes`, `created_at`, `updated_at` (`@UpdateDateColumn`); `gross_amount` y `currency` (solo OTA); `commission_percentage`, `commission_amount`, `commission_status` |
 | `reservation_room` | `ReservationRoom` | PK `id`; FK `reservation_id` → `reservation` (borrado en cascada); único `(reservation_id, room_id)` | Entre 1 y 10 por reserva; `room_id` (`Room.id` del Módulo 1, sin FK), `room_number`, `category_room`, `guest_count`, `room_gross_amount`, `quote_id` y `currency` (solo `DIRECT`, D2), `stay_status`, `check_in_foreign_guest_count`, `check_out_foreign_guest_count` |
 | `cancellation` | `Cancellation` | PK `id`; FK `reservation_id` → `reservation`, único (0..1 por reserva) | Inmutable; `channel` `RECEPTION` u `OTA_API` |
-| `migratory_movement` | `MigratoryMovement` | PK `id`; FK `reservation_id` → `reservation`; FK `guest_id` → `guest` (nulo para acompañantes); único `(reservation_id, document_number, movement_type)` | Copia de los datos de todos los huéspedes que envía el Módulo 1; `room_id` de la notificación. La vista de huéspedes alojados se arma desde esta tabla |
+| `migratory_movement` | `MigratoryMovement` | PK `id`; FK `reservation_id` → `reservation`; FK `guest_id` → `guest` (nulo para acompañantes); único `(reservation_id, document_number, movement_type)` | Copia de los datos de todos los huéspedes que envía el Módulo 1. La vista de huéspedes alojados se arma desde esta tabla |
 | `sire_export` | `SireExport` | PK `id` | `export_kind` `PERIOD` o `SINGLE_MOVEMENT`; `exportId` = `SireExport.id`; sin relación con los movimientos |
 | `reservation_audit` | auditoría de actualizaciones | PK `id`; FK `reservation_id` | Inmutable |
 | `commission_audit` | auditoría de comisiones OTA | PK `id`; FK `reservation_id`; FK `ota_id` | Inmutable: acción, importes y actor |
