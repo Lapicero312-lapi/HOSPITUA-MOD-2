@@ -171,10 +171,10 @@ están en "Modelo de datos base".
 para colombianos pueden estar vacíos). Identidad única: (`reservationRef`, `documentNumber`).
 Se crea en el Check-In y no se modifica; el Check-Out solo agrega el `DEPARTURE`.
 
-**MigratoryMovement** (entrada o salida de un huésped): `movementId`, `reservationRef`,
-`documentNumber` (referencia a su `GuestData`), `guestRef` (solo si es el titular), `movementType`
-(`ENTRY` | `DEPARTURE`), `movementDate`. Sin datos personales copiados. Identidad única:
-(`reservationRef`, `documentNumber`, `movementType`).
+**MigratoryMovement** (entrada o salida de un huésped): `movementId`, su `GuestData`, `movementType`
+(`ENTRY` | `DEPARTURE`) y `movementDate`. Sin datos personales copiados: la reserva (`reservationRef`),
+el documento (`documentNumber`) y el titular (`guestRef`) se obtienen de su `GuestData`. Identidad
+única: un movimiento de cada tipo por `GuestData`.
 
 **SireExport** (histórico de descargas del archivo SIRE): `id`, `exportDate`, `exportKind` (`PERIOD` |
 `SINGLE_MOVEMENT`), `recordsCount`, `dateRangeStart`, `dateRangeEnd`, `processedBy`. No marca los
@@ -438,6 +438,7 @@ campo `reservation` lleva el detalle completo de FR-014, no solo lo que cambió:
 | `POST /api/reservations/{reservationRef}/modification-preview` y `PATCH /api/reservations/{reservationRef}` | Recepcionista (solo directas); la OTA modifica las suyas por su canal | `update-reservation` |
 | `POST /api/reservations/{reservationRef}/cancellation` | Recepcionista (solo directas); la OTA cancela las suyas por su canal | `cancel-reservation` |
 | `POST /api/ota/reservations` y `POST /api/ota/reservations/{reservationRef}/confirmation` (pago o garantía) | Ota | `generate-ota-reservation` |
+| `PUT /api/ota/registration` (la OTA se registra o actualiza su `name`, su `hotelAccountId` y su `commissionPercentage`; la identifica su credencial) y `POST /api/ota/connection` (aviso de desvinculación o de nueva vinculación: `DISCONNECTED` o `CONNECTED`). Todo mensaje de la OTA actualiza su `lastSyncAt` | Ota | `register-ota-information-commission` |
 | `GET /api/guest-stays` (vista de huéspedes alojados: paginación de 10, filtros de nacionalidad, situación y periodo, búsqueda por documento o nombre) y `GET /api/reservations/{reservationRef}/guests/{documentNumber}` (detalle de un huésped) | Recepcionista | `process-guest-data` |
 | `POST /api/sire/exports` (periodo o movimiento individual; devuelve `.TXT` y cabecera `Export-Id`; es `POST` porque registra un `SireExport`, decisión D9) | Recepcionista | `export-sire-file` |
 | `GET /api/otas` y `GET /api/otas/{otaId}` (solo lectura; devuelve `id`, `name`, `commissionPercentage`, estado de conexión) | Recepcionista, Módulo 3 | `register-ota-information-commission` |
@@ -555,25 +556,226 @@ Recepcionista; la Ota solo usa la API y el Módulo 1 tiene su propia interfaz.
 
 ### Modelo de datos base (PostgreSQL)
 
-| Tabla | Entidad | Clave y relaciones | Notas |
-|---|---|---|---|
-| `guest` | `Guest` | PK `id`; único `(document_type, document_number)` | `first_name`, `last_name`, `nationality`, `contact_phone`, `contact_email`. Es extranjero si su `nationality` no es Colombia; no se guarda un tipo |
-| `ota` | `Ota` | PK `id`; único `hotel_account_id` | `name`, `linked_at`, `commission_percentage`, `connection_status` (`CONNECTED`/`DISCONNECTED`), `last_sync_at`; se llena por la vinculación automática |
-| `reservation` | `Reservation` | PK `id`; único `reservation_ref`; FK `guest_id` → `guest`; FK `ota_id` → `ota` (nulo en directas); único `(ota_id, external_confirmation_code)` | `start_date`, `end_date`, `guest_count` (total), `source`, `status`, `status_reason` (D6), `notes`, `created_at`, `updated_at` (`@UpdateDateColumn`); `gross_amount` y `currency` (solo OTA); `commission_percentage`, `commission_amount`, `commission_status` |
-| `reservation_room` | `ReservationRoom` | PK `id`; FK `reservation_id` → `reservation` (borrado en cascada); único `(reservation_id, room_id)` | Entre 1 y 10 por reserva; `room_id` (`Room.id` del Módulo 1, sin FK), `room_number`, `category_room`, `guest_count`, `room_gross_amount`, `quote_id` y `currency` (solo `DIRECT`, D2), `stay_status` |
-| `cancellation` | `Cancellation` | PK `id`; FK `reservation_id` → `reservation`, único (0..1 por reserva) | Inmutable; `channel` `RECEPTION` u `OTA_API` |
-| `guest_data` | `GuestData` | PK `id`; FK `reservation_id` → `reservation`; único `(reservation_id, document_number)` | Datos de todos los huéspedes que envía el Módulo 1, guardados una vez, en el Check-In; no se actualizan. `origin_place` y `destination_place` admiten nulo (colombianos) |
-| `migratory_movement` | `MigratoryMovement` | PK `id`; FK `guest_data_id` → `guest_data`; FK `reservation_id` → `reservation`; FK `guest_id` → `guest` (nulo para acompañantes); único `(reservation_id, document_number, movement_type)` | Solo tipo y fecha. La vista de huéspedes alojados y el SIRE unen esta tabla con `guest_data` |
-| `sire_export` | `SireExport` | PK `id` | `export_kind` `PERIOD` o `SINGLE_MOVEMENT`; `exportId` = `SireExport.id`; sin relación con los movimientos |
-| `reservation_audit` | auditoría de actualizaciones | PK `id`; FK `reservation_id` | Inmutable |
-| `commission_audit` | auditoría de comisiones OTA | PK `id`; FK `reservation_id`; FK `ota_id` | Inmutable: acción, importes y actor |
-| `daily_list_message` | mensajes al Módulo 1 | PK `message_id`; único `(operational_date, sequence_number)` | Evita reenviar la lista el mismo día |
-| `processed_message` | idempotencia de colas | PK `message_id` | |
+**Convenciones**
 
-`Reservation.status` (`PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`) se
-guarda como texto. `migrationStatus` es solo un dato de pantalla: se calcula, no se guarda. `Room`,
-`MaintenanceCalendar` y `RateQuote` son del Módulo 1 o 3: **no se persisten** en el
-Módulo 2; solo viajan en objetos de integración.
+- Nombres de tablas y columnas en `snake_case`. Cada tabla tiene clave primaria `id uuid`
+  (`gen_random_uuid()`), salvo donde se indica otra.
+- Fechas sin hora: `date`. Fechas con hora: `timestamptz` (`updated_at` con precisión de
+  microsegundos, porque es el control de concurrencia).
+- Dinero: `numeric(14,2)`. Porcentajes: `numeric(5,2)` de 0 a 100 (`30.00` es el 30 %). Moneda:
+  `char(3)` (código ISO 4217, por ejemplo `COP`).
+- Estados y tipos: texto con un `CHECK` de los valores permitidos (no se usan tipos `enum` de
+  PostgreSQL, para poder agregar valores con una migración simple).
+- `nationality` guarda el nombre del país tal como llega (`Colombia`, `Venezuela`, `Estados Unidos`);
+  el huésped es extranjero si no es exactamente `Colombia`. Así se exporta al SIRE.
+- Extensiones creadas en la migración base: `btree_gist` (anti-solape, D3), `pg_trgm` y `unaccent`
+  (búsqueda por nombre sin distinguir mayúsculas ni tildes).
+- Datos que **no** se guardan en tablas: `Room` y `MaintenanceCalendar` (Módulo 1) y `RateQuote`
+  (Módulo 3) viajan solo en objetos de integración; el código del hotel en SIRE (`hotelSireCode`) y el
+  código de la ciudad (`hotelCityCode`) van en la configuración del sistema (variables de entorno).
+
+```mermaid
+erDiagram
+    guest ||--o{ reservation : "es titular de"
+    ota |o--o{ reservation : "origina"
+    reservation ||--|{ reservation_room : "tiene (1..10)"
+    reservation ||--o| cancellation : "se anula con"
+    reservation ||--o{ guest_data : "aloja"
+    guest_data ||--|{ migratory_movement : "entra y sale (1..2)"
+    reservation ||--o{ commission_audit : "registra"
+    ota ||--o{ commission_audit : "registra"
+    reservation |o--o{ daily_list_message : "se avisa en"
+```
+
+**`guest`** — titular de reservas
+
+| Columna | Tipo | Nulo | Regla |
+|---|---|---|---|
+| `id` | `uuid` | no | PK (`guestRef`) |
+| `first_name`, `last_name` | `varchar(100)` | no | |
+| `document_type` | `varchar(3)` | no | `RC`, `TI`, `CC`, `CE`, `PAS`, `NIT` |
+| `document_number` | `varchar(30)` | no | |
+| `nationality` | `varchar(60)` | no | Nombre del país |
+| `contact_phone` | `varchar(30)` | sí | |
+| `contact_email` | `varchar(254)` | sí | |
+| `created_at`, `updated_at` | `timestamptz` | no | |
+
+Único `(document_type, document_number)`. Índice trigram sobre `unaccent(first_name || ' ' || last_name)`.
+
+**`ota`** — agencia; se registra sola por su API
+
+| Columna | Tipo | Nulo | Regla |
+|---|---|---|---|
+| `id` | `uuid` | no | PK |
+| `name` | `varchar(100)` | no | Único |
+| `hotel_account_id` | `varchar(100)` | no | Único |
+| `commission_percentage` | `numeric(5,2)` | no | De 0 a 100 |
+| `connection_status` | `varchar(12)` | no | `CONNECTED`, `DISCONNECTED` |
+| `linked_at` | `timestamptz` | no | Fecha de la primera vinculación; no cambia al volver a vincular |
+| `last_sync_at` | `timestamptz` | no | Se actualiza con cada mensaje de la OTA |
+| `created_at`, `updated_at` | `timestamptz` | no | |
+
+**`reservation`** — raíz del agregado
+
+| Columna | Tipo | Nulo | Regla |
+|---|---|---|---|
+| `id` | `uuid` | no | PK |
+| `reservation_ref` | `char(12)` | no | Único; `CHECK (reservation_ref ~ '^RSV-[0-9A-F]{8}$')`; si el generado ya existe, se genera otro |
+| `guest_id` | `uuid` | no | FK → `guest` |
+| `source` | `varchar(6)` | no | `DIRECT`, `OTA` |
+| `ota_id` | `uuid` | sí | FK → `ota`; solo `OTA` |
+| `external_confirmation_code` | `varchar(50)` | sí | Solo `OTA` |
+| `start_date`, `end_date` | `date` | no | `CHECK (end_date > start_date)` |
+| `guest_count` | `smallint` | no | `CHECK (guest_count >= 1)`; suma de sus habitaciones |
+| `status` | `varchar(12)` | no | `PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW` |
+| `status_reason` | `varchar(200)` | sí | Motivo de la última transición (D6) |
+| `notes` | `varchar(500)` | sí | |
+| `gross_amount` | `numeric(14,2)` | sí | Solo `OTA`: valor bruto que envía la agencia (`totalAmount`) |
+| `currency` | `char(3)` | sí | Solo `OTA`: moneda del `gross_amount` |
+| `commission_percentage` | `numeric(5,2)` | no | `0` por defecto; de 0 a 100; en `OTA`, el de la agencia al registrar la reserva |
+| `commission_amount` | `numeric(14,2)` | no | `0` por defecto; `CHECK (commission_amount >= 0)`; en `OTA`, `gross_amount × commission_percentage / 100` |
+| `commission_status` | `varchar(10)` | sí | Solo `OTA`: `CALCULATED`, `RECONCILED`, `PAID`, `DISPUTED` |
+| `created_at` | `timestamptz` | no | |
+| `updated_at` | `timestamptz(6)` | no | Control de concurrencia (`@UpdateDateColumn`) |
+
+- Único `(ota_id, external_confirmation_code)`.
+- `CHECK` de canal:
+  - `DIRECT`: `ota_id`, `external_confirmation_code`, `gross_amount`, `currency` y
+    `commission_status` nulos, y `commission_percentage = 0` y `commission_amount = 0`.
+  - `OTA`: `ota_id`, `external_confirmation_code`, `gross_amount`, `currency` y
+    `commission_status` no nulos.
+- Índices: `(status, start_date)`, `(end_date)`, `(guest_id)`, `(ota_id)`.
+
+**`reservation_room`** — habitación dentro de la reserva
+
+| Columna | Tipo | Nulo | Regla |
+|---|---|---|---|
+| `id` | `uuid` | no | PK |
+| `reservation_id` | `uuid` | no | FK → `reservation`, borrado en cascada |
+| `room_id` | `uuid` | no | `Room.id` del Módulo 1, sin FK |
+| `room_number` | `varchar(10)` | no | Copia del número del Módulo 1, guardada al asignarla |
+| `category_room` | `varchar(50)` | no | |
+| `guest_count` | `smallint` | no | `CHECK (guest_count >= 1)`; el tope (`maxCapacity`) lo valida la aplicación, porque viene del Módulo 1 |
+| `room_gross_amount` | `numeric(14,2)` | sí | Solo `DIRECT`: `lodgingAmount` de la cotización (D2) |
+| `quote_id` | `varchar(64)` | sí | Solo `DIRECT` |
+| `currency` | `char(3)` | sí | Solo `DIRECT` |
+| `stay_status` | `varchar(12)` | no | `EXPECTED` por defecto; `EXPECTED`, `CHECKED_IN`, `CHECKED_OUT`, `NOT_ARRIVED` |
+| `start_date`, `end_date` | `date` | no | Copia de las fechas de su reserva (D3) |
+| `blocks_inventory` | `boolean` | no | `true` mientras la habitación ocupa inventario (D3) |
+
+- Único `(reservation_id, room_id)`.
+- `CHECK`: `room_gross_amount`, `quote_id` y `currency` van los tres o ninguno.
+- **Anti-solape (D3):** `EXCLUDE USING gist (room_id WITH =, daterange(start_date, end_date, '[)') WITH &&) WHERE (blocks_inventory)`.
+- Índice `(room_id)`.
+
+**`cancellation`** — registro inmutable de la anulación
+
+| Columna | Tipo | Nulo | Regla |
+|---|---|---|---|
+| `id` | `uuid` | no | PK (`cancellationId`) |
+| `reservation_id` | `uuid` | no | FK → `reservation`; único (0..1 por reserva) |
+| `cancellation_date` | `timestamptz` | no | |
+| `reason` | `varchar(500)` | sí | |
+| `channel` | `varchar(10)` | no | `RECEPTION`, `OTA_API` |
+| `processed_by` | `varchar(100)` | no | Identificador de quien canceló (Recepcionista u OTA) |
+| `status` | `varchar(10)` | no | Siempre `COMPLETED` |
+
+**`guest_data`** — datos de todos los huéspedes, una vez por reserva
+
+| Columna | Tipo | Nulo | Regla |
+|---|---|---|---|
+| `id` | `uuid` | no | PK |
+| `reservation_id` | `uuid` | no | FK → `reservation` |
+| `document_type` | `varchar(3)` | no | `RC`, `TI`, `CC`, `CE`, `PAS`, `NIT` |
+| `document_number` | `varchar(30)` | no | |
+| `first_name`, `last_name` | `varchar(100)` | no | |
+| `birth_date` | `date` | no | |
+| `nationality` | `varchar(60)` | no | Nombre del país |
+| `origin_place`, `destination_place` | `varchar(100)` | sí | Vacíos para colombianos |
+| `created_at` | `timestamptz` | no | Sin `updated_at`: se crea en el Check-In y no se modifica |
+
+Único `(reservation_id, document_number)`. Índices: `(document_number)` y trigram sobre
+`unaccent(first_name || ' ' || last_name)`. No hay `CHECK` de procedencia y destino: el Módulo 2 da
+por hecho que el Módulo 1 los envía completos para los extranjeros (D5).
+
+**`migratory_movement`** — entrada o salida de un huésped
+
+| Columna | Tipo | Nulo | Regla |
+|---|---|---|---|
+| `id` | `uuid` | no | PK (`movementId`) |
+| `guest_data_id` | `uuid` | no | FK → `guest_data` |
+| `movement_type` | `varchar(9)` | no | `ENTRY`, `DEPARTURE` |
+| `movement_date` | `date` | no | |
+| `created_at` | `timestamptz` | no | |
+
+Único `(guest_data_id, movement_type)`. Índice `(movement_date)` para el periodo del SIRE. La
+reserva, el documento y el titular (`guestRef`) se obtienen de su `guest_data`: el titular es el
+huésped cuyo documento coincide con el `guest` de la reserva.
+
+**`sire_export`** — histórico de descargas del archivo SIRE
+
+| Columna | Tipo | Nulo | Regla |
+|---|---|---|---|
+| `id` | `uuid` | no | PK (`exportId`) |
+| `export_date` | `timestamptz` | no | |
+| `export_kind` | `varchar(15)` | no | `PERIOD`, `SINGLE_MOVEMENT` |
+| `records_count` | `integer` | no | `CHECK (records_count >= 0)` |
+| `date_range_start`, `date_range_end` | `date` | sí | Obligatorios si es `PERIOD` |
+| `processed_by` | `varchar(100)` | no | La Recepcionista |
+
+Sin relación con los movimientos: la exportación solo filtra por `movement_date` (D7).
+
+**`commission_audit`** — registro auditable de cada comisión (FR-010 de `register-ota-information-commission`)
+
+| Columna | Tipo | Nulo | Regla |
+|---|---|---|---|
+| `id` | `uuid` | no | PK |
+| `reservation_id` | `uuid` | no | FK → `reservation` |
+| `ota_id` | `uuid` | no | FK → `ota` |
+| `action` | `varchar(12)` | no | `CALCULATED`, `RECONCILED`, `PAID`, `DISPUTED` |
+| `previous_status` | `varchar(10)` | sí | Estado de la comisión antes de la acción |
+| `gross_amount` | `numeric(14,2)` | no | |
+| `commission_percentage` | `numeric(5,2)` | no | |
+| `commission_amount` | `numeric(14,2)` | no | |
+| `channel` | `varchar(10)` | no | `OTA_API` (cálculo) o `MODULE3` (conciliación) |
+| `performed_by` | `varchar(100)` | no | |
+| `occurred_at` | `timestamptz` | no | |
+
+Inmutable. Índice `(reservation_id)`.
+
+**`daily_list_message`** — avisos al Módulo 1; se guardan antes de publicarse
+
+| Columna | Tipo | Nulo | Regla |
+|---|---|---|---|
+| `message_id` | `uuid` | no | PK; es el `messageId` del mensaje |
+| `operational_date` | `date` | no | |
+| `sequence_number` | `integer` | no | `CHECK (sequence_number >= 1)`; la lista es `1` |
+| `message_kind` | `varchar(6)` | no | `LIST`, `UPDATE` |
+| `update_type` | `varchar(8)` | sí | Solo `UPDATE`: `ADDED`, `UPDATED`, `REMOVED` |
+| `reservation_id` | `uuid` | sí | FK → `reservation`; solo `UPDATE` |
+| `removal_reason` | `varchar(12)` | sí | Solo `REMOVED`: `CANCELLED`, `DATE_CHANGED`, `NO_SHOW` |
+| `payload` | `jsonb` | no | El JSON exacto que se publica |
+| `publish_status` | `varchar(9)` | no | `PENDING`, `PUBLISHED`, `FAILED` |
+| `attempts` | `smallint` | no | `0` por defecto |
+| `created_at` | `timestamptz` | no | |
+| `published_at` | `timestamptz` | sí | |
+
+- Único `(operational_date, sequence_number)`.
+- Único parcial `(operational_date) WHERE message_kind = 'LIST'`: una sola lista por día.
+- Índice `(publish_status, operational_date, sequence_number)` para reintentar en orden.
+
+**`processed_message`** — mensajes recibidos del Módulo 1 (idempotencia)
+
+| Columna | Tipo | Nulo | Regla |
+|---|---|---|---|
+| `message_id` | `uuid` | no | PK |
+| `queue` | `varchar(60)` | no | Cola de la que llegó |
+| `sequence_number` | `bigint` | no | Para detectar saltos (FR-023 de `update-reservation`) |
+| `processed_at` | `timestamptz` | no | |
+
+Se inserta en la misma transacción que el cambio que produce el mensaje.
+
+`migrationStatus` es solo un dato de pantalla: se calcula, no se guarda.
 
 ### Reglas transversales que todos los planes de feature heredan
 
@@ -613,7 +815,7 @@ Módulo 2; solo viajan en objetos de integración.
 |---|---|---|
 | D1 | **La confirmación de una cotización no confía en el importe de la pantalla.** Al confirmar, el servidor vuelve a cotizar con el Módulo 3 y lo compara con las tarifas por habitación que vio el solicitante; si difiere, responde 400 "La tarifa cambió, vuelva a cotizar". Nunca se guarda un monto enviado por el cliente; de la `RateQuote` solo se guardan `lodgingAmount` y `quoteId` en la habitación. Lo aplican `generate-direct-reservation` y `update-reservation`. | `calculate-dynamic-rate` |
 | D2 | **La tarifa se guarda por habitación, sin total guardado:** `reservation_room` guarda `room_gross_amount` (el `lodgingAmount`), `quote_id` y `currency` tal como las entrega el Módulo 3 (FR-002); el `quote_id` permite al Módulo 3 cobrar en el Check-Out exactamente el valor cotizado. Su única operación con ellas es sumarlas para mostrar el total de la reserva, que no se guarda. | `calculate-dynamic-rate` |
-| D3 | **Restricción de exclusión en PostgreSQL** sobre `reservation_room` y las fechas de su reserva (o sobre una tabla de ocupación equivalente): `EXCLUDE USING gist (room_id WITH =, daterange(start_date, end_date) WITH &&) WHERE (status IN ('PENDING','ACTIVE','IN_PROGRESS'))`, con la extensión `btree_gist` creada en la migración base. Impide dos reservas activas solapadas en la misma habitación aun con concurrencia; una violación se traduce en 409 `NO_AVAILABILITY` (o en probar la siguiente habitación candidata). El diseño exacto (copiar fechas y estado a la tabla de ocupación) se cierra en el plan de `check-room-availability`. | `check-room-availability` |
+| D3 | **Anti-solape con una restricción de exclusión en PostgreSQL** sobre `reservation_room`. Cada habitación guarda una copia de las fechas de su reserva (`start_date`, `end_date`) y `blocks_inventory`, que vale `true` mientras la reserva está en `PENDING`, `ACTIVE` o `IN_PROGRESS` y la habitación en `EXPECTED` o `CHECKED_IN`. Restricción: `EXCLUDE USING gist (room_id WITH =, daterange(start_date, end_date, '[)') WITH &&) WHERE (blocks_inventory)`, con la extensión `btree_gist`. El rango `'[)'` deja que una salida y una llegada el mismo día no choquen. El agregado `Reservation` actualiza esas copias en la misma transacción cada vez que cambian las fechas, el `status` o el `stayStatus`. Impide dos reservas solapadas en la misma habitación aunque se guarden al mismo tiempo; una violación se traduce en 409 `NO_AVAILABILITY` (o en probar la siguiente habitación candidata). | `check-room-availability` |
 | D5 | **Datos migratorios completos:** el Módulo 2 da por hecho que el Módulo 1 los envía completos y correctos; no los valida ni los devuelve. | `process-guest-data` |
 | D6 | **Motivo de las transiciones:** columna `status_reason` en `reservation`. | `update-reservation` |
 | D7 | **Periodo de la exportación SIRE:** se filtra por la `movementDate` del movimiento migratorio. | `process-guest-data`, `export-sire-file` |
