@@ -87,8 +87,8 @@ se duplican.
 
 1. **Scenario**: Movimiento de entrada de los huéspedes de una habitación (Happy Path)
    - **Given** una `Reservation` en Check-In
-   - **When** el sistema recibe la notificación del Módulo 1 con los huéspedes de la habitación y
-     `movementType` `ENTRY`
+   - **When** el sistema recibe la notificación de Check-In del Módulo 1 (con `movementType` `ENTRY`)
+     con los huéspedes de la habitación
    - **Then** el sistema registra un `MigratoryMovement` `ENTRY` por cada huésped, colombiano o
      extranjero
 
@@ -100,8 +100,8 @@ se duplican.
 
 3. **Scenario**: Movimiento de salida (Happy Path)
    - **Given** huéspedes con su movimiento `ENTRY` registrado
-   - **When** la notificación de Check-Out trae a esos huéspedes con `movementType` `DEPARTURE` y su
-     fecha
+   - **When** la notificación de Check-Out (con `movementType` `DEPARTURE` y su fecha) trae a esos
+     huéspedes
    - **Then** el sistema registra un `MigratoryMovement` `DEPARTURE` por cada uno, sin modificar el
      `ENTRY`; cada huésped queda con dos movimientos y un solo `GuestData`, sin datos duplicados
 

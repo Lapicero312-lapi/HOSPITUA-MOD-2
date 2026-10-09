@@ -267,15 +267,15 @@ pase a `COMPLETED`, sin afectar el estado de las `Room`, que gestiona el Módulo
 3. **Scenario**: Recepción de los datos de los huéspedes en el Check-In
    - **Given** una `Reservation` con tres huéspedes, dos extranjeros y uno colombiano, en proceso de
      Check-In
-   - **When** la notificación de Check-In trae a los tres, con sus datos, `movementType` `ENTRY` y la
-     fecha de ingreso
+   - **When** la notificación de Check-In (con `movementType` `ENTRY` y la fecha de ingreso) trae a
+     los tres, con sus datos
    - **Then** el sistema registra, mediante "Procesar datos de huéspedes", un
      `MigratoryMovement` de entrada por cada uno; solo los dos extranjeros entrarán a la exportación SIRE
 
 3a. **Scenario**: Recepción de los datos de los huéspedes en el Check-Out
    - **Given** una habitación en `CHECKED_IN` con tres huéspedes
-   - **When** la notificación de Check-Out trae a los tres con `movementType` `DEPARTURE` y la fecha
-     de salida
+   - **When** la notificación de Check-Out (con `movementType` `DEPARTURE` y la fecha de salida)
+     trae a los tres
    - **Then** el sistema registra un `MigratoryMovement` de salida por cada uno, sin modificar sus
      movimientos de entrada
 
