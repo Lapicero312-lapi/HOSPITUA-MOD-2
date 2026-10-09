@@ -36,9 +36,11 @@ Por `roomId`:
 **Reglas:**
 
 - Una categoría sin habitaciones devuelve una lista vacía.
-- Si el Módulo 1 falla, no responde o el `roomId` no existe, el Módulo 2 responde un error controlado
+- Errores del Módulo 1 (los mismos de la consulta de mantenimientos): **404** si la habitación no
+  existe; **400** si el `roomId` o la `categoryRoom` tienen formato inválido. Nunca 500.
+- Si el Módulo 1 falla o no responde, el Módulo 2 no asume habitaciones: responde un error controlado
   (HTTP 400) a quien consulta.
 - La consulta responde en menos de 1 segundo en condiciones normales.
 
-Los valores de los ejemplos son ilustrativos. Las rutas y los códigos de error exactos del Módulo 1
-quedan por acordar con ese equipo.
+Los valores de los ejemplos son ilustrativos. La ruta exacta del Módulo 1 queda por acordar con ese
+equipo.
