@@ -8,11 +8,12 @@
 
 Antes de registrar o modificar una reserva, el hotel necesita saber con certeza si la habitación
 puede ocuparse en las fechas pedidas. Una habitación puede parecer libre y, aun así, tener otra
-reserva que se cruza, un mantenimiento programado, o estar ocupada hoy mismo. Si esa validación se
-hace de forma parcial o distinta según la pantalla, aparecen sobreventas y reservas que después hay
-que cancelar. El negocio necesita una única verificación, reutilizada por todos los flujos de
-reserva, que combine las reservas locales del Módulo 2 con el inventario y el calendario de
-mantenimientos del Módulo 1. La verificación de disponibilidad admite la consulta tanto por
+reserva que se cruza o un mantenimiento programado. Si esa validación se hace de forma parcial o
+distinta según la pantalla, aparecen sobreventas y reservas que después hay que cancelar. El negocio
+necesita una única verificación, reutilizada por todos los flujos de reserva, que combine las
+reservas locales del Módulo 2 con las habitaciones vendibles y el calendario de mantenimientos del
+Módulo 1. Todo huésped alojado tiene una reserva del Módulo 2, así que la ocupación de hoy también se
+detecta con esas reservas, sin consultar el estado físico de la habitación. La verificación de disponibilidad admite la consulta tanto por
 categoría de habitación (`categoryRoom`) como por habitación específica (`roomId`).
 
 Como una reserva puede tener varias habitaciones, el flujo invocador ejecuta esta verificación una
@@ -23,22 +24,21 @@ para que el flujo invocador elija o asigne las que necesita.
 ### Flujo de Usuario de Alto Nivel
 
 1. Un flujo de reserva (generar reservación directa, generar reservación por OTA o actualizar
-   reservación) solicita verificar la disponibilidad de una `Room` para un rango de fechas
-   (`startDate` y `endDate`) y, cuando se trata de una modificación, la `reservationRef` de la
-   reserva editada.
-2. El sistema cruza el rango contra las habitaciones de las reservas locales mediante "Consultar
-   reservas", considerando solo las reservas que aún reservan inventario (`PENDING`, `ACTIVE` o
-   `IN_PROGRESS`) y, dentro de ellas, solo las habitaciones que no están en `CHECKED_OUT` ni en
-   `NOT_ARRIVED`, y excluyendo la reserva indicada en `reservationRef`.
-3. El sistema consulta el calendario del Módulo 1 mediante "Consultar calendario de
-   mantenimientos".
-4. Si la estadía incluye el día en curso, el sistema consulta el estado físico real mediante
-   "Consultar inventario de habitaciones", enviando también la `reservationRef` de la reserva
-   editada. El Módulo 1 informa qué reserva mantiene apartada la `Room`
-   (`reservedByReservationRef`); si coincide con la reserva editada, ese `Reserved` es su propio
-   apartado y no cuenta como conflicto. El `Reserved` solo existe para reservas con llegada el día
-   en curso; las reservas futuras se detectan únicamente en el cruce con las reservas locales.
-5. El sistema devuelve si la `Room` está disponible o no, indicando el motivo cuando no lo esté.
+   reservación) solicita verificar la disponibilidad por categoría (`categoryRoom`) o de una `Room`
+   (`roomId`) para un rango de fechas (`startDate` y `endDate`) y, cuando se trata de una
+   modificación, la `reservationRef` de la reserva editada.
+2. Si la consulta es por categoría, el sistema obtiene las habitaciones vendibles de esa categoría
+   mediante "Consultar inventario de habitaciones"; si es por `roomId`, verifica que la habitación
+   exista.
+3. El sistema cruza el rango de cada habitación contra las habitaciones de las reservas locales
+   mediante "Consultar reservas", considerando solo las reservas que aún reservan inventario
+   (`PENDING`, `ACTIVE` o `IN_PROGRESS`) y, dentro de ellas, solo las habitaciones que no están en
+   `CHECKED_OUT` ni en `NOT_ARRIVED`, y excluyendo la reserva indicada en `reservationRef`. Así se
+   detecta también la habitación ocupada hoy, que está en `CHECKED_IN` dentro de una reserva
+   `IN_PROGRESS`.
+4. El sistema consulta el calendario del Módulo 1 mediante "Consultar calendario de
+   mantenimientos" para cada habitación que pasó el cruce.
+5. El sistema devuelve las habitaciones disponibles y el motivo de cada una que no lo esté.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -47,15 +47,15 @@ para que el flujo invocador elija o asigne las que necesita.
 La Recepcionista o la OTA necesitan verificar que una `Room` está
 disponible antes de registrar una `Reservation`, para evitar cruces de hospedaje y asegurar que la
 habitación no esté inhabilitada por mantenimiento. Por tratarse de una única verificación, los
-casos libre, bloqueada por mantenimiento, cruzada con otra reserva y ocupada hoy se consolidan en
-esta misma historia de usuario.
+casos libre, bloqueada por mantenimiento, cruzada con otra reserva y ocupada hoy por un huésped
+alojado se consolidan en esta misma historia de usuario.
 
 **Why this priority**: Es el primer paso obligatorio del flujo de reservas. Garantiza que ninguna
 reserva ingrese al sistema si la habitación está comprometida física o lógicamente.
 
 **Independent Test**: Se envían consultas de disponibilidad para distintas habitaciones y se valida
-que el sistema cruce correctamente las reservas locales, el calendario de mantenimientos y el
-inventario del Módulo 1, devolviendo la disponibilidad precisa en cada caso.
+que el sistema cruce correctamente las reservas locales, el calendario de mantenimientos y las
+habitaciones vendibles del Módulo 1, devolviendo la disponibilidad precisa en cada caso.
 
 **Acceptance Scenarios**:
 
@@ -77,11 +77,11 @@ inventario del Módulo 1, devolviendo la disponibilidad precisa en cada caso.
    - **When** el solicitante verifica la disponibilidad
    - **Then** el sistema la rechaza indicando que la habitación ya está reservada en esas fechas
 
-4. **Scenario**: Validación en tiempo real para una reserva del mismo día
-   - **Given** una consulta cuya estadía incluye el día en curso
+4. **Scenario**: Habitación ocupada hoy por un huésped alojado
+   - **Given** una `Room` en `CHECKED_IN` dentro de una `Reservation` `IN_PROGRESS` cuyas fechas se
+     cruzan con el rango pedido
    - **When** el solicitante verifica la disponibilidad
-   - **Then** el sistema consulta el inventario del Módulo 1 y, si la `Room` está `Occupied`, o
-     `Reserved` por una reserva distinta de la consultada, informa que no está disponible
+   - **Then** el sistema la rechaza indicando que la habitación ya está reservada en esas fechas
 
 5. **Scenario**: Modificación de fechas de una reserva existente
    - **Given** una `Reservation` en `ACTIVE` sobre una `Room` sin otras reservas ni mantenimientos
@@ -96,16 +96,7 @@ inventario del Módulo 1, devolviendo la disponibilidad precisa en cada caso.
    - **When** el solicitante verifica la disponibilidad
    - **Then** el sistema ignora esas reservas y confirma la disponibilidad
 
-7. **Scenario**: Modificación de una reserva cuya estadía incluye hoy
-   - **Given** una `Reservation` `ACTIVE` cuya `Room` está `Reserved` por esa misma reserva y cuya
-     estadía incluye el día en curso
-   - **When** el solicitante verifica la disponibilidad enviando su `reservationRef` con nuevas
-     fechas
-   - **Then** el sistema reconoce que el `Reserved` es el apartado propio
-     (`reservedByReservationRef` coincide) y no lo trata como conflicto, por lo que la reserva puede
-     modificar sus fechas
-
-8. **Scenario**: Habitación liberada dentro de una reserva en curso
+7. **Scenario**: Habitación liberada dentro de una reserva en curso
    - **Given** una `Room` que pertenece a una reserva `IN_PROGRESS` pero está en `NOT_ARRIVED` o
      `CHECKED_OUT` dentro de esa reserva
    - **When** el solicitante verifica la disponibilidad de esa `Room` en fechas que se cruzan con
@@ -147,11 +138,9 @@ inventario del Módulo 1, devolviendo la disponibilidad precisa en cada caso.
 - **FR-003**: El sistema debe aceptar la `reservationRef` de la reserva que se está modificando y
   excluirla del cruce, para que una modificación de fechas no se reporte como no disponible por
   solaparse consigo misma.
-- **FR-004**: El sistema debe consultar el `status` físico de la `Room` mediante "Consultar
-  inventario de habitaciones" cuando la estadía incluya el día en curso, enviando la
-  `reservationRef` de la reserva editada, y debe tratar un `Reserved` cuyo
-  `reservedByReservationRef` coincida con ella como el apartado propio de la reserva, no como un
-  conflicto.
+- **FR-004**: El sistema debe obtener las habitaciones de la categoría mediante "Consultar
+  inventario de habitaciones" (todas son vendibles) y no debe usar el estado físico de hoy: la
+  ocupación se detecta solo con las reservas del Módulo 2.
 - **FR-005**: El sistema no debe asumir disponibilidad cuando el Módulo 1 no responda.
 - **FR-006**: El sistema debe interceptar timeouts, fechas y formatos inválidos, respondiendo con
   **HTTP 400 (Bad Request)** y prohibiendo errores **HTTP 500**.
@@ -163,8 +152,8 @@ inventario del Módulo 1, devolviendo la disponibilidad precisa en cada caso.
 
 ### Key Entities *(include if feature involves data)*
 
-- **Room**: Habitación física validada, propiedad del Módulo 1. Atributos: `id`, `roomNumber`,
-  `categoryRoom` y `status` (`Available` | `Reserved` | `Occupied`).
+- **Room**: Habitación vendible, propiedad del Módulo 1. Atributos: `id`, `roomNumber`,
+  `categoryRoom` y `maxCapacity`.
 - **Reservation**: Reserva local con la que se cruzan las fechas. Atributos: `reservationRef`,
   `startDate`, `endDate` y `status` (`PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`,
   `CANCELLED`, `NO_SHOW`).

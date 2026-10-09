@@ -30,9 +30,10 @@ llegada futura solo bloquean la disponibilidad en el Módulo 2 hasta el día de 
    `Room` específicas disponibles de esa categoría; la Recepcionista no elige el número de habitación
    ni puede combinar categorías distintas en una misma reserva desde esta pantalla (para eso existe
    "Actualizar reservación", que sí permite cambiar una habitación por otra de distinta categoría).
-2. El sistema ejecuta "Verificar disponibilidades" para **cada** habitación: cruza las fechas contra
-   las reservas locales del Módulo 2 y consulta al Módulo 1 el calendario de mantenimientos y el
-   inventario en tiempo real. Si una sola habitación no está disponible, no se puede continuar.
+2. El sistema ejecuta "Verificar disponibilidades" para **cada** habitación: obtiene del Módulo 1 las
+   habitaciones vendibles de la categoría, cruza las fechas contra las reservas locales del Módulo 2 y
+   consulta al Módulo 1 el calendario de mantenimientos. Si una sola habitación no está disponible,
+   no se puede continuar.
 3. El sistema valida que el `guestCount` de cada habitación sea al menos 1 y no supere su capacidad
    máxima (`maxCapacity`). El `guestCount` de la reserva es la suma de los de sus habitaciones.
 4. Si todas las habitaciones están disponibles, el sistema solicita al Módulo 3 el cálculo del
@@ -225,7 +226,8 @@ reserva y se devuelve un error controlado.
   `EXPECTED`).
 - **Guest**: Huésped titular. Atributos: `id`, `firstName`, `lastName`, `documentType` (`RC`, `TI`, `CC`, `CE`, `PAS` o `NIT`), `documentNumber`,
   `nationality` (texto libre, obligatorio; no hay una lista fija de países; el huésped es extranjero
-  si `nationality` no es "Colombia", sin distinguir mayúsculas ni tildes — no se guarda como un
+  si `nationality` no es exactamente `Colombia`; la nacionalidad se escribe con el nombre del país,
+  por ejemplo `Colombia`, `Venezuela` o `Estados Unidos` — no se guarda como un
   atributo propio, se deriva de `nationality` cuando hace falta), `contactPhone`, `contactEmail`.
 - **RateQuote**: Cotización del valor de hospedaje de una habitación calculada por el Módulo 3, con
   carácter informativo. Atributos: `quoteId`, `nightlyRates` (lista de `date` y `rate`) y
