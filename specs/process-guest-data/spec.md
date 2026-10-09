@@ -47,8 +47,8 @@ movimiento), los guarda y, al exportar, selecciona los extranjeros y los empaque
    habitación, con `movementType` `DEPARTURE` y su `movementDate`.
 3. Por cada huésped de la lista, el sistema guarda sus datos **una sola vez** en `GuestData` (por
    reserva y número de documento) y registra un `MigratoryMovement` con el tipo y la fecha, sea
-   colombiano o extranjero. Si el huésped ya existe en esa reserva (por ejemplo, en el Check-Out), no se
-   duplica: se actualizan sus datos con los del último mensaje y solo se agrega el movimiento. Hay un
+   colombiano o extranjero. En el Check-Out el huésped se identifica por su `documentNumber`: no se
+   duplica ni se modifican sus datos, y solo se agrega el `DEPARTURE`. Hay un
    movimiento por cada combinación de reserva, huésped y tipo de movimiento: un huésped que ingresa y
    sale tiene dos, uno `ENTRY` y uno `DEPARTURE`, ligados al mismo `GuestData`.
 4. El sistema identifica como **extranjero** a todo huésped cuya `nationality` sea distinta de Colombia.
@@ -101,12 +101,11 @@ se duplican.
    - **Then** el sistema registra un `MigratoryMovement` `DEPARTURE` por cada uno, sin modificar el
      `ENTRY`; cada huésped queda con dos movimientos y un solo `GuestData`, sin datos duplicados
 
-3a. **Scenario**: Datos distintos en el Check-Out
+3a. **Scenario**: Salida de un huésped ya registrado
    - **Given** un huésped con su `GuestData` y su `ENTRY` registrados
-   - **When** la notificación de Check-Out trae al mismo huésped con algún dato distinto (por ejemplo,
-     el apellido corregido)
-   - **Then** el sistema actualiza su `GuestData` con los datos del Check-Out, registra el `DEPARTURE`
-     y deja el `ENTRY` como estaba; la vista y el archivo SIRE muestran el dato actualizado
+   - **When** la notificación de Check-Out trae a ese huésped, identificado por su `documentNumber`
+   - **Then** el sistema registra el `DEPARTURE` en ese huésped, sin crear otro `GuestData` ni
+     modificar el existente
 
 4. **Scenario**: Reserva solo de huéspedes colombianos
    - **Given** una `Reservation` cuyos huéspedes son todos colombianos
@@ -225,8 +224,8 @@ vista no permite modificar nada.
 
 ### Casos Borde
 
-- ¿Qué sucede si llega un `DEPARTURE` de un huésped sin `ENTRY` registrado? Se registra normalmente
-  y queda disponible para el reporte; no bloquea nada.
+- ¿Qué sucede si llega un `DEPARTURE` de un huésped sin `ENTRY` registrado? No debería ocurrir, porque
+  el Módulo 1 siempre envía primero el Check-In con los datos del huésped.
 - ¿Qué sucede si la notificación trae más huéspedes que el `guestCount` de la habitación? Se registran
   todos; la Recepcionista ve en la pantalla la cantidad de huéspedes que informó el Módulo 1.
 - ¿Qué sucede si el mismo huésped viene repetido en la misma notificación? Se procesa una sola vez,
@@ -270,8 +269,8 @@ vista no permite modificar nada.
   huésped (`documentNumber`) y `movementType`, sin sobrescribir los de otras estadías ni los del otro
   tipo de movimiento del mismo huésped. Un movimiento repetido no se duplica.
 - **FR-017**: El sistema debe guardar los datos personales de cada huésped una sola vez por reserva y
-  `documentNumber` (`GuestData`), sin copiarlos en cada movimiento. Si el huésped ya existe en la
-  reserva, debe actualizar sus datos con los del último mensaje y agregar solo el movimiento.
+  `documentNumber` (`GuestData`), sin copiarlos en cada movimiento. En el Check-Out debe identificar al
+  huésped por su `documentNumber` y agregarle el `DEPARTURE`, sin modificar sus datos.
 - **FR-006**: El sistema debe conservar el Check-In o el Check-Out y responder 200 al registrar los
   movimientos de la notificación.
 - **FR-007**: El sistema debe procesar cada huésped de la lista de forma independiente.
@@ -321,7 +320,7 @@ vista no permite modificar nada.
   `reservationRef`, `firstName`, `lastName`, `documentType`, `documentNumber`, `birthDate`,
   `nationality`, `originPlace` (lugar de procedencia) y `destinationPlace` (lugar de destino). SIRE
   exige los dos últimos para los extranjeros. Identidad única: (`reservationRef`, `documentNumber`).
-  Si llega de nuevo en el Check-Out, se actualiza con los datos del último mensaje.
+  Se crea en el Check-In y no se modifica: el Check-Out solo agrega el `DEPARTURE`.
 - **MigratoryMovement**: Movimiento de entrada o de salida de un huésped en una estadía, colombiano o
   extranjero. Solo los de extranjeros entran al archivo SIRE. Atributos: `movementId`, `reservationRef`,
   `documentNumber` (referencia a su `GuestData`), `guestRef` (solo si el huésped es el titular; los
