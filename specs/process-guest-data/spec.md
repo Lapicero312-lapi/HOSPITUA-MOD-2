@@ -30,7 +30,8 @@ huéspedes que se han alojado** en el hotel.
 ocupantes y asigna por su cuenta el tipo de movimiento y su fecha, sin pedírselos a la Recepcionista:
 `ENTRY` con la fecha de llegada (`checkInDate`) en el Check-In, y `DEPARTURE` con la fecha de salida
 (`checkOutDate`) en el Check-Out, ambas solo fecha, sin hora. **El Módulo 2 da por hecho que los datos
-llegan completos y correctos**: el Módulo 1 no envía a un huésped al que le falte algún dato. El Módulo
+llegan completos y correctos**: el Módulo 1 no envía a un huésped al que le falte algún dato obligatorio
+(el lugar de procedencia y el de destino solo son obligatorios para los extranjeros). El Módulo
 2 no captura, no valida ni completa nada: recibe los datos de cada huésped (tipo y número de documento,
 fecha de nacimiento, nombre, apellido, nacionalidad, lugar de procedencia, lugar de destino y tipo de
 movimiento), los guarda y, al exportar, selecciona los extranjeros y los empaqueta en el archivo `.TXT`.
@@ -39,7 +40,7 @@ movimiento), los guarda y, al exportar, selecciona los extranjeros y los empaque
 
 1. El **Módulo 1** notifica el **Check-In** de una habitación de una reserva (cola
    `m2.habitacion.checkin.queue`) con la `reservationRef` y la lista `guests` con **todos
-   los huéspedes** que ingresaron a esa habitación, cada uno con sus `GuestData` (los diez campos),
+   los huéspedes** que ingresaron a esa habitación, cada uno con sus `GuestData` (`originPlace` y `destinationPlace` solo para extranjeros),
    `movementType` `ENTRY` y su `movementDate`. El cambio de estado de la habitación y de la reserva lo
    ejecuta "Actualizar reservación".
 2. El Módulo 1 notifica el **Check-Out** de una habitación (cola `m2.habitacion.checkout.queue`) con la
@@ -263,7 +264,8 @@ vista no permite modificar nada.
 - **FR-003**: El sistema debe identificar como extranjero a todo huésped cuya `nationality` sea
   distinta de Colombia, sin guardar esa marca por separado.
 - **FR-004**: El sistema debe dar por hecho que los datos de cada huésped llegan completos y correctos,
-  porque el Módulo 1 los valida antes de enviarlos. No debe validarlos, completarlos ni corregirlos, y
+  porque el Módulo 1 los valida antes de enviarlos. El lugar de procedencia y el de destino solo son
+  obligatorios para los extranjeros; para los colombianos pueden venir vacíos. No debe validarlos, completarlos ni corregirlos, y
   no debe devolverlos al Módulo 1.
 - **FR-005**: El sistema debe registrar un `MigratoryMovement` por cada combinación de reserva,
   huésped (`documentNumber`) y `movementType`, sin sobrescribir los de otras estadías ni los del otro
@@ -319,7 +321,7 @@ vista no permite modificar nada.
   cada huésped en la lista `guests`). El Módulo 2 los guarda **una sola vez** por reserva. Atributos:
   `reservationRef`, `firstName`, `lastName`, `documentType`, `documentNumber`, `birthDate`,
   `nationality`, `originPlace` (lugar de procedencia) y `destinationPlace` (lugar de destino). SIRE
-  exige los dos últimos para los extranjeros. Identidad única: (`reservationRef`, `documentNumber`).
+  exige los dos últimos para los extranjeros; para los colombianos pueden estar vacíos. Identidad única: (`reservationRef`, `documentNumber`).
   Se crea en el Check-In y no se modifica: el Check-Out solo agrega el `DEPARTURE`.
 - **MigratoryMovement**: Movimiento de entrada o de salida de un huésped en una estadía, colombiano o
   extranjero. Solo los de extranjeros entran al archivo SIRE. Atributos: `movementId`, `reservationRef`,
