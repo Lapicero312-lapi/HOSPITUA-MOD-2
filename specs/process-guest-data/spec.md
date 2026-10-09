@@ -203,8 +203,8 @@ vista no permite modificar nada.
    - **Given** un huésped del listado
    - **When** la Recepcionista abre su detalle
    - **Then** el sistema muestra todos sus datos (tipo y número de documento, nombre, apellido, fecha de
-     nacimiento, nacionalidad, procedencia y destino), la reserva con un enlace a su detalle, y
-     sus movimientos de entrada y salida con su fecha
+     nacimiento, nacionalidad, procedencia y destino; si están vacíos, muestra una raya "—"), la
+     reserva con un enlace a su detalle, y sus movimientos de entrada y salida con su fecha
 
 7. **Scenario**: Sin resultados
    - **Given** filtros que ningún huésped cumple
