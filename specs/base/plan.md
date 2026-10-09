@@ -311,13 +311,13 @@ Contenido del `payload` (según el diccionario y los specs):
 
 | Routing key | `payload` |
 |---|---|
-| `habitacion.checkin` | `reservationRef`, `roomId` y `foreignGuestCount` (cuántos extranjeros ingresan a esa habitación; solo informativo) |
-| `habitacion.checkout` | `reservationRef`, `roomId` y `foreignGuestCount` (cuántos extranjeros salen de esa habitación; solo informativo) |
-| `huesped.extranjero` | `reservationRef`, `roomId` y los 10 campos del huésped: `firstName`, `lastName`, `documentType`, `documentNumber`, `birthDate`, `nationality`, `movementType` (`ENTRY` o `DEPARTURE`), `movementDate`, `originPlace`, `destinationPlace` |
+| `habitacion.checkin` | `messageId`, `sequenceNumber`, `reservationRef`, `roomId`, `movementType` (`ENTRY`), `movementDate` (`checkInDate`) y la lista `guests` con todos los huéspedes de la habitación |
+| `habitacion.checkout` | `messageId`, `sequenceNumber`, `reservationRef`, `roomId`, `movementType` (`DEPARTURE`), `movementDate` (`checkOutDate`) y la lista `guests` con todos los huéspedes de la habitación |
 
-Los extranjeros viajan en su propia cola para que el Check-In y el Check-Out nunca esperen por datos
-migratorios; el mensaje de un huésped puede llegar antes o después de la notificación de su habitación
-y se asocia por `reservationRef`. La lista del día y sus actualizaciones llevan el detalle de
+Cada huésped de `guests` trae `firstName`, `lastName`, `documentType` (`RC`, `TI`, `CC`, `CE`, `PAS` o
+`NIT`), `documentNumber`, `birthDate` y `nationality` (un colombiano se escribe exactamente `Colombia`);
+`originPlace` y `destinationPlace` solo son obligatorios para extranjeros. El `movementType` y el
+`movementDate` van a nivel de mensaje y valen para todos los huéspedes de la lista. La lista del día y sus actualizaciones llevan el detalle de
 `check-view-reservation` (FR-014): `source` viaja como `DIRECTA` o con el nombre de la agencia (por
 ejemplo `BOOKING`).
 

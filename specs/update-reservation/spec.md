@@ -80,7 +80,8 @@ en momentos distintos.
 2. El Módulo 1 envía al Módulo 2 una notificación (cola `m2.habitacion.checkin.queue`) con el
    `messageId`, el `sequenceNumber`, la `reservationRef`, el `roomId` de la habitación que ingresó y
    la lista `guests` con **todos los huéspedes** que ingresaron a esa habitación (colombianos y
-   extranjeros), cada uno con sus datos y `movementType` `ENTRY`.
+   extranjeros), cada uno con sus datos, y el `movementType` `ENTRY` y el `movementDate` a nivel de
+   mensaje.
 3. El sistema localiza la reserva mediante "Consultar reservas", valida que el `roomId` pertenezca a
    la reserva y que la reserva esté en `ACTIVE` o `IN_PROGRESS`.
 4. El sistema cambia el `stayStatus` de esa habitación (`ReservationRoom`) de `EXPECTED` a
@@ -99,8 +100,8 @@ El Check-Out también se notifica **por habitación**.
 1. El **Módulo 1** ejecuta el Check-Out físico de una habitación: la libera y cierra su estadía.
 2. El Módulo 1 envía al Módulo 2 una notificación (cola `m2.habitacion.checkout.queue`) con el
    `messageId`, el `sequenceNumber`, la `reservationRef`, el `roomId` y la lista `guests` con **todos
-   los huéspedes** que salieron de esa habitación, cada uno con sus datos y `movementType`
-   `DEPARTURE`.
+   los huéspedes** que salieron de esa habitación, cada uno con sus datos, y el `movementType`
+   `DEPARTURE` y el `movementDate` a nivel de mensaje.
 3. El sistema localiza la reserva mediante "Consultar reservas", valida que el `roomId` pertenezca a
    la reserva, que la reserva esté en `IN_PROGRESS` y que esa habitación esté en `CHECKED_IN`.
 4. El sistema cambia el `stayStatus` de esa habitación a `CHECKED_OUT`.

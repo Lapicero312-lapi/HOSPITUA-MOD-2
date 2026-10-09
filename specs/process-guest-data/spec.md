@@ -40,19 +40,22 @@ movimiento), los guarda y, al exportar, selecciona los extranjeros y los empaque
 
 1. El **Módulo 1** notifica el **Check-In** de una habitación de una reserva (cola
    `m2.habitacion.checkin.queue`) con la `reservationRef` y la lista `guests` con **todos
-   los huéspedes** que ingresaron a esa habitación, cada uno con sus `GuestData` (`originPlace` y `destinationPlace` solo para extranjeros),
-   `movementType` `ENTRY` y su `movementDate`. El cambio de estado de la habitación y de la reserva lo
+   los huéspedes** que ingresaron a esa habitación, cada uno con sus `GuestData` (`originPlace` y `destinationPlace` solo para extranjeros).
+   La notificación trae el `movementType` `ENTRY` y el `movementDate` (`checkInDate`) a nivel de
+   mensaje, y valen para todos los huéspedes de la lista. El cambio de estado de la habitación y de la reserva lo
    ejecuta "Actualizar reservación".
 2. El Módulo 1 notifica el **Check-Out** de una habitación (cola `m2.habitacion.checkout.queue`) con la
    `reservationRef` y la lista `guests` con todos los huéspedes que salieron de esa
-   habitación, con `movementType` `DEPARTURE` y su `movementDate`.
+   habitación. La notificación trae el `movementType` `DEPARTURE` y el `movementDate`
+   (`checkOutDate`) a nivel de mensaje, y valen para todos los huéspedes de la lista.
 3. Por cada huésped de la lista, el sistema guarda sus datos **una sola vez** en `GuestData` (por
    reserva y número de documento) y registra un `MigratoryMovement` con el tipo y la fecha, sea
    colombiano o extranjero. En el Check-Out el huésped se identifica por su `documentNumber`: no se
    duplica ni se modifican sus datos, y solo se agrega el `DEPARTURE`. Hay un
    movimiento por cada combinación de reserva, huésped y tipo de movimiento: un huésped que ingresa y
    sale tiene dos, uno `ENTRY` y uno `DEPARTURE`, ligados al mismo `GuestData`.
-4. El sistema identifica como **extranjero** a todo huésped cuya `nationality` sea distinta de Colombia.
+4. El sistema identifica como **extranjero** a todo huésped cuya `nationality` sea distinta de
+   `Colombia` (el Módulo 1 escribe la nacionalidad de un colombiano exactamente así).
    Esta marca se deduce de la nacionalidad y no se guarda aparte.
 5. Solo un payload inutilizable (sin identificador de reserva o con caracteres maliciosos) se rechaza
    con **HTTP 400 (Bad Request)** sin registrar nada.
@@ -257,12 +260,14 @@ vista no permite modificar nada.
 
 - **FR-001**: El sistema debe recibir los datos de los huéspedes dentro de las notificaciones de
   Check-In (`m2.habitacion.checkin.queue`) y de Check-Out (`m2.habitacion.checkout.queue`) del Módulo 1,
-  como una lista `guests` con **todos** los huéspedes de la habitación, cada uno con sus `GuestData`,
-  su `movementType` (`ENTRY` en el Check-In, `DEPARTURE` en el Check-Out) y su `movementDate`.
+  como una lista `guests` con **todos** los huéspedes de la habitación, cada uno con sus `GuestData`.
+  La notificación trae, a nivel de mensaje, el `movementType` (`ENTRY` en el Check-In, `DEPARTURE` en
+  el Check-Out) y el `movementDate`, que valen para todos los huéspedes de la lista.
 - **FR-002**: El sistema debe guardar los datos de cada huésped de la lista en `GuestData` y registrar
   un `MigratoryMovement` por cada uno, sea colombiano o extranjero.
 - **FR-003**: El sistema debe identificar como extranjero a todo huésped cuya `nationality` sea
-  distinta de Colombia, sin guardar esa marca por separado.
+  distinta de `Colombia` (escrita exactamente así para los colombianos), sin guardar esa marca por
+  separado.
 - **FR-004**: El sistema debe dar por hecho que los datos de cada huésped llegan completos y correctos,
   porque el Módulo 1 los valida antes de enviarlos. El lugar de procedencia y el de destino solo son
   obligatorios para los extranjeros; para los colombianos pueden venir vacíos. No debe validarlos, completarlos ni corregirlos, y
@@ -317,8 +322,8 @@ vista no permite modificar nada.
 ### Key Entities *(include if feature involves data)*
 
 - **GuestData**: Datos de un huésped, colombiano o extranjero, capturados por el Módulo 1 y enviados
-  en la notificación de Check-In o de Check-Out (junto con el `movementType` y el `movementDate` de
-  cada huésped en la lista `guests`). El Módulo 2 los guarda **una sola vez** por reserva. Atributos:
+  en la lista `guests` de la notificación de Check-In o de Check-Out (cuyo `movementType` y
+  `movementDate` van a nivel de mensaje y valen para todos). El Módulo 2 los guarda **una sola vez** por reserva. Atributos:
   `reservationRef`, `firstName`, `lastName`, `documentType`, `documentNumber`, `birthDate`,
   `nationality`, `originPlace` (lugar de procedencia) y `destinationPlace` (lugar de destino). SIRE
   exige los dos últimos para los extranjeros; para los colombianos pueden estar vacíos. Identidad única: (`reservationRef`, `documentNumber`).
