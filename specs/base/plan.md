@@ -39,12 +39,18 @@ describe lo propio.
 - **API**: REST, documentada con OpenAPI (`@nestjs/swagger`)
 - **Frontend**: React + Vite + React Router + TanStack Query
 - **Version Control**: Git + GitHub (Gitflow)
-- **Performance Goals**: NEEDS CLARIFICATION (las specs fijan tiempos por operación: cancelación local
-< 200 ms, Check-In/Check-Out < 500 ms, recotización < 3 s, exportación SIRE < 2 s para 500 huéspedes,
-cierre del día < 1 min para 1000 reservas, página del listado < 1 s con hasta 50 000 reservas; falta un
-objetivo global de carga)
-- **Constraints**: NEEDS CLARIFICATION
-- **Scale/Scope**: NEEDS CLARIFICATION
+- **Performance Goals**: cualquier llamada REST responde en menos de 1 segundo en el 95 % de los
+  casos, con 5 recepcionistas y hasta 5 solicitudes por segundo de las OTA a la vez, salvo que la spec
+  del caso de uso fije otro tiempo. Se mantienen los tiempos de cada spec: cancelación local
+  < 200 ms, Check-In/Check-Out < 500 ms, recotización < 3 s, exportación SIRE < 2 s para 500
+  huéspedes, cierre del día < 1 min para 1000 reservas, página del listado < 1 s con hasta 50 000
+  reservas.
+- **Constraints**: tiempo máximo de espera de 1 s al Módulo 1 y de 3 s al Módulo 3 (si no responden,
+  nunca se asume disponibilidad ni tarifa); ningún error sale como 500; no se escriben datos
+  personales en los logs; el día operativo es el de Colombia (`America/Bogota`); disponible 24/7,
+  porque las OTA reservan a cualquier hora.
+- **Scale/Scope**: hasta 100 habitaciones en hasta 10 categorías, 5 recepcionistas a la vez, 5
+  agencias OTA conectadas, 300 reservas nuevas por día y 50 000 reservas guardadas en total.
 
 ### Decisiones de stack
 
