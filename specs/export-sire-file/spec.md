@@ -12,8 +12,8 @@ extranjeros que aloja, a través del sistema SIRE, con su información migratori
 movimiento de cada uno: entrada o salida. Cuando ese reporte se arma a mano, es lento, se presta a
 errores de formato que el sistema oficial rechaza, y es fácil omitir huéspedes o reportar dos veces
 al mismo, lo que expone al hotel a multas. El negocio necesita automatizar la generación del archivo:
-consolidar los datos de los huéspedes extranjeros que el Módulo 1 envía en el Check-In y en el
-Check-Out, y ofrecer a la **Recepcionista** una forma de filtrar por fechas y descargar el archivo
+seleccionar los huéspedes extranjeros entre los datos de todos los huéspedes que el Módulo 1 envía en
+el Check-In y en el Check-Out, y ofrecer a la **Recepcionista** una forma de filtrar por fechas y descargar el archivo
 `.TXT`, que ella misma envía después a Migración. El Módulo 2 no envía nada a Migración: Migración
 no es un actor del sistema.
 
@@ -22,9 +22,10 @@ no es un actor del sistema.
 1. La **Recepcionista** se autentica y abre la pantalla de exportación SIRE.
 2. La Recepcionista define el periodo del reporte (`startDate` y `endDate`), que se compara con la
    fecha de cada movimiento migratorio (`movementDate`).
-3. El sistema ejecuta "Procesar datos de huéspedes extranjeros" para obtener los movimientos
-   migratorios del periodo, tanto de entrada (`ENTRY`) como de salida (`DEPARTURE`). Todos están
-   completos, porque el Módulo 1 los envía ya procesados. El sistema no lleva
+3. El sistema ejecuta "Procesar datos de huéspedes" para obtener los movimientos del
+   periodo, tanto de entrada (`ENTRY`) como de salida (`DEPARTURE`), **seleccionando solo los de
+   huéspedes extranjeros** (nacionalidad distinta de Colombia). Los movimientos de huéspedes
+   colombianos se omiten. Todos están completos, porque el Módulo 1 los envía ya procesados. El sistema no lleva
    cuenta de lo que ya se descargó: el mismo periodo se puede descargar las veces que haga falta.
 4. El sistema genera el archivo de texto plano (`.TXT`) con las columnas, anchos y delimitadores de
    Migración Colombia. El archivo tiene una línea por cada movimiento de cada huésped, con toda su
@@ -79,10 +80,12 @@ controlado.
    - **Then** el archivo incluye solo su línea de entrada; su salida se reportará en la exportación
      del periodo en que ocurra
 
-3. **Scenario**: Grupo de varios extranjeros de una misma reserva
-   - **Given** una reserva con tres huéspedes extranjeros, cada uno con su movimiento completo
+3. **Scenario**: Grupo mixto de una misma reserva
+   - **Given** una reserva con tres huéspedes, dos extranjeros y uno colombiano, cada uno con su
+     movimiento completo
    - **When** se genera el archivo
-   - **Then** el archivo incluye una línea por cada uno de los tres, no solo la del titular
+   - **Then** el archivo incluye una línea por cada uno de los dos extranjeros, no solo la del titular, y
+     deja fuera al colombiano
 
 4. **Scenario**: Descarga repetida del mismo periodo
    - **Given** un periodo que la Recepcionista ya descargó antes
@@ -135,8 +138,9 @@ controlado.
   generar y descargar el archivo. El sistema no debe enviar el archivo a Migración.
 - **FR-002**: El sistema debe filtrar por un periodo obligatorio (`startDate` y `endDate`, máximo un
   año), aplicado a la `movementDate` de cada movimiento migratorio.
-- **FR-003**: El sistema debe incluir los movimientos `ENTRY` y `DEPARTURE` de todos los huéspedes
-  extranjeros de las reservas del periodo, no solo del titular, sin depender del estado actual de la
+- **FR-003**: El sistema debe seleccionar e incluir los movimientos `ENTRY` y `DEPARTURE` de todos los
+  huéspedes extranjeros (nacionalidad distinta de Colombia) de las reservas del periodo, sin incluir a
+  los colombianos, no solo del titular, sin depender del estado actual de la
   reserva.
 - **FR-004**: El sistema debe obtener los `MigratoryMovement` mediante "Procesar datos de huéspedes
   extranjeros". Todos están completos: el Módulo 1 los envía ya procesados.
@@ -183,8 +187,8 @@ controlado.
   exportación), `exportDate`,
   `exportKind` (`PERIOD` | `SINGLE_MOVEMENT`), `recordsCount`, `dateRangeStart`, `dateRangeEnd`
   y `processedBy` (la Recepcionista).
-- **MigratoryMovement**: Movimiento migratorio de un huésped extranjero en una estadía, del que se
-  toman todos los campos de cada línea del archivo. Siempre está completo. Atributos: `movementId`,
+- **MigratoryMovement**: Movimiento de un huésped en una estadía, del que se toman todos los campos
+  de cada línea del archivo. Solo entran al archivo los de huéspedes extranjeros. Siempre está completo. Atributos: `movementId`,
   `reservationRef`, `movementType` (`ENTRY` | `DEPARTURE`), `movementDate`, `firstName`, `lastName`,
   `documentType`, `documentNumber`, `birthDate`, `nationality`, `originPlace`, y `destinationPlace`.
 
