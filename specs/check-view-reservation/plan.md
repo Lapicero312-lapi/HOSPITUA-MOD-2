@@ -30,6 +30,28 @@ filtros construidos con TypeORM `QueryBuilder`; el envío al Módulo 1 usa el pa
 guarda en la misma transacción que el cambio y un publicador lo envía en orden), para no perder ni
 desordenar mensajes si RabbitMQ falla (FR-019, FR-020).
 
+## Resumen técnico e identificación
+
+| Dato | Valor |
+|---|---|
+| Caso de uso | Consultar reservas (`check-view-reservation`) |
+| Spec | [spec.md](./spec.md), historias 1 a 5 y FR-001 a FR-023 |
+| Actores | Recepcionista (pantalla); Módulo 1 (consulta por fechas y consumidor de la lista del día); Módulo 3 (consulta por referencia); procesos internos del Módulo 2 (búsqueda interna y cambios de la lista) |
+| Naturaleza | Solo lectura sobre `Reservation`; escribe únicamente sus propios mensajes (`daily_list_message`, `daily_sequence`) |
+
+**Disparadores** (cada capacidad de esta feature se activa de una forma distinta):
+
+| # | Capacidad | Disparador | Actor | Contrato |
+|---|---|---|---|---|
+| 1 | Listado y búsqueda | REST `GET /api/reservations` | Recepcionista | C1 |
+| 2 | Resumen del día | REST `GET /api/reservations/day-summary` | Recepcionista | C2 |
+| 3 | Detalle de una reserva | REST `GET /api/reservations/{reservationRef}` | Recepcionista | C3 |
+| 4 | Consulta para liquidar | REST `GET /api/reservations/{reservationRef}` | Módulo 3 | C4 |
+| 5 | Reservas por fechas | REST `GET /api/reservations` | Módulo 1 | C5 |
+| 6 | Lista del día | Tarea programada a las 00:00 (y al arrancar) | Sistema | Mensaje `reserva.lista-del-dia` |
+| 7 | Actualización de la lista | Llamada interna de otra feature, dentro de su transacción | Otras features del Módulo 2 | Mensaje `reserva.lista-del-dia.actualizacion` |
+| 8 | Publicación de pendientes | Después de confirmar una transacción y tarea cada 10 s | Sistema | Colas del Módulo 1 |
+
 ## Technical Context
 
 Todo el contexto técnico (lenguaje, framework, dependencias, almacenamiento, pruebas) es el del
@@ -514,7 +536,176 @@ Como ambos pasan por el mismo bloqueo, ningún cambio queda "entre medio": o ent
 `GenerateDailyList` es **idempotente**: si `list_generated` ya es `true`, no hace nada (historia 4,
 escenario 4). El respaldo definitivo es la restricción única `(operational_date, sequence_number)`.
 
+## Diagramas de secuencia
+
+### D1. Listado y búsqueda (C1)
+
+```mermaid
+sequenceDiagram
+    actor R as Recepcionista
+    participant C as ReservationsController
+    participant G as Guard de rol
+    participant U as ListReservations
+    participant S as ResolveSearchCriteria
+    participant Q as ReservationQueryPort
+    participant DB as PostgreSQL
+
+    R->>C: GET /api/reservations?search=...&status=...&page=...
+    C->>G: ¿rol RECEPTIONIST?
+    alt rol distinto
+        G-->>R: 403 FORBIDDEN
+    end
+    C->>C: Valida DTO (formatos, rango, orden, página)
+    alt parámetro inválido
+        C-->>R: 400 con el mensaje de FR-009 (no consulta la base)
+    end
+    C->>U: execute(filtros)
+    U->>S: resolver(search)
+    alt coincide un código
+        S->>Q: buscar por reservationRef y por externalConfirmationCode
+        Q->>DB: consulta exacta, sin distinguir mayúsculas
+        S-->>U: coincidencias (ignora los demás filtros)
+    else empieza con RSV- y no hay coincidencia
+        S-->>R: 400 RESERVATION_NOT_FOUND
+    else documento o nombre
+        S-->>U: criterio de titular + demás filtros
+    end
+    U->>Q: contar(totales) y ids de la página
+    Q->>DB: COUNT y página de 10 ordenada por startDate
+    U->>Q: cargar reservas, titular, habitaciones, agencia y migrationStatus de esos ids
+    Q->>DB: carga de la página
+    U-->>C: página, totales y mensaje si está vacía
+    C-->>R: 200
+```
+
+### D2. Lista del día a las 00:00
+
+```mermaid
+sequenceDiagram
+    participant J as DailyListJob
+    participant L as Bloqueo asesor
+    participant U as GenerateDailyList
+    participant DB as PostgreSQL
+    participant P as Publicador
+    participant MQ as RabbitMQ (m1.reservas.diarias.queue)
+    participant M1 as Módulo 1
+
+    J->>L: pg_try_advisory_lock (America/Bogota, 00:00)
+    alt otra instancia tiene el bloqueo
+        L-->>J: se salta esta ejecución
+    end
+    J->>U: execute(día operativo)
+    U->>DB: BEGIN
+    U->>DB: SELECT daily_sequence FOR UPDATE (la crea si no existe)
+    alt list_generated = true
+        U-->>J: no hace nada (ejecución repetida)
+    end
+    U->>DB: leer reservas ACTIVE con startDate = hoy
+    U->>DB: INSERT daily_list_message (LIST, secuencia 1, PENDING)
+    U->>DB: UPDATE daily_sequence (last_sequence = 1, list_generated = true)
+    U->>DB: COMMIT
+    U->>P: publicar pendientes del día
+    P->>MQ: reserva.lista-del-dia (confirmación de publicación)
+    P->>DB: publish_status = PUBLISHED
+    MQ-->>M1: lista del día
+```
+
+### D3. Actualización cuando otra feature cambia una reserva
+
+```mermaid
+sequenceDiagram
+    participant F as Otra feature (cancelar, modificar, crear, confirmar OTA)
+    participant R as DailyListChangeRecorder
+    participant D as DailyListMembership (dominio)
+    participant DB as PostgreSQL
+    participant P as Publicador
+    participant MQ as RabbitMQ
+    participant M1 as Módulo 1
+
+    F->>DB: BEGIN y cambio de la reserva
+    F->>R: record(tx, reservaAntes, reservaDespués)
+    R->>DB: SELECT daily_sequence de hoy FOR UPDATE
+    alt no existe o list_generated = false
+        R-->>F: no emite nada (la lista incluirá el cambio)
+    end
+    R->>D: evaluar(antes, después, díaOperativo)
+    D-->>R: ADDED, UPDATED, REMOVED(motivo) o nada
+    alt hay mensaje
+        R->>DB: last_sequence + 1 e INSERT daily_list_message (PENDING)
+    end
+    F->>DB: COMMIT (cambio y mensaje, juntos)
+    F->>P: publicar pendientes (después de confirmar)
+    P->>MQ: reserva.lista-del-dia.actualizacion
+    MQ-->>M1: actualización
+```
+
+### D4. Falla de publicación y reanudación en orden
+
+```mermaid
+sequenceDiagram
+    participant J as PublishPendingJob (cada 10 s)
+    participant DB as PostgreSQL
+    participant MQ as RabbitMQ
+
+    J->>DB: PENDING del día, por secuencia ascendente
+    J->>MQ: publicar secuencia 5
+    MQ--xJ: falla (servidor no disponible)
+    J->>DB: attempts + 1 (se detiene: no envía la 6)
+    Note over J,DB: Reintenta con espera creciente. La operación original no se revirtió.
+    J->>MQ: publicar secuencia 5 (RabbitMQ ya responde)
+    MQ-->>J: confirmado
+    J->>DB: PUBLISHED, y continúa con 6, 7…
+    Note over J,DB: Tras 10 intentos fallidos: FAILED, alerta en el log y los siguientes esperan detrás
+```
+
+### D5. Consulta de otros módulos (C4 y C5)
+
+```mermaid
+sequenceDiagram
+    participant X as Módulo 1 o Módulo 3
+    participant C as ReservationsController
+    participant G as Guard de rol
+    participant U as FindReservationsByStayRange / GetReservationForBilling
+    participant DB as PostgreSQL
+
+    X->>C: GET /api/reservations (M1) o GET /api/reservations/{ref} (M3), con credencial de servicio
+    C->>G: rol MODULE1 o MODULE3
+    alt sin token o rol sin permiso
+        G-->>X: 401 o 403
+    end
+    C->>U: execute(parámetros)
+    U->>DB: consulta de solo lectura
+    alt M3 y la reserva no existe
+        U-->>X: 404 RESERVATION_NOT_FOUND
+    else
+        U-->>X: 200 con la forma reducida (sin datos del huésped ni financieros)
+    end
+```
+
 ## Datos y consultas
+
+### Modelo de datos y entidades involucradas
+
+Esta feature **no cambia ningún estado**: lee las entidades del dominio y escribe solo sus mensajes.
+
+| Tabla | Uso | Qué se toca |
+|---|---|---|
+| `reservation` | Lectura | `reservation_ref`, `status`, `source`, `start_date`, `end_date`, `guest_count`, `notes`, `created_at`, `updated_at`, `external_confirmation_code`, `ota_id`, `commission_percentage` (solo para C4) |
+| `reservation_room` | Lectura | `room_id`, `room_number`, `category_room`, `guest_count`, `stay_status`, `room_gross_amount` y `quote_id` (solo `DIRECT`), conteos de Check-In y Check-Out |
+| `guest` | Lectura | Titular: nombres, documento, nacionalidad, contacto |
+| `ota` | Lectura | `name` para mostrar la agencia y generar `source` |
+| `cancellation` | Lectura | Solo en el detalle de una reserva cancelada por solicitud explícita |
+| `guest_data`, `migratory_movement` | Lectura | Solo para `migrationStatus` (`EXISTS` de movimientos de extranjeros) |
+| `daily_list_message` | Escritura | Un mensaje por lista y por actualización, con su `payload` y su estado de publicación |
+| `daily_sequence` | Escritura | Una fila por día operativo (nueva en este plan) |
+
+**Estados y transiciones**: ninguna. El `Reservation.status` y el `stayStatus` solo se leen. Lo único con
+ciclo de vida propio es el mensaje:
+
+```text
+PENDING --publicado--> PUBLISHED
+PENDING --10 intentos fallidos--> FAILED --reencolado a mano--> PENDING
+```
 
 ### Índices y extensiones (migraciones en SQL, decisión D11)
 
@@ -557,6 +748,62 @@ Función pura en el dominio: `deriveMigrationStatus(status, hasForeignMovement)`
 
 `hasForeignMovement` se consulta una sola vez por página con `EXISTS` sobre `migratory_movement` unido a
 `guest_data` (nacionalidad distinta de `Colombia`). No se guarda.
+
+## Reglas de validación y manejo de errores
+
+Todo error sale con el cuerpo `{ "errorCode", "message", "timestamp", "path" }` y **siempre 4xx**. El
+filtro global del plan base traduce cualquier excepción inesperada a un 4xx controlado y deja el detalle
+en el log, sin datos personales ni de infraestructura. **Esta feature nunca responde 500.**
+
+### Errores del cliente (REST)
+
+| Situación | HTTP | `errorCode` | Dónde se detecta |
+|---|---|---|---|
+| Sin token o token inválido | 401 | `UNAUTHENTICATED` | Guard de autenticación |
+| Rol sin permiso (incluida la `OTA`) | 403 | `FORBIDDEN` | Guard de rol |
+| Filtro con formato inválido (estado, canal, fechas, orden, página, código, nombre) | 400 | Los de la tabla de C1 | DTO, antes de consultar |
+| `RSV-…` sin coincidencia, o referencia inexistente en el detalle | 400 | `RESERVATION_NOT_FOUND` | `ResolveSearchCriteria` y `GetReservationDetail` |
+| Referencia inexistente en la consulta del Módulo 3 | 404 | `RESERVATION_NOT_FOUND` | `GetReservationForBilling` |
+| Parámetro ajeno con rol `MODULE1` | 400 | `UNSUPPORTED_PARAMETER` | DTO del Módulo 1 |
+| `roomId` con formato inválido | 400 | `INVALID_ROOM_ID` | DTO del Módulo 1 |
+| Agencia sin canal `OTA` | 400 | `AGENCY_REQUIRES_OTA_CHANNEL` | DTO |
+| Texto con caracteres de inyección en cualquier filtro | 400 | `INVALID_RESERVATION_CODE` | Validación de formato; nunca llega a la base |
+
+**Sin resultados no es un error**: responde 200 con la lista vacía y el mensaje (FR-010).
+
+### Errores internos
+
+| Situación | Respuesta | Qué más pasa |
+|---|---|---|
+| Excepción inesperada o base de datos caída durante una consulta | 400 `REQUEST_NOT_PROCESSED`, "No fue posible procesar la solicitud." | Se registra con el identificador de correlación; sin datos personales |
+| Tiempo agotado en una consulta | 400 `REQUEST_NOT_PROCESSED` | Se registra la duración |
+
+### Errores de la cola (no hay cliente al que responder)
+
+| Situación | Comportamiento |
+|---|---|
+| RabbitMQ no disponible al publicar | El mensaje queda `PENDING`; reintento con espera creciente (5 s, 15 s, 45 s, 2 min, 5 min); la operación original **no** se revierte |
+| 10 intentos fallidos | `FAILED`, alerta en el log (nivel `error`, con `messageId`), y los mensajes siguientes del día esperan detrás |
+| Publicación sin confirmación del broker en 5 s | Se cuenta como intento fallido |
+| Dos instancias generan la lista a la vez | Una toma el bloqueo asesor y la otra se salta; la restricción única del plan base es el respaldo |
+| Reinicio a las 00:00 | La recuperación al arrancar genera la lista si falta |
+
+## Integraciones externas
+
+Esta feature **no hace ninguna llamada síncrona a otros módulos**: ni al Módulo 1 ni al Módulo 3. Solo
+publica por cola y responde consultas. No necesita `Module1Port` ni `Module3Port`.
+
+| Módulo | Dirección | Mecanismo | Contrato | Fallo o tiempo agotado |
+|---|---|---|---|---|
+| Módulo 1 | M2 → M1 | Cola `m1.reservas.diarias.queue` (`reserva.lista-del-dia` y `reserva.lista-del-dia.actualizacion`) | "Mensajería hacia el Módulo 1" | Reintento en orden, `FAILED` con alerta y bloqueo de los siguientes |
+| Módulo 1 | M1 → M2 | REST `GET /api/reservations` con `dateFrom`, `dateTo` y `roomId` | C5 | Es una consulta que ellos hacen; el Módulo 2 responde 4xx controlado y nunca 500 |
+| Módulo 3 | M3 → M2 | REST `GET /api/reservations/{reservationRef}` | C4 | Idem; 404 si no existe |
+
+**Compromisos con cada módulo**
+
+- **Módulo 1**: descarta `messageId` repetidos, aplica en orden por `sequenceNumber`, no responde.
+- **Módulo 3**: llama con credencial de servicio (rol `MODULE3`) y espera 404 si la reserva no existe.
+- **Autenticación de servicio** de ambos: definida en el plan base (JWT de servicio a servicio).
 
 ## Arquitectura (capas del plan base)
 
@@ -758,6 +1005,42 @@ Cada uno se puede cambiar sin romper el resto; se anotan para que no pasen desap
 | 3 | Tipo de `otaCommissionPercentage` en la respuesta C4 (número o texto) y su escala (0 a 100) | Módulo 3 |
 | 4 | Campos exactos que espera el Módulo 1 en C5 | Módulo 1 |
 | 5 | Autenticación de servicio de `MODULE1` y `MODULE3` (credencial, caducidad) | Módulos 1 y 3 |
+
+## Trazabilidad: requisito → componente → tarea
+
+| Requisito | Componente | Tarea |
+|---|---|---|
+| FR-001, FR-003a | `ListReservations`, `ReservationQueryPort` (paginación de 10 y orden) | T005, T009 |
+| FR-002, FR-003 | Filtros de estado y de cruce de fechas en `ReservationQueryPort` | T005, T009 |
+| FR-004 | `ResolveSearchCriteria` (documento, nombre, canal, agencia) | T006, T020 |
+| FR-005 | Fila del listado y `actions` | T010 |
+| FR-005a | `GetDaySummary` y `GET /api/reservations/day-summary` | T012 |
+| FR-005b | `deriveMigrationStatus` | T003, T010 |
+| FR-006 | `GetReservationDetail` y búsqueda por código | T015, T016 |
+| FR-007, FR-008 | Puerto `ReservationLookup` (solo lectura) | T016 |
+| FR-009, FR-010 | DTO, mensajes literales y respuesta vacía | T007, T011, T017, T021 |
+| FR-011 | Guards por rol | T008 |
+| FR-012, FR-013 | `GenerateDailyList`, `DailyListJob` | T023, T024 |
+| FR-014, FR-015 | `ReservationProjection` | T004 |
+| FR-016, FR-017 | `DailyListMembership`, `DailyListChangeRecorder` | T003, T028 |
+| FR-018, FR-019, FR-020 | `daily_sequence`, publicador y reintentos | T002, T025, T026, T029 |
+| FR-021 | La feature no cambia ningún estado | T030 |
+| FR-022 | `GetReservationForBilling` (C4) | T032 |
+| FR-023 | `FindReservationsByStayRange` (C5) | T033 |
+| NFR-001, NFR-002 | Índices y prueba de carga | T001, T036 |
+| NFR-003 | Logs sin datos personales | T035 |
+| NFR-004, NFR-005 | Generación de la lista y publicación inmediata | T023, T029, T036 |
+| SC-001 a SC-008 | Las pruebas por escenario | T013, T018, T022, T027, T030 |
+
+## Checklist de auto-revisión
+
+- [x] Ningún `spec.md` fue modificado; los desajustes están en "Puntos que este plan propone" y "Puntos abiertos".
+- [x] Cada contrato REST tiene método, ruta, parámetros, respuesta de ejemplo, roles y errores.
+- [x] Los mensajes de cola son los acordados con el Módulo 1 (planos, sin envoltura).
+- [x] Todo error es 4xx; no hay ninguna respuesta 500.
+- [x] Cada escenario Gherkin tiene su prueba y cada FR su componente y su tarea.
+- [x] La feature no hace llamadas síncronas a otros módulos.
+- [ ] Revisión del plan por el equipo (pendiente).
 
 ## Notes
 
