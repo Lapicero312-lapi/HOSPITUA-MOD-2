@@ -366,8 +366,9 @@ de negocio".
    `updatedAt`): actualiza fechas, `guest_count` (la suma), `notes`; inserta, borra y actualiza
    habitaciones con sus tarifas y copias de fechas (D3); actualiza el titular; y llama a
    `DailyListChangeRecorder`. Una violación de la restricción anti-solape se traduce en `NO_AVAILABILITY`.
-6. **Titular**: corrige el `Guest` de la reserva (todos sus datos salvo `nationality`). Ver "Puntos
-   abiertos" sobre un titular que tiene otras reservas.
+6. **Titular**: corrige el `guest` de **esta** reserva (cada reserva tiene su propio titular, plan base),
+   con todos sus datos salvo `nationality`. No afecta a otras reservas ni a `guest_data`: la modificación
+   solo se permite antes del Check-In.
 
 ### Check-In (FR-015)
 
@@ -862,14 +863,13 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
 
 | # | Pendiente | Con quién |
 |---|---|---|
-| 1 | **Titular con otras reservas**: el spec permite corregir los datos del `Guest` titular. Como un `Guest` puede ser titular de varias reservas, corregirlo cambia sus datos en todas. Hay que decidir si es lo deseado o si se debe crear un `Guest` nuevo para esa reserva; y qué pasa si el nuevo documento ya pertenece a otro `Guest` | Equipo del Módulo 2 |
-| 2 | **Modificación por la OTA**: el spec la menciona ("la Ota por su API") pero las rutas las definirá el caso de uso futuro "Configurar OTA". Hasta entonces este plan solo cubre la modificación de la Recepcionista | Equipo del Módulo 2 |
-| 3 | **Hora del cierre del día**: 00:00:30 contra "23:59" del plan base | Equipo del Módulo 2 |
-| 4 | **Habitaciones `NOT_ARRIVED` en una reserva `IN_PROGRESS`**: el spec dice que se quitan de la lista del día, pero la reserva ya no está en la lista (está `IN_PROGRESS`), así que no hay aviso. Confirmar que es lo esperado | Módulo 1 |
-| 5 | El Módulo 1 debería conservar el mismo `messageId` en los reintentos y no reiniciar el `sequenceNumber` (FR-023); confirmar | Módulo 1 |
-| 6 | El spec menciona en FR-003 un texto confuso ("sin mostrar la tarifa nueva"): se interpretó como "sin mostrar la tarifa anterior", coherente con el resto del spec y con `calculate-dynamic-rate` | Equipo del Módulo 2 |
-| 7 | El wireframe tiene el aviso de llegada tardía (`lateArrivalNotice`), que este spec ya no incluye. Se alinea cuando se retome el wireframe | Equipo del Módulo 2 |
-| 8 | `reservation_audit` aparecía en versiones anteriores del plan base y ya no está; este spec no pide una auditoría de las modificaciones | Equipo del Módulo 2 |
+| 1 | **Modificación por la OTA**: el spec la menciona ("la Ota por su API") pero las rutas las definirá el caso de uso futuro "Configurar OTA". Hasta entonces este plan solo cubre la modificación de la Recepcionista | Equipo del Módulo 2 |
+| 2 | **Hora del cierre del día**: 00:00:30 contra "23:59" del plan base | Equipo del Módulo 2 |
+| 3 | **Habitaciones `NOT_ARRIVED` en una reserva `IN_PROGRESS`**: el spec dice que se quitan de la lista del día, pero la reserva ya no está en la lista (está `IN_PROGRESS`), así que no hay aviso. Confirmar que es lo esperado | Módulo 1 |
+| 4 | El Módulo 1 debería conservar el mismo `messageId` en los reintentos y no reiniciar el `sequenceNumber` (FR-023); confirmar | Módulo 1 |
+| 5 | El spec menciona en FR-003 un texto confuso ("sin mostrar la tarifa nueva"): se interpretó como "sin mostrar la tarifa anterior", coherente con el resto del spec y con `calculate-dynamic-rate` | Equipo del Módulo 2 |
+| 6 | El wireframe tiene el aviso de llegada tardía (`lateArrivalNotice`), que este spec ya no incluye. Se alinea cuando se retome el wireframe | Equipo del Módulo 2 |
+| 7 | `reservation_audit` aparecía en versiones anteriores del plan base y ya no está; este spec no pide una auditoría de las modificaciones | Equipo del Módulo 2 |
 
 ## Notes
 
