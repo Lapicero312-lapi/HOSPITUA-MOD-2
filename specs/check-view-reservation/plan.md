@@ -457,7 +457,10 @@ La regla vive en el **dominio** (`DailyListMembership`), no en cada caso de uso,
 `DailyListChangeRecorder`. Los demás casos de uso lo llaman **dentro de su transacción**, con la reserva
 antes y después del cambio.
 
-Una reserva **pertenece a la lista** si `startDate` es el día operativo en curso y `status` es `ACTIVE`.
+Una reserva **pertenece a la lista** si `startDate` es el día operativo y `status` es `ACTIVE`. El día
+operativo es el **en curso**, salvo que quien llama indique otro: el cierre del día de `update-reservation`
+corre después de las 00:00 y pasa la fecha del día que acaba de terminar, para que el `REMOVED` por
+`NO_SHOW` use la secuencia y la `operationalDate` de la lista a la que pertenecía.
 
 | Antes | Después | Resultado |
 |---|---|---|
@@ -623,8 +626,8 @@ sequenceDiagram
     participant M1 as Módulo 1
 
     F->>DB: BEGIN y cambio de la reserva
-    F->>R: record(tx, reservaAntes, reservaDespués)
-    R->>DB: SELECT daily_sequence de hoy FOR UPDATE
+    F->>R: record(tx, reservaAntes, reservaDespués, operationalDate opcional)
+    R->>DB: SELECT daily_sequence del día operativo FOR UPDATE
     alt no existe o list_generated = false
         R-->>F: no emite nada (la lista incluirá el cambio)
     end
@@ -826,7 +829,8 @@ arquitectura).
 
 **Integración con otros casos de uso**: `cancel-reservation`, `update-reservation`,
 `generate-direct-reservation` y `generate-ota-reservation` llaman a `DailyListChangeRecorder.record(tx,
-before, after)` dentro de su transacción. Cada uno de esos planes debe listar esa llamada.
+before, after, operationalDate?)` dentro de su transacción (`operationalDate` es opcional y por defecto
+es el día operativo en curso). Cada uno de esos planes debe listar esa llamada.
 
 ## Project Structure
 
