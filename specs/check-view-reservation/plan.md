@@ -1032,16 +1032,6 @@ Cada uno se puede cambiar sin romper el resto; se anotan para que no pasen desap
 | NFR-004, NFR-005 | Generación de la lista y publicación inmediata | T023, T029, T036 |
 | SC-001 a SC-008 | Las pruebas por escenario | T013, T018, T022, T027, T030 |
 
-## Checklist de auto-revisión
-
-- [x] Ningún `spec.md` fue modificado; los desajustes están en "Puntos que este plan propone" y "Puntos abiertos".
-- [x] Cada contrato REST tiene método, ruta, parámetros, respuesta de ejemplo, roles y errores.
-- [x] Los mensajes de cola son los acordados con el Módulo 1 (planos, sin envoltura).
-- [x] Todo error es 4xx; no hay ninguna respuesta 500.
-- [x] Cada escenario Gherkin tiene su prueba y cada FR su componente y su tarea.
-- [x] La feature no hace llamadas síncronas a otros módulos.
-- [ ] Revisión del plan por el equipo (pendiente).
-
 ## Notes
 
 - `[P]` marca tareas paralelizables; `[US#]` las liga a su historia de usuario.
