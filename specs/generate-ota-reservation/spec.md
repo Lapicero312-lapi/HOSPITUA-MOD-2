@@ -25,18 +25,18 @@ Módulo 1. El Módulo 2 no aparta ni libera habitaciones: el Módulo 1 decide qu
    de estadía (comunes a toda la reserva), una lista de entre 1 y 10 habitaciones (cada una con un
    `roomId` específico o solo con la `categoryRoom` deseada, y su `guestCount`), los datos del
    `Guest` titular (`firstName`, `lastName`, `documentType`, `documentNumber`, `nationality` y contacto), las observaciones opcionales (`notes`), el valor bruto
-   total del hospedaje (`totalAmount`, de todas las habitaciones) y el `externalConfirmationCode` de
+   total del hospedaje (`totalAmount`, de todas las habitaciones) con su moneda (`currency`) y el `externalConfirmationCode` de
    la agencia.
 2. El sistema valida la estructura JSON y que estén presentes todos los campos obligatorios,
    incluido el `externalConfirmationCode`, y valida que cada habitación traiga un `guestCount` de al
    menos 1.
-3. El sistema ejecuta "Verificar disponibilidades" para cada habitación: cruza las fechas contra las
-   reservas locales y consulta al Módulo 1 el calendario de mantenimientos y el inventario en tiempo
-   real. Para las habitaciones pedidas solo por categoría, asigna una `Room` disponible de esa
+3. El sistema ejecuta "Verificar disponibilidades" para cada habitación: obtiene del Módulo 1 las
+   habitaciones vendibles de la categoría, cruza las fechas contra las reservas locales y consulta al
+   Módulo 1 el calendario de mantenimientos. Para las habitaciones pedidas solo por categoría, asigna una `Room` disponible de esa
    categoría (la de menor `roomNumber`), sin repetir una habitación ya asignada a la misma reserva.
    Con las habitaciones asignadas, valida que el `guestCount` de cada habitación no supere su `maxCapacity`.
 4. Si todas las habitaciones están disponibles, el sistema ejecuta "Registrar confirmación y comisión de ota",
-   que calcula el `commissionAmount` con la fórmula `totalAmount × commissionPercentage`, con el
+   que calcula el `commissionAmount` con la fórmula `totalAmount × commissionPercentage / 100`, con el
    porcentaje configurado para esa agencia.
 5. El sistema registra el valor bruto recibido tal cual, sin recalcular la tarifa: en este flujo no
    interviene "Calcular tarifa dinámica".
@@ -180,7 +180,7 @@ crea una reserva y que todos devuelven una respuesta JSON de error estructurada.
 - **FR-003a**: El sistema debe exigir entre 1 y 10 habitaciones distintas y un `guestCount` entero
   por habitación, mayor o igual a 1 y menor o igual a su `maxCapacity`; `notes` es opcional, con máximo 500 caracteres.
 - **FR-004**: Al persistir la reserva, el sistema debe registrar `source` como `OTA` y calcular la
-  comisión pactada (`commissionAmount`) con la fórmula `totalAmount × commissionPercentage`,
+  comisión pactada (`commissionAmount`) con la fórmula `totalAmount × commissionPercentage / 100`,
   mediante "Registrar confirmación y comisión de ota".
 - **FR-005**: El sistema debe registrar el valor bruto enviado por la OTA en `totalAmount` sin
   recalcularlo y sin invocar "Calcular tarifa dinámica".
@@ -207,7 +207,7 @@ crea una reserva y que todos devuelven una respuesta JSON de error estructurada.
 - **Reservation**: Contrato de reserva registrado desde el canal externo. Atributos:
   `reservationRef`,
   `guestRef`, `guestCount` (suma de los de sus habitaciones), `startDate`, `endDate`, `totalAmount` (valor bruto total de todas las
-  habitaciones enviado por la OTA), `commissionAmount`, `externalConfirmationCode`, `notes`,
+  habitaciones enviado por la OTA), `currency` (moneda del `totalAmount`, enviada por la OTA), `commissionAmount`, `externalConfirmationCode`, `notes`,
   `source` (`OTA`), `createdAt`,
   y `status` con estados permitidos: `PENDING`, `ACTIVE`,
   `IN_PROGRESS`, `COMPLETED`, `CANCELLED`,

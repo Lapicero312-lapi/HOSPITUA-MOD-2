@@ -2,7 +2,8 @@
 
 **Date**: 2026-10-09  
 **Plan base**: [../base/plan.md](../base/plan.md)  
-**Spec**: [spec.md](./spec.md)
+**Spec**: [spec.md](./spec.md)  
+**Guía**: [../base/guia-planes-por-caso-de-uso.md](../base/guia-planes-por-caso-de-uso.md)
 
 ## Summary
 
@@ -84,10 +85,10 @@ Un único cuadro de búsqueda (`search`) cubre código de reserva, código de la
 {
   "items": [
     {
-      "reservationRef": "RSV-2026-00421",
+      "reservationRef": "RSV-3F9A1C7B",
       "externalConfirmationCode": null,
       "guest": { "fullName": "Valentina Ospina", "documentNumber": "1144093552" },
-      "rooms": [ { "roomNumber": "204", "categoryRoom": "Superior" } ],
+      "rooms": [ { "roomNumber": "204", "categoryRoom": "DOBLE" } ],
       "source": "DIRECT",
       "otaName": null,
       "startDate": "2026-10-23",
@@ -151,7 +152,7 @@ fechas (formato, completitud, orden, 366 días) → `order` → `page` → longi
 
 ```json
 {
-  "reservationRef": "RSV-2026-00421",
+  "reservationRef": "RSV-3F9A1C7B",
   "status": "ACTIVE",
   "source": "DIRECT",
   "externalConfirmationCode": null,
@@ -165,7 +166,7 @@ fechas (formato, completitud, orden, 366 días) → `order` → `page` → longi
   "rooms": [
     {
       "roomNumber": "204",
-      "categoryRoom": "Superior",
+      "categoryRoom": "DOBLE",
       "guestCount": 3,
       "roomGrossAmount": { "amount": "713000.00", "currency": "COP" },
       "stayStatus": "EXPECTED",
@@ -199,7 +200,7 @@ de uso `GetReservationForBilling` y entrega solo esto:
 
 ```json
 {
-  "reservationRef": "RSV-2026-00421",
+  "reservationRef": "RSV-3F9A1C7B",
   "channel": "DIRECT",
   "quoteIds": ["8b1f6c0e-7d1a-4c0b-9d5e-2f4f3b6a1c11"]
 }
@@ -207,7 +208,7 @@ de uso `GetReservationForBilling` y entrega solo esto:
 
 ```json
 {
-  "reservationRef": "RSV-2026-00425",
+  "reservationRef": "RSV-8D02E5A4",
   "channel": "OTA",
   "quoteIds": [],
   "otaId": "ota-booking",
@@ -245,11 +246,11 @@ Cualquier otro parámetro (`search`, `status`, `source`, `page`...) con este rol
 {
   "items": [
     {
-      "reservationRef": "RSV-2026-00421",
+      "reservationRef": "RSV-3F9A1C7B",
       "status": "ACTIVE",
       "startDate": "2026-10-23",
       "endDate": "2026-10-25",
-      "rooms": [ { "roomId": "a4c2…", "roomNumber": "204", "categoryRoom": "Superior" } ]
+      "rooms": [ { "roomId": "a4c2…", "roomNumber": "204", "categoryRoom": "DOBLE" } ]
     }
   ]
 }
@@ -295,102 +296,131 @@ Nunca se envían documento y nombre a la vez: el paso 5 o el 6, no ambos.
 ## Mensajería hacia el Módulo 1
 
 Cola de salida única del Módulo 2 (la define el plan base): exchange `hospitua.events`, cola
-`m1.reservas.diarias.queue`, dos routing keys por el mismo canal y proceso para conservar el orden.
+`m1.reservas.diarias.queue`, dos routing keys por el mismo canal y proceso para conservar el orden. Este
+es el contrato **ya acordado con el equipo del Módulo 1**; el plan lo adopta tal cual.
 
-| Routing key | `eventType` | Cuándo | `sequenceNumber` |
+| Routing key | Mensaje | Cuándo | `sequenceNumber` |
 |---|---|---|---|
-| `reserva.lista-del-dia` | `DAILY_RESERVATION_LIST` | Una vez por día operativo a las 00:00 | Siempre `1` |
-| `reserva.lista-del-dia.actualizacion` | `DAILY_RESERVATION_UPDATE` | Cada cambio confirmado que afecta la lista | `2, 3, 4…` dentro del día operativo |
+| `reserva.lista-del-dia` | Lista del día | Una vez por día operativo a las 00:00 | Siempre `1` |
+| `reserva.lista-del-dia.actualizacion` | Actualización `ADDED`, `UPDATED` o `REMOVED` | Cada cambio confirmado que afecta la lista | `2, 3, 4…` dentro del día operativo |
 
-### Envoltura (igual para los dos)
+- Los mensajes son **JSON planos**, sin envoltura: el `messageId` (UUIDv4) es la única clave para
+  descartar duplicados y el `sequenceNumber` marca el orden.
+- Las fechas sin hora van como `AAAA-MM-DD`; las fechas con hora, en ISO 8601 con zona horaria
+  (`updatedAt` con microsegundos, porque es el control de concurrencia). Los valores de los ejemplos son
+  ilustrativos.
+- La lista y sus actualizaciones llevan el detalle de FR-014 de la spec. El campo `source` viaja como
+  `DIRECTA` para las reservas directas o con el nombre de la agencia (por ejemplo `BOOKING`) para las
+  `OTA`.
 
-```json
-{
-  "eventId": "UUIDv4",
-  "eventType": "DAILY_RESERVATION_LIST",
-  "occurredAt": "2026-10-09T05:00:00Z",
-  "sourceModule": "MODULE_2",
-  "payload": { "messageId": "UUIDv4", "sequenceNumber": 1, "operationalDate": "2026-10-09", "...": "..." }
-}
-```
+### Lista del día (FR-013, FR-014)
 
-`messageId` y `sequenceNumber` van **dentro** de `payload`, como en los mensajes que recibe el
-Módulo 2. El `eventId` es distinto del `messageId`: el `eventId` identifica el intento de publicación y
-el `messageId` al mensaje de negocio, que no cambia aunque se reintente.
-
-### Payload de `DAILY_RESERVATION_LIST` (FR-013, FR-014)
+Routing key `reserva.lista-del-dia`, una vez por día operativo a las 00:00:
 
 ```json
 {
-  "messageId": "6f1c2a9e-…",
+  "messageId": "UUIDv4",
   "sequenceNumber": 1,
   "operationalDate": "2026-10-09",
-  "generatedAt": "2026-10-09T00:00:03-05:00",
-  "totalReservations": 3,
-  "totalRooms": 4,
-  "totalGuests": 8,
+  "generatedAt": "2026-10-09T00:00:02-05:00",
+  "totalReservations": 1,
+  "totalRooms": 1,
+  "totalGuests": 2,
   "reservations": [
     {
-      "reservationRef": "RSV-2026-00421",
+      "reservationRef": "RSV-3F9A1C7B",
       "status": "ACTIVE",
       "source": "DIRECTA",
-      "externalConfirmationCode": null,
       "startDate": "2026-10-09",
-      "endDate": "2026-10-11",
-      "nights": 2,
-      "guestCount": 3,
-      "notes": "Llegada después de las 8 p. m.",
-      "updatedAt": "2026-10-08T17:42:10-05:00",
+      "endDate": "2026-10-12",
+      "guestCount": 2,
+      "notes": "Llegada tarde",
+      "updatedAt": "2026-10-08T15:42:10.123456-05:00",
       "rooms": [
-        { "roomId": "a4c2…", "roomNumber": "204", "categoryRoom": "Superior", "guestCount": 3 }
+        { "roomId": "uuid", "roomNumber": "201", "categoryRoom": "DOBLE", "guestCount": 2 }
       ],
       "guest": {
-        "guestRef": "g-0192", "firstName": "Valentina", "lastName": "Ospina", "fullName": "Valentina Ospina",
-        "documentType": "CC", "documentNumber": "1144093552", "nationality": "Colombia",
-        "contactPhone": "+57 300 000 0000", "contactEmail": null
+        "guestRef": "uuid",
+        "firstName": "Ana",
+        "lastName": "Pérez",
+        "fullName": "Ana Pérez",
+        "documentType": "CC",
+        "documentNumber": "123",
+        "nationality": "Colombia",
+        "contactPhone": "+57 300 000 0000",
+        "contactEmail": "ana@correo.com"
       }
     }
   ]
 }
 ```
 
+- Una reserva `OTA` lleva además `externalConfirmationCode`, y su `source` es el nombre de la agencia.
+- Si no hay reservas, la lista se envía con `"reservations": []` y los tres totales en `0`.
 - Solo reservas `ACTIVE` con `startDate` igual al día operativo. Las `PENDING` de OTA no viajan; las que
   ya están `IN_PROGRESS` por una llegada anticipada tampoco.
-- Se envía **aunque no haya reservas**: `reservations: []` y los tres totales en `0`.
 - `totalGuests` es la suma de los `guestCount` de las reservas; `totalRooms`, el número de habitaciones.
-- `source` viaja como `DIRECTA` o con el nombre de la agencia en mayúsculas (`BOOKING`, `EXPEDIA`). La
-  regla exacta de conversión desde `Ota.name` está en "Puntos abiertos".
-- El teléfono y el correo del titular viajan `null` si no existen; no impiden el envío.
-- **Nunca** `grossAmount`, comisión ni tarifas (FR-015).
+- Un teléfono o correo que no exista viaja `null`; no impide el envío.
+- **Nunca** `grossAmount`, comisión ni tarifas (FR-015), ni número de noches.
 
-### Payload de `DAILY_RESERVATION_UPDATE` (FR-016)
+### Actualización `ADDED` o `UPDATED` (FR-016)
 
-`ADDED` y `UPDATED` llevan el detalle completo y vigente de la reserva (el mismo bloque de la lista);
-`REMOVED` solo la referencia y el motivo:
+Routing key `reserva.lista-del-dia.actualizacion`. El campo `reservation` lleva el detalle completo y
+vigente de FR-014, no solo lo que cambió:
 
 ```json
 {
-  "messageId": "b2d7…",
-  "sequenceNumber": 3,
+  "messageId": "UUIDv4",
+  "sequenceNumber": 2,
   "operationalDate": "2026-10-09",
   "updateType": "UPDATED",
-  "reservationRef": "RSV-2026-00421",
-  "reservation": { "…": "mismo detalle de la lista" },
-  "removalReason": null,
-  "occurredAt": "2026-10-09T10:15:20-05:00"
+  "occurredAt": "2026-10-09T09:15:00-05:00",
+  "reservationRef": "RSV-3F9A1C7B",
+  "reservation": {
+    "reservationRef": "RSV-3F9A1C7B",
+    "status": "ACTIVE",
+    "source": "DIRECTA",
+    "startDate": "2026-10-09",
+    "endDate": "2026-10-13",
+    "guestCount": 2,
+    "notes": "Llegada tarde",
+    "updatedAt": "2026-10-09T09:15:00.000000-05:00",
+    "rooms": [
+      { "roomId": "uuid", "roomNumber": "201", "categoryRoom": "DOBLE", "guestCount": 2 }
+    ],
+    "guest": {
+      "guestRef": "uuid",
+      "firstName": "Ana",
+      "lastName": "Pérez",
+      "fullName": "Ana Pérez",
+      "documentType": "CC",
+      "documentNumber": "123",
+      "nationality": "Colombia",
+      "contactPhone": "+57 300 000 0000",
+      "contactEmail": "ana@correo.com"
+    }
+  }
 }
 ```
+
+### Actualización `REMOVED` (FR-016)
+
+Misma routing key. No lleva `reservation`; `removalReason` es `CANCELLED`, `DATE_CHANGED` o `NO_SHOW`:
 
 ```json
 {
-  "messageId": "c9e1…", "sequenceNumber": 4, "operationalDate": "2026-10-09",
-  "updateType": "REMOVED", "reservationRef": "RSV-2026-00421",
-  "reservation": null, "removalReason": "CANCELLED", "occurredAt": "2026-10-09T11:02:41-05:00"
+  "messageId": "UUIDv4",
+  "sequenceNumber": 3,
+  "operationalDate": "2026-10-09",
+  "updateType": "REMOVED",
+  "occurredAt": "2026-10-09T23:59:00-05:00",
+  "reservationRef": "RSV-8D02E5A4",
+  "removalReason": "NO_SHOW"
 }
 ```
 
-`removalReason`: `CANCELLED`, `DATE_CHANGED` o `NO_SHOW`. Una actualización pendiente de un día anterior se
-envía con la `operationalDate` a la que pertenece, no con la del momento del envío.
+Una actualización pendiente de un día anterior se envía con la `operationalDate` a la que pertenece, no
+con la del momento del envío.
 
 ### Contrato con el Módulo 1 (lo que debe garantizar quien consume)
 
@@ -426,27 +456,22 @@ lista se arme con los datos vigentes (caso borde del spec).
 
 ## Secuencia, orden y fallas de publicación
 
-### Tablas (agregan una fila al modelo de datos base)
+### Tablas
 
-`daily_list_message` (ya prevista en el plan base) guarda cada mensaje antes de publicarlo:
+`daily_list_message` ya está definida en el plan base: guarda cada mensaje con su `payload` antes de
+publicarlo, con `message_kind` (`LIST` o `UPDATE`), `update_type`, `reservation_id`, `removal_reason`,
+`publish_status` (`PENDING`, `PUBLISHED`, `FAILED`) y `attempts`. Esta feature la usa tal cual: el
+único parcial `(operational_date) WHERE message_kind = 'LIST'` es el respaldo de que la lista sale una
+sola vez por día, y el índice `(publish_status, operational_date, sequence_number)` sirve para reintentar
+en orden. La causa de cada fallo no tiene columna: se escribe en el log, sin datos personales.
 
-| Columna | Notas |
-|---|---|
-| `message_id` (PK) | UUID, el `messageId` de negocio |
-| `operational_date` | Fecha operativa a la que pertenece |
-| `sequence_number` | Único con `operational_date` |
-| `message_type` | `LIST` \| `UPDATE` |
-| `update_type`, `reservation_ref`, `removal_reason` | Solo `UPDATE` |
-| `payload` | `jsonb`, el payload completo ya armado |
-| `publish_status` | `PENDING` \| `PUBLISHED` \| `FAILED` |
-| `attempts`, `last_error`, `created_at`, `published_at` | Para reintentos y alertas |
-
-`daily_sequence` (**nueva**): una fila por día operativo que serializa la numeración.
+Lo único que este plan agrega al modelo de datos es **`daily_sequence`** (se documenta también en el
+plan base): una fila por día operativo que serializa la numeración.
 
 | Columna | Notas |
 |---|---|
 | `operational_date` (PK) | |
-| `last_sequence` | Último `sequenceNumber` asignado |
+| `last_sequence` | Último `sequenceNumber` asignado; `0` hasta que sale la lista |
 | `list_generated` | `true` cuando ya existe la lista (secuencia 1) |
 
 ### Por qué hace falta `daily_sequence`
@@ -599,17 +624,17 @@ frontend/src/pages/reservations/     # listado con filtros, detalle, resumen del
 
 ## Phase 1: Setup
 
-- [ ] CVR-T01 Migración SQL: extensiones `unaccent` y `pg_trgm`, `immutable_unaccent`, columna generada `document_number_normalized` y los índices de "Datos y consultas"
-- [ ] CVR-T02 [P] Migración SQL: tabla `daily_sequence` y columnas de `daily_list_message` (`message_type`, `update_type`, `removal_reason`, `payload`, `attempts`, `last_error`, `published_at`)
+- [ ] T001 Migración SQL: extensiones `unaccent` y `pg_trgm`, `immutable_unaccent`, columna generada `document_number_normalized` y los índices de "Datos y consultas"
+- [ ] T002 [P] Migración SQL: tabla `daily_sequence` (la de `daily_list_message` ya viene del plan base)
 
 ## Phase 2: Foundational
 
-- [ ] CVR-T03 [P] `deriveMigrationStatus` y `DailyListMembership` en el dominio, con pruebas unitarias de cada fila de las dos tablas
-- [ ] CVR-T04 [P] `ReservationProjection` (el detalle de FR-014) y su mapeo a la forma del mensaje
-- [ ] CVR-T05 `ReservationQueryPort` y su implementación TypeORM: filtros, orden, paginación y cruce de fechas
-- [ ] CVR-T06 `ResolveSearchCriteria` (algoritmo de búsqueda) con pruebas unitarias de cada caso
-- [ ] CVR-T07 DTO de entrada con validación y el orden de validación; mensajes literales de FR-009 en un solo archivo de constantes
-- [ ] CVR-T08 Guards por rol para `RECEPTIONIST`, `MODULE1` y `MODULE3`, y el 403 para `OTA`
+- [ ] T003 [P] `deriveMigrationStatus` y `DailyListMembership` en el dominio, con pruebas unitarias de cada fila de las dos tablas
+- [ ] T004 [P] `ReservationProjection` (el detalle de FR-014) y su mapeo a la forma del mensaje
+- [ ] T005 `ReservationQueryPort` y su implementación TypeORM: filtros, orden, paginación y cruce de fechas
+- [ ] T006 `ResolveSearchCriteria` (algoritmo de búsqueda) con pruebas unitarias de cada caso
+- [ ] T007 DTO de entrada con validación y el orden de validación; mensajes literales de FR-009 en un solo archivo de constantes
+- [ ] T008 Guards por rol para `RECEPTIONIST`, `MODULE1` y `MODULE3`, y el 403 para `OTA`
 
 ## Phase 3: User Story 1 - Listado con filtros, orden y paginación (P1)
 
@@ -617,57 +642,57 @@ frontend/src/pages/reservations/     # listado con filtros, detalle, resumen del
 **Independent Test**: 45 reservas en los seis estados y ambos canales; cada filtro y las combinaciones
 devuelven exactamente lo esperado, con totales y páginas correctos.
 
-- [ ] CVR-T09 [US1] Caso de uso `ListReservations` y `GET /api/reservations` (C1) sin búsqueda
-- [ ] CVR-T10 [US1] Fila del listado: una reserva por fila, habitaciones agrupadas, `actions`, `migrationStatus`
-- [ ] CVR-T11 [US1] Ajuste de página al último valor válido y respuesta vacía con mensaje
-- [ ] CVR-T12 [US1] `GET /api/reservations/day-summary` (C2)
-- [ ] CVR-T13 [US1] Pruebas de integración de los escenarios 1 a 9 (ver tabla de pruebas)
-- [ ] CVR-T14 [P] [US1] Frontend: listado, filtros, orden, paginación y resumen del día
+- [ ] T009 [US1] Caso de uso `ListReservations` y `GET /api/reservations` (C1) sin búsqueda
+- [ ] T010 [US1] Fila del listado: una reserva por fila, habitaciones agrupadas, `actions`, `migrationStatus`
+- [ ] T011 [US1] Ajuste de página al último valor válido y respuesta vacía con mensaje
+- [ ] T012 [US1] `GET /api/reservations/day-summary` (C2)
+- [ ] T013 [US1] Pruebas de integración de los escenarios 1 a 9 (ver tabla de pruebas)
+- [ ] T014 [P] [US1] Frontend: listado, filtros, orden, paginación y resumen del día
 
 ## Phase 4: User Story 2 - Búsqueda por código y detalle (P1)
 
 **Goal**: encontrar una reserva por `reservationRef` o código de la OTA y ver todo su detalle.
 
-- [ ] CVR-T15 [US2] Búsqueda por código en paralelo (referencia y código de la OTA) que ignora los demás filtros
-- [ ] CVR-T16 [US2] `GetReservationDetail` y `GET /api/reservations/{reservationRef}` para `RECEPTIONIST` (C3), con `Cancellation` y datos de Check-In/Check-Out
-- [ ] CVR-T17 [US2] Errores `RESERVATION_NOT_FOUND` e `INVALID_RESERVATION_CODE` sin llegar a la base de datos cuando el formato es inválido
-- [ ] CVR-T18 [US2] Pruebas de integración de los escenarios 1 a 6
-- [ ] CVR-T19 [P] [US2] Frontend: pantalla de detalle
+- [ ] T015 [US2] Búsqueda por código en paralelo (referencia y código de la OTA) que ignora los demás filtros
+- [ ] T016 [US2] `GetReservationDetail` y `GET /api/reservations/{reservationRef}` para `RECEPTIONIST` (C3), con `Cancellation` y datos de Check-In/Check-Out
+- [ ] T017 [US2] Errores `RESERVATION_NOT_FOUND` e `INVALID_RESERVATION_CODE` sin llegar a la base de datos cuando el formato es inválido
+- [ ] T018 [US2] Pruebas de integración de los escenarios 1 a 6
+- [ ] T019 [P] [US2] Frontend: pantalla de detalle
 
 ## Phase 5: User Story 3 - Búsqueda por titular (P2)
 
-- [ ] CVR-T20 [US3] Documento exacto normalizado y nombre parcial sin tildes (`pg_trgm`), combinables con estado, canal y fecha
-- [ ] CVR-T21 [US3] Error `NAME_SEARCH_TOO_SHORT`
-- [ ] CVR-T22 [US3] Pruebas de integración de los escenarios 1 a 4
+- [ ] T020 [US3] Documento exacto normalizado y nombre parcial sin tildes (`pg_trgm`), combinables con estado, canal y fecha
+- [ ] T021 [US3] Error `NAME_SEARCH_TOO_SHORT`
+- [ ] T022 [US3] Pruebas de integración de los escenarios 1 a 4
 
 ## Phase 6: User Story 4 - Lista del día al Módulo 1 (P1)
 
 **Goal**: el Módulo 1 recibe, cada día operativo, una sola lista con las reservas `ACTIVE` que llegan.
 
-- [ ] CVR-T23 [US4] `GenerateDailyList` con bloqueo de `daily_sequence`, secuencia 1 y mensaje `PENDING`
-- [ ] CVR-T24 [US4] `DailyListJob` a las 00:00 (`America/Bogota`) y recuperación al arrancar
-- [ ] CVR-T25 [US4] `RabbitDailyListPublisher` con confirmación de publicación y el orden por secuencia
-- [ ] CVR-T26 [US4] `PublishPendingDailyMessages`, reintentos con espera creciente y paso a `FAILED` con alerta
-- [ ] CVR-T27 [US4] Pruebas de integración de los escenarios 1 a 4 y del envío vacío
+- [ ] T023 [US4] `GenerateDailyList` con bloqueo de `daily_sequence`, secuencia 1 y mensaje `PENDING`
+- [ ] T024 [US4] `DailyListJob` a las 00:00 (`America/Bogota`) y recuperación al arrancar
+- [ ] T025 [US4] `RabbitDailyListPublisher` con confirmación de publicación y el orden por secuencia
+- [ ] T026 [US4] `PublishPendingDailyMessages`, reintentos con espera creciente y paso a `FAILED` con alerta
+- [ ] T027 [US4] Pruebas de integración de los escenarios 1 a 4 y del envío vacío
 
 ## Phase 7: User Story 5 - Actualizaciones de la lista (P1)
 
-- [ ] CVR-T28 [US5] `DailyListChangeRecorder` con la tabla de membresía y la asignación de secuencia bajo bloqueo
-- [ ] CVR-T29 [US5] Publicación inmediata tras confirmar la transacción y respaldo por la tarea de 10 s
-- [ ] CVR-T30 [US5] Pruebas de integración de los escenarios 1 a 8, incluida la caída de RabbitMQ y la reanudación en orden
-- [ ] CVR-T31 [US5] Coordinar con los planes de `generate-direct-reservation`, `generate-ota-reservation`, `update-reservation` y `cancel-reservation` la llamada a `DailyListChangeRecorder`
+- [ ] T028 [US5] `DailyListChangeRecorder` con la tabla de membresía y la asignación de secuencia bajo bloqueo
+- [ ] T029 [US5] Publicación inmediata tras confirmar la transacción y respaldo por la tarea de 10 s
+- [ ] T030 [US5] Pruebas de integración de los escenarios 1 a 8, incluida la caída de RabbitMQ y la reanudación en orden
+- [ ] T031 [US5] Coordinar con los planes de `generate-direct-reservation`, `generate-ota-reservation`, `update-reservation` y `cancel-reservation` la llamada a `DailyListChangeRecorder`
 
 ## Phase 8: Consultas de otros módulos
 
-- [ ] CVR-T32 `GetReservationForBilling` para `MODULE3` en la misma ruta (C4), con `404`
-- [ ] CVR-T33 `FindReservationsByStayRange` para `MODULE1` en `GET /api/reservations` (C5)
-- [ ] CVR-T34 Pruebas de contrato de C4 y C5 contra la forma exacta de las respuestas
+- [ ] T032 `GetReservationForBilling` para `MODULE3` en la misma ruta (C4), con `404`
+- [ ] T033 `FindReservationsByStayRange` para `MODULE1` en `GET /api/reservations` (C5)
+- [ ] T034 Pruebas de contrato de C4 y C5 contra la forma exacta de las respuestas
 
 ## Phase N: Polish
 
-- [ ] CVR-T35 Verificar que ningún log escribe datos personales del titular (NFR-003)
-- [ ] CVR-T36 Prueba de carga: 50 000 reservas y una página en menos de 1 s; 500 reservas en la lista en menos de 1 min
-- [ ] CVR-T37 Documentar las rutas en OpenAPI (`@nestjs/swagger`), incluidos los dos comportamientos de `GET /api/reservations` por rol
+- [ ] T035 Verificar que ningún log escribe datos personales del titular (NFR-003)
+- [ ] T036 Prueba de carga: 50 000 reservas y una página en menos de 1 s; 500 reservas en la lista en menos de 1 min
+- [ ] T037 Documentar las rutas en OpenAPI (`@nestjs/swagger`), incluidos los dos comportamientos de `GET /api/reservations` por rol
 
 ## Pruebas por escenario
 

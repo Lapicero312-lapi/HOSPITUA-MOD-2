@@ -547,6 +547,12 @@ sin enviar ninguna orden de liberación al Módulo 1.
 - **FR-022**: El sistema debe procesar cada registro del lote del cierre del día con manejo
   individual de excepciones, de modo que un error de validación no interrumpa el lote ni exponga
   errores **HTTP 500**.
+- **FR-023**: El sistema debe descartar, sin efectos, las notificaciones de Check-In y de Check-Out
+  cuyo `messageId` ya haya procesado. El Módulo 1 genera el `messageId` una sola vez por hecho y lo
+  conserva en los reintentos. El `sequenceNumber` que envía el Módulo 1 es un entero creciente por
+  cola que nunca se reinicia. El sistema no reordena las notificaciones: valida cada una contra el
+  estado de la habitación y, si detecta un salto de secuencia, lo registra en el log sin detener el
+  procesamiento.
 
 ### Non-Functional Requirements
 

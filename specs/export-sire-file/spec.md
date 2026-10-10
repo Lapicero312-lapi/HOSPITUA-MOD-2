@@ -148,9 +148,9 @@ controlado.
   una línea por movimiento y estos 12 campos en este orden:
   1. Código del hotel en SIRE (`hotelSireCode`, configuración del hotel).
   2. Código de la ciudad del hotel (`hotelCityCode`, configuración del hotel).
-  3. Código del tipo de documento (`documentType`, convertido a la tabla de códigos de SIRE).
+  3. Tipo de documento (`documentType`, tal cual: `RC`, `TI`, `CC`, `CE`, `PAS` o `NIT`).
   4. Número de documento (`documentNumber`).
-  5. Código de la nacionalidad (`nationality`, convertido a la tabla de códigos de SIRE).
+  5. Nacionalidad (`nationality`, tal cual: el nombre del país, por ejemplo `Estados Unidos`).
   6. Apellidos (`lastName`).
   7. Nombres (`firstName`).
   8. Tipo de movimiento: `E` para `ENTRY` y `S` para `DEPARTURE`.
@@ -158,8 +158,7 @@ controlado.
   10. Lugar de procedencia (`originPlace`).
   11. Lugar de destino (`destinationPlace`).
   12. Fecha de nacimiento (`birthDate`).
-  El separador de campos, el formato de fecha y las tablas de códigos de documento, nacionalidad y
-  lugares son los del manual de cargue de SIRE, disponible en el portal de SIRE con la cuenta del
+  El separador de campos y el formato de fecha son los del manual de cargue de SIRE, disponible en el portal de SIRE con la cuenta del
   hotel; el sistema los toma de configuración para no fijarlos en el código.
 - **FR-006**: El sistema no debe llevar cuenta de los movimientos ya descargados: cualquier
   periodo o movimiento se puede descargar las veces que haga falta, sin restricciones.

@@ -569,13 +569,15 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
   el proceso se ejecuta de nuevo el mismo día, no debe reenviarla.
 - **FR-014**: Por cada reserva, la lista y las actualizaciones `ADDED` y `UPDATED` deben incluir:
   - Reserva: `reservationRef`, `status`, `source`, `externalConfirmationCode` (solo `OTA`),
-    `startDate`, `endDate` (fecha de salida), número de noches, `guestCount` (total de personas),
+    `startDate` (fecha de entrada), `endDate` (fecha de salida), `guestCount` (total de personas),
     `notes` (observaciones) y `updatedAt`. El campo `source` viaja como `DIRECTA` para las reservas
     directas o con el nombre de la agencia (por ejemplo `BOOKING` o `EXPEDIA`) para las `OTA`.
-  - Habitaciones: por cada `ReservationRoom`, `roomId`, `roomNumber`, `categoryRoom` y `guestCount`
-    (personas de esa habitación; la suma es el `guestCount` de la reserva).
-  - Titular (`Guest`): `guestRef`, `firstName`, `lastName`, `fullName` (para mostrar),
+  - Habitaciones (`rooms`): por cada `ReservationRoom`, `roomId`, `roomNumber`, `categoryRoom` y
+    `guestCount` (personas de esa habitación; la suma es el `guestCount` de la reserva).
+  - Titular (`guest`): `guestRef`, `firstName`, `lastName`, `fullName` (para mostrar),
     `documentType`, `documentNumber`, `nationality`, `contactPhone` y `contactEmail`.
+
+  El formato exacto de cada mensaje está en el plan de este caso de uso ([plan.md](plan.md)).
 - **FR-015**: El sistema no debe incluir datos financieros (`grossAmount`, comisión) en la lista ni
   en las actualizaciones: no los necesita el Módulo 1. La consulta por referencia del Módulo 3 (FR-022)
   es aparte y sí entrega los `quoteIds` y el porcentaje de comisión.
