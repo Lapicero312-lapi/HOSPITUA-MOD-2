@@ -139,7 +139,9 @@ interface VerifyAvailability {
 ```
 
 **B2. `requireAvailable(result, quantity)`** (función pura del dominio): exige `quantity` habitaciones
-disponibles; si hay menos, lanza `NO_AVAILABILITY` (400) con el motivo de las que no lo están.
+disponibles; si hay menos, lanza `NO_AVAILABILITY` con el motivo de las que no lo están. El código HTTP
+lo decide cada flujo según su spec: **400** en la reserva directa y en la modificación, **409** en la
+reserva de OTA.
 
 **B3. `assignRooms(result, quantity, alreadyAssigned)`** (función pura del dominio): elige las `quantity`
 habitaciones disponibles de **menor `roomNumber`** (orden numérico), sin repetir una ya asignada a la misma
@@ -257,8 +259,8 @@ sequenceDiagram
     B->>F: confirmar
     F->>V: check de nuevo, dentro de la transacción
     V-->>F: ya no disponible (RESERVED)
-    F-->>B: BusinessError NO_AVAILABILITY (400)
-    Note over F,DB: Si ambos llegaran a insertar a la vez, la restricción EXCLUDE de D3 rechaza uno y se traduce en NO_AVAILABILITY (400)
+    F-->>B: BusinessError NO_AVAILABILITY (400 o 409 según el flujo)
+    Note over F,DB: Si ambos llegaran a insertar a la vez, la restricción EXCLUDE de D3 rechaza uno y se traduce en NO_AVAILABILITY (400 o 409 según el flujo)
 ```
 
 ## Modelo de datos y entidades involucradas
@@ -299,8 +301,8 @@ Todo error sale con `{ "errorCode", "message", "timestamp", "path" }` y **siempr
 
 | Situación | HTTP | `errorCode` | `message` |
 |---|---|---|---|
-| Hay menos habitaciones disponibles que las pedidas, o la habitación pedida no está disponible | 400 | `NO_AVAILABILITY` | El motivo de la no disponibilidad (tabla de motivos de B) |
-| La restricción anti-solape rechaza el guardado (verificaciones simultáneas) | 400 | `NO_AVAILABILITY` | "La habitación ya está reservada en esas fechas." |
+| Hay menos habitaciones disponibles que las pedidas, o la habitación pedida no está disponible | **400** en `generate-direct-reservation` y `update-reservation`; **409** en `generate-ota-reservation` | `NO_AVAILABILITY` | El motivo de la no disponibilidad (tabla de motivos de B) |
+| La restricción anti-solape rechaza el guardado (verificaciones simultáneas) | Igual que la fila anterior | `NO_AVAILABILITY` | "La habitación ya está reservada en esas fechas." |
 
 - **Una habitación no disponible no es un error de esta verificación**: se devuelve con su motivo. El
   error aparece cuando el flujo invocador exige una cantidad que no se cumple.
@@ -450,7 +452,7 @@ ocupadas hoy y liberadas dentro de una reserva en curso.
 
 | # | Pendiente | Con quién |
 |---|---|---|
-| 1 | **400 contra 409**: los specs de `generate-direct-reservation` y `update-reservation` dicen **HTTP 400** ante la falta de disponibilidad, y la decisión D3 y la sección "Errores" del plan base hablan de **409** (`NO_AVAILABILITY`). Este plan usa 400, como los specs. Hay que ajustar el plan base | Equipo del Módulo 2 |
+| 1 | **400 o 409 según el flujo**: los specs de `generate-direct-reservation` y `update-reservation` dicen **HTTP 400** ante la falta de disponibilidad, y el de `generate-ota-reservation` dice **HTTP 409**, como la sección "Errores" del plan base. Este plan deja que cada flujo siga su spec. Conviene unificar los tres en un solo código | Equipo del Módulo 2 |
 | 2 | **Costo de los mantenimientos**: una consulta por habitación candidata. Con categorías grandes puede acercarse al límite de 2 s. Conviene que el Módulo 1 permita consultar por categoría o por varias habitaciones | Módulo 1 |
 | 3 | La asignación "de menor `roomNumber`" para la reserva directa: el spec dice que la Recepcionista no elige la habitación pero no cómo se asigna | Equipo del Módulo 2 |
 | 4 | El mensaje de error cuando el Módulo 1 falla al consultar el **inventario** durante la verificación: el spec de este caso de uso solo define el de mantenimientos. Se usa el de `consult-room-inventory` | Equipo del Módulo 2 |
