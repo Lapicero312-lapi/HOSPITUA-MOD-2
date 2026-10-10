@@ -497,7 +497,7 @@ frontend/src/pages/guest-stays/              # vista de huéspedes alojados y su
 - [ ] T016 [US3] `GetGuestStayDetail` y C2, con el enlace a la reserva
 - [ ] T017 [US3] Guard de rol (403 para otros actores) y validadores de filtros
 - [ ] T018 [US3] Pruebas de los escenarios 1 a 9
-- [ ] T019 [P] [US3] Frontend: vista de huéspedes alojados y su detalle (el wireframe no la tiene)
+- [ ] T019 [P] [US3] Frontend: vista de huéspedes alojados y su detalle (pantalla de referencia en el wireframe)
 
 ## Phase N: Polish
 
@@ -580,8 +580,7 @@ frontend/src/pages/guest-stays/              # vista de huéspedes alojados y su
 | 2 | Transacción única entre `update-reservation` (estado y `processed_message`) y este caso de uso: confirmarlo en el plan de `update-reservation` | Equipo del Módulo 2 |
 | 3 | El spec exige que el Módulo 2 **no valide** los datos, pero la base tiene columnas obligatorias: confirmar que omitir al huésped incompleto es aceptable | Equipo del Módulo 2 |
 | 4 | Tamaño máximo de un mensaje (cantidad de huéspedes) para protegerse de payloads desmedidos | Módulo 1 |
-| 5 | La vista de huéspedes alojados **no está en el wireframe** | Equipo del Módulo 2 |
-| 6 | Si la nacionalidad llega con otra escritura ("COLOMBIA", "colombiana"), hoy se trataría como extranjera. Confirmar con el Módulo 1 que siempre envía `Colombia` | Módulo 1 |
+| 5 | Si la nacionalidad llega con otra escritura ("COLOMBIA", "colombiana"), hoy se trataría como extranjera. Confirmar con el Módulo 1 que siempre envía `Colombia` | Módulo 1 |
 
 ## Notes
 

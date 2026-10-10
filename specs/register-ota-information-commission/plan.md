@@ -613,7 +613,6 @@ frontend/src/pages/otas/                            # pantalla "Agencias OTA" (s
 | 4 | Cómo expresa el Módulo 3 el porcentaje de comisión (0 a 100) | Módulo 3 |
 | 5 | Qué pasa con la comisión de una reserva OTA que queda en `NO_SHOW`: el spec solo trata `COMPLETED` y `CANCELLED` | Equipo del Módulo 2 |
 | 6 | Una OTA `DISCONNECTED` que envía una reserva nueva: el spec no lo define (lo resuelve `generate-ota-reservation`) | Equipo del Módulo 2 |
-| 7 | El wireframe muestra "Agencias OTA" con un botón de crear y editar agencias que el spec ya no permite; se alinea cuando se retome | Equipo del Módulo 2 |
 
 ## Notes
 

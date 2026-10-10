@@ -526,7 +526,6 @@ seguro ante un Módulo 3 caído.
 | 4 | **Vigencia del `quoteId`**: si una cotización caduca, el Módulo 3 cobraría contra una cotización vencida. Hoy se re-cotiza al confirmar (D1), pero falta saber si el `quoteId` guardado se puede usar días después en el Check-Out | Módulo 3 |
 | 5 | Autenticación de servicio hacia el Módulo 3 y límite de llamadas por segundo | Módulo 3 |
 | 6 | **Origen de las categorías y de las tarifas base** de la pantalla "Tarifas": hoy una configuración local. Es el mismo problema de `consult-room-inventory` (de dónde sale la lista de categorías); conviene resolverlos juntos | Equipo del Módulo 2 y Módulo 1 |
-| 7 | El wireframe muestra "ajuste de temporada" en el detalle de la tarifa de una reserva, que el spec no contempla (solo `nightlyRates` y `lodgingAmount`). Se alinea cuando se retome el wireframe | Equipo del Módulo 2 |
 
 ## Notes
 

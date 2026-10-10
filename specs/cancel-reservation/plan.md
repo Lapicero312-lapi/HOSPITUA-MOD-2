@@ -394,7 +394,6 @@ canal y `REMOVED`); una con llegada futura (sin aviso); y los intentos sobre `IN
 | 3 | La OTA **cancela por la misma API desde la que envía sus reservas**; las rutas definitivas dependerán de "Configurar OTA" | Equipo del Módulo 2 |
 | 4 | Una reserva de OTA en `PENDING` con llegada hoy no está en la lista del día, así que su cancelación no genera aviso. Confirmar que es lo esperado | Módulo 1 |
 | 5 | El spec salta de SC-002 a SC-004 (falta SC-003) | Equipo del Módulo 2 |
-| 6 | El wireframe de "Cancelar reserva" ya tiene la casilla de confirmación; falta alinear el texto del botón y el motivo opcional cuando se retome | Equipo del Módulo 2 |
 
 ## Notes
 

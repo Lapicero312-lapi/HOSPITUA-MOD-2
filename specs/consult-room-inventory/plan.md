@@ -408,7 +408,6 @@ fallos del Módulo 1.
 | 2 | Forma canónica de `categoryRoom` (por ejemplo `DOBLE`, en mayúsculas y sin tildes) y su patrón de validación | Módulo 1 |
 | 3 | Rutas definitivas del inventario y autenticación de servicio | Módulo 1 |
 | 4 | Costo de la pantalla: una consulta por categoría más una de mantenimientos por habitación. Si el hotel crece, conviene que el Módulo 1 acepte consultar mantenimientos por categoría (B6 de las decisiones anteriores) | Módulo 1 |
-| 5 | El wireframe de "Habitaciones" muestra una columna "Estado hoy"; el spec dice que la pantalla no muestra estado. Se alinea cuando se retome el wireframe | Equipo del Módulo 2 |
 
 ## Notes
 

@@ -523,8 +523,7 @@ solo movimiento.
 | 3 | El spec nombra la dependencia como **"Procesar datos de huéspedes extranjeros"** (FR-004), pero el caso de uso se llama "Procesar datos de huéspedes" | Equipo del Módulo 2 |
 | 4 | **Huésped repetido entre reservas**: un huésped con dos estadías aparece con las líneas de ambas. Confirmar que Migración las espera así | Equipo del Módulo 2 |
 | 5 | **Hasta cuándo se conservan las `SireExport`**: son un registro auditable; el spec no fija retención | Equipo del Módulo 2 |
-| 6 | El wireframe de "Exportar SIRE" muestra "Últimos 7 días" y "Últimos 30 días"; el spec no los menciona, aunque no se contradicen | Equipo del Módulo 2 |
-| 7 | La **numeración del spec** salta de FR-008 a FR-010 y luego FR-009 | Equipo del Módulo 2 |
+| 6 | La **numeración del spec** salta de FR-008 a FR-010 y luego FR-009 | Equipo del Módulo 2 |
 
 ## Notes
 

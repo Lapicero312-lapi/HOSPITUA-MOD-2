@@ -456,7 +456,6 @@ ocupadas hoy y liberadas dentro de una reserva en curso.
 | 2 | **Costo de los mantenimientos**: una consulta por habitación candidata. Con categorías grandes puede acercarse al límite de 2 s. Conviene que el Módulo 1 permita consultar por categoría o por varias habitaciones | Módulo 1 |
 | 3 | La asignación "de menor `roomNumber`" para la reserva directa: el spec dice que la Recepcionista no elige la habitación pero no cómo se asigna | Equipo del Módulo 2 |
 | 4 | El mensaje de error cuando el Módulo 1 falla al consultar el **inventario** durante la verificación: el spec de este caso de uso solo define el de mantenimientos. Se usa el de `consult-room-inventory` | Equipo del Módulo 2 |
-| 5 | El wireframe muestra la disponibilidad al escribir en "Nueva reserva directa". Eso exige que la vista previa se pueda consultar al cambiar categoría y fechas; se define en el plan de `generate-direct-reservation` | Equipo del Módulo 2 |
 
 ## Notes
 

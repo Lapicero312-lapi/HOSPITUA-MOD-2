@@ -869,8 +869,7 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
 | 3 | **Habitaciones `NOT_ARRIVED` en una reserva `IN_PROGRESS`**: el spec dice que se quitan de la lista del día, pero la reserva ya no está en la lista (está `IN_PROGRESS`), así que no hay aviso. Confirmar que es lo esperado | Módulo 1 |
 | 4 | El Módulo 1 debería conservar el mismo `messageId` en los reintentos y no reiniciar el `sequenceNumber` (FR-023); confirmar | Módulo 1 |
 | 5 | El spec menciona en FR-003 un texto confuso ("sin mostrar la tarifa nueva"): se interpretó como "sin mostrar la tarifa anterior", coherente con el resto del spec y con `calculate-dynamic-rate` | Equipo del Módulo 2 |
-| 6 | El wireframe tiene el aviso de llegada tardía (`lateArrivalNotice`), que este spec ya no incluye. Se alinea cuando se retome el wireframe | Equipo del Módulo 2 |
-| 7 | `reservation_audit` aparecía en versiones anteriores del plan base y ya no está; este spec no pide una auditoría de las modificaciones | Equipo del Módulo 2 |
+| 6 | `reservation_audit` aparecía en versiones anteriores del plan base y ya no está; este spec no pide una auditoría de las modificaciones | Equipo del Módulo 2 |
 
 ## Notes
 
