@@ -191,9 +191,7 @@ fechas (formato, completitud, orden, 366 días) → `order` → `page` → longi
       "categoryRoom": "DOBLE",
       "guestCount": 3,
       "roomGrossAmount": { "amount": "713000.00", "currency": "COP" },
-      "stayStatus": "EXPECTED",
-      "checkIn": null,
-      "checkOut": null
+      "stayStatus": "EXPECTED"
     }
   ],
   "guest": {
@@ -206,10 +204,6 @@ fechas (formato, completitud, orden, 366 días) → `order` → `page` → longi
 
 - `roomGrossAmount` es `null` en reservas `OTA`. El dinero va como **texto decimal** (`decimal.js`),
   nunca como número.
-- `checkIn` y `checkOut` de cada habitación: `null` hasta que el Módulo 1 los informa; luego
-  `{ "guestCount": 2, "foreignGuestCount": 1 }`, para que la Recepcionista vea cuántos huéspedes acaba
-  de enviar el Módulo 1. **Estos conteos dependen de un dato que el modelo actual no guarda** (ver
-  "Puntos abiertos"): hasta que se decida, la API devuelve `null` en ambos.
 - `cancellation` solo viene en reservas `CANCELLED` por solicitud explícita:
   `{ "cancellationDate", "channel", "reason", "processedBy" }`. El No-Show no tiene `Cancellation`.
 - Si la reserva no existe: `400` `RESERVATION_NOT_FOUND`, "La reserva no existe." (regla del plan base:
@@ -695,7 +689,7 @@ Este caso de uso **no cambia ningún estado**: lee las entidades del dominio y e
 | Tabla | Uso | Qué se toca |
 |---|---|---|
 | `reservation` | Lectura | `reservation_ref`, `status`, `source`, `start_date`, `end_date`, `guest_count`, `notes`, `created_at`, `updated_at`, `external_confirmation_code`, `ota_id`, `commission_percentage` (solo para C4) |
-| `reservation_room` | Lectura | `room_id`, `room_number`, `category_room`, `guest_count`, `stay_status`, `room_gross_amount` y `quote_id` (solo `DIRECT`), conteos de Check-In y Check-Out |
+| `reservation_room` | Lectura | `room_id`, `room_number`, `category_room`, `guest_count`, `stay_status`, `room_gross_amount` y `quote_id` (solo `DIRECT`) |
 | `guest` | Lectura | Titular: nombres, documento, nacionalidad, contacto |
 | `ota` | Lectura | `name` para mostrar la agencia y generar `source` |
 | `cancellation` | Lectura | Solo en el detalle de una reserva cancelada por solicitud explícita |
@@ -1010,10 +1004,9 @@ Cada uno se puede cambiar sin romper el resto; se anotan para que no pasen desap
 | # | Pendiente | Con quién |
 |---|---|---|
 | 1 | Regla para convertir `Ota.name` en el `source` de la lista (`Booking.com` → `BOOKING`): ¿mayúsculas sin dominio, o un código propio de la agencia? | Módulo 1 |
-| 2 | `checkIn` y `checkOut` del detalle (cuántos huéspedes registró el Módulo 1 en cada habitación y cuántos son extranjeros, FR-006): el modelo del plan base guarda los huéspedes por reserva (`guest_data`), sin habitación, y `reservation_room` ya no tiene columnas de conteo, así que **no se pueden derivar**. `process-guest-data` propone guardar los conteos en `reservation_room` a partir de su `RegistrationSummary`; requiere un cambio en el plan base | Equipo del Módulo 2 |
-| 3 | Tipo de `otaCommissionPercentage` en la respuesta C4 (número o texto) y su escala (0 a 100) | Módulo 3 |
-| 4 | Campos exactos que espera el Módulo 1 en C5 | Módulo 1 |
-| 5 | Autenticación de servicio de `MODULE1` y `MODULE3` (credencial, caducidad) | Módulos 1 y 3 |
+| 2 | Tipo de `otaCommissionPercentage` en la respuesta C4 (número o texto) y su escala (0 a 100) | Módulo 3 |
+| 3 | Campos exactos que espera el Módulo 1 en C5 | Módulo 1 |
+| 4 | Autenticación de servicio de `MODULE1` y `MODULE3` (credencial, caducidad) | Módulos 1 y 3 |
 
 ## Trazabilidad: requisito → componente → tarea
 
