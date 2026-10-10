@@ -192,7 +192,7 @@ esperar al Módulo 1** (FR-007).
 | `errorCode` | Cuándo | `message` |
 |---|---|---|
 | `START_DATE_IN_PAST` | `startDate` anterior al día operativo en curso | "La fecha de entrada no puede ser anterior a hoy." |
-| `INVALID_DATE_RANGE` | Fechas vacías, inexistentes o salida no posterior a la entrada | "La fecha de salida debe ser posterior a la de entrada." |
+| `INVALID_STAY_DATES` | Fechas vacías, inexistentes o salida no posterior a la entrada | "La fecha de salida debe ser posterior a la de entrada." |
 | `INVALID_ROOM_COUNT` | Cero o más de 10 habitaciones | "Una reserva debe tener entre 1 y 10 habitaciones." |
 | `ROOM_ALREADY_IN_RESERVATION` | La misma habitación dos veces | "La habitación ya forma parte de la reserva." |
 | `INVALID_GUEST_COUNT` | `guestCount` no es un entero positivo | "La cantidad de personas debe ser un número entero mayor que cero." |

@@ -147,7 +147,7 @@ El conflicto de disponibilidad es **409**; todo lo demás es **400**.
 |---|---|---|---|
 | 400 | `EXTERNAL_CONFIRMATION_CODE_REQUIRED` | Falta `externalConfirmationCode` o viene vacío | "El código de confirmación externo es obligatorio." |
 | 400 | `DUPLICATE_CONFIRMATION_CODE` | El código ya está registrado para esa agencia | "El código de confirmación ya está registrado para esta agencia." |
-| 400 | `INVALID_DATE_RANGE` | Fechas mal formadas, inexistentes o salida no posterior a la entrada | "La fecha de salida debe ser posterior a la de entrada." |
+| 400 | `INVALID_STAY_DATES` | Fechas mal formadas, inexistentes o salida no posterior a la entrada | "La fecha de salida debe ser posterior a la de entrada." |
 | 400 | `START_DATE_IN_PAST` | `startDate` anterior al día operativo en curso | "La fecha de entrada no puede ser anterior a hoy." |
 | 400 | `INVALID_ROOMS` | Lista vacía, más de 10, o el mismo `roomId` repetido | "Una reserva debe tener entre 1 y 10 habitaciones distintas." |
 | 400 | `INVALID_ROOMS` | Una habitación sin `roomId` ni `categoryRoom` | "La habitación en la posición {n} no indica ni roomId ni categoryRoom." |

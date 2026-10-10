@@ -159,7 +159,7 @@ sequenceDiagram
     V->>U: check(roomId, startDate, endDate)
     U->>U: Validar roomId (UUID), formato de fechas y endDate > startDate
     alt dato inválido
-        U-->>V: BusinessError INVALID_ROOM_ID o INVALID_DATE_RANGE (400), sin llamar al Módulo 1
+        U-->>V: BusinessError INVALID_ROOM_ID o INVALID_STAY_DATES (400), sin llamar al Módulo 1
     end
     U->>P: getMaintenances(roomId, startDate, endDate)
     P->>M1: GET /api/rooms/{roomId}/maintenances?startDate=...&endDate=... (timeout)
@@ -221,7 +221,7 @@ Todo error sale con `{ "errorCode", "message", "timestamp", "path" }` y **siempr
 |---|---|---|---|---|
 | `roomId` vacío o con formato inválido (no es un UUID) | M2, antes de llamar al Módulo 1 | 400 | `INVALID_ROOM_ID` | "El identificador de la habitación es inválido." |
 | El Módulo 1 responde 404 (la habitación no existe) | Módulo 1 | 400 | `INVALID_ROOM_ID` | "El identificador de la habitación es inválido." |
-| Fecha mal formada o inexistente, o `endDate` no posterior a `startDate` | M2, antes de llamar al Módulo 1 | 400 | `INVALID_DATE_RANGE` | "Rango de fechas inválido. Verifique las fechas seleccionadas." |
+| Fecha mal formada o inexistente, o `endDate` no posterior a `startDate` | M2, antes de llamar al Módulo 1 | 400 | `INVALID_STAY_DATES` | "Rango de fechas inválido. Verifique las fechas seleccionadas." |
 | Tiempo agotado o error de red | Módulo 1 | 400 | `MAINTENANCE_CHECK_UNAVAILABLE` | "No es posible validar mantenimientos en este momento. Intente de nuevo." |
 | El Módulo 1 responde 5xx | Módulo 1 | 400 | `MAINTENANCE_CHECK_UNAVAILABLE` | El mismo |
 | El Módulo 1 responde 400 (cuando el Módulo 2 ya validó, es una incoherencia) | Módulo 1 | 400 | `MAINTENANCE_CHECK_UNAVAILABLE` | El mismo; el detalle va al log |
@@ -282,7 +282,7 @@ backend/test/
 - [ ] T003 [P] Validadores de `roomId` (UUID) y de las fechas (`AAAA-MM-DD` real y `endDate > startDate`)
 - [ ] T004 [P] Función `overlap` del periodo del cruce, con pruebas unitarias de cruce parcial, total, contiguo y de un solo día
 - [ ] T005 `Module1Port.getMaintenances` y su método en `Module1HttpAdapter` con timeout, mapeo de errores y validación de la forma de la respuesta
-- [ ] T006 Códigos de error `INVALID_ROOM_ID` (compartido), `INVALID_DATE_RANGE` y `MAINTENANCE_CHECK_UNAVAILABLE` con sus mensajes literales
+- [ ] T006 Códigos de error `INVALID_ROOM_ID` (compartido), `INVALID_STAY_DATES` y `MAINTENANCE_CHECK_UNAVAILABLE` con sus mensajes literales
 
 ## Phase 3: User Story 1 - Detección de mantenimientos que cruzan una estadía (P1)
 
@@ -313,7 +313,7 @@ contiguo, más los fallos del Módulo 1.
 | US1 | 2 mantenimiento que cruza | `available: false` con el periodo del cruce (`overlapStart` y `overlapEnd`) calculado sobre el rango pedido; cruce parcial y total |
 | US1 | 3 mantenimiento contiguo | Termina justo antes de la llegada: sin cruce, la habitación puede reservarse |
 | Casos borde | Módulo 1 no responde | Tiempo agotado: `400` `MAINTENANCE_CHECK_UNAVAILABLE` con el mensaje del spec; no se asume libre |
-| Casos borde | Fechas inválidas | Salida anterior a la llegada, fecha inexistente o mal formada: `400` `INVALID_DATE_RANGE`, sin llamar al Módulo 1 |
+| Casos borde | Fechas inválidas | Salida anterior a la llegada, fecha inexistente o mal formada: `400` `INVALID_STAY_DATES`, sin llamar al Módulo 1 |
 | Casos borde | `roomId` inválido o inexistente | Formato inválido: `400` sin llamar al Módulo 1; 404 del Módulo 1: `400` `INVALID_ROOM_ID` |
 | Casos borde | Mantenimiento posterior a la reserva | Fuera de alcance: esta consulta solo valida en el momento de reservar; no hay prueba de reubicación |
 | Contrato | Módulo 1 | Respuestas con campos faltantes, `available` incoherente, fechas mal formadas, 400, 404, 503 y lenta (más del tiempo máximo) |

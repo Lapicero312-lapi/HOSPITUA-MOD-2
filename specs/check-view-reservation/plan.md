@@ -208,7 +208,8 @@ fechas (formato, completitud, orden, 366 días) → `order` → `page` → longi
   nunca como número.
 - `checkIn` y `checkOut` de cada habitación: `null` hasta que el Módulo 1 los informa; luego
   `{ "guestCount": 2, "foreignGuestCount": 1 }`, para que la Recepcionista vea cuántos huéspedes acaba
-  de enviar el Módulo 1 (ver "Puntos abiertos" sobre `guestCount`).
+  de enviar el Módulo 1. **Estos conteos dependen de un dato que el modelo actual no guarda** (ver
+  "Puntos abiertos"): hasta que se decida, la API devuelve `null` en ambos.
 - `cancellation` solo viene en reservas `CANCELLED` por solicitud explícita:
   `{ "cancellationDate", "channel", "reason", "processedBy" }`. El No-Show no tiene `Cancellation`.
 - Si la reserva no existe: `400` `RESERVATION_NOT_FOUND`, "La reserva no existe." (regla del plan base:
@@ -974,6 +975,7 @@ Cada escenario Gherkin tiene al menos una prueba de integración (regla del plan
 | US5 | 8 sin efecto | Reserva con llegada en una semana: no se genera mensaje |
 | Casos borde | Varios | Coincidencia doble de código, varias agencias con el mismo código, página inexistente, 367 días, inyección en filtros, caída de RabbitMQ y reanudación, Check-In sin mensaje, `PENDING` OTA fuera de la lista |
 | FR-022 / FR-023 | Sin Gherkin | Pruebas de contrato de C4 y C5: forma exacta, `404` y `403` |
+| FR-011 | Acceso | La `OTA` recibe `403` en el listado, la búsqueda, el resumen y el detalle; el Módulo 1 recibe `403` en todo salvo `GET /api/reservations` por fechas (C5); el Módulo 3 solo accede al detalle por referencia (C4) |
 
 ## Dependencies & Execution Order
 
@@ -1008,7 +1010,7 @@ Cada uno se puede cambiar sin romper el resto; se anotan para que no pasen desap
 | # | Pendiente | Con quién |
 |---|---|---|
 | 1 | Regla para convertir `Ota.name` en el `source` de la lista (`Booking.com` → `BOOKING`): ¿mayúsculas sin dominio, o un código propio de la agencia? | Módulo 1 |
-| 2 | `checkIn.guestCount` y `checkOut.guestCount` del detalle (cuántos huéspedes registró el Módulo 1 en cada habitación): `ReservationRoom` solo guarda hoy los extranjeros (`checkInForeignGuestCount`, `checkOutForeignGuestCount`). Hay que decidir en `process-guest-data` o `update-reservation` si se guarda también el total | Equipo del Módulo 2 |
+| 2 | `checkIn` y `checkOut` del detalle (cuántos huéspedes registró el Módulo 1 en cada habitación y cuántos son extranjeros, FR-006): el modelo del plan base guarda los huéspedes por reserva (`guest_data`), sin habitación, y `reservation_room` ya no tiene columnas de conteo, así que **no se pueden derivar**. `process-guest-data` propone guardar los conteos en `reservation_room` a partir de su `RegistrationSummary`; requiere un cambio en el plan base | Equipo del Módulo 2 |
 | 3 | Tipo de `otaCommissionPercentage` en la respuesta C4 (número o texto) y su escala (0 a 100) | Módulo 3 |
 | 4 | Campos exactos que espera el Módulo 1 en C5 | Módulo 1 |
 | 5 | Autenticación de servicio de `MODULE1` y `MODULE3` (credencial, caducidad) | Módulos 1 y 3 |

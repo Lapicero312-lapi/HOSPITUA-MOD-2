@@ -140,7 +140,7 @@ interface CalculateDynamicRate {
 | Una habitación cambia de categoría | Solo esa habitación |
 | Una habitación se cambia por otra **de la misma categoría**, sin cambiar fechas | **Ninguna**: se conserva la tarifa vigente |
 | Se quita una habitación | **Ninguna**: se va con su tarifa, sin llamar al Módulo 3 |
-| Cambia solo `guestCount`, datos del titular, `notes` o `lateArrivalNotice` | **Ninguna** |
+| Cambia solo `guestCount`, datos del titular o `notes` | **Ninguna** |
 
 **B3. Total de la reserva** (función pura del dominio, `reservationTotal`): la suma de los
 `lodgingAmount` de las habitaciones. **No se guarda**; se calcula al mostrarlo (FR-002). Exige que todas
@@ -217,7 +217,7 @@ sequenceDiagram
     G->>C: quoteRooms(habitaciones, NEW_RESERVATION)
     C->>C: Validar categoryRoom y fechas
     alt dato inválido
-        C-->>G: BusinessError INVALID_CATEGORY o INVALID_DATE_RANGE (400), sin llamar al Módulo 3
+        C-->>G: BusinessError INVALID_CATEGORY o INVALID_STAY_DATES (400), sin llamar al Módulo 3
     end
     par una cotización por habitación (tope QUOTE_CONCURRENCY)
         C->>P: createQuote(roomType, checkInDate, checkOutDate)
@@ -343,8 +343,8 @@ Todo error sale con `{ "errorCode", "message", "timestamp", "path" }` y **siempr
 | Respuesta del Módulo 3 inválida (campos faltantes, `lodgingAmount` ≤ 0, más de 2 decimales, moneda inválida, fechas fuera del rango) | Módulo 3 | 400 | El de la fila anterior según el contexto | El de la fila anterior; el detalle va al log |
 | `categoryRoom` vacía o con caracteres no permitidos | M2, antes de llamar | 400 | `INVALID_CATEGORY` | "La categoría indicada no es válida." |
 | El Módulo 3 rechaza la categoría (no existe en su catálogo) | Módulo 3 | 400 | `INVALID_CATEGORY` | "La categoría indicada no es válida." |
-| Fechas mal formadas o `endDate` no posterior a `startDate` | M2, antes de llamar | 400 | `INVALID_DATE_RANGE` | "Rango de fechas inválido. Verifique las fechas seleccionadas." |
-| Otro 4xx del Módulo 3 (parámetros ausentes, rango incoherente) | Módulo 3 | 400 | `INVALID_DATE_RANGE` o el de indisponibilidad (ver "Puntos abiertos") | El correspondiente |
+| Fechas mal formadas o `endDate` no posterior a `startDate` | M2, antes de llamar | 400 | `INVALID_STAY_DATES` | "Rango de fechas inválido. Verifique las fechas seleccionadas." |
+| Otro 4xx del Módulo 3 (parámetros ausentes, rango incoherente) | Módulo 3 | 400 | `INVALID_STAY_DATES` o el de indisponibilidad (ver "Puntos abiertos") | El correspondiente |
 | La tarifa cambió entre la vista previa y la confirmación | M2 (`verifyQuotes`) | 400 | `RATE_CHANGED` | "La tarifa cambió, vuelva a cotizar." |
 | Habitaciones de una reserva con monedas distintas al sumar el total | M2 | 400 | `CURRENCY_MISMATCH` | "Las tarifas de la reserva no tienen la misma moneda." |
 | Sin token o token inválido (pantalla "Tarifas") | Guard | 401 | `UNAUTHENTICATED` | Genérico |
@@ -420,7 +420,7 @@ frontend/src/pages/rates/                        # pantalla "Tarifas"
 - [ ] T004 [P] Función `roomsNeedingQuote` con una prueba por fila de la tabla de B2
 - [ ] T005 [P] Validadores de `categoryRoom` y de las fechas (`AAAA-MM-DD` real y `endDate > startDate`)
 - [ ] T006 `Module3Port.createQuote` y `Module3HttpAdapter`: lectura de importes sin `number`, máximo dos decimales, `lodgingAmount > 0`, validación de la forma de la respuesta, timeout y mapeo de errores
-- [ ] T007 Códigos de error `PRICING_UNAVAILABLE`, `RECALCULATION_UNAVAILABLE`, `INVALID_CATEGORY` (compartido), `INVALID_DATE_RANGE` (compartido), `RATE_CHANGED` y `CURRENCY_MISMATCH` con sus mensajes literales
+- [ ] T007 Códigos de error `PRICING_UNAVAILABLE`, `RECALCULATION_UNAVAILABLE`, `INVALID_CATEGORY` (compartido), `INVALID_STAY_DATES` (compartido), `RATE_CHANGED` y `CURRENCY_MISMATCH` con sus mensajes literales
 
 ## Phase 3: User Story 1 - Cotización de reservas nuevas (P1)
 
@@ -521,7 +521,7 @@ seguro ante un Módulo 3 caído.
 | # | Pendiente | Con quién |
 |---|---|---|
 | 1 | **El spec se contradice**: FR-002 permite sumar los `lodgingAmount` para mostrar el total de la reserva y FR-005 dice "ni sumas, ni diferencias". Este plan implementa FR-002 (la única suma permitida). Hay que dejar FR-005 igual que FR-002 | Equipo del Módulo 2 |
-| 2 | Formato del cuerpo de error del Módulo 3 (4xx): cómo distingue categoría inexistente, rango inválido y parámetros ausentes. Mientras tanto, todo 4xx se trata como `INVALID_CATEGORY` o `INVALID_DATE_RANGE` según la validación local | Módulo 3 |
+| 2 | Formato del cuerpo de error del Módulo 3 (4xx): cómo distingue categoría inexistente, rango inválido y parámetros ausentes. Mientras tanto, todo 4xx se trata como `INVALID_CATEGORY` o `INVALID_STAY_DATES` según la validación local | Módulo 3 |
 | 3 | Escala de los importes (¿máximo dos decimales?) y tipo en el JSON (número o texto) | Módulo 3 |
 | 4 | **Vigencia del `quoteId`**: si una cotización caduca, el Módulo 3 cobraría contra una cotización vencida. Hoy se re-cotiza al confirmar (D1), pero falta saber si el `quoteId` guardado se puede usar días después en el Check-Out | Módulo 3 |
 | 5 | Autenticación de servicio hacia el Módulo 3 y límite de llamadas por segundo | Módulo 3 |

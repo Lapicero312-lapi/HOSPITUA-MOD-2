@@ -289,7 +289,7 @@ Todo error sale con `{ "errorCode", "message", "timestamp", "path" }` y **siempr
 
 | Situación | Origen | HTTP | `errorCode` | `message` |
 |---|---|---|---|---|
-| Fechas mal formadas o `endDate` no posterior a `startDate` | M2, antes de consultar | 400 | `INVALID_DATE_RANGE` | "Rango de fechas inválido. Verifique las fechas seleccionadas." |
+| Fechas mal formadas o `endDate` no posterior a `startDate` | M2, antes de consultar | 400 | `INVALID_STAY_DATES` | "Rango de fechas inválido. Verifique las fechas seleccionadas." |
 | `roomId` con formato inválido o que el Módulo 1 no conoce | M2 o Módulo 1 | 400 | `INVALID_ROOM_ID` | "El identificador de la habitación es inválido." |
 | `categoryRoom` inválida | M2 o Módulo 1 | 400 | `INVALID_CATEGORY` | "La categoría indicada no es válida." |
 | Ni categoría ni `roomId`, o ambos a la vez | M2 | 400 | `INVALID_AVAILABILITY_QUERY` | "Debe indicar una categoría o una habitación." |
@@ -400,7 +400,7 @@ ocupadas hoy y liberadas dentro de una reserva en curso.
 | US1 | 6 reservas históricas | Solapadas solo con `COMPLETED`, `CANCELLED` y `NO_SHOW`: disponible |
 | US1 | 7 habitación liberada | En `NOT_ARRIVED` o `CHECKED_OUT` dentro de una reserva `IN_PROGRESS`: no bloquea |
 | Casos borde | Módulo 1 sin responder | Tiempo agotado en el calendario: `400` `MAINTENANCE_CHECK_UNAVAILABLE` con el mensaje literal; no se asume disponibilidad |
-| Casos borde | Fechas inválidas | `400` `INVALID_DATE_RANGE`, sin llamar a ningún módulo |
+| Casos borde | Fechas inválidas | `400` `INVALID_STAY_DATES`, sin llamar a ningún módulo |
 | Casos borde | `roomId` inválido | `400` `INVALID_ROOM_ID` |
 | Casos borde | Verificaciones simultáneas | Ambas responden disponible; al crear, la segunda falla con `NO_AVAILABILITY` (D3) |
 | FR-004 | Sin estado físico | El inventario simulado no trae estado y una habitación "ocupada hoy" en el Módulo 1 se sigue evaluando solo con las reservas |
