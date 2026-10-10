@@ -282,7 +282,7 @@ Cualquier otro parámetro (`search`, `status`, `source`, `page`...) con este rol
   vea el panorama completo.
 - Sin datos financieros ni del huésped. Solo lectura: no cambia nada.
 - Errores `400`: `INCOMPLETE_DATE_RANGE`, `INVALID_DATE`, `INVALID_DATE_RANGE`, `DATE_RANGE_TOO_LARGE`
-  (mismos mensajes que C1) y `INVALID_ROOM_ID` ("El identificador de habitación no es válido.").
+  (mismos mensajes que C1) y `INVALID_ROOM_ID` ("El identificador de la habitación es inválido.").
 
 ### Resumen de rutas y roles
 
