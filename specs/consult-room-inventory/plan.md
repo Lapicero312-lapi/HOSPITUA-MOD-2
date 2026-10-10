@@ -7,7 +7,7 @@
 ## Summary
 
 El Módulo 2 no guarda un inventario de habitaciones: el Módulo 1 es su dueño exclusivo y todas las
-habitaciones que entrega son vendibles. Esta feature es la **consulta síncrona, de solo lectura y en
+habitaciones que entrega son vendibles. Este caso de uso es la **consulta síncrona, de solo lectura y en
 tiempo real** al inventario del Módulo 1, con dos usos:
 
 1. **Insumo de "Verificar disponibilidades"** (`check-room-availability`): por `roomId` (una habitación)
@@ -38,7 +38,7 @@ No persiste nada y no cambia ninguna `Room`. Si el Módulo 1 falla, no asume hab
 ## Technical Context
 
 El stack, la arquitectura hexagonal y el manejo de errores son los del [plan base](../base/plan.md).
-Lo propio de esta feature:
+Lo propio de este caso de uso:
 
 - **Dependencias nuevas**: ninguna (cliente HTTP `@nestjs/axios` del plan base).
 - **Almacenamiento**: ninguno. El inventario no se guarda ni se cachea para "Verificar disponibilidades"
@@ -82,7 +82,7 @@ la ruta exacta; este plan propone las siguientes y se confirman con ese equipo.
 
 ### B. Puerto de entrada interno (lo usa "Verificar disponibilidades")
 
-No hay ruta REST para este uso: otras features lo llaman por el puerto de entrada
+No hay ruta REST para este uso: otros casos de uso lo llaman por el puerto de entrada
 `ConsultRoomInventory`, que no devuelve entidades de TypeORM sino el objeto de integración `Room`.
 
 ```typescript
@@ -236,15 +236,15 @@ sequenceDiagram
 
 ## Modelo de datos y entidades involucradas
 
-**Esta feature no crea ni modifica tablas.** El inventario es del Módulo 1 y no se copia.
+**Este caso de uso no crea ni modifica tablas.** El inventario es del Módulo 1 y no se copia.
 
 | Elemento | Dónde vive | Notas |
 |---|---|---|
 | `Room` (`id`, `roomNumber`, `categoryRoom`, `maxCapacity`) | Objeto de integración en `application/integration/` | Del Módulo 1; no se persiste (plan base, "Datos externos") |
-| `ReservationRoom.roomId` | Tabla `reservation_room`, columna `room_id` | Solo referencia al `Room.id` del Módulo 1, sin FK; esta feature no la lee ni la escribe |
+| `ReservationRoom.roomId` | Tabla `reservation_room`, columna `room_id` | Solo referencia al `Room.id` del Módulo 1, sin FK; este caso de uso no la lee ni la escribe |
 
 **Estados y transiciones**: ninguno. No hay `Reservation.status` ni `stayStatus` en juego. El
-`maxCapacity` que devuelve se usa en otras features para validar el `guestCount` de cada habitación.
+`maxCapacity` que devuelve se usa en otros casos de uso para validar el `guestCount` de cada habitación.
 
 ## Reglas de validación y manejo de errores
 
@@ -274,19 +274,19 @@ Todo error sale con `{ "errorCode", "message", "timestamp", "path" }` y **siempr
 | Módulo | Dirección | Mecanismo | Contrato | Fallo o tiempo agotado |
 |---|---|---|---|---|
 | Módulo 1 | M2 → M1 | REST GET (inventario por `roomId` y por `categoryRoom`) | A1 y A2 | `INVENTORY_UNAVAILABLE` (400); no se asume ninguna habitación |
-| Módulo 1 (indirecto) | M2 → M1 | REST GET de mantenimientos, vía `consult-maintenance-calendar` | Plan de esa feature | La habitación sale con `maintenance.status = UNAVAILABLE`; no rompe la pantalla |
+| Módulo 1 (indirecto) | M2 → M1 | REST GET de mantenimientos, vía `consult-maintenance-calendar` | Plan de ese caso de uso | La habitación sale con `maintenance.status = UNAVAILABLE`; no rompe la pantalla |
 
 - Se accede **solo por `Module1Port`** (plan base): si cambia la API del Módulo 1, solo cambia el
   adaptador.
 - Tiempo máximo de espera por llamada: `MODULE1_TIMEOUT_MS`.
-- No hay colas en esta feature. No se publica ni se consume ningún mensaje.
+- No hay colas en este caso de uso. No se publica ni se consume ningún mensaje.
 
 ## Arquitectura (capas del plan base)
 
-| Capa | Piezas de esta feature |
+| Capa | Piezas de este caso de uso |
 |---|---|
 | `application/integration/` | `Room` |
-| `application/ports/out/` | `Module1Port.getRoom(roomId)` y `Module1Port.listRoomsByCategory(categoryRoom)` (el puerto lo comparten las demás features del Módulo 1) |
+| `application/ports/out/` | `Module1Port.getRoom(roomId)` y `Module1Port.listRoomsByCategory(categoryRoom)` (el puerto lo comparten los demás casos de uso del Módulo 1) |
 | `application/use-cases/consult-room-inventory/` | **Entrada**: `ConsultRoomInventory` (`byRoomId`, `byCategory`, `listAll`) y `ListRoomsWithMaintenance`; validadores de `roomId` y `categoryRoom` |
 | `infrastructure/in/rest/` | `RoomsController` (C1) |
 | `infrastructure/out/module1/` | `Module1HttpAdapter`: cliente HTTP con timeout, mapeo de 404, 400 y 5xx a errores de negocio, y validación de la forma de la respuesta |
@@ -364,7 +364,7 @@ fallos del Módulo 1.
 ## Dependencies & Execution Order
 
 - **Depende de**: el plan base (fase 2: `Module1Port`, configuración, filtro de errores, guards).
-- **Necesitan de esta feature**: `check-room-availability` (la usa como insumo) y, para el
+- **Necesitan de este caso de uso**: `check-room-availability` (la usa como insumo) y, para el
   `maxCapacity`, `generate-direct-reservation`, `generate-ota-reservation` y `update-reservation`.
 - **Depende para la pantalla**: `consult-maintenance-calendar` (mantenimiento próximo).
 - **Orden**: T001–T004 → US1 (T005–T009) → pantalla (T010–T014) → Polish. La pantalla se puede dejar

@@ -7,7 +7,7 @@
 
 ## Summary
 
-Esta feature es la **única vía de lectura de reservas** del Módulo 2 y la que informa al Módulo 1 de
+Este caso de uso es la **única vía de lectura de reservas** del Módulo 2 y la que informa al Módulo 1 de
 las llegadas del día. Hace cinco cosas:
 
 1. **Listado, filtros, orden y paginación de a 10** para la Recepcionista (historia 1).
@@ -16,7 +16,7 @@ las llegadas del día. Hace cinco cosas:
    (historia 3).
 4. **Lista del día al Módulo 1**: un envío único a las 00:00 por la cola `m1.reservas.diarias.queue`
    (historia 4).
-5. **Actualizaciones de la lista** (`ADDED`, `UPDATED`, `REMOVED`) cada vez que otra feature cambia una
+5. **Actualizaciones de la lista** (`ADDED`, `UPDATED`, `REMOVED`) cada vez que otro caso de uso cambia una
    reserva que forma parte de la lista del día (historia 5).
 
 Además expone dos consultas de solo lectura para otros módulos, sin pantalla: la del **Módulo 3** por
@@ -39,7 +39,7 @@ desordenar mensajes si RabbitMQ falla (FR-019, FR-020).
 | Actores | Recepcionista (pantalla); Módulo 1 (consulta por fechas y consumidor de la lista del día); Módulo 3 (consulta por referencia); procesos internos del Módulo 2 (búsqueda interna y cambios de la lista) |
 | Naturaleza | Solo lectura sobre `Reservation`; escribe únicamente sus propios mensajes (`daily_list_message`, `daily_sequence`) |
 
-**Disparadores** (cada capacidad de esta feature se activa de una forma distinta):
+**Disparadores** (cada capacidad de este caso de uso se activa de una forma distinta):
 
 | # | Capacidad | Disparador | Actor | Contrato |
 |---|---|---|---|---|
@@ -49,13 +49,13 @@ desordenar mensajes si RabbitMQ falla (FR-019, FR-020).
 | 4 | Consulta para liquidar | REST `GET /api/reservations/{reservationRef}` | Módulo 3 | C4 |
 | 5 | Reservas por fechas | REST `GET /api/reservations` | Módulo 1 | C5 |
 | 6 | Lista del día | Tarea programada a las 00:00 (y al arrancar) | Sistema | Mensaje `reserva.lista-del-dia` |
-| 7 | Actualización de la lista | Llamada interna de otra feature, dentro de su transacción | Otras features del Módulo 2 | Mensaje `reserva.lista-del-dia.actualizacion` |
+| 7 | Actualización de la lista | Llamada interna de otro caso de uso, dentro de su transacción | Otros casos de uso del Módulo 2 | Mensaje `reserva.lista-del-dia.actualizacion` |
 | 8 | Publicación de pendientes | Después de confirmar una transacción y tarea cada 10 s | Sistema | Colas del Módulo 1 |
 
 ## Technical Context
 
 Todo el contexto técnico (lenguaje, framework, dependencias, almacenamiento, pruebas) es el del
-[plan base](../base/plan.md#technical-context). Lo propio de esta feature:
+[plan base](../base/plan.md#technical-context). Lo propio de este caso de uso:
 
 - **Extensiones de PostgreSQL**: `unaccent` y `pg_trgm` (búsqueda por nombre sin tildes ni mayúsculas).
 - **Dependencias nuevas**: ninguna.
@@ -67,10 +67,10 @@ Todo el contexto técnico (lenguaje, framework, dependencias, almacenamiento, pr
 
 ## Alcance y límites
 
-| Dentro de esta feature | Fuera (lo hace otra feature) |
+| Dentro de este caso de uso | Fuera (lo hace otro caso de uso) |
 |---|---|
 | Listar, filtrar, buscar y mostrar el detalle | Modificar o cancelar la reserva (`update-reservation`, `cancel-reservation`); aquí solo se habilitan o no los botones |
-| Armar y publicar la lista del día y sus actualizaciones | Decidir *cuándo* hay un cambio: las demás features llaman al puerto `DailyListChangeRecorder` dentro de su transacción |
+| Armar y publicar la lista del día y sus actualizaciones | Decidir *cuándo* hay un cambio: los demás casos de uso llaman al puerto `DailyListChangeRecorder` dentro de su transacción |
 | Calcular `migrationStatus` para mostrarlo | Registrar los movimientos migratorios (`process-guest-data`) |
 | Consulta por referencia del Módulo 3 y por fechas del Módulo 1 | Cobrar o liquidar (Módulo 3); validar mantenimientos o bajas (Módulo 1): esa lógica es de ellos |
 | El resumen del día (FR-005a) | La ocupación física: es del Módulo 1 |
@@ -80,7 +80,7 @@ Todo el contexto técnico (lenguaje, framework, dependencias, almacenamiento, pr
 Rutas y reglas generales del plan base: prefijo `/api`, JSON, autenticación JWT, errores con cuerpo
 `{ "errorCode", "message", "timestamp", "path" }` y siempre 4xx (nunca 500). Roles: `RECEPTIONIST`,
 `MODULE1` y `MODULE3` (los dos últimos, de servicio a servicio). La `OTA` no tiene acceso a nada de
-esta feature (FR-011).
+este caso de uso (FR-011).
 
 **Autorización de fondo**: sin token, `401` (`UNAUTHENTICATED`); con un rol sin permiso, `403`
 (`FORBIDDEN`). Son 4xx, así que respetan la regla del diccionario.
@@ -453,8 +453,8 @@ con la del momento del envío.
 
 ## Cuándo una reserva "entra", "cambia" o "sale" de la lista
 
-La regla vive en el **dominio** (`DailyListMembership`), no en cada feature, y la usa el puerto
-`DailyListChangeRecorder`. Las demás features lo llaman **dentro de su transacción**, con la reserva
+La regla vive en el **dominio** (`DailyListMembership`), no en cada caso de uso, y la usa el puerto
+`DailyListChangeRecorder`. Los demás casos de uso lo llaman **dentro de su transacción**, con la reserva
 antes y después del cambio.
 
 Una reserva **pertenece a la lista** si `startDate` es el día operativo en curso y `status` es `ACTIVE`.
@@ -482,7 +482,7 @@ lista se arme con los datos vigentes (caso borde del spec).
 
 `daily_list_message` ya está definida en el plan base: guarda cada mensaje con su `payload` antes de
 publicarlo, con `message_kind` (`LIST` o `UPDATE`), `update_type`, `reservation_id`, `removal_reason`,
-`publish_status` (`PENDING`, `PUBLISHED`, `FAILED`) y `attempts`. Esta feature la usa tal cual: el
+`publish_status` (`PENDING`, `PUBLISHED`, `FAILED`) y `attempts`. Este caso de uso la usa tal cual: el
 único parcial `(operational_date) WHERE message_kind = 'LIST'` es el respaldo de que la lista sale una
 sola vez por día, y el índice `(publish_status, operational_date, sequence_number)` sirve para reintentar
 en orden. La causa de cada fallo no tiene columna: se escribe en el log, sin datos personales.
@@ -502,7 +502,7 @@ Dos cambios simultáneos de reservas distintas podrían tomar el mismo número, 
 a las 00:00 podría perderse entre la lista y la primera actualización. La fila del día se bloquea con
 `SELECT … FOR UPDATE`:
 
-- **Cambio de una reserva** (en la transacción de la otra feature): bloquea la fila de hoy. Si
+- **Cambio de una reserva** (en la transacción del otro caso de uso): bloquea la fila de hoy. Si
   `list_generated` es `false`, no emite nada (la lista incluirá el cambio). Si es `true`, toma
   `last_sequence + 1`, lo guarda y inserta el mensaje `PENDING` **en la misma transacción** que el cambio.
 - **Proceso de las 00:00**: bloquea la misma fila (la crea si no existe), lee las reservas ya
@@ -610,11 +610,11 @@ sequenceDiagram
     MQ-->>M1: lista del día
 ```
 
-### D3. Actualización cuando otra feature cambia una reserva
+### D3. Actualización cuando otro caso de uso cambia una reserva
 
 ```mermaid
 sequenceDiagram
-    participant F as Otra feature (cancelar, modificar, crear, confirmar OTA)
+    participant F as Otro caso de uso (cancelar, modificar, crear, confirmar OTA)
     participant R as DailyListChangeRecorder
     participant D as DailyListMembership (dominio)
     participant DB as PostgreSQL
@@ -686,7 +686,7 @@ sequenceDiagram
 
 ### Modelo de datos y entidades involucradas
 
-Esta feature **no cambia ningún estado**: lee las entidades del dominio y escribe solo sus mensajes.
+Este caso de uso **no cambia ningún estado**: lee las entidades del dominio y escribe solo sus mensajes.
 
 | Tabla | Uso | Qué se toca |
 |---|---|---|
@@ -753,7 +753,7 @@ Función pura en el dominio: `deriveMigrationStatus(status, hasForeignMovement)`
 
 Todo error sale con el cuerpo `{ "errorCode", "message", "timestamp", "path" }` y **siempre 4xx**. El
 filtro global del plan base traduce cualquier excepción inesperada a un 4xx controlado y deja el detalle
-en el log, sin datos personales ni de infraestructura. **Esta feature nunca responde 500.**
+en el log, sin datos personales ni de infraestructura. **Este caso de uso nunca responde 500.**
 
 ### Errores del cliente (REST)
 
@@ -790,7 +790,7 @@ en el log, sin datos personales ni de infraestructura. **Esta feature nunca resp
 
 ## Integraciones externas
 
-Esta feature **no hace ninguna llamada síncrona a otros módulos**: ni al Módulo 1 ni al Módulo 3. Solo
+Este caso de uso **no hace ninguna llamada síncrona a otros módulos**: ni al Módulo 1 ni al Módulo 3. Solo
 publica por cola y responde consultas. No necesita `Module1Port` ni `Module3Port`.
 
 | Módulo | Dirección | Mecanismo | Contrato | Fallo o tiempo agotado |
@@ -807,7 +807,7 @@ publica por cola y responde consultas. No necesita `Module1Port` ni `Module3Port
 
 ## Arquitectura (capas del plan base)
 
-| Capa | Piezas de esta feature |
+| Capa | Piezas de este caso de uso |
 |---|---|
 | `domain/reservation/` | `DailyListMembership` (cuándo entra, cambia o sale), `ReservationProjection` (el detalle de FR-014), `deriveMigrationStatus` |
 | `application/use-cases/check-view-reservation/` | **Entrada**: `ListReservations`, `GetReservationDetail`, `GetDaySummary`, `GetReservationForBilling`, `FindReservationsByStayRange`, `GenerateDailyList`, `PublishPendingDailyMessages`, `DailyListChangeRecorder` |
@@ -817,12 +817,12 @@ publica por cola y responde consultas. No necesita `Module1Port` ni `Module3Port
 | `infrastructure/out/persistence/` | `TypeOrmReservationQuery` (`QueryBuilder`), repositorios de `daily_list_message` y `daily_sequence` |
 | `infrastructure/out/messaging/` | `RabbitDailyListPublisher` (exchange `hospitua.events`, confirmación de publicación) |
 
-**Servicio interno (FR-007)**: las demás features buscan reservas por el puerto de entrada
+**Servicio interno (FR-007)**: los demás casos de uso buscan reservas por el puerto de entrada
 `ReservationLookup` (`findByRef`, `findByCode`, `findForUpdate`), que devuelve la reserva completa con
 `updatedAt` y comisión. No usan la ruta REST ni las clases internas de este caso de uso (regla 6 de la
 arquitectura).
 
-**Integración con otras features**: `cancel-reservation`, `update-reservation`,
+**Integración con otros casos de uso**: `cancel-reservation`, `update-reservation`,
 `generate-direct-reservation` y `generate-ota-reservation` llaman a `DailyListChangeRecorder.record(tx,
 before, after)` dentro de su transacción. Cada uno de esos planes debe listar esa llamada.
 
@@ -866,7 +866,7 @@ frontend/src/pages/reservations/     # listado con filtros, detalle, resumen del
 ```
 
 **Structure Decision**: sin código nuevo fuera de las carpetas del plan base. Las consultas viven en
-`application/use-cases/check-view-reservation/` y el único acoplamiento con otras features es el puerto
+`application/use-cases/check-view-reservation/` y el único acoplamiento con otros casos de uso es el puerto
 `DailyListChangeRecorder`.
 
 ## Phase 1: Setup
@@ -971,8 +971,8 @@ Cada escenario Gherkin tiene al menos una prueba de integración (regla del plan
 ## Dependencies & Execution Order
 
 - **Depende de**: el plan base completo (fase 2: esquema, mensajería, roles, bloqueo asesor).
-- **Antes que esta feature**: ninguna. Es la primera del orden recomendado.
-- **Necesitan de esta feature**: `check-room-availability`, `update-reservation`, `cancel-reservation`
+- **Antes que este caso de uso**: ninguno. Es el primero del orden recomendado.
+- **Necesitan de este caso de uso**: `check-room-availability`, `update-reservation`, `cancel-reservation`
   y `generate-*` usan `ReservationLookup` (FR-007) y `DailyListChangeRecorder`.
 - **Orden interno**: fases 1 y 2 → US1 → US2 → US3 → US4 → US5 → consultas de otros módulos. US4 y US5
   son independientes de las pantallas (US1 a US3) y pueden hacerse en paralelo.
@@ -1024,7 +1024,7 @@ Cada uno se puede cambiar sin romper el resto; se anotan para que no pasen desap
 | FR-014, FR-015 | `ReservationProjection` | T004 |
 | FR-016, FR-017 | `DailyListMembership`, `DailyListChangeRecorder` | T003, T028 |
 | FR-018, FR-019, FR-020 | `daily_sequence`, publicador y reintentos | T002, T025, T026, T029 |
-| FR-021 | La feature no cambia ningún estado | T030 |
+| FR-021 | El caso de uso no cambia ningún estado | T030 |
 | FR-022 | `GetReservationForBilling` (C4) | T032 |
 | FR-023 | `FindReservationsByStayRange` (C5) | T033 |
 | NFR-001, NFR-002 | Índices y prueba de carga | T001, T036 |
