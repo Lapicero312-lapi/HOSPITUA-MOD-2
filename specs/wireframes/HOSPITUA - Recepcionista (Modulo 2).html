@@ -12,6 +12,7 @@
   <nav class="side" id="side">
     <div class="brand"><span class="mark">H</span><span><span class="txt">HOSPITUA</span><small>Módulo 2 · Recepción</small></span></div>
     <button class="navbtn" data-nav="reservas"><span>Reservas</span></button>
+    <button class="navbtn" data-nav="huespedes"><span>Huéspedes alojados</span></button>
     <button class="navbtn" data-nav="sire"><span>Exportar SIRE</span></button>
     <button class="navbtn" data-nav="habitaciones"><span>Habitaciones</span></button>
     <button class="navbtn" data-nav="tarifas"><span>Tarifas</span></button>
@@ -231,6 +232,33 @@
         </div>
       </section>
 
+      <!-- ================= HUÉSPEDES ALOJADOS ================= -->
+      <section class="screen" id="scr-huespedes" hidden>
+        <div class="panel">
+          <h2>Huéspedes alojados</h2>
+          <div class="row">
+            <div class="field" style="flex:1;min-width:220px"><label>Buscar</label><input id="gSearch" placeholder="Número de documento o nombre"></div>
+            <div class="field"><label>Nacionalidad</label>
+              <select id="gNac"><option value="">Todos</option><option value="FOREIGN">Extranjeros</option><option value="COLOMBIAN">Colombianos</option></select>
+            </div>
+            <div class="field"><label>Situación</label>
+              <select id="gSit"><option value="">Todos</option><option value="IN_HOTEL">En el hotel</option><option value="CHECKED_OUT">Ya salió</option></select>
+            </div>
+          </div>
+          <div class="row">
+            <div class="field"><label>Desde</label><input type="date" id="gDesde"></div>
+            <div class="field"><label>Hasta</label><input type="date" id="gHasta"></div>
+            <div class="field" style="justify-content:flex-end"><label>&nbsp;</label><button class="btn" id="gClear">Limpiar filtros</button></div>
+          </div>
+          <div id="gErr"></div>
+          <div class="tablewrap"><table>
+            <thead><tr><th>Huésped</th><th>Nacionalidad</th><th>Reserva</th><th>Entrada</th><th>Salida</th><th style="text-align:right">Acciones</th></tr></thead>
+            <tbody id="tblGuests"></tbody>
+          </table></div>
+          <div class="pager" id="gPager"></div>
+        </div>
+      </section>
+
       <!-- ================= EXPORTAR SIRE ================= -->
       <section class="screen" id="scr-sire" hidden>
         <div class="panel">
@@ -264,7 +292,7 @@
         <div class="panel">
           <h2>Habitaciones</h2>
           <div class="tablewrap"><table>
-            <thead><tr><th>N.º</th><th>Categoría</th><th>Capacidad</th><th>Estado hoy</th><th>Detalle</th></tr></thead>
+            <thead><tr><th>N.º</th><th>Categoría</th><th>Capacidad</th><th>Mantenimiento próximo</th></tr></thead>
             <tbody id="tblRooms"></tbody>
           </table></div>
         </div>
@@ -284,12 +312,9 @@
       <!-- ================= AGENCIAS OTA ================= -->
       <section class="screen" id="scr-otas" hidden>
         <div class="panel">
-          <h2 style="justify-content:space-between">
-            <span>Agencias OTA</span>
-            <button class="btn primary" onclick="openOtaModal(null)">+ Nueva agencia</button>
-          </h2>
+          <h2>Agencias OTA</h2>
           <div class="tablewrap"><table>
-            <thead><tr><th>Agencia</th><th>Cuenta del hotel vinculada</th><th>Vinculada el</th><th>% Comisión</th><th>Conexión</th><th>Reservas activas</th><th style="text-align:right">Acciones</th></tr></thead>
+            <thead><tr><th>Agencia</th><th>Cuenta del hotel vinculada</th><th>Vinculada el</th><th>% Comisión</th><th>Conexión</th><th>Reservas activas</th></tr></thead>
             <tbody id="tblOtas"></tbody>
           </table></div>
         </div>
@@ -299,18 +324,18 @@
   </div>
 </div>
 
-<!-- ============ MODAL: Nueva / editar agencia OTA ============ -->
-<div class="overlay" id="m-ota" hidden>
-  <div class="modal narrow">
-    <h3 id="otaTitle">Nueva agencia</h3>
-    <p class="sub">Nombre, cuenta del hotel vinculada en la OTA y porcentaje de comisión contractual.</p>
-    <div class="field" style="margin-bottom:10px"><label class="req">Nombre</label><input id="otaNombre" placeholder="Ej. Hotels.com"></div>
-    <div class="field" style="margin-bottom:10px"><label class="req">Cuenta del hotel vinculada</label><input id="otaCuenta" placeholder="Ej. Hotel ID 8841207"></div>
-    <div class="field"><label class="req">% Comisión</label><input id="otaPct" type="number" min="0" max="100" value="15"></div>
-    <div id="otaErr"></div>
+<!-- ============ MODAL: Detalle de un huésped ============ -->
+<div class="overlay" id="m-huesped" hidden>
+  <div class="modal">
+    <h3 id="gdName"></h3>
+    <div class="kv" id="gdData" style="margin:12px 0"></div>
+    <div class="tablewrap"><table>
+      <thead><tr><th>Movimiento</th><th>Fecha</th></tr></thead>
+      <tbody id="gdMoves"></tbody>
+    </table></div>
     <div class="acts">
-      <button class="btn" onclick="closeModal('m-ota')">Cancelar</button>
-      <button class="btn primary" id="otaSave">Guardar</button>
+      <button class="btn" onclick="closeModal('m-huesped')">Cerrar</button>
+      <button class="btn primary" id="gdReserva">Ver reserva</button>
     </div>
   </div>
 </div>
@@ -351,7 +376,10 @@ const rooms = [
   {n:'201',cat:'Superior'}, {n:'202',cat:'Superior'}, {n:'203',cat:'Superior'}, {n:'204',cat:'Superior'},
   {n:'301',cat:'Suite'}, {n:'302',cat:'Suite'}, {n:'303',cat:'Suite'},
 ];
-const maintenance = [{room:'203', start:'2026-09-30', end:'2026-10-02', label:'Mantenimiento programado 30 sep → 02 oct'}];
+const maintenance = [
+  {room:'203', start:'2026-09-30', end:'2026-10-02', label:''},
+  {room:'105', start:'2026-10-08', end:'2026-10-10', label:''},
+];
 
 // Agencias registradas solas al vincular la cuenta del hotel; datos enviados por cada OTA (no editables).
 const otas = [
@@ -361,37 +389,40 @@ const otas = [
 ];
 
 const reservations = [
-  {ref:'RSV-2026-00420', guest:'Andrés Molina', doc:'CC 80.221.334', pais:'Colombia', source:'DIRECT',
+  {ref:'RSV-7B2E41A0', guest:'Andrés Molina', doc:'CC 80.221.334', pais:'Colombia', source:'DIRECT',
     start:'2026-09-28', end:'2026-09-29', status:'ACTIVE', guestCount:1, rooms:[{n:'102',cat:'Estándar',stay:'EXPECTED'}],
     phone:'+57 310 220 4471', email:'andres.molina@correo.com', notes:'Llega en el último vuelo, 23:30.'},
-  {ref:'RSV-2026-00418', guest:'Camila Restrepo', doc:'CC 1.020.456.789', pais:'Colombia', source:'DIRECT',
+  {ref:'RSV-5C19D3E8', guest:'Camila Restrepo', doc:'CC 1.020.456.789', pais:'Colombia', source:'DIRECT',
     start:'2026-09-28', end:'2026-10-01', status:'ACTIVE', guestCount:2, rooms:[{n:'104',cat:'Estándar',stay:'EXPECTED'}],
     notes:''},
-  {ref:'RSV-2026-00421', guest:'Valentina Ospina', doc:'CC 1.144.093.552', pais:'Colombia', source:'DIRECT',
+  {ref:'RSV-3F9A1C7B', guest:'Valentina Ospina', doc:'CC 1.144.093.552', pais:'Colombia', source:'DIRECT',
     start:'2026-10-15', end:'2026-10-17', status:'ACTIVE', guestCount:3, rooms:[{n:'204',cat:'Superior',stay:'EXPECTED'}],
     phone:'+57 300 118 5520', email:'valentina.ospina@correo.com', notes:'Aniversario, solicita decoración.'},
-  {ref:'RSV-2026-00427', guest:'Marta Kowalski', doc:'Pasaporte PL7730215', pais:'Polonia', source:'OTA', ota:'Airbnb', ext:'HMX4Q8Z2TA',
+  {ref:'RSV-A41F82D6', guest:'Marta Kowalski', doc:'Pasaporte PL7730215', pais:'Polonia', source:'OTA', ota:'Airbnb', ext:'HMX4Q8Z2TA',
     start:'2026-10-05', end:'2026-10-08', status:'ACTIVE', guestCount:2, rooms:[{n:'303',cat:'Suite',stay:'EXPECTED'}],
     gross:1656000, commissionPct:12, commissionStatus:'CALCULATED', notes:''},
-  {ref:'RSV-2026-00425', guest:'John Miller', doc:'Pasaporte US5519302', pais:'Estados Unidos', source:'OTA', ota:'Booking.com', ext:'4417829013',
+  {ref:'RSV-8D02E5A4', guest:'John Miller', doc:'Pasaporte US5519302', pais:'Estados Unidos', source:'OTA', ota:'Booking.com', ext:'4417829013',
     start:'2026-10-12', end:'2026-10-14', status:'PENDING', guestCount:1, rooms:[{n:'105',cat:'Estándar',stay:'EXPECTED'}],
     gross:506000, commissionPct:15, commissionStatus:'CALCULATED', notes:''},
-  {ref:'RSV-2026-00412', guest:'Lukas Becker', doc:'Pasaporte C4X8R21K', pais:'Alemania', source:'OTA', ota:'Booking.com', ext:'4409921557',
+  {ref:'RSV-1E6B9C35', guest:'Lukas Becker', doc:'Pasaporte C4X8R21K', pais:'Alemania', source:'OTA', ota:'Booking.com', ext:'4409921557',
     start:'2026-09-26', end:'2026-09-30', status:'IN_PROGRESS', guestCount:1, rooms:[{n:'201',cat:'Superior',stay:'CHECKED_IN'}],
     gross:1426000, commissionPct:15, commissionStatus:'CALCULATED', notes:''},
-  {ref:'RSV-2026-00410', guest:'Isabela Santos Rocha', doc:'Pasaporte BR552104', pais:'Brasil', source:'DIRECT',
+  {ref:'RSV-C07A52F9', guest:'Isabela Santos Rocha', doc:'Pasaporte BR552104', pais:'Brasil', source:'DIRECT',
     start:'2026-09-26', end:'2026-09-30', status:'IN_PROGRESS', guestCount:3, rooms:[{n:'202',cat:'Superior',stay:'CHECKED_IN'},{n:'301',cat:'Suite',stay:'CHECKED_IN'}],
     notes:'Grupo familiar: titular y dos acompañantes.'},
-  {ref:'RSV-2026-00415', guest:'Lucía Fernández Gil', doc:'Pasaporte ES4471230', pais:'España', source:'OTA', ota:'Booking.com', ext:'4410038871',
+  {ref:'RSV-92D4E1B7', guest:'Lucía Fernández Gil', doc:'Pasaporte ES4471230', pais:'España', source:'OTA', ota:'Booking.com', ext:'4410038871',
     start:'2026-09-27', end:'2026-10-01', status:'IN_PROGRESS', guestCount:1, rooms:[{n:'101',cat:'Estándar',stay:'CHECKED_IN'}],
     gross:1012000, commissionPct:15, commissionStatus:'CALCULATED', notes:''},
-  {ref:'RSV-2026-00413', guest:'Hiroshi Tanaka', doc:'Pasaporte JP0098231', pais:'Japón', source:'OTA', ota:'Expedia', ext:'EXP-72201934',
+  {ref:'RSV-4A8F60C2', guest:'Hiroshi Tanaka', doc:'Pasaporte JP0098231', pais:'Japón', source:'OTA', ota:'Expedia', ext:'EXP-72201934',
     start:'2026-09-20', end:'2026-09-24', status:'COMPLETED', guestCount:1, rooms:[{n:'302',cat:'Suite',stay:'CHECKED_OUT'}],
     gross:2208000, commissionPct:18, commissionStatus:'RECONCILED', notes:''},
-  {ref:'RSV-2026-00407', guest:'Emma Dubois', doc:'Pasaporte FR19XK442', pais:'Francia', source:'OTA', ota:'Airbnb', ext:'HMB77PQ1RD',
+  {ref:'RSV-E5B31D08', guest:'Emma Dubois', doc:'Pasaporte FR19XK442', pais:'Francia', source:'OTA', ota:'Airbnb', ext:'HMB77PQ1RD',
     start:'2026-09-22', end:'2026-09-24', status:'NO_SHOW', guestCount:2, rooms:[{n:'203',cat:'Superior',stay:'NOT_ARRIVED'}],
     gross:713000, commissionPct:12, commissionStatus:'CALCULATED', notes:''},
-  {ref:'RSV-2026-00402', guest:'Ricardo Peña Salas', doc:'CC 79.554.120', pais:'Colombia', source:'DIRECT',
+  {ref:'RSV-B83D07E2', guest:'Daniela Cárdenas', doc:'CC 52.118.904', pais:'Colombia', source:'DIRECT',
+    start:'2026-09-27', end:'2026-10-01', status:'IN_PROGRESS', guestCount:2, rooms:[{n:'103',cat:'Estándar',stay:'CHECKED_IN'}],
+    phone:'+57 315 480 2290', email:'daniela.cardenas@correo.com', notes:'Viaja con su pareja.'},
+  {ref:'RSV-6D90A7F3', guest:'Ricardo Peña Salas', doc:'CC 79.554.120', pais:'Colombia', source:'DIRECT',
     start:'2026-09-15', end:'2026-09-16', status:'NO_SHOW', guestCount:1, rooms:[{n:'103',cat:'Estándar',stay:'NOT_ARRIVED'}],
     notes:'', noShow:true},
 ];
@@ -399,20 +430,27 @@ const reservations = [
 // Plantillas de movimientos migratorios de cada huésped extranjero. El ENTRY existe cuando la reserva ya tuvo
 // Check-In (llegó) y el DEPARTURE cuando ya tuvo Check-Out; la fecha es la de entrada o la de salida de la reserva.
 const movementTemplates = [
-  {id:'MM-0101', ref:'RSV-2026-00413', room:'302', firstName:'Hiroshi', lastName:'Tanaka', docType:'PA', docNumber:'JP0098231', birthDate:'1984-03-11', nat:'JAPÓN', origin:'TOKIO', dest:'CARTAGENA', type:'ENTRY'},
-  {id:'MM-0102', ref:'RSV-2026-00413', room:'302', firstName:'Hiroshi', lastName:'Tanaka', docType:'PA', docNumber:'JP0098231', birthDate:'1984-03-11', nat:'JAPÓN', origin:'TOKIO', dest:'CARTAGENA', type:'DEPARTURE'},
-  {id:'MM-0110', ref:'RSV-2026-00412', room:'201', firstName:'Lukas', lastName:'Becker', docType:'PA', docNumber:'C4X8R21K', birthDate:'1991-07-02', nat:'ALEMANIA', origin:'BERLÍN', dest:'MEDELLÍN', type:'ENTRY'},
-  {id:'MM-0113', ref:'RSV-2026-00412', room:'201', firstName:'Lukas', lastName:'Becker', docType:'PA', docNumber:'C4X8R21K', birthDate:'1991-07-02', nat:'ALEMANIA', origin:'BERLÍN', dest:'MEDELLÍN', type:'DEPARTURE'},
-  {id:'MM-0111', ref:'RSV-2026-00410', room:'202', firstName:'Isabela', lastName:'Santos Rocha', docType:'PA', docNumber:'BR552104', birthDate:'1988-12-19', nat:'BRASIL', origin:'SÃO PAULO', dest:'SANTA MARTA', type:'ENTRY'},
-  {id:'MM-0114', ref:'RSV-2026-00410', room:'202', firstName:'Isabela', lastName:'Santos Rocha', docType:'PA', docNumber:'BR552104', birthDate:'1988-12-19', nat:'BRASIL', origin:'SÃO PAULO', dest:'SANTA MARTA', type:'DEPARTURE'},
-  {id:'MM-0112', ref:'RSV-2026-00410', room:'202', firstName:'Pedro', lastName:'Santos Rocha', docType:'PA', docNumber:'BR552187', birthDate:'2014-05-30', nat:'BRASIL', origin:'SÃO PAULO', dest:'SANTA MARTA', type:'ENTRY'},
-  {id:'MM-0115', ref:'RSV-2026-00410', room:'202', firstName:'Pedro', lastName:'Santos Rocha', docType:'PA', docNumber:'BR552187', birthDate:'2014-05-30', nat:'BRASIL', origin:'SÃO PAULO', dest:'SANTA MARTA', type:'DEPARTURE'},
-  {id:'MM-0116', ref:'RSV-2026-00415', room:'101', firstName:'Lucía', lastName:'Fernández Gil', docType:'PA', docNumber:'ES4471230', birthDate:'1990-09-08', nat:'ESPAÑA', origin:'MADRID', dest:'BOGOTÁ', type:'ENTRY'},
-  {id:'MM-0117', ref:'RSV-2026-00415', room:'101', firstName:'Lucía', lastName:'Fernández Gil', docType:'PA', docNumber:'ES4471230', birthDate:'1990-09-08', nat:'ESPAÑA', origin:'MADRID', dest:'BOGOTÁ', type:'DEPARTURE'},
-  {id:'MM-0118', ref:'RSV-2026-00427', room:'303', firstName:'Marta', lastName:'Kowalski', docType:'PA', docNumber:'PL7730215', birthDate:'1986-02-14', nat:'POLONIA', origin:'VARSOVIA', dest:'CARTAGENA', type:'ENTRY'},
-  {id:'MM-0119', ref:'RSV-2026-00427', room:'303', firstName:'Marta', lastName:'Kowalski', docType:'PA', docNumber:'PL7730215', birthDate:'1986-02-14', nat:'POLONIA', origin:'VARSOVIA', dest:'CARTAGENA', type:'DEPARTURE'},
+  {id:'MM-0101', ref:'RSV-4A8F60C2', room:'302', firstName:'Hiroshi', lastName:'Tanaka', docType:'PAS', docNumber:'JP0098231', birthDate:'1984-03-11', nat:'Japón', origin:'Tokio, Japón', dest:'Cartagena, Colombia', type:'ENTRY'},
+  {id:'MM-0102', ref:'RSV-4A8F60C2', room:'302', firstName:'Hiroshi', lastName:'Tanaka', docType:'PAS', docNumber:'JP0098231', birthDate:'1984-03-11', nat:'Japón', origin:'Tokio, Japón', dest:'Cartagena, Colombia', type:'DEPARTURE'},
+  {id:'MM-0110', ref:'RSV-1E6B9C35', room:'201', firstName:'Lukas', lastName:'Becker', docType:'PAS', docNumber:'C4X8R21K', birthDate:'1991-07-02', nat:'Alemania', origin:'Berlín, Alemania', dest:'Medellín, Colombia', type:'ENTRY'},
+  {id:'MM-0113', ref:'RSV-1E6B9C35', room:'201', firstName:'Lukas', lastName:'Becker', docType:'PAS', docNumber:'C4X8R21K', birthDate:'1991-07-02', nat:'Alemania', origin:'Berlín, Alemania', dest:'Medellín, Colombia', type:'DEPARTURE'},
+  {id:'MM-0111', ref:'RSV-C07A52F9', room:'202', firstName:'Isabela', lastName:'Santos Rocha', docType:'PAS', docNumber:'BR552104', birthDate:'1988-12-19', nat:'Brasil', origin:'São Paulo, Brasil', dest:'Santa Marta, Colombia', type:'ENTRY'},
+  {id:'MM-0114', ref:'RSV-C07A52F9', room:'202', firstName:'Isabela', lastName:'Santos Rocha', docType:'PAS', docNumber:'BR552104', birthDate:'1988-12-19', nat:'Brasil', origin:'São Paulo, Brasil', dest:'Santa Marta, Colombia', type:'DEPARTURE'},
+  {id:'MM-0112', ref:'RSV-C07A52F9', room:'202', firstName:'Pedro', lastName:'Santos Rocha', docType:'PAS', docNumber:'BR552187', birthDate:'2014-05-30', nat:'Brasil', origin:'São Paulo, Brasil', dest:'Santa Marta, Colombia', type:'ENTRY'},
+  {id:'MM-0115', ref:'RSV-C07A52F9', room:'202', firstName:'Pedro', lastName:'Santos Rocha', docType:'PAS', docNumber:'BR552187', birthDate:'2014-05-30', nat:'Brasil', origin:'São Paulo, Brasil', dest:'Santa Marta, Colombia', type:'DEPARTURE'},
+  {id:'MM-0116', ref:'RSV-92D4E1B7', room:'101', firstName:'Lucía', lastName:'Fernández Gil', docType:'PAS', docNumber:'ES4471230', birthDate:'1990-09-08', nat:'España', origin:'Madrid, España', dest:'Bogotá, Colombia', type:'ENTRY'},
+  {id:'MM-0117', ref:'RSV-92D4E1B7', room:'101', firstName:'Lucía', lastName:'Fernández Gil', docType:'PAS', docNumber:'ES4471230', birthDate:'1990-09-08', nat:'España', origin:'Madrid, España', dest:'Bogotá, Colombia', type:'DEPARTURE'},
+  {id:'MM-0118', ref:'RSV-A41F82D6', room:'303', firstName:'Marta', lastName:'Kowalski', docType:'PAS', docNumber:'PL7730215', birthDate:'1986-02-14', nat:'Polonia', origin:'Varsovia, Polonia', dest:'Cartagena, Colombia', type:'ENTRY'},
+  {id:'MM-0119', ref:'RSV-A41F82D6', room:'303', firstName:'Marta', lastName:'Kowalski', docType:'PAS', docNumber:'PL7730215', birthDate:'1986-02-14', nat:'Polonia', origin:'Varsovia, Polonia', dest:'Cartagena, Colombia', type:'DEPARTURE'},
+  {id:'MM-0120', ref:'RSV-B83D07E2', room:'103', firstName:'Daniela', lastName:'Cárdenas Ruiz', docType:'CC', docNumber:'52118904', birthDate:'1992-04-17', nat:'Colombia', origin:'', dest:'', type:'ENTRY'},
+  {id:'MM-0121', ref:'RSV-B83D07E2', room:'103', firstName:'Daniela', lastName:'Cárdenas Ruiz', docType:'CC', docNumber:'52118904', birthDate:'1992-04-17', nat:'Colombia', origin:'', dest:'', type:'DEPARTURE'},
+  {id:'MM-0122', ref:'RSV-B83D07E2', room:'103', firstName:'Jonas', lastName:'Weber', docType:'PAS', docNumber:'C9T4M55Z', birthDate:'1989-11-23', nat:'Alemania', origin:'Hamburgo, Alemania', dest:'Medellín, Colombia', type:'ENTRY'},
+  {id:'MM-0123', ref:'RSV-B83D07E2', room:'103', firstName:'Jonas', lastName:'Weber', docType:'PAS', docNumber:'C9T4M55Z', birthDate:'1989-11-23', nat:'Alemania', origin:'Hamburgo, Alemania', dest:'Medellín, Colombia', type:'DEPARTURE'},
 ];
 const movements = [];
+// Extranjero = nacionalidad distinta de Colombia (process-guest-data FR-003): no se guarda aparte.
+const isForeign = m => !!m.nat && m.nat !== 'Colombia';
+const foreignMovements = () => movements.filter(isForeign);
 
 // Configuración SIRE del hotel (export-sire-file FR-005). Se carga desde el manual de cargue de SIRE.
 const SIRE_CONFIG = {hotelSireCode:'123456', hotelCityCode:'11001', separator:'\t', separatorLabel:'Tabulador', dateFormat:'dd/mm/aaaa'};
@@ -427,7 +465,11 @@ const exportsHist = [
   {id:'EXP-20260921-02', kind:'Periodo', start:'2026-09-14', end:'2026-09-21', ok:1, by:USER, date:'2026-09-21 08:12'},
 ];
 let exportSeq = 1;
-let nextRefNum = 430;
+function newRef(){
+  let r;
+  do { r = 'RSV-' + Array.from({length: 8}, () => '0123456789ABCDEF'[Math.floor(Math.random() * 16)]).join(''); } while (findRes(r));
+  return r;
+}
 
 // ================= Utilidades de dominio =================
 function findRes(ref){ return reservations.find(r => r.ref === ref); }
@@ -554,7 +596,6 @@ const lockLong = {
 const STATUS_ES = {ACTIVE:'Activa', PENDING:'Pendiente', IN_PROGRESS:'En curso', COMPLETED:'Completada', CANCELLED:'Cancelada', NO_SHOW:'No se presentó'};
 const STAY_ES = {EXPECTED:'Esperada', CHECKED_IN:'Con Check-In', CHECKED_OUT:'Con Check-Out', NOT_ARRIVED:'No llegó'};
 const COMMISSION_ES = {CALCULATED:'Calculada', RECONCILED:'Conciliada'};
-const ROOM_STATE_ES = {Available:'Disponible', Reserved:'Reservada', Occupied:'Ocupada', DisabledForRepairs:'En reparación'};
 const MOVEMENT_ES = {ENTRY:'Entrada', DEPARTURE:'Salida'};
 function fmtDate(v){
   if (!v) return '';
@@ -576,9 +617,10 @@ function channelBadge(r){
 function roomsText(r){ return r.rooms.map(x => 'Hab. ' + x.n).join(', '); }
 function roomIsReservedToday(r){ return isEditable(r) && r.start === TODAY; }
 function movementsOf(ref){ return movements.filter(m => m.ref === ref); }
+function foreignMovementsOf(ref){ return movementsOf(ref).filter(isForeign); }
 // Estado migratorio de la reserva (check-view-reservation FR-005b). Nunca se muestra vacío ni "N/A".
 function migrationStatus(r){
-  const ms = movementsOf(r.ref);
+  const ms = foreignMovementsOf(r.ref);
   if (isEditable(r)) return 'AWAITING_CHECK_IN';
   if (r.status === 'CANCELLED' || r.status === 'NO_SHOW') return 'NO_CHECK_IN';
   if (!ms.length) return 'NOT_REQUIRED';
@@ -598,7 +640,7 @@ function kv(k, v){ return `<div><div class="k">${k}</div><div class="v">${v}</di
 
 // ================= Navegación =================
 const titles = {reservas:'Reservas', 'nueva-directa':'Nueva reserva directa', detalle:'Detalle de reserva',
-  modificar:'Modificar reserva', cancelar:'Cancelar reserva', sire:'Exportar SIRE', habitaciones:'Habitaciones', tarifas:'Tarifas', otas:'Agencias OTA'};
+  modificar:'Modificar reserva', cancelar:'Cancelar reserva', huespedes:'Huéspedes alojados', sire:'Exportar SIRE', habitaciones:'Habitaciones', tarifas:'Tarifas', otas:'Agencias OTA'};
 const RES_SCREENS = ['detalle', 'modificar', 'cancelar', 'nueva-directa'];
 let currentRef = null;
 function showScreen(id){
@@ -614,6 +656,7 @@ function showScreen(id){
   document.getElementById('crumbs').textContent = crumbs;
   if (id === 'reservas') renderReservas();
   if (id === 'sire') renderSire();
+  if (id === 'huespedes') renderGuests();
   window.scrollTo(0, 0);
   closeSide();
 }
@@ -832,7 +875,7 @@ document.getElementById('dtCanBtn').addEventListener('click', () => goCancelar(c
 
 function renderMigTab(r){
   const box = document.getElementById('dtMig');
-  const ms = movementsOf(r.ref);
+  const ms = foreignMovementsOf(r.ref);
   if (!ms.length){
     const msg = {
       AWAITING_CHECK_IN: 'Pendiente de Check-In. Los datos migratorios de cada huésped extranjero (incluidos los acompañantes) se registran en el Check-In.',
@@ -1060,7 +1103,7 @@ document.getElementById('ndSubmit').addEventListener('click', () => {
   const s = document.getElementById('ndEntrada').value, e = document.getElementById('ndSalida').value;
   const pais = document.getElementById('ndPais').value.trim();
   const picked = roomsFreeFor(cat, s, e).slice(0, qty);
-  const ref = 'RSV-2026-00' + (nextRefNum++);
+  const ref = newRef();
   const r = {ref, guest: document.getElementById('ndNombre').value.trim(), docType: document.getElementById('ndDocType').value, doc: docLabel(document.getElementById('ndDocType').value, document.getElementById('ndDoc').value.trim()), pais,
     source: 'DIRECT', start: s, end: e, status: 'ACTIVE',
     guestCount: parseInt(document.getElementById('ndPersonas').value, 10),
@@ -1118,7 +1161,7 @@ function renderSire(){
     return;
   }
   errBox.innerHTML = '';
-  const inRange = movements.filter(m => m.date >= p.s && m.date <= p.e).sort((a, b) => a.date.localeCompare(b.date));
+  const inRange = foreignMovements().filter(m => m.date >= p.s && m.date <= p.e).sort((a, b) => a.date.localeCompare(b.date));
   document.getElementById('sStats').innerHTML = `
     <div class="statcard"><div class="lbl">Movimientos en el periodo</div><div class="val">${inRange.length}</div></div>`;
   document.getElementById('sAll').disabled = !inRange.length;
@@ -1152,7 +1195,7 @@ function registerExport(kind, s, e, included){
 function sireDownloadAll(){
   const p = sirePeriod();
   if (p.error) return renderSire();
-  const inRange = movements.filter(m => m.date >= p.s && m.date <= p.e);
+  const inRange = foreignMovements().filter(m => m.date >= p.s && m.date <= p.e);
   const included = inRange;
   if (!inRange.length) return toast('No hay movimientos migratorios que reportar en ese periodo.', true);
   const lines = included.map(sireLine);
@@ -1162,7 +1205,7 @@ function sireDownloadAll(){
   toast(`Archivo ${id} descargado: ${included.length} movimiento(s).`);
 }
 function sireDownloadOne(mid){
-  const m = movements.find(x => x.id === mid);
+  const m = foreignMovements().find(x => x.id === mid);
   const line = sireLine(m);
   const id = registerExport('Individual', m.date, m.date, [m]);
   downloadTxt('SIRE_' + id + '_' + m.lastName.replace(/\s+/g, '_') + '.txt', line + '\r\n');
@@ -1171,9 +1214,9 @@ function sireDownloadOne(mid){
   toast(`Movimiento de ${m.firstName} ${m.lastName} descargado (${id}).`);
 }
 function sirePreview(mid){
-  const m = movements.find(x => x.id === mid);
+  const m = foreignMovements().find(x => x.id === mid);
   document.getElementById('lnMeta').innerHTML =
-    kv('Reserva', m.ref) + kv('Huésped', m.firstName + ' ' + m.lastName) + kv('Movimiento', m.type + ' · ' + m.date);
+    kv('Reserva', m.ref) + kv('Huésped', m.firstName + ' ' + m.lastName) + kv('Movimiento', MOVEMENT_ES[m.type] + ' · ' + fmtDate(m.date));
   document.getElementById('lnFields').innerHTML = sireFields(m).map((f, i) =>
     `<tr><td class="note">${i + 1}</td><td>${f[0]}</td><td><b>${f[1]}</b></td></tr>`).join('');
   document.getElementById('lnPre').textContent = sireLine(m).split(SIRE_CONFIG.separator).join(SIRE_CONFIG.separator === '\t' ? '  →  ' : SIRE_CONFIG.separator);
@@ -1182,21 +1225,17 @@ function sirePreview(mid){
   openModal('m-linea');
 }
 // ================= Habitaciones, tarifas y agencias =================
-function roomStatus(n){
-  const occ = reservations.find(r => r.status === 'IN_PROGRESS' && r.rooms.some(x => x.n === n && x.stay === 'CHECKED_IN'));
-  if (occ) return {estado: 'Occupied', det: occ.guest + ' · ' + occ.ref};
-  const res = reservations.find(r => roomIsReservedToday(r) && r.rooms.some(x => x.n === n));
-  if (res) return {estado: 'Reserved', det: res.guest + ' · ' + res.ref};
-  const mt = maintenance.find(m => m.room === n && TODAY >= m.start && TODAY < m.end);
-  if (mt) return {estado: 'DisabledForRepairs', det: mt.label};
-  const next = maintenance.find(m => m.room === n && m.start > TODAY);
-  return {estado: 'Available', det: next ? 'Lista para asignar · próximo: ' + next.label : 'Lista para asignar'};
+// Mantenimiento próximo de una habitación: el más cercano dentro de los siguientes 30 días.
+const MAINTENANCE_WINDOW_DAYS = 30;
+function nextMaintenance(n){
+  const limit = addDays(TODAY, MAINTENANCE_WINDOW_DAYS);
+  return maintenance.filter(m => m.room === n && m.end > TODAY && m.start <= limit).sort((x, y) => x.start.localeCompare(y.start))[0] || null;
 }
 function renderRooms(){
   document.getElementById('tblRooms').innerHTML = rooms.map(rm => {
-    const st = roomStatus(rm.n);
-    const cls = {Available: 'ok', Reserved: 'warn', Occupied: 'info', DisabledForRepairs: 'err'}[st.estado] || 'neutral';
-    return `<tr><td>Hab. ${rm.n}</td><td>${rm.cat}</td><td>${capacity[rm.cat]} personas</td><td><span class="badge ${cls}">${ROOM_STATE_ES[st.estado]}</span></td><td class="note">${st.det}</td></tr>`;
+    const mt = nextMaintenance(rm.n);
+    const cell = mt ? `<span class="badge warn">${fmtDate(mt.start)} → ${fmtDate(mt.end)}</span>` : '<span class="note">Sin mantenimiento próximo</span>';
+    return `<tr><td>Hab. ${rm.n}</td><td>${rm.cat}</td><td>${capacity[rm.cat]} personas</td><td>${cell}</td></tr>`;
   }).join('');
 }
 function renderTarifas(){
@@ -1213,48 +1252,123 @@ function renderOtas(){
     return `<tr><td><b>${o.name}</b></td><td><span class="code">${o.account}</span></td><td class="note" style="white-space:nowrap">${fmtDate(o.linkedAt)}</td>
       <td>${o.pct}%</td>
       <td>${badge}<br><span class="note">${syncNote}</span></td>
-      <td>${activas}</td>
-      <td><button class="btn sm" onclick="openOtaModal('${o.name}')">Editar</button></td></tr>`;
+      <td>${activas}</td></tr>`;
   }).join('');
 }
 
-// Crear o editar una agencia OTA.
-let otaEditing = null;   // null = nueva; si no, el name de la agencia que se está editando
-function openOtaModal(name){
-  otaEditing = name;
-  const o = name ? otas.find(x => x.name === name) : null;
-  document.getElementById('otaTitle').textContent = o ? 'Editar agencia' : 'Nueva agencia';
-  document.getElementById('otaNombre').value = o ? o.name : '';
-  document.getElementById('otaCuenta').value = o ? o.account : '';
-  document.getElementById('otaPct').value = o ? o.pct : 15;
-  document.getElementById('otaErr').innerHTML = '';
-  openModal('m-ota');
+// ================= Huéspedes alojados (process-guest-data: solo consulta) =================
+let guestPage = 1;
+// Una fila por huésped y reserva, armada con sus movimientos: la entrada y, si ya salió, la salida.
+function guestStays(){
+  const map = new Map();
+  movements.forEach(m => {
+    const key = m.ref + '|' + m.docNumber;
+    if (!map.has(key)) map.set(key, {key, ref: m.ref, firstName: m.firstName, lastName: m.lastName, docType: m.docType,
+      docNumber: m.docNumber, birthDate: m.birthDate, nat: m.nat, origin: m.origin, dest: m.dest, entry: null, exit: null});
+    const g = map.get(key);
+    if (m.type === 'ENTRY') g.entry = m.date; else g.exit = m.date;
+  });
+  return [...map.values()];
 }
-document.getElementById('otaSave').addEventListener('click', () => {
-  const name = document.getElementById('otaNombre').value.trim();
-  const account = document.getElementById('otaCuenta').value.trim();
-  const pct = parseFloat(document.getElementById('otaPct').value);
-  const errBox = document.getElementById('otaErr');
-  let err = '';
-  if (!name || !account) err = 'Nombre y cuenta del hotel vinculada son obligatorios.';
-  else if (isNaN(pct) || pct < 0 || pct > 100) err = 'El porcentaje de comisión debe estar entre 0 y 100.';
-  else if (!otaEditing && otas.some(o => o.name.toLowerCase() === name.toLowerCase())) err = 'Ya existe una agencia con ese nombre.';
-  if (err){ errBox.innerHTML = `<p class="field" style="margin-top:8px"><span class="err">${err}</span></p>`; return; }
-  if (otaEditing){
-    const o = otas.find(x => x.name === otaEditing);
-    o.name = name; o.account = account; o.pct = pct;
-  } else {
-    const now = TODAY + ' ' + new Date().toTimeString().slice(0, 5);
-    otas.push({name, account, linkedAt: now, pct, connection: 'CONNECTED', lastSync: now});
+function guestFilters(){
+  const q = document.getElementById('gSearch').value.trim();
+  const d1 = document.getElementById('gDesde').value, d2 = document.getElementById('gHasta').value;
+  const f = {nac: document.getElementById('gNac').value, sit: document.getElementById('gSit').value, d1, d2, q, byDoc: false};
+  if (!!d1 !== !!d2) return {error: 'Debe completar ambas fechas del rango.'};
+  if (d1 && d2 && d1 > d2) return {error: 'La fecha inicial no puede ser posterior a la fecha final.'};
+  if (d1 && d2 && nightsBetween(d1, d2) > 366) return {error: 'El rango de fechas no puede superar un año.'};
+  if (q){
+    if (/\d/.test(q)) f.byDoc = true;
+    else if (q.length < 3) return {error: 'La búsqueda por nombre requiere al menos 3 caracteres.'};
   }
-  closeModal('m-ota');
-  fillAgencias();
-  renderOtas();
-  toast('Agencia ' + name + (otaEditing ? ' actualizada.' : ' vinculada correctamente.'));
+  return f;
+}
+function filteredGuests(){
+  const f = guestFilters();
+  if (f.error) return f;
+  const docKey = x => (x || '').replace(/[^0-9a-zA-Z]/g, '').toUpperCase();
+  const nameKey = x => stripAccents(x).toLowerCase();
+  const list = guestStays().filter(g => {
+    if (f.nac === 'FOREIGN' && !isForeign(g)) return false;
+    if (f.nac === 'COLOMBIAN' && isForeign(g)) return false;
+    if (f.sit === 'IN_HOTEL' && !(g.entry && !g.exit)) return false;
+    if (f.sit === 'CHECKED_OUT' && !g.exit) return false;
+    if (f.d1){
+      const start = g.entry || g.exit, end = g.exit || '9999-12-31';
+      if (!(start <= f.d2 && end >= f.d1)) return false;
+    }
+    if (f.q){
+      if (f.byDoc) return docKey(g.docNumber) === docKey(f.q);
+      return nameKey(g.firstName + ' ' + g.lastName).includes(nameKey(f.q));
+    }
+    return true;
+  });
+  list.sort((a, b) => (b.entry || b.exit).localeCompare(a.entry || a.exit) || a.ref.localeCompare(b.ref) || a.docNumber.localeCompare(b.docNumber));
+  return {list};
+}
+function renderGuests(){
+  const tbl = document.getElementById('tblGuests'), pager = document.getElementById('gPager'), errBox = document.getElementById('gErr');
+  const res = filteredGuests();
+  if (res.error){
+    errBox.innerHTML = `<p class="field" style="margin-bottom:10px"><span class="err">${res.error}</span></p>`;
+    tbl.innerHTML = ''; pager.innerHTML = '';
+    return;
+  }
+  errBox.innerHTML = '';
+  const list = res.list;
+  const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+  if (guestPage > pages) guestPage = pages;
+  if (!list.length){
+    tbl.innerHTML = '<tr><td colspan="6" class="note" style="text-align:center;padding:24px">No hay huéspedes que coincidan con los filtros.</td></tr>';
+    pager.innerHTML = '<span class="note">0 huéspedes</span>';
+    return;
+  }
+  const from = (guestPage - 1) * PAGE_SIZE;
+  const slice = list.slice(from, from + PAGE_SIZE);
+  tbl.innerHTML = slice.map(g => {
+    const name = g.firstName + ' ' + g.lastName;
+    return `<tr>
+      <td><div class="person">${avatarHTML(name)}<div>${name}<br><span class="note">${g.docType} ${g.docNumber}</span></div></div></td>
+      <td>${g.nat}${isForeign(g) ? ' <span class="badge info">Extranjero</span>' : ''}</td>
+      <td><button class="btn sm" onclick="goDetalle('${g.ref}')">${g.ref}</button></td>
+      <td style="white-space:nowrap">${g.entry ? fmtDate(g.entry) : '—'}</td>
+      <td style="white-space:nowrap">${g.exit ? fmtDate(g.exit) : '<span class="badge ok">En el hotel</span>'}</td>
+      <td><div class="rowacts"><button class="btn sm" onclick="openGuest('${g.key}')">Ver detalle</button></div></td></tr>`;
+  }).join('');
+  let nums = '';
+  for (let p = 1; p <= pages; p++) nums += `<button class="btn sm ${p === guestPage ? 'primary' : ''}" onclick="setGuestPage(${p})">${p}</button>`;
+  pager.innerHTML = `<span class="note">Mostrando ${from + 1}–${from + slice.length} de ${list.length} huéspedes · página ${guestPage} de ${pages}</span>
+    <div class="pagerbtns">
+      <button class="btn sm" ${guestPage === 1 ? 'disabled' : ''} onclick="setGuestPage(${guestPage - 1})">← Anterior</button>
+      ${nums}
+      <button class="btn sm" ${guestPage === pages ? 'disabled' : ''} onclick="setGuestPage(${guestPage + 1})">Siguiente →</button>
+    </div>`;
+}
+function setGuestPage(p){ guestPage = p; renderGuests(); }
+['gSearch', 'gNac', 'gSit', 'gDesde', 'gHasta']
+  .forEach(id => document.getElementById(id).addEventListener('input', () => { guestPage = 1; renderGuests(); }));
+document.getElementById('gClear').addEventListener('click', () => {
+  ['gSearch', 'gNac', 'gSit', 'gDesde', 'gHasta'].forEach(id => document.getElementById(id).value = '');
+  guestPage = 1;
+  renderGuests();
 });
+function openGuest(key){
+  const g = guestStays().find(x => x.key === key);
+  const dash = '<span class="note">—</span>';
+  document.getElementById('gdName').textContent = g.firstName + ' ' + g.lastName;
+  document.getElementById('gdData').innerHTML =
+    kv('Documento', g.docType + ' ' + g.docNumber) + kv('Fecha de nacimiento', fmtDate(g.birthDate)) +
+    kv('Nacionalidad', g.nat + (isForeign(g) ? ' · extranjero' : '')) + kv('Reserva', g.ref) +
+    kv('Lugar de procedencia', g.origin || dash) + kv('Lugar de destino', g.dest || dash);
+  document.getElementById('gdMoves').innerHTML =
+    (g.entry ? `<tr><td><span class="badge neutral">${MOVEMENT_ES.ENTRY}</span></td><td>${fmtDate(g.entry)}</td></tr>` : '') +
+    (g.exit ? `<tr><td><span class="badge neutral">${MOVEMENT_ES.DEPARTURE}</span></td><td>${fmtDate(g.exit)}</td></tr>` : '');
+  document.getElementById('gdReserva').onclick = () => { closeModal('m-huesped'); goDetalle(g.ref); };
+  openModal('m-huesped');
+}
 
 // ================= Inicio =================
-function renderAll(){ renderReservas(); renderStatRow(); renderRooms(); renderOtas(); renderSire(); }
+function renderAll(){ renderReservas(); renderStatRow(); renderRooms(); renderOtas(); renderSire(); renderGuests(); }
 fillAgencias();
 renderTarifas();
 renderAll();

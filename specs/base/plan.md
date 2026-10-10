@@ -1,9 +1,9 @@
 # Implementation Plan: Base del Módulo 2 (plataforma compartida)
 
 **Date**: 2026-10-09  
-**Spec**: [diccionario.md](../diccionario.md) (contrato de integración) y los `spec.md` de las 12 features  
-en `specs/*/`. Este plan no implementa una feature: deja lista la base que todos los planes de
-feature reutilizan.
+**Spec**: [diccionario.md](../diccionario.md) (contrato de integración) y los `spec.md` de los 12 casos de uso  
+en `specs/*/`. Este plan no implementa un caso de uso: deja lista la base que todos los planes de
+caso de uso reutilizan.
 
 ## Summary
 
@@ -16,9 +16,9 @@ Consulta al Módulo 1 (inventario y calendario de mantenimientos) y al Módulo 3
 envía por cola la lista de reservas del día y sus actualizaciones. **No le ordena apartar ni liberar
 habitaciones**: el Módulo 1, dueño del estado de las habitaciones, decide qué hace con esa lista.
 
-Este plan fija lo que comparten las 12 features: stack, arquitectura hexagonal, estructura, modelo de
+Este plan fija lo que comparten los 12 casos de uso: stack, arquitectura hexagonal, estructura, modelo de
 datos, contratos de integración (REST y colas), manejo uniforme de errores (siempre 4xx, nunca 500),
-tareas programadas y pruebas. Cada plan de feature (`specs/[feature]/plan.md`) depende de este y solo
+tareas programadas y pruebas. Cada plan de caso de uso (`specs/[caso-de-uso]/plan.md`) depende de este y solo
 describe lo propio.
 
 ## Technical Context
@@ -72,7 +72,7 @@ describe lo propio.
 
 ## Arquitectura hexagonal
 
-El backend tiene **un solo dominio general** (`src/domain/`), compartido por todas las features. No hay
+El backend tiene **un solo dominio general** (`src/domain/`), compartido por todos los casos de uso. No hay
 un dominio por módulo: las entidades del Módulo 2 (`Reservation`, `Guest`, `Ota`, `MigratoryMovement`...)
 están relacionadas entre sí y sus reglas se cruzan (una cancelación cambia el estado de la reserva y
 genera avisos al Módulo 1; un Check-In cambia la reserva y registra movimientos migratorios), así
@@ -82,7 +82,7 @@ que viven juntas. Las dependencias siempre apuntan hacia adentro:
 | Capa | Contiene | Puede importar |
 |---|---|---|
 | `domain/` | **Todas** las entidades y objetos de valor del Módulo 2, sus relaciones, los enumerados, las reglas de negocio (invariantes y tabla de transiciones de `status`) y los errores de negocio. Ver "Modelo de dominio" | Solo TypeScript puro (y `decimal.js` para dinero). **Nada de Nest, TypeORM ni RabbitMQ** |
-| `application/` | Un caso de uso por feature de las specs (puertos de entrada y servicios) y los puertos de salida (repositorios, Módulo 1, Módulo 3, publicador de eventos, reloj) | `domain/` |
+| `application/` | Un caso de uso por cada spec (puertos de entrada y servicios) y los puertos de salida (repositorios, Módulo 1, Módulo 3, publicador de eventos, reloj) | `domain/` |
 | `infrastructure/in/` | Adaptadores de entrada: controladores REST, consumidores RabbitMQ, tareas programadas | `application/` (puertos de entrada) |
 | `infrastructure/out/` | Adaptadores de salida: repositorios TypeORM, clientes HTTP del Módulo 1 y 3, publicadores RabbitMQ, reloj | `application/` (implementan los puertos de salida) |
 
@@ -242,7 +242,7 @@ puertos. No se persisten: de `RateQuote` se copian el `lodgingAmount`, el `quote
 Regla: **proactiva** (el módulo avisa un evento y no espera respuesta) → **cola RabbitMQ**;
 **reactiva** (necesita un dato o confirmación inmediata) → **REST**.
 
-| Interacción | Dirección | Mecanismo | Tipo | Feature |
+| Interacción | Dirección | Mecanismo | Tipo | Caso de uso |
 |---|---|---|---|---|
 | Check-In por habitación (con la lista de huéspedes) | M1 → M2 | Cola `m2.habitacion.checkin.queue` | Proactiva | `update-reservation` |
 | Check-Out por habitación (con la lista de huéspedes) | M1 → M2 | Cola `m2.habitacion.checkout.queue` | Proactiva | `update-reservation` |
@@ -307,11 +307,12 @@ El contenido exacto de cada mensaje está en el plan de su caso de uso:
 
 ## Contratos REST
 
-**El Módulo 2 expone** (rutas propuestas, se fijan en cada plan de feature):
+**El Módulo 2 expone** (rutas propuestas, se fijan en cada plan de caso de uso):
 
-| Recurso | Quién lo consume | Feature |
+| Recurso | Quién lo consume | Caso de uso |
 |---|---|---|
-| `GET /api/reservations` con paginación de 10, filtros (búsqueda por `reservationRef`, documento o nombre; estado; canal; agencia; tipo de fecha `ARRIVAL`/`DEPARTURE`/`STAY` con `from` y `to`) y orden por `startDate` | Recepcionista, procesos internos | `check-view-reservation` |
+| `GET /api/reservations` con paginación de 10, filtros (`search` por código, documento o nombre; `status`; `source`; `otaId`; rango de estadía `dateFrom` y `dateTo`) y `order` por `startDate`. Con rol `MODULE1` es la consulta por fechas de FR-023 | Recepcionista, procesos internos; Módulo 1 | `check-view-reservation` |
+| `GET /api/reservations/day-summary` (llegadas y salidas esperadas hoy) | Recepcionista | `check-view-reservation` |
 | `GET /api/reservations/{reservationRef}` (detalle) | Recepcionista; Módulo 3 con credencial de servicio (devuelve `quoteIds`, canal y, solo si es OTA, `otaId`, `otaConfirmationCode` y `otaCommissionPercentage`; 404 si no existe) | `check-view-reservation` |
 | `POST /api/reservations/direct/preview` y `POST /api/reservations/direct` (canal directo) | Recepcionista | `generate-direct-reservation` |
 | `POST /api/reservations/{reservationRef}/modification-preview` y `PATCH /api/reservations/{reservationRef}` | Recepcionista (solo directas); la OTA modifica las suyas por su canal | `update-reservation` |
@@ -333,7 +334,7 @@ rutas de alta ni edición manual (`POST`/`PUT /api/otas` quedan fuera).
 
 **El Módulo 2 consume** (a través de los puertos `Module1Port` y `Module3Port`):
 
-| Servicio | Método | Feature |
+| Servicio | Método | Caso de uso |
 |---|---|---|
 | Habitaciones vendibles por `categoryRoom` o por `roomId` (contrato en [`consult-room-inventory/plan.md`](../consult-room-inventory/plan.md)) | M1 GET | `consult-room-inventory` |
 | Calendario de mantenimientos por `roomId` y rango de fechas (contrato en [`consult-maintenance-calendar/plan.md`](../consult-maintenance-calendar/plan.md)) | M1 GET | `consult-maintenance-calendar` |
@@ -347,7 +348,7 @@ para un error.
 
 ## Project Structure
 
-### Documentation (this feature)
+### Documentation (este caso de uso)
 
 ```text
 specs/
@@ -356,7 +357,7 @@ specs/
 │   ├── plan.md                           # Este archivo
 │   └── guia-planes-por-caso-de-uso.md    # Cómo escribir el plan de cada caso de uso
 ├── template/                             # Plantillas de spec y de plan
-└── [caso-de-uso]/                        # Uno por cada una de las 12 features
+└── [caso-de-uso]/                        # Uno por cada uno de los 12 casos de uso
     ├── spec.md
     └── plan.md                           # Plan del caso de uso; referencia a ../base/plan.md
 ```
@@ -389,7 +390,7 @@ backend/
     │   ├── ports/out/            # ReservationRepository, GuestRepository, ..., Module1Port, Module3Port,
     │   │                         #   EventPublisher, Clock
     │   ├── integration/          # objetos de integración: Room, MaintenanceCalendar, RateQuote
-    │   └── use-cases/            # un caso de uso por feature de las specs (puerto de entrada + servicio):
+    │   └── use-cases/            # un caso de uso por cada spec (puerto de entrada + servicio):
     │       ├── generate-direct-reservation/
     │       ├── generate-ota-reservation/
     │       ├── check-view-reservation/       # incluye la lista del día al Módulo 1
@@ -434,8 +435,8 @@ frontend/
 
 **Structure Decision**: aplicación web `backend/` + `frontend/` en un monorepo pnpm. El backend se
 organiza **por capas hexagonales**, con un solo `domain/` general para todo el Módulo 2: las entidades
-están relacionadas y sus reglas se cruzan entre features, así que separarlas por módulo duplicaría
-reglas. Las features de las specs se reflejan en `application/use-cases/`. El frontend cubre solo a la
+están relacionadas y sus reglas se cruzan entre casos de uso, así que separarlas por módulo duplicaría
+reglas. Los casos de uso de las specs se reflejan en `application/use-cases/`. El frontend cubre solo a la
 Recepcionista; la Ota solo usa la API y el Módulo 1 tiene su propia interfaz.
 
 ## Diseño técnico base
@@ -798,6 +799,17 @@ Inmutable. Índice `(reservation_id)`.
   `REMOVED`.
 - Índice `(publish_status, operational_date, sequence_number)` para reintentar en orden.
 
+**`daily_sequence`** — numeración de los avisos del día
+
+| Columna | Tipo | Nulo | Regla |
+|---|---|---|---|
+| `operational_date` | `date` | no | PK |
+| `last_sequence` | `integer` | no | `CHECK (last_sequence >= 0)`; último `sequence_number` asignado; `0` hasta que sale la lista |
+| `list_generated` | `boolean` | no | `false` por defecto; `true` cuando la lista (secuencia 1) quedó guardada |
+
+Se bloquea con `SELECT … FOR UPDATE` para asignar `sequence_number` sin huecos ni repetidos y para que
+ningún cambio quede entre la lista y su primera actualización (ver `check-view-reservation/plan.md`).
+
 **`processed_message`** — mensajes recibidos del Módulo 1 (idempotencia)
 
 | Columna | Tipo | Nulo | Regla |
@@ -811,7 +823,7 @@ Se inserta en la misma transacción que el cambio que produce el mensaje.
 
 `migrationStatus` es solo un dato de pantalla: se calcula, no se guarda.
 
-### Reglas transversales que todos los planes de feature heredan
+### Reglas transversales que todos los planes de caso de uso heredan
 
 1. **Transiciones de `status` en un solo lugar.** La tabla de transiciones vive en el dominio
    (`PENDING`→`ACTIVE`, `ACTIVE`→`IN_PROGRESS`, `IN_PROGRESS`→`COMPLETED`, `ACTIVE`/`PENDING`→`CANCELLED`,
@@ -833,7 +845,7 @@ Se inserta en la misma transacción que el cambio que produce el mensaje.
    Ningún error no controlado sale como 500; el filtro genérico registra el detalle en el log y responde
    un error controlado sin datos de infraestructura.
 6. **Clientes de otros módulos** detrás de puertos (`Module1Port`, `Module3Port`) con timeout.
-   Ante fallo, cada feature decide, pero nunca se asume disponibilidad ni tarifa por defecto o a cero.
+   Ante fallo, cada caso de uso decide, pero nunca se asume disponibilidad ni tarifa por defecto o a cero.
 7. **Mensajería.** Mensajes planos con `messageId` y `sequenceNumber`. El consumidor registra el
    `messageId` en `processed_message` dentro de la misma transacción que el cambio. Reintentos con
    backoff y dead-letter queue.
@@ -843,7 +855,7 @@ Se inserta en la misma transacción que el cambio que produce el mensaje.
 9. **OTA solo lectura.** Las reservas de canal OTA solo las cambian o cancelan la propia OTA (canal
    `OTA_API`); la Recepcionista no puede. Cancelar una reserva OTA no toca la comisión.
 
-### Decisiones de diseño tomadas al escribir los planes de feature
+### Decisiones de diseño tomadas al escribir los planes de caso de uso
 
 | # | Decisión | Origen |
 |---|---|---|
@@ -855,7 +867,7 @@ Se inserta en la misma transacción que el cambio que produce el mensaje.
 | D7 | **Periodo de la exportación SIRE:** se filtra por la `movementDate` del movimiento migratorio. | `process-guest-data`, `export-sire-file` |
 | D8 | **API de modificación en dos pasos:** `POST .../modification-preview` (no persiste) y `PATCH` (confirma, con `updatedAt` y las tarifas esperadas por habitación). Propuesta de los planes; el spec no define su forma. | `update-reservation` |
 | D9 | **La exportación SIRE es `POST`**, no `GET`, porque crea un registro `SireExport` (un `GET` no debe tener efectos). | `export-sire-file` |
-| D10 | **Arquitectura hexagonal** con un solo `domain/` general para todo el Módulo 2 y las capas `application` (un caso de uso por feature) e `infrastructure` (in/out). Verificada en CI. | Este plan |
+| D10 | **Arquitectura hexagonal** con un solo `domain/` general para todo el Módulo 2 y las capas `application` (un caso de uso por cada spec) e `infrastructure` (in/out). Verificada en CI. | Este plan |
 | D11 | **Migraciones escritas en SQL**, no generadas desde las clases de TypeORM, para controlar `EXCLUDE`, índices parciales y bloqueos. | Este plan |
 
 ## Estrategia de testing base
@@ -870,7 +882,7 @@ Se inserta en la misma transacción que el cambio que produce el mensaje.
 - **API** (supertest): controladores con los casos de uso reales y el filtro global de errores.
 - **Arquitectura**: la verificación de dependencias entre capas corre como parte de las pruebas.
 - **Cada escenario Gherkin** de un `spec.md` debe tener al menos una prueba de integración en el plan
-  de su feature.
+  de su caso de uso.
 - **Frontend**: Vitest + Testing Library en pantallas críticas (listado con filtros, paginación,
   modificar, cancelar, exportación SIRE).
 
@@ -887,7 +899,7 @@ Se inserta en la misma transacción que el cambio que produce el mensaje.
 
 ## Phase 2: Foundational (Blocking Prerequisites)
 
-**⚠️ CRÍTICO**: Ninguna feature puede empezar hasta terminar esta fase.
+**⚠️ CRÍTICO**: Ningún caso de uso puede empezar hasta terminar esta fase.
 
 - [ ] T007 Definir el esquema base (tablas de Diseño técnico base), la extensión `btree_gist` y la restricción de exclusión (D3) con migraciones SQL de TypeORM
 - [ ] T008 [P] Crear el dominio y la persistencia de `Reservation`, `ReservationRoom`, `Guest` y `Ota` (entidades de dominio, clases de tabla TypeORM, mapeadores y repositorios)
@@ -904,11 +916,11 @@ Se inserta en la misma transacción que el cambio que produce el mensaje.
 - [ ] T019 Configurar el bloqueo asesor de PostgreSQL y el planificador (`@nestjs/schedule`, `America/Bogota`) para las tareas programadas
 - [ ] T020 Configurar OpenAPI (`@nestjs/swagger`) y la verificación de dependencias entre capas en CI
 
-**Checkpoint**: Base lista; los planes de feature pueden implementarse.
+**Checkpoint**: Base lista; los planes de caso de uso pueden implementarse.
 
 ---
 
-## Orden recomendado de los 12 planes de feature
+## Orden recomendado de los 12 planes de caso de uso
 
 1. **Consultas y servicios base**: `check-view-reservation`, `consult-room-inventory`,
    `consult-maintenance-calendar`, `calculate-dynamic-rate`.
@@ -924,9 +936,9 @@ Se inserta en la misma transacción que el cambio que produce el mensaje.
 ## Dependencies & Execution Order
 
 - **Setup (Fase 1)**: sin dependencias. **Foundational (Fase 2)**: depende de Setup y bloquea a todos
-  los planes de feature.
-- Los planes de feature dependen de este plan base y entre sí según el orden anterior.
-- Dentro de cada feature: dominio, casos de uso, adaptadores, endpoints y pruebas de integración por escenario.
+  los planes de caso de uso.
+- Los planes de caso de uso dependen de este plan base y entre sí según el orden anterior.
+- Dentro de cada caso de uso: dominio, servicio, adaptadores, endpoints y pruebas de integración por escenario.
 
 ## Contradicciones detectadas y decisiones tomadas
 
@@ -947,8 +959,8 @@ quedaron decididas. La tabla registra cada decisión.
 
 ## Notes
 
-- `[P]` marca tareas paralelizables; `[US1]` (en los planes de feature) las liga a su historia de usuario.
-- Cada plan de feature debe indicar en su encabezado: `Plan base: ../base/plan.md`.
+- `[P]` marca tareas paralelizables; `[US1]` (en los planes de caso de uso) las liga a su historia de usuario.
+- Cada plan de caso de uso debe indicar en su encabezado: `Plan base: ../base/plan.md`.
 - Cómo escribir el plan de cada caso de uso: [guia-planes-por-caso-de-uso.md](guia-planes-por-caso-de-uso.md).
-- No se programa una feature hasta que su SPEC esté validado y su PLAN revisado.
+- No se programa un caso de uso hasta que su SPEC esté validado y su PLAN revisado.
 - Commit por tarea o grupo lógico, con Gitflow.
