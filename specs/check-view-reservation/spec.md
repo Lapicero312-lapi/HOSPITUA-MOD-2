@@ -527,9 +527,7 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
     `OTA`), `startDate`, `endDate`, número de noches, `guestCount` (total), `notes`, `createdAt`.
   - Habitaciones (`ReservationRoom`): por cada una, `roomNumber`, `categoryRoom`,
     `guestCount` (personas de la habitación), `roomGrossAmount` (tarifa, informativa; vacía en reservas
-    `OTA`), `stayStatus` y, cuando el Módulo 1 ya los informó, los huéspedes registrados en el Check-In y
-    en el Check-Out de esa habitación (cuántos son y cuántos son extranjeros), para que la Recepcionista
-    vea cuántos huéspedes acaba de enviar el Módulo 1.
+    `OTA`) y `stayStatus`.
   - Titular (`Guest`): `firstName`, `lastName`, `documentType`, `documentNumber`, `nationality`,
     `contactPhone`, `contactEmail`.
   - Si la reserva está `CANCELLED` por una solicitud explícita: `cancellationDate`, `channel`,

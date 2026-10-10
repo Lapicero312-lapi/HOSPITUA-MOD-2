@@ -100,8 +100,7 @@ interface RegisterGuestMovements {
 ```
 
 - **Corre dentro de la transacción del consumidor**: recibe la transacción abierta y no hace `commit`.
-- El `RegistrationSummary` se lo devuelve a `update-reservation`, que lo usa para su respuesta de log y,
-  si se acuerda, para los conteos por habitación (ver "Puntos abiertos").
+- El `RegistrationSummary` se lo devuelve a `update-reservation`, que lo usa para su respuesta de log.
 
 **B2. Seleccionar extranjeros para el SIRE** (`SelectForeignMovements`, la usa `export-sire-file`):
 
@@ -576,11 +575,10 @@ frontend/src/pages/guest-stays/              # vista de huéspedes alojados y su
 
 | # | Pendiente | Con quién |
 |---|---|---|
-| 1 | **Conteos por habitación**: `check-view-reservation` (FR-006) muestra cuántos huéspedes registró el Módulo 1 en el Check-In y el Check-Out de **cada habitación**, y cuántos son extranjeros. El modelo del plan base guarda los huéspedes por reserva, sin `room_id`, así que no se pueden derivar. Opción: guardar esos conteos en `reservation_room` (por ejemplo `check_in_guest_count` y `check_in_foreign_guest_count`, y los de Check-Out) a partir del `RegistrationSummary`. Requiere cambiar el plan base | Equipo del Módulo 2 |
-| 2 | Transacción única entre `update-reservation` (estado y `processed_message`) y este caso de uso: confirmarlo en el plan de `update-reservation` | Equipo del Módulo 2 |
-| 3 | El spec exige que el Módulo 2 **no valide** los datos, pero la base tiene columnas obligatorias: confirmar que omitir al huésped incompleto es aceptable | Equipo del Módulo 2 |
-| 4 | Tamaño máximo de un mensaje (cantidad de huéspedes) para protegerse de payloads desmedidos | Módulo 1 |
-| 5 | Si la nacionalidad llega con otra escritura ("COLOMBIA", "colombiana"), hoy se trataría como extranjera. Confirmar con el Módulo 1 que siempre envía `Colombia` | Módulo 1 |
+| 1 | Transacción única entre `update-reservation` (estado y `processed_message`) y este caso de uso: confirmarlo en el plan de `update-reservation` | Equipo del Módulo 2 |
+| 2 | El spec exige que el Módulo 2 **no valide** los datos, pero la base tiene columnas obligatorias: confirmar que omitir al huésped incompleto es aceptable | Equipo del Módulo 2 |
+| 3 | Tamaño máximo de un mensaje (cantidad de huéspedes) para protegerse de payloads desmedidos | Módulo 1 |
+| 4 | Si la nacionalidad llega con otra escritura ("COLOMBIA", "colombiana"), hoy se trataría como extranjera. Confirmar con el Módulo 1 que siempre envía `Colombia` | Módulo 1 |
 
 ## Notes
 

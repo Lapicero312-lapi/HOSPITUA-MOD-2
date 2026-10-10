@@ -174,7 +174,7 @@ de la reserva con la forma de `check-view-reservation` (C3):
     {
       "roomNumber": "201", "categoryRoom": "DOBLE", "guestCount": 2,
       "roomGrossAmount": { "amount": "750000.00", "currency": "COP" },
-      "stayStatus": "EXPECTED", "checkIn": null, "checkOut": null
+      "stayStatus": "EXPECTED"
     }
   ],
   "guest": { "firstName": "Valentina", "lastName": "Ospina", "documentType": "CC", "documentNumber": "1144093552",
