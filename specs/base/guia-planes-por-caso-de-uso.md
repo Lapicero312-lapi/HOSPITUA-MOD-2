@@ -22,7 +22,7 @@ cambia; si algo no le sirve, se discute y se cambia primero en el plan base.
 
 - **Stack:** NestJS, TypeScript `strict`, TypeORM, PostgreSQL, RabbitMQ (`@golevelup/nestjs-rabbitmq`),
   pnpm; frontend React + Vite + TanStack Query.
-- **Arquitectura hexagonal:** un solo `src/domain/` para todo el Módulo 2, un caso de uso por feature
+- **Arquitectura hexagonal:** un solo `src/domain/` para todo el Módulo 2, un caso de uso por cada spec
   en `application/use-cases/` y adaptadores en `infrastructure/in` y `infrastructure/out`.
 - **Errores:** siempre 4xx con el cuerpo `{ errorCode, message, timestamp, path }`; nunca 500.
 - **Mensajería:** mensajes JSON planos, `messageId` como única clave de duplicados, `sequenceNumber`
