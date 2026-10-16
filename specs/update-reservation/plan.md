@@ -18,8 +18,11 @@ Tiene cuatro capacidades:
    `process-guest-data`).
 3. **Cerrar el día** (No-Show): una tarea programada marca `NO_SHOW` las reservas que no se presentaron
    y `NOT_ARRIVED` las habitaciones que no ingresaron.
-4. **Aplicar las transiciones de estado** que piden otros casos de uso (confirmación OTA, cancelación,
-   creación) con las mismas reglas de transición y de concurrencia, mediante `ReservationStatusService`.
+4. **Aplicar las transiciones de estado** que piden otros casos de uso (cancelación y creación) con las
+   mismas reglas de transición y de concurrencia, mediante `ReservationStatusService`.
+5. **Aplicar los cambios que envía Booking** (`ApplyOtaChange`, lo llama `generate-ota-reservation`) sin
+   rechazarlos, y dejar que la Recepcionista **asigne la habitación** de una reserva de Booking en
+   conflicto (decisión D13 del plan base).
 
 El Módulo 2 **no le ordena nada al Módulo 1**: cada cambio que afecta la lista del día se avisa con
 `DailyListChangeRecorder` (`check-view-reservation`) y el Módulo 1 decide qué hace con sus habitaciones.
@@ -31,7 +34,7 @@ El Check-In y el Check-Out los ejecuta el Módulo 1: este caso de uso **no tiene
 | Dato | Valor |
 |---|---|
 | Caso de uso | Actualizar reservación (`update-reservation`) |
-| Spec | [spec.md](./spec.md), historias 1 a 3 y FR-001 a FR-023 |
+| Spec | [spec.md](./spec.md), historias 1 a 3 y FR-001 a FR-025 |
 | Actores | Recepcionista (modificación de reservas directas); Módulo 1 (Check-In y Check-Out por cola); sistema (cierre del día); `generate-ota-reservation`, `cancel-reservation` y `generate-direct-reservation` (transiciones de estado) |
 | Naturaleza | Escribe `reservation`, `reservation_room`, `guest` y `processed_message`; lee y avisa por `DailyListChangeRecorder` |
 
@@ -43,9 +46,11 @@ El Check-In y el Check-Out los ejecuta el Módulo 1: este caso de uso **no tiene
 | 4 | Check-Out de una habitación | Cola `m2.habitacion.checkout.queue` | Módulo 1 | A |
 | 5 | Cierre del día (No-Show) | Tarea programada `CloseDayJob` | Sistema | D |
 | 6 | Cambio de estado | Llamada interna `ReservationStatusService` | Otros casos de uso | C |
+| 7 | Cambio enviado por Booking | Llamada interna `ApplyOtaChange` | `generate-ota-reservation` | C4 |
+| 8 | Asignar habitación a una reserva de Booking en conflicto | REST `PATCH /api/reservations/{reservationRef}/room-assignment` | Recepcionista | B3 |
 
-La modificación de una reserva de **OTA** la hace la propia agencia por su API; sus rutas las definirá el
-caso de uso futuro "Configurar OTA" (plan base). Este plan no las define.
+Los cambios de una reserva de **OTA** los envía Booking por el feed de Channex; `generate-ota-reservation`
+los lee y los aplica con `ApplyOtaChange` (C4). La Recepcionista solo puede asignar la habitación (B3).
 
 ## Technical Context
 
@@ -259,7 +264,7 @@ tarifas que el solicitante vio:
 | `errorCode` | Cuándo | `message` |
 |---|---|---|
 | `RESERVATION_NOT_FOUND` | La reserva no existe | "La reserva no existe." |
-| `OTA_RESERVATION_READ_ONLY` | La Recepcionista modifica una reserva `OTA` | "Las reservas de OTA solo las modifica la agencia por su API." |
+| `OTA_RESERVATION_READ_ONLY` | La Recepcionista modifica una reserva `OTA` | "Las reservas de OTA solo las modifica Booking. Si está en conflicto, solo se le puede asignar la habitación." |
 | `STATUS_NOT_EDITABLE` | La reserva está en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` o `NO_SHOW` | "El estado actual de la reserva no admite modificaciones." |
 | `CONCURRENT_UPDATE` | `updatedAt` no coincide (otra persona la modificó) | "La reserva fue modificada por otra persona. Recargue la información e intente de nuevo." |
 | `INVALID_STAY_DATES` | Fechas vacías o salida no posterior a la entrada | "La fecha de salida debe ser posterior a la de entrada." |
@@ -276,6 +281,33 @@ tarifas que el solicitante vio:
 | `RECALCULATION_UNAVAILABLE` | El Módulo 3 no responde al recotizar | "No se pudo calcular la nueva tarifa en este momento. Intente más tarde." |
 | `RATE_CHANGED` | La tarifa cambió entre la vista previa y la confirmación | "La tarifa cambió, vuelva a cotizar." |
 | `INVENTORY_UNAVAILABLE`, `MAINTENANCE_CHECK_UNAVAILABLE`, `INVALID_ROOM_ID` | Fallos del Módulo 1 o `roomId` inexistente | Los de `consult-room-inventory` y `consult-maintenance-calendar` |
+
+**B3. `PATCH /api/reservations/{reservationRef}/room-assignment`** (FR-025): asigna habitación a las
+habitaciones sin asignar de una reserva de Booking en conflicto. Cabecera `X-User`.
+
+```json
+{
+  "updatedAt": "2026-11-08T10:00:00.000000-05:00",
+  "assignments": [
+    { "reservationRoomId": "uuid-rr-1", "roomId": "uuid-204" }
+  ]
+}
+```
+
+- Verifica la disponibilidad de cada habitación con `VerifyAvailability.check` (excluyendo la propia
+  reserva) y que sea de la **misma categoría** que la habitación sin asignar.
+- Guarda `room_id`, `room_number` y `blocks_inventory = true`. Si ya no queda ninguna habitación sin
+  asignar ni capacidad superada, **quita la marca de conflicto**.
+- Avisa `UPDATED` a la lista del día si corresponde y anota el cambio para Channex (`AriChangeRecorder`).
+- Responde `200` con el detalle de la reserva (C3 de `check-view-reservation`).
+
+| `errorCode` | Cuándo | `message` |
+|---|---|---|
+| `RESERVATION_NOT_IN_CONFLICT` | La reserva no es de Booking o no está en conflicto | "Solo se puede asignar habitación a una reserva de Booking en conflicto." |
+| `ROOM_ALREADY_ASSIGNED` | La habitación de la reserva ya tiene número | "Esa habitación de la reserva ya está asignada." |
+| `CATEGORY_MISMATCH` | La habitación elegida es de otra categoría | "La habitación debe ser de la misma categoría." |
+| `NO_AVAILABILITY` | La habitación elegida no está libre en esas fechas | "La habitación no está disponible para el rango de fechas solicitado." |
+| `CONCURRENT_UPDATE` | `updatedAt` no coincide | El mismo de B1 y B2 |
 
 ### C. Puertos de entrada internos
 
@@ -296,8 +328,8 @@ interface ReservationStatusService {
 | De | A | Lo pide |
 |---|---|---|
 | (nueva) | `ACTIVE` | `generate-direct-reservation` |
-| (nueva) | `PENDING` | `generate-ota-reservation` |
-| `PENDING` | `ACTIVE` | `generate-ota-reservation` (confirmación de pago o garantía) |
+| (nueva) | `ACTIVE` | `generate-ota-reservation` (Booking envía las reservas ya confirmadas) |
+| `PENDING` | `ACTIVE` | Sin uso hoy: se conserva por si una agencia futura lo necesita |
 | `ACTIVE` | `IN_PROGRESS` | Check-In de la primera habitación |
 | `IN_PROGRESS` | `COMPLETED` | Check-Out o cierre del día, cuando no queda habitación en `EXPECTED` ni `CHECKED_IN` |
 | `ACTIVE` o `PENDING` | `NO_SHOW` | Cierre del día |
@@ -310,9 +342,10 @@ interface ReservationStatusService {
 | `EXPECTED` | `NOT_ARRIVED` | Cierre del día |
 
 - `StatusReason` (columna `status_reason`, D6): `CHECK_IN`, `CHECK_OUT`, `DAY_CLOSE_NO_SHOW`,
-  `DAY_CLOSE_PARTIAL`, `OTA_CONFIRMED`, `CANCELLED_BY_RECEPTION` y `CANCELLED_BY_OTA`.
+  `DAY_CLOSE_PARTIAL`, `OTA_CONFIRMED` (sin uso hoy), `CANCELLED_BY_RECEPTION` y `CANCELLED_BY_OTA`.
 - Cada transición **recalcula `reservation_room.blocks_inventory`**: `true` mientras la reserva está en
-  `PENDING`, `ACTIVE` o `IN_PROGRESS` y la habitación en `EXPECTED` o `CHECKED_IN` (D3).
+  `PENDING`, `ACTIVE` o `IN_PROGRESS`, la habitación en `EXPECTED` o `CHECKED_IN` y tiene `room_id` (D3;
+  una habitación sin asignar nunca bloquea).
 - Control de concurrencia: `UPDATE … WHERE id = :id AND updated_at = :expected`; sin filas afectadas,
   `CONCURRENT_UPDATE`.
 
@@ -323,6 +356,33 @@ uso).
 
 **C3. Registro de huéspedes**: llama a `RegisterGuestMovements.register(tx, …)` de `process-guest-data`
 en el Check-In y en el Check-Out.
+
+**C4. `ApplyOtaChange`** (FR-024; lo llama `generate-ota-reservation` con una revisión `modified`):
+
+```typescript
+interface ApplyOtaChange {
+  apply(tx: Transaction, reservation: Reservation, change: {
+    startDate: string; endDate: string;
+    rooms: { categoryRoom: string; guestCount: number }[];
+    grossAmount: Money; notes: string | null;
+    guest: { firstName: string; lastName: string; contactEmail: string | null;
+             contactPhone: string | null; nationality: string | null };
+  }): Promise<Reservation>;   // aplicada o marcada en conflicto; nunca lanza NO_AVAILABILITY
+}
+```
+
+- Conserva las habitaciones que siguen libres en las fechas nuevas; para las demás busca otra libre de la
+  misma categoría (`assignRooms`) y, si no hay, la deja **sin asignar** (`NO_ROOM_AVAILABLE`). Si alguna
+  supera su `maxCapacity`, marca `CAPACITY_EXCEEDED`.
+- **No invoca al Módulo 3**: recalcula la comisión con el porcentaje congelado
+  (`RegisterOtaConfirmationAndCommission`).
+- No usa `updatedAt` del cliente: el orden lo da el feed. Usa el `updated_at` leído en la misma
+  transacción para el control de concurrencia.
+- Llama a `DailyListChangeRecorder` y a `AriChangeRecorder` como cualquier modificación.
+
+**C5. Disponibilidad para Channex**: este caso de uso llama a `AriChangeRecorder.record` (de
+`configure-ota`) dentro de su transacción en la modificación, la asignación de habitación (B3), el
+No-Show, el Check-Out y las habitaciones que pasan a `NOT_ARRIVED`.
 
 ### D. Cierre del día
 
@@ -623,7 +683,8 @@ sequenceDiagram
 **Máquina de estados** (la implementa `ReservationStatusService`):
 
 ```text
-Reservation:  PENDING --OTA confirma--> ACTIVE --1.er Check-In--> IN_PROGRESS --último Check-Out--> COMPLETED
+Reservation:  (nueva: directa o Booking) --> ACTIVE --1.er Check-In--> IN_PROGRESS --último Check-Out--> COMPLETED
+              PENDING: sin uso hoy (PENDING --> ACTIVE se conserva para una agencia futura)
               ACTIVE | PENDING --cierre del día--> NO_SHOW        ACTIVE | PENDING --cancelar--> CANCELLED
 Habitación:   EXPECTED --Check-In--> CHECKED_IN --Check-Out--> CHECKED_OUT
               EXPECTED --cierre del día--> NOT_ARRIVED
@@ -771,6 +832,13 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
 
 - [ ] T025 Exponer `ReservationStatusService` a `generate-direct-reservation`, `generate-ota-reservation` y `cancel-reservation`, y coordinar con sus planes
 
+## Phase 7: Reservas de Booking (FR-024 y FR-025)
+
+- [ ] T029 `ApplyOtaChange` (C4): conservar, reasignar o dejar sin asignar habitaciones, conflicto y comisión con el porcentaje congelado
+- [ ] T030 `AssignRoom` y `PATCH /api/reservations/{reservationRef}/room-assignment` (B3), con la limpieza del conflicto
+- [ ] T031 Llamadas a `AriChangeRecorder` (C5) en la modificación, la asignación, el No-Show, el Check-Out y `NOT_ARRIVED`
+- [ ] T032 Pruebas de los escenarios 13 y 14 de la historia 1
+
 ## Phase N: Polish
 
 - [ ] T026 Pruebas de tiempo: recotización de 10 habitaciones en menos de 3 s, Check-In con 10 huéspedes en menos de 500 ms y cierre del día de 1000 reservas en menos de 1 minuto
@@ -835,6 +903,8 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
 | FR-016 | `RegisterGuestMovements` | T018 |
 | FR-018 a FR-022 | `CloseDay` y `CloseDayJob` | T021, T022 |
 | FR-023 | `processed_message` y control de secuencia | T017 |
+| FR-024 | `ApplyOtaChange` | T029 |
+| FR-025 | `AssignRoom` y B3 | T030 |
 | NFR-001 a NFR-003 | Pruebas de tiempo | T026 |
 | SC-001 a SC-008 | Pruebas por escenario | T013, T019, T024 |
 
@@ -862,11 +932,10 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
 
 | # | Pendiente | Con quién |
 |---|---|---|
-| 1 | **Modificación por la OTA**: el spec la menciona ("la Ota por su API") pero las rutas las definirá el caso de uso futuro "Configurar OTA". Hasta entonces este plan solo cubre la modificación de la Recepcionista | Equipo del Módulo 2 |
-| 2 | **Hora del cierre del día**: 00:00:30 contra "23:59" del plan base | Equipo del Módulo 2 |
-| 3 | **Habitaciones `NOT_ARRIVED` en una reserva `IN_PROGRESS`**: el spec dice que se quitan de la lista del día, pero la reserva ya no está en la lista (está `IN_PROGRESS`), así que no hay aviso. Confirmar que es lo esperado | Módulo 1 |
-| 4 | El Módulo 1 debería conservar el mismo `messageId` en los reintentos y no reiniciar el `sequenceNumber` (FR-023); confirmar | Módulo 1 |
-| 5 | El spec menciona en FR-003 un texto confuso ("sin mostrar la tarifa nueva"): se interpretó como "sin mostrar la tarifa anterior", coherente con el resto del spec y con `calculate-dynamic-rate` | Equipo del Módulo 2 |
+| 1 | **Hora del cierre del día**: 00:00:30 contra "23:59" del plan base | Equipo del Módulo 2 |
+| 2 | **Habitaciones `NOT_ARRIVED` en una reserva `IN_PROGRESS`**: el spec dice que se quitan de la lista del día, pero la reserva ya no está en la lista (está `IN_PROGRESS`), así que no hay aviso. Confirmar que es lo esperado | Módulo 1 |
+| 3 | El Módulo 1 debería conservar el mismo `messageId` en los reintentos y no reiniciar el `sequenceNumber` (FR-023); confirmar | Módulo 1 |
+| 4 | El spec menciona en FR-003 un texto confuso ("sin mostrar la tarifa nueva"): se interpretó como "sin mostrar la tarifa anterior", coherente con el resto del spec y con `calculate-dynamic-rate` | Equipo del Módulo 2 |
 
 ## Notes
 
