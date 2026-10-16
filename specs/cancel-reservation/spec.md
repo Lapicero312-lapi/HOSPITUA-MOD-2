@@ -9,7 +9,7 @@
 
 Las reservas se caen todo el tiempo: el huésped cambia de planes, la agencia recibe una anulación o
 la Recepcionista atiende una llamada para dar de baja una reserva. El hotel necesita procesar esas
-cancelaciones de forma ágil por los dos canales por los que llegan —recepción y API de la OTA— y,
+cancelaciones de forma ágil por los dos canales por los que llegan —recepción y Booking, a través de Channex— y,
 sobre todo, cuando la cancelación ocurre el mismo día de la llegada, necesita avisar al Módulo 1 para
 que libere la habitación. El Módulo 2 no libera habitaciones: lo avisa en la lista de reservas del día
 y el Módulo 1, dueño del estado de las habitaciones, decide qué hacer. Como el pago del 100% de la estadía se liquida en el
@@ -20,13 +20,14 @@ en curso.
 
 ### Flujo de Usuario de Alto Nivel
 
-1. El solicitante (la **Recepcionista** o la **Ota** desde su API) localiza la reserva mediante
-   "Consultar reservas". La Recepcionista solo cancela reservas de canal `DIRECT`; una reserva de
-   canal `OTA` solo la cancela la Ota por su API (canal `OTA_API`).
+1. El solicitante localiza la reserva mediante "Consultar reservas": la **Recepcionista**, o
+   "Generar reservación por OTA" cuando Booking envía una cancelación por el feed de Channex. La
+   Recepcionista solo cancela reservas de canal `DIRECT`; una reserva de canal `OTA` solo se cancela
+   cuando la envía Booking (canal `OTA_API`).
 2. El sistema valida que la `Reservation` esté en estado `ACTIVE` o `PENDING`.
 3. El solicitante confirma la cancelación: para la Recepcionista, marcando en pantalla una casilla
    de confirmación ("Entiendo que la cancelación no se puede deshacer") antes de que el botón de
-   confirmar se habilite; para la Ota, mediante el JSON recibido.
+   confirmar se habilite; para Booking, la propia cancelación que envía es la confirmación.
 4. El sistema cambia el atributo `Reservation.status` directamente a `CANCELLED`, de forma atómica
    dentro de la transacción de cancelación, sin requerir la invocación del flujo de modificación de
    reservación.
@@ -70,11 +71,11 @@ se bloquea con un error controlado.
    - **Then** el sistema cambia la reserva a `CANCELLED`, registra la `Cancellation` con su canal, y
      avisa `REMOVED` (motivo `CANCELLED`) al Módulo 1
 
-2. **Scenario**: Cancelación exitosa de una reserva OTA vía API (Happy Path)
+2. **Scenario**: Cancelación de una reserva de Booking (Happy Path)
    - **Given** una `Reservation` con `source` `OTA` en `ACTIVE` o `PENDING` y con llegada hoy
-   - **When** la API recibe la solicitud de cancelación de la **Ota**
-   - **Then** el sistema procesa la baja de inmediato, cambia la reserva a `CANCELLED`, avisa
-     `REMOVED` al Módulo 1 si estaba en la lista del día y devuelve una respuesta HTTP 200
+   - **When** "Generar reservación por OTA" recibe la cancelación de Booking por el feed de Channex
+   - **Then** el sistema procesa la baja de inmediato, cambia la reserva a `CANCELLED`, registra la
+     `Cancellation` con el canal `OTA_API` y avisa `REMOVED` al Módulo 1 si estaba en la lista del día
 
 3. **Scenario**: Cancelación de una reserva con llegada futura (Happy Path)
    - **Given** una `Reservation` en `ACTIVE` o `PENDING` cuya llegada es dentro de varios días
@@ -126,8 +127,8 @@ se bloquea con un error controlado.
 - **FR-002**: El sistema debe autorizar la cancelación únicamente si la `Reservation` está en
   `ACTIVE` o `PENDING`.
 - **FR-002a**: El sistema debe permitir a la Recepcionista cancelar solo reservas de canal `DIRECT`
-  (canal `RECEPTION`); las reservas de canal `OTA` solo las cancela la Ota por su API (canal
-  `OTA_API`).
+  (canal `RECEPTION`); las reservas de canal `OTA` solo se cancelan cuando Booking envía la cancelación
+  por el feed de Channex (canal `OTA_API`), mediante "Generar reservación por OTA".
 - **FR-002b**: La pantalla de cancelación debe exigir que la Recepcionista marque una casilla de
   confirmación ("Entiendo que la cancelación no se puede deshacer") antes de habilitar el botón que
   confirma la cancelación.
@@ -141,7 +142,7 @@ se bloquea con un error controlado.
 - **FR-005**: El sistema debe registrar cada cancelación en `Cancellation` con la referencia de la
   reserva, la fecha, el canal (`RECEPTION` u `OTA_API`) y quién la procesó.
 - **FR-006**: El sistema no debe cobrar penalidades ni invocar la liquidación del Módulo 3 al
-  cancelar, ni modificar la comisión de una reserva OTA cancelada por la Ota (ver
+  cancelar, ni modificar la comisión de una reserva OTA cancelada por Booking (ver
   `register-ota-information-commission` FR-007).
 - **FR-007**: El sistema debe interceptar errores de validación, estado incorrecto o concurrencia y
   responder con **HTTP 400 (Bad Request)** amigable, prohibiendo errores **HTTP 500**.
