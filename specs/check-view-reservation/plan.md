@@ -77,13 +77,12 @@ Todo el contexto técnico (lenguaje, framework, dependencias, almacenamiento, pr
 
 ## Contratos REST
 
-Rutas y reglas generales del plan base: prefijo `/api`, JSON, autenticación JWT, errores con cuerpo
-`{ "errorCode", "message", "timestamp", "path" }` y siempre 4xx (nunca 500). Roles: `RECEPTIONIST`,
-`MODULE1` y `MODULE3` (los dos últimos, de servicio a servicio). La `OTA` no tiene acceso a nada de
-este caso de uso (FR-011).
+Rutas y reglas generales del plan base: prefijo `/api`, JSON, errores con cuerpo
+`{ "errorCode", "message", "timestamp", "path" }` y siempre 4xx (nunca 500).
 
-**Autorización de fondo**: sin token, `401` (`UNAUTHENTICATED`); con un rol sin permiso, `403`
-(`FORBIDDEN`). Son 4xx, así que respetan la regla del diccionario.
+**Sin seguridad** (regla transversal 10 del plan base): quien llama lo indica con la cabecera
+`X-Client` (`RECEPTIONIST`, `MODULE1` o `MODULE3`) y el Módulo 2 no lo valida. Sin `X-Client`, o con un
+valor que la ruta no admite, responde `400` `INVALID_CLIENT`. La `OTA` no usa este caso de uso (FR-011).
 
 ### C1. `GET /api/reservations` (Recepcionista): listado y búsqueda
 
@@ -97,6 +96,7 @@ Un único cuadro de búsqueda (`search`) cubre código de reserva, código de la
 | `status` | `PENDING` \| `ACTIVE` \| `IN_PROGRESS` \| `COMPLETED` \| `CANCELLED` \| `NO_SHOW` | No | Sin valor: todos los estados |
 | `source` | `DIRECT` \| `OTA` | No | |
 | `otaId` | id de agencia | No | Solo con `source=OTA` (ver "Puntos que este plan propone") |
+| `inConflict` | `true` | No | Solo las reservas de Booking en conflicto (FR-002a) |
 | `dateFrom`, `dateTo` | `AAAA-MM-DD` | Ambos o ninguno | Rango inclusivo; cruce: `startDate ≤ dateTo` y `endDate > dateFrom`; máximo 366 días |
 | `order` | `asc` \| `desc` | No | Por `startDate`. Por defecto `desc` |
 | `page` | entero ≥ 1 | No | Por defecto `1`. Tamaño fijo de 10 (no hay `pageSize`) |
@@ -117,7 +117,8 @@ Un único cuadro de búsqueda (`search`) cubre código de reserva, código de la
       "endDate": "2026-10-25",
       "status": "ACTIVE",
       "migrationStatus": "AWAITING_CHECK_IN",
-      "actions": { "canModify": true, "canCancel": true }
+      "conflict": null,
+      "actions": { "canModify": true, "canCancel": true, "canAssignRoom": false }
     }
   ],
   "page": 1,
@@ -132,6 +133,11 @@ Un único cuadro de búsqueda (`search`) cubre código de reserva, código de la
 - `externalConfirmationCode` y `otaName` solo vienen con valor en reservas `OTA`.
 - `actions.canModify` y `actions.canCancel` son `true` solo si la reserva es `DIRECT` y está `ACTIVE` o
   `PENDING` (FR-005).
+- `conflict` es `null`, o `{ "reason": "NO_ROOM_AVAILABLE", "detectedAt": "..." }` en una reserva de
+  Booking en conflicto; la pantalla la muestra con la marca "En conflicto". `actions.canAssignRoom` es
+  `true` cuando la reserva está en conflicto y tiene alguna habitación sin asignar (`update-reservation`,
+  B3).
+- Una habitación sin asignar aparece con `roomNumber: null` ("Sin asignar").
 - Sin resultados: `200` con `items: []`, `totalItems: 0`, `totalPages: 0` y
   `message: "No se encontraron reservas con los filtros aplicados."` (FR-010).
 - Si `page` supera `totalPages`, se devuelve la **última página válida** y `page` refleja la que se
@@ -185,6 +191,7 @@ fechas (formato, completitud, orden, 366 días) → `order` → `page` → longi
   "guestCount": 3,
   "notes": "",
   "createdAt": "2026-10-01T09:14:00-05:00",
+  "conflict": null,
   "rooms": [
     {
       "roomNumber": "204",
@@ -204,6 +211,8 @@ fechas (formato, completitud, orden, 366 días) → `order` → `page` → longi
 
 - `roomGrossAmount` es `null` en reservas `OTA`. El dinero va como **texto decimal** (`decimal.js`),
   nunca como número.
+- `conflict` tiene la misma forma que en C1; una habitación sin asignar trae `roomNumber: null`.
+- En reservas de Booking el titular puede venir sin `documentType` ni `documentNumber` (`null`).
 - `cancellation` solo viene en reservas `CANCELLED` por solicitud explícita:
   `{ "cancellationDate", "channel", "reason", "processedBy" }`. El No-Show no tiene `Cancellation`.
 - Si la reserva no existe: `400` `RESERVATION_NOT_FOUND`, "La reserva no existe." (regla del plan base:
@@ -212,7 +221,7 @@ fechas (formato, completitud, orden, 366 días) → `order` → `page` → longi
 
 ### C4. `GET /api/reservations/{reservationRef}` (Módulo 3): consulta para liquidar (FR-022)
 
-**Misma ruta que C3, respuesta distinta según el rol.** Con rol `MODULE3` el controlador llama al caso
+**Misma ruta que C3, respuesta distinta según `X-Client`.** Con `X-Client: MODULE3` el controlador llama al caso
 de uso `GetReservationForBilling` y entrega solo esto:
 
 ```json
@@ -241,11 +250,11 @@ de uso `GetReservationForBilling` y entrega solo esto:
 - No incluye otros datos financieros ni del huésped.
 - Si la reserva no existe: **`404`** `RESERVATION_NOT_FOUND`. Es la única respuesta 404 del Módulo 2:
   el Módulo 3 la espera así (ver el plan base, sección "Errores").
-- Cualquier otro rol que no sea `RECEPTIONIST` ni `MODULE3`: `403`.
+- Con otro valor de `X-Client`, o sin él: `400` `INVALID_CLIENT`.
 
 ### C5. `GET /api/reservations` (Módulo 1): reservas por fechas (FR-023)
 
-**Misma ruta que C1, comportamiento distinto con rol `MODULE1`**: el controlador llama a
+**Misma ruta que C1, comportamiento distinto con `X-Client: MODULE1`**: el controlador llama a
 `FindReservationsByStayRange`. Sirve al Módulo 1 para validar un mantenimiento al registrarlo o dar de
 baja una habitación; la lógica sobre esas reservas es suya.
 
@@ -254,7 +263,7 @@ baja una habitación; la lógica sobre esas reservas es suya.
 | `dateFrom`, `dateTo` | Sí, ambos | `AAAA-MM-DD`; mismo cruce de FR-003; máximo 366 días |
 | `roomId` | No | Id de habitación del Módulo 1 |
 
-Cualquier otro parámetro (`search`, `status`, `source`, `page`...) con este rol: `400`
+Cualquier otro parámetro (`search`, `status`, `source`, `page`...) con `X-Client: MODULE1`: `400`
 `UNSUPPORTED_PARAMETER`.
 
 **Respuesta 200** (sin paginar; solo reservas `PENDING`, `ACTIVE` o `IN_PROGRESS`):
@@ -279,13 +288,16 @@ Cualquier otro parámetro (`search`, `status`, `source`, `page`...) con este rol
 - Errores `400`: `INCOMPLETE_DATE_RANGE`, `INVALID_DATE`, `INVALID_DATE_RANGE`, `DATE_RANGE_TOO_LARGE`
   (mismos mensajes que C1) y `INVALID_ROOM_ID` ("El identificador de la habitación es inválido.").
 
-### Resumen de rutas y roles
+### Resumen de rutas según `X-Client`
 
 | Ruta | `RECEPTIONIST` | `MODULE1` | `MODULE3` | `OTA` |
 |---|---|---|---|---|
-| `GET /api/reservations` | Listado (C1) | Por fechas (C5) | 403 | 403 |
-| `GET /api/reservations/day-summary` | Sí (C2) | 403 | 403 | 403 |
-| `GET /api/reservations/{reservationRef}` | Detalle (C3) | 403 | Para liquidar (C4) | 403 |
+| `GET /api/reservations` | Listado (C1) | Por fechas (C5) | 400 | 400 |
+| `GET /api/reservations/day-summary` | Sí (C2) | 400 | 400 | 400 |
+| `GET /api/reservations/{reservationRef}` | Detalle (C3) | 400 | Para liquidar (C4) | 400 |
+
+El `400` es `INVALID_CLIENT`. No es una regla de seguridad: solo indica que esa ruta no tiene una
+respuesta para ese llamador.
 
 ## Algoritmo de búsqueda
 
@@ -327,8 +339,9 @@ es el contrato **ya acordado con el equipo del Módulo 1**; el plan lo adopta ta
   (`updatedAt` con microsegundos, porque es el control de concurrencia). Los valores de los ejemplos son
   ilustrativos.
 - La lista y sus actualizaciones llevan el detalle de FR-014 de la spec. El campo `source` viaja como
-  `DIRECTA` para las reservas directas o con el nombre de la agencia (por ejemplo `BOOKING`) para las
-  `OTA`.
+  `DIRECTA` para las reservas directas o con el nombre de la agencia en mayúsculas y sin el dominio para
+  las `OTA`: `Booking.com` viaja como `BOOKING`.
+- En una reserva de Booking con una habitación sin asignar, su `roomId` y su `roomNumber` viajan `null`.
 
 ### Lista del día (FR-013, FR-014)
 
@@ -542,16 +555,16 @@ escenario 4). El respaldo definitivo es la restricción única `(operational_dat
 sequenceDiagram
     actor R as Recepcionista
     participant C as ReservationsController
-    participant G as Guard de rol
+    participant G as Lectura de X-Client
     participant U as ListReservations
     participant S as ResolveSearchCriteria
     participant Q as ReservationQueryPort
     participant DB as PostgreSQL
 
     R->>C: GET /api/reservations?search=...&status=...&page=...
-    C->>G: ¿rol RECEPTIONIST?
-    alt rol distinto
-        G-->>R: 403 FORBIDDEN
+    C->>G: ¿X-Client RECEPTIONIST?
+    alt sin X-Client o con otro valor
+        G-->>R: 400 INVALID_CLIENT
     end
     C->>C: Valida DTO (formatos, rango, orden, página)
     alt parámetro inválido
@@ -662,14 +675,14 @@ sequenceDiagram
 sequenceDiagram
     participant X as Módulo 1 o Módulo 3
     participant C as ReservationsController
-    participant G as Guard de rol
+    participant G as Lectura de X-Client
     participant U as FindReservationsByStayRange / GetReservationForBilling
     participant DB as PostgreSQL
 
-    X->>C: GET /api/reservations (M1) o GET /api/reservations/{ref} (M3), con credencial de servicio
-    C->>G: rol MODULE1 o MODULE3
-    alt sin token o rol sin permiso
-        G-->>X: 401 o 403
+    X->>C: GET /api/reservations (M1) o GET /api/reservations/{ref} (M3), con X-Client
+    C->>G: X-Client MODULE1 o MODULE3
+    alt sin X-Client o con otro valor
+        G-->>X: 400 INVALID_CLIENT
     end
     C->>U: execute(parámetros)
     U->>DB: consulta de solo lectura
@@ -757,12 +770,11 @@ en el log, sin datos personales ni de infraestructura. **Este caso de uso nunca 
 
 | Situación | HTTP | `errorCode` | Dónde se detecta |
 |---|---|---|---|
-| Sin token o token inválido | 401 | `UNAUTHENTICATED` | Guard de autenticación |
-| Rol sin permiso (incluida la `OTA`) | 403 | `FORBIDDEN` | Guard de rol |
+| Sin `X-Client`, o con un valor que la ruta no admite | 400 | `INVALID_CLIENT` | Lectura de `X-Client` |
 | Filtro con formato inválido (estado, canal, fechas, orden, página, código, nombre) | 400 | Los de la tabla de C1 | DTO, antes de consultar |
 | `RSV-…` sin coincidencia, o referencia inexistente en el detalle | 400 | `RESERVATION_NOT_FOUND` | `ResolveSearchCriteria` y `GetReservationDetail` |
 | Referencia inexistente en la consulta del Módulo 3 | 404 | `RESERVATION_NOT_FOUND` | `GetReservationForBilling` |
-| Parámetro ajeno con rol `MODULE1` | 400 | `UNSUPPORTED_PARAMETER` | DTO del Módulo 1 |
+| Parámetro ajeno con `X-Client: MODULE1` | 400 | `UNSUPPORTED_PARAMETER` | DTO del Módulo 1 |
 | `roomId` con formato inválido | 400 | `INVALID_ROOM_ID` | DTO del Módulo 1 |
 | Agencia sin canal `OTA` | 400 | `AGENCY_REQUIRES_OTA_CHANNEL` | DTO |
 | Texto con caracteres de inyección en cualquier filtro | 400 | `INVALID_RESERVATION_CODE` | Validación de formato; nunca llega a la base |
@@ -800,8 +812,9 @@ publica por cola y responde consultas. No necesita `Module1Port` ni `Module3Port
 **Compromisos con cada módulo**
 
 - **Módulo 1**: descarta `messageId` repetidos, aplica en orden por `sequenceNumber`, no responde.
-- **Módulo 3**: llama con credencial de servicio (rol `MODULE3`) y espera 404 si la reserva no existe.
-- **Autenticación de servicio** de ambos: definida en el plan base (JWT de servicio a servicio).
+- **Módulo 3**: llama con `X-Client: MODULE3` y espera 404 si la reserva no existe.
+- **Sin seguridad**: los Módulos 1 y 3 envían `X-Client`; el Módulo 2 no valida quién llama (regla
+  transversal 10 del plan base).
 
 ## Arquitectura (capas del plan base)
 
@@ -810,7 +823,7 @@ publica por cola y responde consultas. No necesita `Module1Port` ni `Module3Port
 | `domain/reservation/` | `DailyListMembership` (cuándo entra, cambia o sale), `ReservationProjection` (el detalle de FR-014), `deriveMigrationStatus` |
 | `application/use-cases/check-view-reservation/` | **Entrada**: `ListReservations`, `GetReservationDetail`, `GetDaySummary`, `GetReservationForBilling`, `FindReservationsByStayRange`, `GenerateDailyList`, `PublishPendingDailyMessages`, `DailyListChangeRecorder` |
 | `application/ports/out/` | `ReservationQueryPort` (solo lectura), `DailyMessageRepository`, `DailySequenceRepository`, `DailyListPublisher`, `Clock` |
-| `infrastructure/in/rest/` | `ReservationsController` (C1–C5), con DTO validados con `class-validator` y guards por rol |
+| `infrastructure/in/rest/` | `ReservationsController` (C1–C5), con DTO validados con `class-validator` y la lectura de `X-Client` |
 | `infrastructure/in/jobs/` | `DailyListJob` (00:00 y al arrancar), `PublishPendingJob` (cada 10 s) |
 | `infrastructure/out/persistence/` | `TypeOrmReservationQuery` (`QueryBuilder`), repositorios de `daily_list_message` y `daily_sequence` |
 | `infrastructure/out/messaging/` | `RabbitDailyListPublisher` (exchange `hospitua.events`, confirmación de publicación) |
@@ -819,7 +832,9 @@ publica por cola y responde consultas. No necesita `Module1Port` ni `Module3Port
 `ReservationLookup` (`findByRef`, `findByCode`, `findForUpdate`), que devuelve la reserva completa con
 `updatedAt` y comisión, y `findBlockingRooms(roomIds, startDate, endDate, excludeReservationRef?)`, que
 usa `check-room-availability` para saber qué habitaciones ya ocupan inventario (su contrato está en el
-plan de ese caso de uso). No usan la ruta REST ni las clases internas de este caso de uso (regla 6 de la
+plan de ese caso de uso). También expone `countBlockingByCategory(categoryRoom, dateFrom, dateTo)`, que
+devuelve, por cada noche del rango, cuántas habitaciones de la categoría bloquean inventario; lo usa
+`configure-ota` para la disponibilidad de Channex. No usan la ruta REST ni las clases internas de este caso de uso (regla 6 de la
 arquitectura).
 
 **Integración con otros casos de uso**: `cancel-reservation`, `update-reservation`,
@@ -882,7 +897,7 @@ frontend/src/pages/reservations/     # listado con filtros, detalle, resumen del
 - [ ] T005 `ReservationQueryPort` y su implementación TypeORM: filtros, orden, paginación y cruce de fechas
 - [ ] T006 `ResolveSearchCriteria` (algoritmo de búsqueda) con pruebas unitarias de cada caso
 - [ ] T007 DTO de entrada con validación y el orden de validación; mensajes literales de FR-009 en un solo archivo de constantes
-- [ ] T008 Guards por rol para `RECEPTIONIST`, `MODULE1` y `MODULE3`, y el 403 para `OTA`
+- [ ] T008 Lectura de `X-Client` (`RECEPTIONIST`, `MODULE1`, `MODULE3`) en cada ruta y `400` `INVALID_CLIENT` con otro valor
 
 ## Phase 3: User Story 1 - Listado con filtros, orden y paginación (P1)
 
@@ -902,8 +917,10 @@ devuelven exactamente lo esperado, con totales y páginas correctos.
 **Goal**: encontrar una reserva por `reservationRef` o código de la OTA y ver todo su detalle.
 
 - [ ] T015 [US2] Búsqueda por código en paralelo (referencia y código de la OTA) que ignora los demás filtros
-- [ ] T016 [US2] `GetReservationDetail` y `GET /api/reservations/{reservationRef}` para `RECEPTIONIST` (C3), con `Cancellation` y datos de Check-In/Check-Out
+- [ ] T016 [US2] `GetReservationDetail` y `GET /api/reservations/{reservationRef}` para `RECEPTIONIST` (C3), con `Cancellation` y conflicto
 - [ ] T016a [US2] `ReservationLookup.findBlockingRooms` (lo usa `check-room-availability`), con su consulta sobre `reservation_room`
+- [ ] T016b [US1] Filtro `inConflict`, campo `conflict`, `actions.canAssignRoom` y habitaciones sin asignar en C1 y C3 (FR-002a)
+- [ ] T016c `ReservationLookup.countBlockingByCategory` (lo usa `configure-ota`), con su consulta sobre `reservation_room`
 - [ ] T017 [US2] Errores `RESERVATION_NOT_FOUND` e `INVALID_RESERVATION_CODE` sin llegar a la base de datos cuando el formato es inválido
 - [ ] T018 [US2] Pruebas de integración de los escenarios 1 a 6
 - [ ] T019 [P] [US2] Frontend: pantalla de detalle
@@ -941,7 +958,7 @@ devuelven exactamente lo esperado, con totales y páginas correctos.
 
 - [ ] T035 Verificar que ningún log escribe datos personales del titular (NFR-003)
 - [ ] T036 Prueba de carga: 50 000 reservas y una página en menos de 1 s; 500 reservas en la lista en menos de 1 min
-- [ ] T037 Documentar las rutas en OpenAPI (`@nestjs/swagger`), incluidos los dos comportamientos de `GET /api/reservations` por rol
+- [ ] T037 Documentar las rutas en OpenAPI (`@nestjs/swagger`), incluidos los dos comportamientos de `GET /api/reservations` según `X-Client`
 
 ## Pruebas por escenario
 
@@ -968,12 +985,12 @@ Cada escenario Gherkin tiene al menos una prueba de integración (regla del plan
 | US5 | 7 orden | `UPDATED` y luego `REMOVED` con secuencias crecientes |
 | US5 | 8 sin efecto | Reserva con llegada en una semana: no se genera mensaje |
 | Casos borde | Varios | Coincidencia doble de código, varias agencias con el mismo código, página inexistente, 367 días, inyección en filtros, caída de RabbitMQ y reanudación, Check-In sin mensaje, `PENDING` OTA fuera de la lista |
-| FR-022 / FR-023 | Sin Gherkin | Pruebas de contrato de C4 y C5: forma exacta, `404` y `403` |
-| FR-011 | Acceso | La `OTA` recibe `403` en el listado, la búsqueda, el resumen y el detalle; el Módulo 1 recibe `403` en todo salvo `GET /api/reservations` por fechas (C5); el Módulo 3 solo accede al detalle por referencia (C4) |
+| FR-022 / FR-023 | Sin Gherkin | Pruebas de contrato de C4 y C5: forma exacta y `404` |
+| FR-011 | Llamador | Sin `X-Client` o con otro valor: `400` en el listado, la búsqueda, el resumen y el detalle; con `MODULE1`, `GET /api/reservations` devuelve la consulta por fechas (C5); con `MODULE3`, el detalle devuelve la consulta para liquidar (C4) |
 
 ## Dependencies & Execution Order
 
-- **Depende de**: el plan base completo (fase 2: esquema, mensajería, roles, bloqueo asesor).
+- **Depende de**: el plan base completo (fase 2: esquema, mensajería, `X-Client`, bloqueo asesor).
 - **Antes que este caso de uso**: ninguno. Es el primero del orden recomendado.
 - **Necesitan de este caso de uso**: `check-room-availability`, `update-reservation`, `cancel-reservation`
   y `generate-*` usan `ReservationLookup` (FR-007) y `DailyListChangeRecorder`.
@@ -992,9 +1009,9 @@ Cada uno se puede cambiar sin romper el resto; se anotan para que no pasen desap
 3. **Consulta del Módulo 1 (C5)**: sin paginación, máximo 366 días y `400` `UNSUPPORTED_PARAMETER` ante
    parámetros ajenos. El Módulo 1 confirmó `dateFrom`, `dateTo` y `roomId`; los campos devueltos y el
    límite son propuesta.
-4. **Rutas compartidas por rol** (`GET /api/reservations` y `GET /api/reservations/{reservationRef}`): el
-   Módulo 1 y el Módulo 3 acordaron esas rutas. La alternativa, rutas separadas por módulo, evitaría
-   respuestas distintas por rol; se descartó para no renegociar lo ya confirmado.
+4. **Rutas compartidas según `X-Client`** (`GET /api/reservations` y `GET /api/reservations/{reservationRef}`):
+   el Módulo 1 y el Módulo 3 acordaron esas rutas. Sin seguridad, quien llama se indica con `X-Client`.
+   La alternativa, rutas separadas por módulo, se descartó para no renegociar lo ya confirmado.
 5. **Mensajes `FAILED` bloquean a los siguientes** del mismo día hasta que alguien los reencole, para no
    dejar huecos en la secuencia. La alternativa (saltar el fallido) rompería la regla de orden de FR-018.
 6. **`daily_sequence`** es una tabla nueva que el plan base no listaba; se agrega allí.
@@ -1003,10 +1020,8 @@ Cada uno se puede cambiar sin romper el resto; se anotan para que no pasen desap
 
 | # | Pendiente | Con quién |
 |---|---|---|
-| 1 | Regla para convertir `Ota.name` en el `source` de la lista (`Booking.com` → `BOOKING`): ¿mayúsculas sin dominio, o un código propio de la agencia? | Módulo 1 |
-| 2 | Tipo de `otaCommissionPercentage` en la respuesta C4 (número o texto) y su escala (0 a 100) | Módulo 3 |
-| 3 | Campos exactos que espera el Módulo 1 en C5 | Módulo 1 |
-| 4 | Autenticación de servicio de `MODULE1` y `MODULE3` (credencial, caducidad) | Módulos 1 y 3 |
+| 1 | Tipo de `otaCommissionPercentage` en la respuesta C4 (número o texto) y su escala (0 a 100) | Módulo 3 |
+| 2 | Campos exactos que espera el Módulo 1 en C5 | Módulo 1 |
 
 ## Trazabilidad: requisito → componente → tarea
 
@@ -1014,6 +1029,7 @@ Cada uno se puede cambiar sin romper el resto; se anotan para que no pasen desap
 |---|---|---|
 | FR-001, FR-003a | `ListReservations`, `ReservationQueryPort` (paginación de 10 y orden) | T005, T009 |
 | FR-002, FR-003 | Filtros de estado y de cruce de fechas en `ReservationQueryPort` | T005, T009 |
+| FR-002a | Filtro `inConflict` y campo `conflict` | T016b |
 | FR-004 | `ResolveSearchCriteria` (documento, nombre, canal, agencia) | T006, T020 |
 | FR-005 | Fila del listado y `actions` | T010 |
 | FR-005a | `GetDaySummary` y `GET /api/reservations/day-summary` | T012 |
@@ -1021,7 +1037,7 @@ Cada uno se puede cambiar sin romper el resto; se anotan para que no pasen desap
 | FR-006 | `GetReservationDetail` y búsqueda por código | T015, T016 |
 | FR-007, FR-008 | Puerto `ReservationLookup` (solo lectura) | T016 |
 | FR-009, FR-010 | DTO, mensajes literales y respuesta vacía | T007, T011, T017, T021 |
-| FR-011 | Guards por rol | T008 |
+| FR-011 | Lectura de `X-Client` | T008 |
 | FR-012, FR-013 | `GenerateDailyList`, `DailyListJob` | T023, T024 |
 | FR-014, FR-015 | `ReservationProjection` | T004 |
 | FR-016, FR-017 | `DailyListMembership`, `DailyListChangeRecorder` | T003, T028 |

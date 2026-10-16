@@ -40,7 +40,11 @@ llegada futura solo bloquean la disponibilidad en el Módulo 2 hasta el día de 
    valor de hospedaje bruto de cada habitación mediante "Calcular tarifa dinámica", obtiene un
    `RateQuote` por habitación y muestra al huésped, de forma informativa, la tarifa de cada una.
 5. El solicitante ingresa los datos de identidad del `Guest` titular y, opcionalmente, las
-   observaciones de la reserva (`notes`, máximo 500 caracteres), y confirma la reserva.
+   observaciones de la reserva (`notes`, máximo 500 caracteres), y confirma la reserva. Si primero
+   escribe el tipo y el número de documento de un titular que ya tuvo una reserva, el sistema le
+   ofrece los datos de su reserva más reciente para **precargar** el formulario; la Recepcionista los
+   revisa, los corrige si cambiaron y confirma. Los datos se **copian** a la nueva reserva: cada reserva
+   guarda su propio titular y corregirlos en una no cambia las demás.
 6. El sistema crea la `Reservation` directamente en estado `ACTIVE`, sin ningún paso de cobro, con
    una `ReservationRoom` en `EXPECTED` por cada habitación.
 7. El sistema responde 201 (Created) con la reserva, sin depender del Módulo 1. Si la llegada
@@ -145,6 +149,18 @@ reserva y se devuelve un error controlado.
      solicitud se hace el 2026-09-29, el `startDate` 2026-09-28 ya se rechaza y el mínimo pasa a ser
      2026-09-29
 
+10. **Scenario**: Precarga del titular de una reserva anterior (Happy Path)
+   - **Given** un titular con tipo y número de documento `CC 123` que ya tuvo una reserva
+   - **When** la Recepcionista escribe ese tipo y número de documento al crear una reserva nueva
+   - **Then** el sistema llena el formulario con el nombre, el apellido, la nacionalidad, el teléfono y
+     el correo de su reserva más reciente; la Recepcionista puede corregirlos antes de confirmar, y la
+     reserva anterior no cambia
+
+11. **Scenario**: Documento sin reservas anteriores
+   - **Given** un tipo y número de documento que no aparece en ninguna reserva
+   - **When** la Recepcionista lo escribe al crear una reserva
+   - **Then** el sistema no precarga nada y la Recepcionista escribe los datos del titular completos
+
 ### Casos Borde
 
 - ¿Qué sucede si un solicitante intenta reservar con un rango de fechas inválido o incoherente (por
@@ -206,6 +222,11 @@ reserva y se devuelve un error controlado.
   cada reserva creada con llegada hoy después de enviada la lista del día (`ADDED`).
 - **FR-010**: El sistema debe interceptar cualquier error de validación de campos, fechas o
   integraciones y responder con **HTTP 400 (Bad Request)**, prohibiendo errores **HTTP 500**.
+- **FR-011**: El sistema debe permitir que la Recepcionista busque, por tipo y número de documento, los
+  datos del titular de la reserva más reciente con ese documento (`firstName`, `lastName`,
+  `documentType`, `documentNumber`, `nationality`, `contactPhone` y `contactEmail`) para precargar el
+  formulario. Los datos se copian a la nueva reserva y no la ligan con la anterior. Si no hay ninguna
+  reserva con ese documento, no precarga nada. Es de solo lectura.
 
 ### Non-Functional Requirements
 

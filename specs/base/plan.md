@@ -1,7 +1,7 @@
 # Implementation Plan: Base del Módulo 2 (plataforma compartida)
 
 **Date**: 2026-10-09  
-**Spec**: [diccionario.md](../diccionario.md) (contrato de integración) y los `spec.md` de los 12 casos de uso  
+**Spec**: [diccionario.md](../diccionario.md) (contrato de integración) y los `spec.md` de los 13 casos de uso  
 en `specs/*/`. Este plan no implementa un caso de uso: deja lista la base que todos los planes de
 caso de uso reutilizan.
 
@@ -9,14 +9,15 @@ caso de uso reutilizan.
 
 El Módulo 2 (Operación de Reservas y Cumplimiento Legal) es el dueño del ciclo de vida de las
 reservas (`Reservation.status`) y de `ReservationRoom.stayStatus`. Registra reservas directas
-(Recepcionista) y recibe las de OTA por API, las modifica, las cancela, cierra el día (No-Show),
+(Recepcionista) y lee las de Booking.com desde el feed de Channex, les envía la disponibilidad y las
+tarifas, las modifica, las cancela, cierra el día (No-Show),
 recibe del Módulo 1 los avisos de Check-In y Check-Out por habitación (con los datos de todos los
 huéspedes de la habitación), y genera el reporte SIRE.
 Consulta al Módulo 1 (inventario y calendario de mantenimientos) y al Módulo 3 (tarifa dinámica), le
 envía por cola la lista de reservas del día y sus actualizaciones. **No le ordena apartar ni liberar
 habitaciones**: el Módulo 1, dueño del estado de las habitaciones, decide qué hace con esa lista.
 
-Este plan fija lo que comparten los 12 casos de uso: stack, arquitectura hexagonal, estructura, modelo de
+Este plan fija lo que comparten los 13 casos de uso: stack, arquitectura hexagonal, estructura, modelo de
 datos, contratos de integración (REST y colas), manejo uniforme de errores (siempre 4xx, nunca 500),
 tareas programadas y pruebas. Cada plan de caso de uso (`specs/[caso-de-uso]/plan.md`) depende de este y solo
 describe lo propio.
@@ -28,7 +29,7 @@ describe lo propio.
 - **Framework backend**: NestJS
 - **Primary Dependencies**: `@nestjs/config`, `@nestjs/typeorm` + `typeorm` + `pg`, `class-validator`,
   `class-transformer`, `@golevelup/nestjs-rabbitmq`, `@nestjs/schedule`, `@nestjs/axios`,
-  `@nestjs/passport` + `@nestjs/jwt`, `@nestjs/swagger`, `nestjs-pino`, `decimal.js`, `luxon`
+  `@nestjs/swagger`, `nestjs-pino`, `decimal.js`, `luxon`
 - **Storage**: PostgreSQL
 - **Messaging**: RabbitMQ
 - **Architecture**: hexagonal (puertos y adaptadores), con un solo dominio general (`src/domain/`)
@@ -40,17 +41,23 @@ describe lo propio.
 - **Frontend**: React + Vite + React Router + TanStack Query
 - **Version Control**: Git + GitHub (Gitflow)
 - **Performance Goals**: cualquier llamada REST responde en menos de 1 segundo en el 95 % de los
-  casos, con 5 recepcionistas y hasta 5 solicitudes por segundo de las OTA a la vez, salvo que la spec
+  casos, con 5 recepcionistas a la vez, salvo que la spec
   del caso de uso fije otro tiempo. Se mantienen los tiempos de cada spec: cancelación local
   < 200 ms, Check-In/Check-Out < 500 ms, recotización < 3 s, exportación SIRE < 2 s para 500
   huéspedes, cierre del día < 1 min para 1000 reservas, página del listado < 1 s con hasta 50 000
-  reservas.
+  reservas. Una reserva de Booking queda registrada en menos de 2 minutos y un cambio de
+  disponibilidad llega a Channex en menos de 1 minuto.
 - **Constraints**: tiempo máximo de espera de 1 s al Módulo 1 y de 3 s al Módulo 3 (si no responden,
   nunca se asume disponibilidad ni tarifa); ningún error sale como 500; no se escriben datos
   personales en los logs; el día operativo es el de Colombia (`America/Bogota`); disponible 24/7,
-  porque las OTA reservan a cualquier hora.
-- **Scale/Scope**: hasta 100 habitaciones en hasta 10 categorías, 5 recepcionistas a la vez, 5
-  agencias OTA conectadas, 300 reservas nuevas por día y 50 000 reservas guardadas en total.
+  porque Booking reserva a cualquier hora; límite de Channex de 10 solicitudes por minuto por propiedad
+  para disponibilidad y 10 para tarifas.
+- **Scale/Scope**: hasta 100 habitaciones en hasta 10 categorías, 5 recepcionistas a la vez, 1
+  agencia OTA (Booking.com, por Channex staging), 300 reservas nuevas por día y 50 000 reservas guardadas en total.
+- **Configuración de Channex** (variables de entorno, nunca en la base de datos): `CHANNEX_BASE_URL`
+  (`https://staging.channex.io`), `CHANNEX_API_KEY`, `CHANNEX_PROPERTY_ID`, `BOOKING_HOTEL_ID`,
+  `BOOKING_COMMISSION_PERCENTAGE`, `CHANNEX_COP_PER_GBP` (`4000`), `CHANNEX_FEED_INTERVAL_SECONDS`
+  (`60`), `CHANNEX_ARI_INTERVAL_SECONDS` (`10`) y `CHANNEX_ARI_DAYS` (`90`).
 
 ### Decisiones de stack
 
@@ -64,7 +71,8 @@ describe lo propio.
 | Control de concurrencia | Comparación de `updatedAt` (`@UpdateDateColumn` de TypeORM, con precisión de microsegundos) al guardar | Edición y cancelación simultáneas (`CONCURRENT_UPDATE`) |
 | Dinero | `decimal.js`, columnas `numeric(14,2)`, redondeo `ROUND_HALF_UP`; **nunca `number`** | Comisión exacta |
 | Fechas | Fechas puras `AAAA-MM-DD` (texto `date` en la base) y `luxon` para el día operativo en `America/Bogota` | Evita corrimientos por zona horaria. Se guardan e intercambian como `AAAA-MM-DD`; las pantallas las muestran como `dd/mm/aaaa` |
-| Autenticación y autorización | Passport + JWT y guards por rol | Las specs exigen interfaces seguras y que cada Ota vea solo sus reservas |
+| Seguridad | **No se implementa en el Módulo 2**: es una capa aparte del sistema de microservicios. El frontend simula el login. Quién llama se indica con la cabecera `X-Client` (`RECEPTIONIST`, `MODULE1`, `MODULE3`) y quién hizo la acción con `X-User`; ninguna se valida | Ver la regla transversal 10 |
+| Integración con Booking.com | **Channex** (entorno de pruebas `staging.channex.io`), por REST con la cabecera `user-api-key`. Las reservas se leen del *feed* (`GET /api/v1/booking_revisions/feed`) y se confirman con `ack`; la disponibilidad y las tarifas se envían con `POST /api/v1/availability` y `POST /api/v1/restrictions` | Booking no llama al Módulo 2: el Módulo 2 consulta a Channex, así que no necesita una URL pública (D12) |
 | Tareas programadas | `@nestjs/schedule` con `timeZone: 'America/Bogota'` | Envío de la lista del día (00:00), cierre del día (23:59) y reintento de avisos pendientes |
 | Exclusión mutua de tareas con varias instancias | Bloqueo asesor de PostgreSQL (C10) | Evitar que dos instancias ejecuten el mismo cierre del día |
 | Timeouts y reintentos REST | `@nestjs/axios` con timeout; `cockatiel` si se necesitan reintentos o corte de circuito | No asumir disponibilidad ante caídas |
@@ -115,6 +123,7 @@ están en "Modelo de datos base".
 |---|---|---|
 | `reservationRef` | texto, único | Formato `RSV-` + 8 caracteres hexadecimales en mayúscula (por ejemplo `RSV-3F9A1C7B`). Lo genera el Módulo 2 al crear la reserva; si el generado ya existe, genera otro. Es el identificador con el que los demás módulos la referencian |
 | `guestRef` | referencia a `Guest` | Titular, obligatorio |
+| `conflictReason`, `conflictDetectedAt` | texto, fecha y hora | Solo reservas de Booking en conflicto: `NO_ROOM_AVAILABLE`, `CAPACITY_EXCEEDED` o `CHANGE_NOT_APPLICABLE` (D13); vacíos si no hay conflicto |
 | `guestCount` | entero | Total de personas: suma de los `guestCount` de sus habitaciones |
 | `rooms` | lista de `ReservationRoom` | Entre 1 y 10, sin repetir `roomId` |
 | `startDate`, `endDate` | fecha sin hora | `endDate` > `startDate`; comunes a todas las habitaciones |
@@ -133,8 +142,8 @@ están en "Modelo de datos base".
 
 | Atributo | Tipo | Regla |
 |---|---|---|
-| `roomId` | id externo | `Room.id` del Módulo 1 |
-| `roomNumber` | texto | Copia del número del Módulo 1, guardada al asignarla |
+| `roomId` | id externo | `Room.id` del Módulo 1; vacío solo si una reserva de Booking quedó sin habitación (D13) |
+| `roomNumber` | texto | Copia del número del Módulo 1, guardada al asignarla; vacío si no hay habitación |
 | `guestCount` | entero | Personas de esa habitación: ≥ 1 y ≤ `maxCapacity` |
 | `categoryRoom` | texto | Categoría de la habitación |
 | `roomGrossAmount`, `currency` | dinero | Solo `DIRECT`: el `lodgingAmount` y la moneda de la cotización del Módulo 3, sin cálculos |
@@ -147,19 +156,29 @@ están en "Modelo de datos base".
 |---|---|---|
 | `id` (`guestRef`) | id | |
 | `firstName`, `lastName` | texto | Obligatorios; el nombre completo (`fullName`) se arma uniéndolos |
-| `documentType` | `DocumentType` | Obligatorio |
-| `documentNumber` | texto | Obligatorio |
-| `nationality` | texto | Si no es Colombia, el huésped es extranjero (se deduce, no se guarda) |
+| `documentType` | `DocumentType` | Obligatorio, salvo en reservas de Booking: Booking no lo envía |
+| `documentNumber` | texto | Obligatorio, salvo en reservas de Booking |
+| `nationality` | texto | Nombre del país; si no es Colombia, el huésped es extranjero (se deduce, no se guarda). En reservas de Booking es informativa: se convierte del código de país de Channex y puede quedar vacía |
 | `contactPhone`, `contactEmail` | texto | Opcionales |
 
-**Ota** (agencia; se registra sola por su API)
+**Ota** (agencia; se registra por configuración, `configure-ota`)
 
 | Atributo | Tipo | Regla |
 |---|---|---|
-| `id`, `name`, `hotelAccountId` | texto | Enviados por la OTA |
+| `id`, `name`, `hotelAccountId` | texto | De la configuración: `Booking.com` y el id del hotel de Booking en Channex |
 | `commissionPercentage` | decimal de 0 a 100 | Porcentaje pactado por defecto |
 | `connectionStatus` | `CONNECTED` o `DISCONNECTED` | |
-| `linkedAt`, `lastSyncAt` | fecha y hora | |
+| `linkedAt`, `lastSyncAt` | fecha y hora | `lastSyncAt`: última lectura del feed de Channex que terminó bien |
+
+**OtaRoomTypeMapping** (relación de tipos de habitación, `configure-ota`): `otaId`, `channexRoomTypeId`,
+`channexRatePlanId` y `categoryRoom`. Un tipo de habitación de Channex por categoría, y viceversa.
+
+**OtaBookingRevision** (revisión de Channex ya procesada, `generate-ota-reservation`): `revisionId`,
+`otaId`, `bookingId`, `status` (`new`, `modified`, `cancelled`), la reserva afectada, el resultado y
+cuándo se confirmó a Channex (`ack`).
+
+**AriPendingChange** (disponibilidad pendiente de enviar a Channex, `configure-ota`): `categoryRoom`,
+`dateFrom` y `dateTo`.
 
 **Cancellation** (registro inmutable de la anulación): `cancellationId`, `reservationRef`,
 `cancellationDate`, `reason` (opcional), `channel` (`RECEPTION` | `OTA_API`), `processedBy`, `status`
@@ -203,7 +222,9 @@ movimientos.
 | `Reservation` → `Guest` | 1 a 1 | Cada reserva guarda su propio titular. Si la misma persona tiene varias reservas, tiene un `Guest` en cada una; corregir sus datos en una reserva no cambia las demás |
 | `Reservation` → `ReservationRoom` | 1 a 1..10 | Composición: las habitaciones se crean, cambian y borran solo a través de su reserva |
 | `Ota` → `Reservation` | 1 a N | Solo reservas `OTA`; `(otaId, externalConfirmationCode)` es único |
-| `Reservation` → `Cancellation` | 1 a 0..1 | Solo cancelaciones explícitas (Recepcionista u OTA); el No-Show no crea `Cancellation` |
+| `Ota` → `OtaRoomTypeMapping` | 1 a N | Un tipo de habitación de Channex por categoría |
+| `Ota` → `OtaBookingRevision` | 1 a N | Una fila por revisión procesada; evita procesarla dos veces |
+| `Reservation` → `Cancellation` | 1 a 0..1 | Solo cancelaciones explícitas (Recepcionista o Booking); el No-Show no crea `Cancellation` |
 | `Reservation` → `GuestData` | 1 a N | Un `GuestData` por huésped de la reserva, único por `documentNumber` |
 | `GuestData` → `MigratoryMovement` | 1 a 1..2 | Máximo un `ENTRY` y un `DEPARTURE` por huésped |
 | `Reservation` → `MigratoryMovement` | 1 a N | Los movimientos de todos sus huéspedes |
@@ -224,10 +245,14 @@ El diagrama con las tablas, sus columnas y sus relaciones está en "Modelo de da
     - Ninguna habitación en `EXPECTED` ni en `CHECKED_IN`, y al menos una `CHECKED_OUT` → `COMPLETED`.
     - Cierre del día sin ningún Check-In → `NO_SHOW` (sea OTA o directa); sus habitaciones pasan a
       `NOT_ARRIVED`.
-  - Solo se modifican o cancelan reservas en `ACTIVE` o `PENDING`; las `OTA` solo por su API.
+  - Solo se modifican o cancelan reservas en `ACTIVE` o `PENDING`; las `OTA` solo cuando Booking lo envía
+    por el feed de Channex. La Recepcionista solo puede asignar la habitación de una reserva OTA en
+    conflicto.
+  - Una habitación sin asignar (`roomId` vacío) no bloquea inventario y deja la reserva en conflicto.
+  - `PENDING` se conserva sin uso: las reservas directas y las de Booking nacen en `ACTIVE`.
   - Las reservas `DIRECT` no guardan un total (se calcula al mostrarlo) y no tienen comisión; las `OTA` no tienen tarifa ni cotización por habitación.
 - **`Guest`**: parte del agregado `Reservation` (su titular); se crea y se corrige solo a través de su reserva.
-- **`Ota`**: agregado propio; la reserva la referencia por id.
+- **`Ota`**: agregado propio, con sus `OtaRoomTypeMapping`; la reserva la referencia por id.
 - **`Cancellation`**, **`GuestData`**, **`MigratoryMovement`**, **`SireExport`**: registros propios que referencian a la reserva por `reservationRef`. Son inmutables una
   vez creados.
 
@@ -235,7 +260,9 @@ El diagrama con las tablas, sus columnas y sus relaciones está en "Modelo de da
 
 `Room` y `MaintenanceCalendar` (Módulo 1) y `RateQuote` (Módulo 3) son objetos de integración de los
 puertos. No se persisten: de `RateQuote` se copian el `lodgingAmount`, el `quoteId` y la moneda a
-`ReservationRoom`. La lista `guests` del Check-In se guarda en `GuestData`.
+`ReservationRoom`. La lista `guests` del Check-In se guarda en `GuestData`. La revisión de reserva de
+Channex (`BookingRevision`) es también un objeto de integración: de ella se crea o cambia la
+`Reservation`, y solo se guarda su identificador en `OtaBookingRevision`.
 
 ## Comunicación entre módulos
 
@@ -253,6 +280,8 @@ Regla: **proactiva** (el módulo avisa un evento y no espera respuesta) → **co
 | Consultar tarifa dinámica | M2 → M3 | REST POST (cuerpo JSON) | Reactiva | `calculate-dynamic-rate` |
 | Consultar las reservas de un rango de fechas (y habitación) para validar un mantenimiento o dar de baja una habitación | M1 → M2 | REST GET | Reactiva | `check-view-reservation` (FR-023) |
 | Consultar una reserva por su referencia (`quoteIds`, canal y datos de la OTA) para liquidar en el Check-Out | M3 → M2 | REST GET | Reactiva | `check-view-reservation` (FR-022) |
+| Leer las reservas de Booking (feed de revisiones) y confirmarlas (`ack`) | M2 → Channex | REST GET y POST, cada 60 s | El Módulo 2 pregunta | `generate-ota-reservation` |
+| Enviar disponibilidad (al cambiar) y tarifas (03:00) | M2 → Channex | REST POST | Proactiva | `configure-ota` |
 
 El Módulo 1 **ya no consulta la lista de reservas** al Módulo 2 por REST: la recibe por cola. Solo
 consulta las reservas entre una fecha de inicio y una de fin al registrar un mantenimiento o dar de baja una habitación (`check-view-reservation`,
@@ -311,37 +340,36 @@ El contenido exacto de cada mensaje está en el plan de su caso de uso:
 
 | Recurso | Quién lo consume | Caso de uso |
 |---|---|---|
-| `GET /api/reservations` con paginación de 10, filtros (`search` por código, documento o nombre; `status`; `source`; `otaId`; rango de estadía `dateFrom` y `dateTo`) y `order` por `startDate`. Con rol `MODULE1` es la consulta por fechas de FR-023 | Recepcionista, procesos internos; Módulo 1 | `check-view-reservation` |
+| `GET /api/reservations` con paginación de 10, filtros (`search` por código, documento o nombre; `status`; `source`; `otaId`; rango de estadía `dateFrom` y `dateTo`) y `order` por `startDate`. Con `X-Client: MODULE1` es la consulta por fechas de FR-023 | Recepcionista, procesos internos; Módulo 1 | `check-view-reservation` |
 | `GET /api/reservations/day-summary` (llegadas y salidas esperadas hoy) | Recepcionista | `check-view-reservation` |
-| `GET /api/reservations/{reservationRef}` (detalle) | Recepcionista; Módulo 3 con credencial de servicio (devuelve `quoteIds`, canal y, solo si es OTA, `otaId`, `otaConfirmationCode` y `otaCommissionPercentage`; 404 si no existe) | `check-view-reservation` |
+| `GET /api/reservations/{reservationRef}` (detalle) | Recepcionista; Módulo 3 con `X-Client: MODULE3` (devuelve `quoteIds`, canal y, solo si es OTA, `otaId`, `otaConfirmationCode` y `otaCommissionPercentage`; 404 si no existe) | `check-view-reservation` |
 | `POST /api/reservations/direct/preview` y `POST /api/reservations/direct` (canal directo) | Recepcionista | `generate-direct-reservation` |
-| `POST /api/reservations/{reservationRef}/modification-preview` y `PATCH /api/reservations/{reservationRef}` | Recepcionista (solo directas); la OTA modifica las suyas por su canal | `update-reservation` |
-| `POST /api/reservations/{reservationRef}/cancellation` | Recepcionista (solo directas); la OTA cancela las suyas por su canal | `cancel-reservation` |
-| `POST /api/ota/reservations` y `POST /api/ota/reservations/{reservationRef}/confirmation` (pago o garantía) | Ota | `generate-ota-reservation` |
+| `POST /api/reservations/{reservationRef}/modification-preview` y `PATCH /api/reservations/{reservationRef}` | Recepcionista (solo directas); los cambios de Booking llegan por el feed de Channex | `update-reservation` |
+| `PATCH /api/reservations/{reservationRef}/room-assignment` (asignar habitación a una reserva de Booking en conflicto) | Recepcionista | `update-reservation` |
+| `POST /api/reservations/{reservationRef}/cancellation` | Recepcionista (solo directas); las cancelaciones de Booking llegan por el feed de Channex | `cancel-reservation` |
 | `GET /api/guest-stays` (vista de huéspedes alojados: paginación de 10, filtros de nacionalidad, situación y periodo, búsqueda por documento o nombre) y `GET /api/reservations/{reservationRef}/guests/{documentNumber}` (detalle de un huésped) | Recepcionista | `process-guest-data` |
+| `GET /api/guests/lookup` (precarga del titular por tipo y número de documento: datos de su reserva más reciente; solo lectura) | Recepcionista | `generate-direct-reservation` |
 | `POST /api/sire/exports` (periodo o movimiento individual; devuelve `.TXT` y cabecera `Export-Id`; es `POST` porque registra un `SireExport`, decisión D9) | Recepcionista | `export-sire-file` |
 | `GET /api/otas` y `GET /api/otas/{otaId}` (solo lectura; devuelve `id`, `name`, `commissionPercentage`, estado de conexión) | Recepcionista, Módulo 3 | `register-ota-information-commission` |
 | `POST /api/ota-commissions/reconciliations` (conciliación de comisiones) | Módulo 3 (finanzas) | `register-ota-information-commission` |
 
-Las agencias OTA se registran **automáticamente** al vincular la cuenta por API: el Módulo 2 no tiene
-rutas de alta ni edición manual (`POST`/`PUT /api/otas` quedan fuera).
+**Booking.com no llama al Módulo 2**: no hay rutas para la OTA. El Módulo 2 lee sus reservas del feed de
+Channex (`generate-ota-reservation`) y le envía la disponibilidad y las tarifas (`configure-ota`). La
+agencia se registra por configuración; no hay rutas de alta ni edición manual (`POST`/`PUT /api/otas`
+quedan fuera).
 
-> **Pendiente: caso de uso "Configurar OTA".** Cada OTA se tiene que configurar para integrarse con el
-> Módulo 2. Un caso de uso futuro, con su propia spec y su propio plan, definirá cómo la OTA se registra
-> y actualiza sus datos y su comisión, cómo avisa su desvinculación y su nueva vinculación, y por qué
-> rutas modifica y cancela sus reservas. Hasta entonces, este plan solo fija las rutas de crear y
-> confirmar reservas OTA.
-
-**El Módulo 2 consume** (a través de los puertos `Module1Port` y `Module3Port`):
+**El Módulo 2 consume** (a través de los puertos `Module1Port`, `Module3Port` y `ChannexPort`):
 
 | Servicio | Método | Caso de uso |
 |---|---|---|
 | Habitaciones vendibles por `categoryRoom` o por `roomId` (contrato en [`consult-room-inventory/plan.md`](../consult-room-inventory/plan.md)) | M1 GET | `consult-room-inventory` |
 | Calendario de mantenimientos por `roomId` y rango de fechas (contrato en [`consult-maintenance-calendar/plan.md`](../consult-maintenance-calendar/plan.md)) | M1 GET | `consult-maintenance-calendar` |
-| Tarifa dinámica por habitación (contrato en [`calculate-dynamic-rate/plan.md`](../calculate-dynamic-rate/plan.md)) | M3 POST | `calculate-dynamic-rate` |
+| Tarifa dinámica por habitación (contrato en [`calculate-dynamic-rate/plan.md`](../calculate-dynamic-rate/plan.md)) | M3 POST | `calculate-dynamic-rate` (también la usa `configure-ota` para las tarifas de Channex) |
+| Feed de revisiones de reserva y `ack` (`/api/v1/booking_revisions/feed`, `/api/v1/booking_revisions/{id}/ack`) | Channex GET y POST | `generate-ota-reservation` |
+| Disponibilidad por tipo de habitación y tarifas por plan de tarifa (`/api/v1/availability`, `/api/v1/restrictions`) | Channex POST | `configure-ota` |
 
 **Errores**: cuerpo `{ "errorCode", "message", "timestamp", "path" }` con HTTP 400 (por defecto, también
-para recursos inexistentes, como piden los specs), 409 (conflicto de disponibilidad) o 429 (exportación
+para recursos inexistentes, como piden los specs, y para la falta de disponibilidad) o 429 (exportación
 SIRE). La única excepción es la consulta de una reserva por referencia para el Módulo 3, que
 responde 404 si no existe, como lo espera ese módulo. El diccionario prohíbe 500 y cualquier 2xx o 3xx
 para un error.
@@ -357,7 +385,7 @@ specs/
 │   ├── plan.md                           # Este archivo
 │   └── guia-planes-por-caso-de-uso.md    # Cómo escribir el plan de cada caso de uso
 ├── template/                             # Plantillas de spec y de plan
-└── [caso-de-uso]/                        # Uno por cada uno de los 12 casos de uso
+└── [caso-de-uso]/                        # Uno por cada uno de los 13 casos de uso
     ├── spec.md
     └── plan.md                           # Plan del caso de uso; referencia a ../base/plan.md
 ```
@@ -381,18 +409,19 @@ backend/
     ├── domain/                   # DOMINIO GENERAL, único para todo el Módulo 2 (TypeScript puro)
     │   ├── reservation/          #   Reservation (raíz), ReservationRoom, transiciones de status y stayStatus
     │   ├── guest/                #   Guest
-    │   ├── ota/                  #   Ota, regla de comisión
+    │   ├── ota/                  #   Ota, OtaRoomTypeMapping, regla de comisión
     │   ├── cancellation/         #   Cancellation
     │   ├── migration/            #   GuestData, MigratoryMovement, SireExport, MigrationStatus (derivado)
     │   ├── shared/               #   enumerados, Money (decimal.js), día operativo, errores de negocio
     │   └── index.ts              #   API pública del dominio
     ├── application/
-    │   ├── ports/out/            # ReservationRepository, GuestRepository, ..., Module1Port, Module3Port,
+    │   ├── ports/out/            # ReservationRepository, GuestRepository, ..., Module1Port, Module3Port, ChannexPort,
     │   │                         #   EventPublisher, Clock
-    │   ├── integration/          # objetos de integración: Room, MaintenanceCalendar, RateQuote
+    │   ├── integration/          # objetos de integración: Room, MaintenanceCalendar, RateQuote, BookingRevision
     │   └── use-cases/            # un caso de uso por cada spec (puerto de entrada + servicio):
     │       ├── generate-direct-reservation/
-    │       ├── generate-ota-reservation/
+    │       ├── configure-ota/                # agencia, tipos de habitación, disponibilidad y tarifas a Channex
+    │       ├── generate-ota-reservation/     # lectura del feed de Channex
     │       ├── check-view-reservation/       # incluye la lista del día al Módulo 1
     │       ├── update-reservation/           # incluye Check-In, Check-Out y cierre del día
     │       ├── cancel-reservation/
@@ -407,15 +436,16 @@ backend/
     │   ├── in/
     │   │   ├── rest/             # controladores REST
     │   │   ├── messaging/        # consumidores RabbitMQ (Check-In y Check-Out)
-    │   │   └── jobs/             # lista del día (00:00), cierre del día (23:59), reintentos
+    │   │   └── jobs/             # lista del día (00:00), cierre del día (23:59), reintentos, feed de
+    │   │                         #   Channex (60 s), disponibilidad (10 s), tarifas (03:00)
     │   ├── out/
     │   │   ├── persistence/      # clases de tabla TypeORM, mapeadores y repositorios
     │   │   ├── module1/          # cliente HTTP del Módulo 1
     │   │   ├── module3/          # cliente HTTP del Módulo 3
+    │   │   ├── channex/          # cliente HTTP de Channex (user-api-key, manejo de 429)
     │   │   ├── messaging/        # publicadores RabbitMQ, idempotencia (processed_message)
     │   │   └── clock/            # reloj del hotel (America/Bogota)
     │   ├── config/               # configuración por entorno (@nestjs/config), RabbitMQ, TypeORM
-    │   ├── security/             # JWT, guards y roles
     │   └── shared/               # ApiError, filtro global de excepciones, correlación de logs
     └── migrations/               # migraciones SQL de TypeORM
 test/
@@ -437,7 +467,8 @@ frontend/
 organiza **por capas hexagonales**, con un solo `domain/` general para todo el Módulo 2: las entidades
 están relacionadas y sus reglas se cruzan entre casos de uso, así que separarlas por módulo duplicaría
 reglas. Los casos de uso de las specs se reflejan en `application/use-cases/`. El frontend cubre solo a la
-Recepcionista; la Ota solo usa la API y el Módulo 1 tiene su propia interfaz.
+Recepcionista; Booking no usa ninguna pantalla ni ruta del Módulo 2, y el Módulo 1 tiene su propia
+interfaz.
 
 ## Diseño técnico base
 
@@ -469,9 +500,9 @@ erDiagram
         uuid reservation_id FK, UK "un titular por reserva"
         varchar first_name
         varchar last_name
-        varchar document_type "RC TI CC CE PAS NIT"
-        varchar document_number
-        varchar nationality "nombre del pais"
+        varchar document_type "RC TI CC CE PAS NIT; nulo en Booking"
+        varchar document_number "nulo en Booking"
+        varchar nationality "nombre del pais; nulo si no se conoce"
         varchar contact_phone "nulo"
         varchar contact_email "nulo"
         timestamptz created_at
@@ -505,14 +536,16 @@ erDiagram
         numeric commission_percentage
         numeric commission_amount
         varchar commission_status "solo OTA"
+        varchar conflict_reason "nulo si no hay conflicto"
+        timestamptz conflict_detected_at "nulo si no hay conflicto"
         timestamptz created_at
         timestamptz updated_at "concurrencia"
     }
     reservation_room {
         uuid id PK
         uuid reservation_id FK "UK con room_id"
-        uuid room_id "Room del Modulo 1, sin FK"
-        varchar room_number
+        uuid room_id "Room del Modulo 1, sin FK; nulo si sin asignar"
+        varchar room_number "nulo si sin asignar"
         varchar category_room
         smallint guest_count
         numeric room_gross_amount "solo DIRECT"
@@ -594,6 +627,30 @@ erDiagram
         bigint sequence_number
         timestamptz processed_at
     }
+    ota_room_type_mapping {
+        uuid id PK
+        uuid ota_id FK
+        uuid channex_room_type_id UK
+        uuid channex_rate_plan_id
+        varchar category_room "UK con ota_id"
+    }
+    ota_booking_revision {
+        uuid revision_id PK "id de Channex"
+        uuid ota_id FK
+        uuid booking_id "id de Channex"
+        varchar status "new modified cancelled"
+        uuid reservation_id FK "nulo si no se aplico"
+        varchar result "APPLIED CONFLICT IGNORED"
+        timestamptz processed_at
+        timestamptz acked_at "nulo hasta confirmar"
+    }
+    ari_pending_change {
+        uuid id PK
+        varchar category_room
+        date date_from
+        date date_to
+        timestamptz created_at
+    }
 
     reservation ||--|| guest : "reservation_id"
     ota |o--o{ reservation : "ota_id"
@@ -604,6 +661,9 @@ erDiagram
     reservation ||--o{ commission_audit : "reservation_id"
     ota ||--o{ commission_audit : "ota_id"
     reservation |o--o{ daily_list_message : "reservation_id"
+    ota ||--o{ ota_room_type_mapping : "ota_id"
+    ota ||--o{ ota_booking_revision : "ota_id"
+    reservation |o--o{ ota_booking_revision : "reservation_id"
 ```
 
 **Normalización.** El modelo está en tercera forma normal: cada dato se guarda en una sola tabla y las
@@ -622,26 +682,28 @@ tablas se unen por sus claves. Hay tres excepciones a propósito:
 | `id` | `uuid` | no | PK (`guestRef`) |
 | `reservation_id` | `uuid` | no | FK → `reservation`, borrado en cascada; único (un titular por reserva) |
 | `first_name`, `last_name` | `varchar(100)` | no | |
-| `document_type` | `varchar(3)` | no | `RC`, `TI`, `CC`, `CE`, `PAS`, `NIT` |
-| `document_number` | `varchar(30)` | no | |
-| `nationality` | `varchar(60)` | no | Nombre del país |
+| `document_type` | `varchar(3)` | sí | `RC`, `TI`, `CC`, `CE`, `PAS`, `NIT`; obligatorio en reservas directas, vacío en las de Booking (no lo envía) |
+| `document_number` | `varchar(30)` | sí | Obligatorio en reservas directas, vacío en las de Booking; los dos van juntos o ninguno |
+| `nationality` | `varchar(60)` | sí | Nombre del país; obligatorio en reservas directas. En las de Booking es informativa y queda vacía si el código de país no está en la tabla de conversión |
 | `contact_phone` | `varchar(30)` | sí | |
 | `contact_email` | `varchar(254)` | sí | |
 | `created_at`, `updated_at` | `timestamptz` | no | |
 
-Índices: `(document_number)` para la búsqueda por documento y trigram sobre `unaccent(first_name || ' ' || last_name)`. No es único por documento: la misma persona puede ser titular de varias reservas, con sus datos en cada una (corregirlos en una reserva no cambia las demás).
+- `CHECK`: `document_type` y `document_number` van los dos o ninguno. Que sean obligatorios en las
+  reservas directas lo valida la aplicación, porque el canal está en `reservation`.
+- Índices: `(document_number)` para la búsqueda por documento y trigram sobre `unaccent(first_name || ' ' || last_name)`. No es único por documento: la misma persona puede ser titular de varias reservas, con sus datos en cada una (corregirlos en una reserva no cambia las demás).
 
-**`ota`** — agencia; se registra sola por su API
+**`ota`** — agencia; se registra por configuración (`configure-ota`)
 
 | Columna | Tipo | Nulo | Regla |
 |---|---|---|---|
 | `id` | `uuid` | no | PK |
-| `name` | `varchar(100)` | no | Único |
-| `hotel_account_id` | `varchar(100)` | no | Único |
+| `name` | `varchar(100)` | no | Único; `Booking.com` |
+| `hotel_account_id` | `varchar(100)` | no | Único; id del hotel de Booking en Channex |
 | `commission_percentage` | `numeric(5,2)` | no | De 0 a 100 |
 | `connection_status` | `varchar(12)` | no | `CONNECTED`, `DISCONNECTED` |
 | `linked_at` | `timestamptz` | no | Fecha de la primera vinculación; no cambia al volver a vincular |
-| `last_sync_at` | `timestamptz` | no | Se actualiza con cada mensaje de la OTA |
+| `last_sync_at` | `timestamptz` | no | Se actualiza con cada lectura del feed de Channex que termina bien |
 | `created_at`, `updated_at` | `timestamptz` | no | |
 
 **`reservation`** — raíz del agregado
@@ -664,16 +726,20 @@ tablas se unen por sus claves. Hay tres excepciones a propósito:
 | `commission_amount` | `numeric(14,2)` | no | `0` por defecto; `CHECK (commission_amount >= 0)`; en `OTA`, `gross_amount × commission_percentage / 100` |
 | `commission_status` | `varchar(10)` | sí | Solo `OTA`: `CALCULATED`, `RECONCILED`, `PAID`, `DISPUTED` |
 | `created_at` | `timestamptz` | no | |
+| `conflict_reason` | `varchar(25)` | sí | Solo reservas de Booking en conflicto: `NO_ROOM_AVAILABLE`, `CAPACITY_EXCEEDED`, `CHANGE_NOT_APPLICABLE` (D13) |
+| `conflict_detected_at` | `timestamptz` | sí | Cuándo se detectó el conflicto |
 | `updated_at` | `timestamptz(6)` | no | Control de concurrencia (`@UpdateDateColumn`) |
 
 - Único `(ota_id, external_confirmation_code)`.
+- `CHECK`: `conflict_reason` y `conflict_detected_at` van los dos o ninguno, y solo en `source = 'OTA'`.
 - `CHECK` de canal:
   - `DIRECT`: `ota_id`, `external_confirmation_code`, `gross_amount`, `currency` y
     `commission_status` nulos, y `commission_percentage = 0` y `commission_amount = 0`.
   - `OTA`: `ota_id`, `external_confirmation_code`, `gross_amount`, `currency` y
     `commission_status` no nulos.
-- Índices: `(status, start_date)`, `(end_date)`, `(ota_id)` y `(external_confirmation_code)` para la
-  búsqueda por el código de la OTA.
+- Índices: `(status, start_date)`, `(end_date)`, `(ota_id)`, `(external_confirmation_code)` para la
+  búsqueda por el código de la OTA y parcial `(conflict_detected_at) WHERE conflict_reason IS NOT NULL`
+  para el filtro de reservas en conflicto.
 
 **`reservation_room`** — habitación dentro de la reserva
 
@@ -681,8 +747,8 @@ tablas se unen por sus claves. Hay tres excepciones a propósito:
 |---|---|---|---|
 | `id` | `uuid` | no | PK |
 | `reservation_id` | `uuid` | no | FK → `reservation`, borrado en cascada |
-| `room_id` | `uuid` | no | `Room.id` del Módulo 1, sin FK |
-| `room_number` | `varchar(10)` | no | Copia del número del Módulo 1, guardada al asignarla |
+| `room_id` | `uuid` | sí | `Room.id` del Módulo 1, sin FK; vacío solo si una reserva de Booking quedó sin habitación (D13) |
+| `room_number` | `varchar(10)` | sí | Copia del número del Módulo 1, guardada al asignarla; vacío si no hay habitación |
 | `category_room` | `varchar(50)` | no | |
 | `guest_count` | `smallint` | no | `CHECK (guest_count >= 1)`; el tope (`maxCapacity`) lo valida la aplicación, porque viene del Módulo 1 |
 | `room_gross_amount` | `numeric(14,2)` | sí | Solo `DIRECT`: `lodgingAmount` de la cotización (D2) |
@@ -694,6 +760,8 @@ tablas se unen por sus claves. Hay tres excepciones a propósito:
 
 - Único `(reservation_id, room_id)`.
 - `CHECK`: `room_gross_amount`, `quote_id` y `currency` van los tres o ninguno.
+- `CHECK`: `room_id` y `room_number` van los dos o ninguno, y sin habitación `blocks_inventory = false`
+  (una habitación sin asignar no ocupa inventario y no entra en la restricción anti-solape).
 - **Anti-solape (D3):** `EXCLUDE USING gist (room_id WITH =, daterange(start_date, end_date, '[)') WITH &&) WHERE (blocks_inventory)`.
 - Índice `(room_id)`.
 
@@ -821,6 +889,46 @@ ningún cambio quede entre la lista y su primera actualización (ver `check-view
 
 Se inserta en la misma transacción que el cambio que produce el mensaje.
 
+**`ota_room_type_mapping`** — relación de tipos de habitación de Channex con categorías (`configure-ota`)
+
+| Columna | Tipo | Nulo | Regla |
+|---|---|---|---|
+| `id` | `uuid` | no | PK |
+| `ota_id` | `uuid` | no | FK → `ota` |
+| `channex_room_type_id` | `uuid` | no | Único; tipo de habitación en Channex |
+| `channex_rate_plan_id` | `uuid` | no | Plan de tarifa de Channex donde se publica el precio |
+| `category_room` | `varchar(50)` | no | Categoría del Módulo 2; único `(ota_id, category_room)` |
+
+Se carga como registro inicial al instalar (`configure-ota`).
+
+**`ota_booking_revision`** — revisiones de Channex ya procesadas (`generate-ota-reservation`)
+
+| Columna | Tipo | Nulo | Regla |
+|---|---|---|---|
+| `revision_id` | `uuid` | no | PK; `id` de la revisión en Channex |
+| `ota_id` | `uuid` | no | FK → `ota` |
+| `booking_id` | `uuid` | no | `booking_id` de Channex (la misma para todas las revisiones de una reserva) |
+| `status` | `varchar(9)` | no | `new`, `modified`, `cancelled` |
+| `reservation_id` | `uuid` | sí | FK → `reservation`; vacío si la revisión no se aplicó |
+| `result` | `varchar(10)` | no | `APPLIED`, `CONFLICT`, `IGNORED` |
+| `processed_at` | `timestamptz` | no | |
+| `acked_at` | `timestamptz` | sí | Cuándo se confirmó a Channex; vacío si el `ack` falló y hay que repetirlo |
+
+Se inserta en la misma transacción que el cambio de la reserva; el `ack` se envía después del commit.
+Índices: `(booking_id)` y parcial `(processed_at) WHERE acked_at IS NULL` para repetir los `ack`.
+
+**`ari_pending_change`** — disponibilidad pendiente de enviar a Channex (`configure-ota`)
+
+| Columna | Tipo | Nulo | Regla |
+|---|---|---|---|
+| `id` | `uuid` | no | PK |
+| `category_room` | `varchar(50)` | no | |
+| `date_from`, `date_to` | `date` | no | Rango de noches afectadas; `date_to > date_from` |
+| `created_at` | `timestamptz` | no | |
+
+Se inserta en la misma transacción que el cambio de la reserva; la tarea de disponibilidad las agrupa,
+las envía y las borra.
+
 `migrationStatus` es solo un dato de pantalla: se calcula, no se guarda.
 
 ### Reglas transversales que todos los planes de caso de uso heredan
@@ -828,8 +936,8 @@ Se inserta en la misma transacción que el cambio que produce el mensaje.
 1. **Transiciones de `status` en un solo lugar.** La tabla de transiciones vive en el dominio
    (`PENDING`→`ACTIVE`, `ACTIVE`→`IN_PROGRESS`, `IN_PROGRESS`→`COMPLETED`, `ACTIVE`/`PENDING`→`CANCELLED`,
    `ACTIVE`/`PENDING`→`NO_SHOW`) y un único servicio de aplicación (`ReservationStatusService`) la
-   aplica con bloqueo optimista. `update-reservation` lo usa para confirmación OTA, Check-In, Check-Out,
-   y No-Show; `cancel-reservation` lo invoca dentro de su propia transacción.
+   aplica con bloqueo optimista. `update-reservation` lo usa para el Check-In, el Check-Out, el No-Show y
+   los cambios que envía Booking; `PENDING`→`ACTIVE` queda sin uso hoy; `cancel-reservation` lo invoca dentro de su propia transacción.
 2. **Sin órdenes de estado al Módulo 1.** El Módulo 2 no aparta ni libera habitaciones: crear,
    modificar o cancelar una reserva solo se refleja en la lista del día (`ADDED`, `UPDATED`,
    `REMOVED`) y la reserva nunca depende de una respuesta del Módulo 1. No hay saga ni compensación.
@@ -839,12 +947,15 @@ Se inserta en la misma transacción que el cambio que produce el mensaje.
 4. **Tareas programadas** (zona horaria `America/Bogota`, idempotentes, con bloqueo asesor): envío de la
    lista del día a las 00:00; cierre del día al terminar las 23:59 (No-Show:
    `NO_SHOW` para cualquier canal, sin `Cancellation`; habitaciones no llegadas pasan a
-   `NOT_ARRIVED`); y reintento de los avisos pendientes. El día operativo es fijo y no es configurable.
+   `NOT_ARRIVED`); reintento de los avisos pendientes; lectura del feed de Channex cada 60 segundos;
+   envío de la disponibilidad pendiente a Channex cada 10 segundos; y envío de tarifas y disponibilidad
+   completa a Channex a las 03:00. El día operativo es fijo y no es configurable.
 5. **Errores uniformes.** Un filtro global de excepciones traduce toda excepción a `ApiError` 4xx; un
    conflicto de `updatedAt` (ediciones o cancelaciones simultáneas) es siempre 400 `CONCURRENT_UPDATE`.
    Ningún error no controlado sale como 500; el filtro genérico registra el detalle en el log y responde
    un error controlado sin datos de infraestructura.
-6. **Clientes de otros módulos** detrás de puertos (`Module1Port`, `Module3Port`) con timeout.
+6. **Clientes de otros módulos** detrás de puertos (`Module1Port`, `Module3Port`, `ChannexPort`) con
+   timeout.
    Ante fallo, cada caso de uso decide, pero nunca se asume disponibilidad ni tarifa por defecto o a cero.
 7. **Mensajería.** Mensajes planos con `messageId` y `sequenceNumber`. El consumidor registra el
    `messageId` en `processed_message` dentro de la misma transacción que el cambio. Reintentos con
@@ -852,8 +963,18 @@ Se inserta en la misma transacción que el cambio que produce el mensaje.
 8. **Nomenclatura del diccionario**: `Reservation.status`, `roomNumber`, `startDate`/`endDate`,
    `externalConfirmationCode`, `grossAmount`, `categoryRoom`, `reservationRef`; estados del Módulo 1
    en PascalCase (`Available`, `Reserved`, `Occupied`, ...).
-9. **OTA solo lectura.** Las reservas de canal OTA solo las cambian o cancelan la propia OTA (canal
-   `OTA_API`); la Recepcionista no puede. Cancelar una reserva OTA no toca la comisión.
+9. **OTA solo lectura.** Las reservas de canal OTA solo las cambian o cancelan los cambios que envía
+   Booking por el feed de Channex (canal `OTA_API`); la Recepcionista solo puede asignar la habitación de
+   una reserva OTA en conflicto. Cancelar una reserva OTA no toca la comisión.
+10. **Sin seguridad.** El Módulo 2 no implementa autenticación ni autorización: es una capa aparte del
+    sistema de microservicios. El frontend **simula** el login y guarda el nombre de la Recepcionista.
+    - `X-Client` dice quién llama (`RECEPTIONIST`, `MODULE1` o `MODULE3`) cuando una misma ruta responde
+      distinto según el llamador. Sin esa cabecera, o con otro valor, se responde 400.
+    - `X-User` trae el nombre de quien hizo la acción y se guarda tal cual en `processed_by` o
+      `performed_by`.
+    - Ninguna de las dos se valida.
+    - Booking no llama al Módulo 2: el Módulo 2 lee el feed de Channex con la clave `user-api-key` de
+      la configuración, que nunca se guarda en la base de datos ni se escribe en los logs.
 
 ### Decisiones de diseño tomadas al escribir los planes de caso de uso
 
@@ -861,7 +982,7 @@ Se inserta en la misma transacción que el cambio que produce el mensaje.
 |---|---|---|
 | D1 | **La confirmación de una cotización no confía en el importe de la pantalla.** Al confirmar, el servidor vuelve a cotizar con el Módulo 3 y lo compara con las tarifas por habitación que vio el solicitante; si difiere, responde 400 "La tarifa cambió, vuelva a cotizar". Nunca se guarda un monto enviado por el cliente; de la `RateQuote` solo se guardan `lodgingAmount` y `quoteId` en la habitación. Lo aplican `generate-direct-reservation` y `update-reservation`. | `calculate-dynamic-rate` |
 | D2 | **La tarifa se guarda por habitación, sin total guardado:** `reservation_room` guarda `room_gross_amount` (el `lodgingAmount`), `quote_id` y `currency` tal como las entrega el Módulo 3 (FR-002); el `quote_id` permite al Módulo 3 cobrar en el Check-Out exactamente el valor cotizado. Su única operación con ellas es sumarlas para mostrar el total de la reserva, que no se guarda. | `calculate-dynamic-rate` |
-| D3 | **Anti-solape con una restricción de exclusión en PostgreSQL** sobre `reservation_room`. Cada habitación guarda una copia de las fechas de su reserva (`start_date`, `end_date`) y `blocks_inventory`, que vale `true` mientras la reserva está en `PENDING`, `ACTIVE` o `IN_PROGRESS` y la habitación en `EXPECTED` o `CHECKED_IN`. Restricción: `EXCLUDE USING gist (room_id WITH =, daterange(start_date, end_date, '[)') WITH &&) WHERE (blocks_inventory)`, con la extensión `btree_gist`. El rango `'[)'` deja que una salida y una llegada el mismo día no choquen. El agregado `Reservation` actualiza esas copias en la misma transacción cada vez que cambian las fechas, el `status` o el `stayStatus`. Impide dos reservas solapadas en la misma habitación aunque se guarden al mismo tiempo; una violación se traduce en 409 `NO_AVAILABILITY` (o en probar la siguiente habitación candidata). | `check-room-availability` |
+| D3 | **Anti-solape con una restricción de exclusión en PostgreSQL** sobre `reservation_room`. Cada habitación guarda una copia de las fechas de su reserva (`start_date`, `end_date`) y `blocks_inventory`, que vale `true` mientras la reserva está en `PENDING`, `ACTIVE` o `IN_PROGRESS` y la habitación en `EXPECTED` o `CHECKED_IN`. Restricción: `EXCLUDE USING gist (room_id WITH =, daterange(start_date, end_date, '[)') WITH &&) WHERE (blocks_inventory)`, con la extensión `btree_gist`. El rango `'[)'` deja que una salida y una llegada el mismo día no choquen. El agregado `Reservation` actualiza esas copias en la misma transacción cada vez que cambian las fechas, el `status` o el `stayStatus`. Impide dos reservas solapadas en la misma habitación aunque se guarden al mismo tiempo; una violación se traduce en 400 `NO_AVAILABILITY` (o en probar la siguiente habitación candidata; en una reserva de Booking, si no hay otra, la habitación queda sin asignar). | `check-room-availability` |
 | D5 | **Datos migratorios completos:** el Módulo 2 da por hecho que el Módulo 1 los envía completos y correctos; no los valida ni los devuelve. | `process-guest-data` |
 | D6 | **Motivo de las transiciones:** columna `status_reason` en `reservation`. | `update-reservation` |
 | D7 | **Periodo de la exportación SIRE:** se filtra por la `movementDate` del movimiento migratorio. | `process-guest-data`, `export-sire-file` |
@@ -869,6 +990,9 @@ Se inserta en la misma transacción que el cambio que produce el mensaje.
 | D9 | **La exportación SIRE es `POST`**, no `GET`, porque crea un registro `SireExport` (un `GET` no debe tener efectos). | `export-sire-file` |
 | D10 | **Arquitectura hexagonal** con un solo `domain/` general para todo el Módulo 2 y las capas `application` (un caso de uso por cada spec) e `infrastructure` (in/out). Verificada en CI. | Este plan |
 | D11 | **Migraciones escritas en SQL**, no generadas desde las clases de TypeORM, para controlar `EXCLUDE`, índices parciales y bloqueos. | Este plan |
+| D12 | **Booking.com por Channex, leyendo el feed.** Una tarea consulta `GET /api/v1/booking_revisions/feed` cada 60 s y confirma cada revisión con `POST /api/v1/booking_revisions/{id}/ack` después del commit. No se usan webhooks: no exigen una URL pública y el feed sirve igual en desarrollo. Cada revisión se procesa una sola vez (`ota_booking_revision`); las reservas de Booking nacen en `ACTIVE`. | `generate-ota-reservation` |
+| D13 | **Conflictos de Booking.** Booking ya aceptó la reserva, así que nunca se rechaza: si no hay habitación libre de la categoría, la habitación queda sin asignar (`room_id` vacío, sin bloquear inventario); si se supera la capacidad o un cambio no se puede aplicar, la reserva queda marcada (`conflict_reason`). La Recepcionista asigna la habitación. | `generate-ota-reservation`, `update-reservation` |
+| D14 | **Disponibilidad y tarifas hacia Channex.** La disponibilidad (vendibles del Módulo 1 menos las que ocupan las reservas) se envía al cambiar, agrupada cada 10 s; las tarifas de los próximos 90 días, cotizadas con el Módulo 3 y convertidas a GBP con una tasa fija de configuración (`4000` COP = 1 GBP), a las 03:00. Se respeta el límite de 10 solicitudes por minuto. Los mantenimientos no se descuentan. | `configure-ota` |
 
 ## Estrategia de testing base
 
@@ -911,16 +1035,17 @@ Se inserta en la misma transacción que el cambio que produce el mensaje.
 - [ ] T014 Crear `processed_message` y la idempotencia por `messageId` en `messaging/`
 - [ ] T015 Configurar la infraestructura de pruebas (Jest, supertest y Testcontainers de PostgreSQL y RabbitMQ)
 - [ ] T016 [P] Esqueleto del frontend: enrutamiento, cliente HTTP, TanStack Query y manejo de errores de API
-- [ ] T017 Configurar autenticación y autorización (Passport + JWT, guards) con los roles `RECEPTIONIST`, `OTA`, `MODULE1` y `MODULE3` (los dos últimos, de servicio a servicio)
+- [ ] T017 Lectura de las cabeceras `X-Client` y `X-User` (sin validar quién llama) y login simulado en el frontend
 - [ ] T018 Configurar logs (`nestjs-pino`) y correlación de solicitudes
 - [ ] T019 Configurar el bloqueo asesor de PostgreSQL y el planificador (`@nestjs/schedule`, `America/Bogota`) para las tareas programadas
 - [ ] T020 Configurar OpenAPI (`@nestjs/swagger`) y la verificación de dependencias entre capas en CI
+- [ ] T021 [P] Implementar `ChannexPort` con su adaptador HTTP (`user-api-key`, feed, `ack`, disponibilidad y tarifas) y el manejo de `429` con espera creciente
 
 **Checkpoint**: Base lista; los planes de caso de uso pueden implementarse.
 
 ---
 
-## Orden recomendado de los 12 planes de caso de uso
+## Orden recomendado de los 13 planes de caso de uso
 
 1. **Consultas y servicios base**: `check-view-reservation`, `consult-room-inventory`,
    `consult-maintenance-calendar`, `calculate-dynamic-rate`.
@@ -928,8 +1053,8 @@ Se inserta en la misma transacción que el cambio que produce el mensaje.
 3. **Datos migratorios y punto de estado**: primero `process-guest-data`, y después `update-reservation`
    (modificación, Check-In, Check-Out y cierre del día; depende de disponibilidad, tarifa
    y del registro del movimiento migratorio).
-4. **Creación de reservas y comisión**: `generate-direct-reservation`, `register-ota-information-commission` (antes que la de OTA) y
-   `generate-ota-reservation`.
+4. **Creación de reservas y comisión**: `generate-direct-reservation`, `register-ota-information-commission`,
+   `configure-ota` (agencia y tipos de habitación, antes que la de OTA) y `generate-ota-reservation`.
 5. **Cancelación**: `cancel-reservation`.
 6. **Cumplimiento legal**: `export-sire-file` (depende de `process-guest-data`).
 

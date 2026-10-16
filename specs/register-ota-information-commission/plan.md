@@ -11,21 +11,18 @@ la estadía. Este caso de uso hace cuatro cosas:
 
 1. **Calcula y registra la comisión** de cada reserva OTA nueva, al registrarla
    (`generate-ota-reservation` lo llama): `commissionAmount = totalAmount × commissionPercentage / 100`,
-   con precisión decimal exacta, y estado inicial `CALCULATED`. Rechaza un código de confirmación repetido
-   para la misma agencia y un porcentaje fuera de 0 a 100.
+   con precisión decimal exacta, y estado inicial `CALCULATED`. La **recalcula** con el mismo porcentaje
+   congelado cuando Booking cambia el valor de la reserva. Nunca calcula con un porcentaje fuera de 0 a
+   100.
 2. **Concilia comisiones con el Módulo 3** (finanzas): el Módulo 3 consulta las comisiones de un periodo y
    le indica al Módulo 2 cuáles pasan a `RECONCILED` o `PAID`. La Recepcionista no concilia.
 3. **Consulta de agencias** (solo lectura): `GET /api/otas` y `GET /api/otas/{otaId}` para la pantalla de
    agencias de la Recepcionista y para el Módulo 3.
-4. **Registro y estado de la OTA**: nombre, cuenta del hotel, comisión pactada, `connectionStatus` y
-   `lastSyncAt`, que los administra el sistema a partir de los mensajes de la OTA.
+4. **Registro y estado de la agencia**: `ManageOta` registra o actualiza la agencia Booking.com cuando la
+   configura `configure-ota`, y `OtaConnectionTracker` lleva el `connectionStatus` y el `lastSyncAt` a
+   partir de las lecturas del feed de Channex (`generate-ota-reservation`). No hay rutas para la OTA.
 
-**Alcance del punto 4**: el plan base deja para un caso de uso futuro, **"Configurar OTA"**, definir por
-qué rutas la OTA se registra, actualiza sus datos y avisa su desvinculación. Este plan implementa las
-**reglas y los servicios internos** de esa historia (validaciones, estados, `lastSyncAt`), pero **no
-define las rutas** que la OTA usará para llamarlos.
-
-La comisión de una reserva **cancelada por la OTA no se toca** (FR-007): la agencia ya sabe que no la
+La comisión de una reserva **cancelada por Booking no se toca** (FR-007): la agencia ya sabe que no la
 cobrará.
 
 ## Resumen técnico e identificación
@@ -34,7 +31,7 @@ cobrará.
 |---|---|
 | Caso de uso | Registrar confirmación y comisión de OTA (`register-ota-information-commission`) |
 | Spec | [spec.md](./spec.md), historias 1 a 3 y FR-001 a FR-010 |
-| Actores | `generate-ota-reservation` (calcula la comisión); Módulo 3 (concilia y consulta); Recepcionista (consulta agencias); la OTA (sus datos y su conexión, a través del caso de uso futuro "Configurar OTA") |
+| Actores | `generate-ota-reservation` (calcula la comisión); Módulo 3 (concilia y consulta); Recepcionista (consulta agencias); `configure-ota` (registro de la agencia); `generate-ota-reservation` (estado de la conexión) |
 | Naturaleza | Escribe `reservation` (campos de comisión), `ota` y `commission_audit`; lee para las consultas |
 
 | # | Capacidad | Disparador | Actor | Contrato |
@@ -43,8 +40,8 @@ cobrará.
 | 2 | Consultar comisiones de un periodo | REST `GET /api/ota-commissions` | Módulo 3 | A1 |
 | 3 | Conciliar comisiones | REST `POST /api/ota-commissions/reconciliations` | Módulo 3 | A2 |
 | 4 | Consultar agencias | REST `GET /api/otas` y `GET /api/otas/{otaId}` | Recepcionista y Módulo 3 | A3 |
-| 5 | Registrar o actualizar una OTA y su conexión | Llamada interna (puerto de entrada) | Caso de uso futuro "Configurar OTA" | B2 |
-| 6 | Actualizar `lastSyncAt` con cada mensaje de la OTA | Llamada interna | Interceptor de la API de la OTA | B3 |
+| 5 | Registrar o actualizar la agencia | Llamada interna `ManageOta` | `configure-ota` | B2 |
+| 6 | Estado de la conexión y última sincronización | Llamada interna `OtaConnectionTracker` | `generate-ota-reservation` y `configure-ota` | B3 |
 
 ## Technical Context
 
@@ -60,10 +57,11 @@ Lo propio de este caso de uso:
 
 ### A. REST del Módulo 2
 
-Roles: `RECEPTIONIST`, `MODULE3` (servicio a servicio) y `OTA`. **Cabeceras**:
-`Authorization: Bearer <JWT>`, `Content-Type: application/json`. Sin token, 401; con un rol sin permiso, 403.
+Las usan la Recepcionista y el Módulo 3. **Cabeceras**: `Content-Type: application/json`. Sin seguridad
+(regla transversal 10 del plan base): cada ruta la usa un llamador distinto, así que no necesita
+`X-Client`. La OTA no llama al Módulo 2.
 
-**A1. `GET /api/ota-commissions`** (solo `MODULE3`): comisiones de las reservas OTA de un periodo.
+**A1. `GET /api/ota-commissions`** (la usa el Módulo 3): comisiones de las reservas OTA de un periodo.
 
 | Parámetro | Tipo | Obligatorio | Regla |
 |---|---|---|---|
@@ -102,7 +100,7 @@ Roles: `RECEPTIONIST`, `MODULE3` (servicio a servicio) y `OTA`. **Cabeceras**:
 - Solo reservas de canal `OTA`. Sin resultados: `200` con `items: []`.
 - Los importes van como **texto decimal**; los porcentajes, de `0.00` a `100.00`.
 
-**A2. `POST /api/ota-commissions/reconciliations`** (solo `MODULE3`): el Módulo 3 le indica al Módulo 2 qué
+**A2. `POST /api/ota-commissions/reconciliations`** (la usa el Módulo 3): el Módulo 3 le indica al Módulo 2 qué
 comisiones pasan a `RECONCILED` o `PAID`.
 
 ```json
@@ -166,8 +164,8 @@ la fecha final."), `DATE_RANGE_TOO_LARGE` ("El rango de fechas no puede superar 
 `INVALID_COMMISSION_STATUS` ("El estado de la comisión no es válido.") e `INVALID_STATUS` ("El estado
 indicado no es válido.").
 
-**A3. Consulta de agencias** (solo lectura): `GET /api/otas` y `GET /api/otas/{otaId}`, para `RECEPTIONIST`
-y `MODULE3`.
+**A3. Consulta de agencias** (solo lectura): `GET /api/otas` y `GET /api/otas/{otaId}`, para la Recepcionista
+y el Módulo 3, con la misma respuesta para los dos.
 
 ```json
 {
@@ -215,6 +213,8 @@ interface CommissionResult {
 
 interface RegisterOtaConfirmationAndCommission {
   calculate(input: CommissionInput): Promise<CommissionResult>;
+  // Booking cambió el valor: mismo porcentaje congelado de la reserva, importe nuevo
+  recalculate(reservation: Reservation, newTotalAmount: Money): CommissionResult;
   recordAudit(tx: Transaction, reservationId: string, result: CommissionResult, performedBy: string): Promise<void>;
 }
 ```
@@ -222,11 +222,13 @@ interface RegisterOtaConfirmationAndCommission {
 - `calculate` **no persiste**: valida y calcula. La reserva con sus campos de comisión la inserta quien
   llama en su transacción, y luego llama a `recordAudit`.
 - **Validaciones** (en este orden): la `Ota` existe; su `commissionPercentage` está entre 0 y 100; el
-  `externalConfirmationCode` no está ya registrado para esa `Ota` (FR-005).
+  `externalConfirmationCode` no está ya registrado para esa `Ota` (FR-005; `generate-ota-reservation` ya
+  trata un código repetido como un cambio, así que este error solo protege contra un uso indebido).
+- `recalculate` escribe también una fila de auditoría `CALCULATED` con los importes nuevos.
 - La reserva guarda **su propia copia** del porcentaje y del importe: un cambio posterior del porcentaje de
   la agencia **no afecta** a las reservas ya registradas.
 
-**B2. Registrar o actualizar una OTA** (`ManageOta`, lo usará "Configurar OTA"):
+**B2. Registrar o actualizar la agencia** (`ManageOta`, lo usa `configure-ota` al iniciar):
 
 ```typescript
 interface OtaRegistration { name: string; hotelAccountId: string; commissionPercentage: string }
@@ -234,8 +236,6 @@ interface OtaRegistration { name: string; hotelAccountId: string; commissionPerc
 interface ManageOta {
   register(data: OtaRegistration, at: Date): Promise<Ota>;                 // nace CONNECTED, linkedAt = lastSyncAt = at
   update(otaId: string, data: Partial<OtaRegistration>, at: Date): Promise<Ota>;
-  markDisconnected(otaId: string, at: Date): Promise<Ota>;                  // CONNECTED → DISCONNECTED
-  markConnected(otaId: string, at: Date): Promise<Ota>;                     // DISCONNECTED → CONNECTED; no cambia linkedAt
 }
 ```
 
@@ -247,11 +247,19 @@ interface ManageOta {
 - Desvincular **no borra** la `Ota` ni modifica sus reservas (`status`, `commissionAmount` y
   `commissionStatus` se conservan).
 
-**B3. Última sincronización** (`TouchOtaSync.touch(otaId, at)`): cada mensaje de la OTA por su API
-(reserva, cambio, cancelación o aviso de conexión) actualiza `lastSyncAt` y **ningún otro dato**. Lo llama
-un interceptor de la API de la OTA, no el controlador.
+**B3. Estado de la conexión** (`OtaConnectionTracker`):
 
-**Errores de B2** (cuando lo llame "Configurar OTA"; el spec pide "especificando los campos inválidos"):
+```typescript
+interface OtaConnectionTracker {
+  markSynced(otaId: string, at: Date): Promise<void>;        // lectura del feed que terminó bien: lastSyncAt y, si estaba DISCONNECTED, CONNECTED
+  markDisconnected(otaId: string, at: Date): Promise<void>;  // Channex respondió 401 o 403
+}
+```
+
+- Lo llaman `generate-ota-reservation` (cada lectura del feed) y `configure-ota` (si Channex rechaza un
+  envío de disponibilidad o tarifas). Volver a `CONNECTED` no cambia `linkedAt`.
+
+**Errores de B2** (los registra `configure-ota` en el log al iniciar, con los campos inválidos):
 
 | `errorCode` | Cuándo | `message` |
 |---|---|---|
@@ -259,7 +267,7 @@ un interceptor de la API de la OTA, no el controlador.
 | `OTA_NAME_ALREADY_EXISTS` | El `name` coincide con el de otra `Ota` | "Ya existe una agencia con ese nombre." |
 | `OTA_ACCOUNT_ALREADY_EXISTS` | El `hotelAccountId` ya está registrado | "Ya existe una agencia con esa cuenta del hotel." |
 
-**Errores de B1** (llegan al cliente a través de `generate-ota-reservation`):
+**Errores de B1** (los registra `generate-ota-reservation` en el log):
 
 | `errorCode` | Cuándo | `message` |
 |---|---|---|
@@ -330,7 +338,7 @@ sequenceDiagram
     participant DB as PostgreSQL
 
     M3->>K: POST /api/ota-commissions/reconciliations
-    K->>K: Guard MODULE3 y validar el cuerpo
+    K->>K: Validar el cuerpo
     alt solicitud inválida
         K-->>M3: 400 sin procesar ningún ítem
     end
@@ -362,15 +370,10 @@ sequenceDiagram
 sequenceDiagram
     participant X as Módulo 3 o Recepcionista
     participant C as Controller
-    participant G as Guard de rol
     participant U as Caso de uso de consulta
     participant DB as PostgreSQL
 
     X->>C: GET /api/ota-commissions (Módulo 3) o GET /api/otas (Recepcionista o Módulo 3)
-    C->>G: rol permitido para esa ruta
-    alt rol sin permiso
-        G-->>X: 403
-    end
     C->>C: Validar parámetros
     alt parámetro inválido
         C-->>X: 400 con el mensaje correspondiente
@@ -385,11 +388,11 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    participant X as Configurar OTA (caso de uso futuro)
+    participant X as EnsureChannexSetup (configure-ota)
     participant M as ManageOta
     participant DB as PostgreSQL
 
-    X->>M: register / update / markDisconnected / markConnected
+    X->>M: register / update
     M->>M: Validar nombre, cuenta del hotel y porcentaje (0 a 100)
     alt datos ausentes o inválidos, o nombre repetido
         M-->>X: BusinessError con los campos inválidos (400)
@@ -435,8 +438,6 @@ Todo error REST sale con `{ "errorCode", "message", "timestamp", "path" }` y **s
 | Situación | HTTP | `errorCode` |
 |---|---|---|
 | Errores de las tablas de A1, A2, A3, B1 y B2 | 400 | Los de cada tabla |
-| Sin token o token inválido | 401 | `UNAUTHENTICATED` |
-| Rol sin permiso para la ruta | 403 | `FORBIDDEN` |
 | Excepción inesperada o fallo de integración | 400 | `REQUEST_NOT_PROCESSED` |
 
 - **Un porcentaje inválido o un código duplicado impiden crear la reserva**: el error se lanza antes de
@@ -452,17 +453,17 @@ Todo error REST sale con `{ "errorCode", "message", "timestamp", "path" }` y **s
 |---|---|---|---|---|
 | Módulo 3 | M3 → M2 | REST `GET /api/ota-commissions` y `POST /api/ota-commissions/reconciliations` | A1 y A2 | Errores 4xx controlados; el Módulo 2 no llama al Módulo 3 en este caso de uso |
 | Módulo 3 | M3 → M2 | REST `GET /api/otas` y `GET /api/otas/{otaId}` ("Consultar % de comisión OTA") | A3 | Idem |
-| OTA | OTA → M2 | Sus mensajes actualizan `lastSyncAt`; el registro y la conexión llegarán por "Configurar OTA" | B2 y B3 | Idem |
+| Channex | A través de `generate-ota-reservation` y `configure-ota` | Las lecturas del feed y las respuestas de Channex actualizan `lastSyncAt` y `connectionStatus` | B3 | Idem |
 
 - Este caso de uso **no llama a ningún módulo** de forma síncrona y **no usa colas**.
-- **Autenticación**: el Módulo 3 y la OTA llaman con su credencial (JWT de servicio, plan base).
+- **Sin autenticación**: la seguridad es una capa aparte (regla transversal 10 del plan base).
 
 ## Arquitectura (capas del plan base)
 
 | Capa | Piezas de este caso de uso |
 |---|---|
 | `domain/ota/` | `Ota`, regla de comisión (`calculateCommission`), transiciones de `commissionStatus` y de `connectionStatus` |
-| `application/use-cases/register-ota-information-commission/` | **Entrada**: `RegisterOtaConfirmationAndCommission`, `ReconcileCommissions`, `ListOtaCommissions`, `ListOtas`, `GetOta`, `ManageOta`, `TouchOtaSync` |
+| `application/use-cases/register-ota-information-commission/` | **Entrada**: `RegisterOtaConfirmationAndCommission`, `ReconcileCommissions`, `ListOtaCommissions`, `ListOtas`, `GetOta`, `ManageOta`, `OtaConnectionTracker` |
 | `application/ports/out/` | `OtaRepository`, `CommissionAuditRepository`, `Clock` |
 | `infrastructure/in/rest/` | `OtaCommissionsController` y `OtasController` |
 | `infrastructure/out/persistence/` | Repositorios y las consultas de A1 y A3 |
@@ -521,14 +522,14 @@ frontend/src/pages/otas/                            # pantalla "Agencias OTA" (s
 - [ ] T011 [US2] `ListOtaCommissions` y `GET /api/ota-commissions` (A1) con sus filtros y validaciones
 - [ ] T012 [US2] `ReconcileCommissions` y `POST /api/ota-commissions/reconciliations` (A2): una transacción por ítem, comprobación de montos y resultados por ítem
 - [ ] T013 [US2] Rechazo de reservas `CANCELLED`, no `COMPLETED`, directas o inexistentes, e idempotencia (`ALREADY_APPLIED`)
-- [ ] T014 [US2] Pruebas de integración de los escenarios 1 y 2, incluida la conservación de la comisión de una reserva cancelada por la OTA
+- [ ] T014 [US2] Pruebas de integración de los escenarios 1 y 2, incluida la conservación de la comisión de una reserva cancelada por Booking
 
 ## Phase 5: User Story 3 - Registro y estado de la OTA (P3)
 
-- [ ] T015 [US3] `ManageOta` (`register`, `update`, `markDisconnected`, `markConnected`) con las validaciones y los códigos de error
-- [ ] T016 [US3] `TouchOtaSync` e interceptor de la API de la OTA que actualiza `lastSyncAt` en cada mensaje
+- [ ] T015 [US3] `ManageOta` (`register`, `update`) con las validaciones y los códigos de error
+- [ ] T016 [US3] `OtaConnectionTracker` (`markSynced`, `markDisconnected`)
 - [ ] T017 [US3] `ListOtas`, `GetOta` y `GET /api/otas` y `/{otaId}` (A3) con `activeReservations`
-- [ ] T018 [US3] Pruebas de los escenarios 1 a 6 y de los casos borde (nace `CONNECTED`, desvincular y revincular, porcentaje nuevo solo para reservas futuras)
+- [ ] T018 [US3] Pruebas de los escenarios 1 a 5 y de los casos borde (nace `CONNECTED`, rechazo de Channex y recuperación, porcentaje nuevo solo para reservas futuras)
 - [ ] T019 [P] [US3] Frontend: pantalla "Agencias OTA" (solo lectura)
 
 ## Phase N: Polish
@@ -543,13 +544,12 @@ frontend/src/pages/otas/                            # pantalla "Agencias OTA" (s
 | US1 | 1 registro exitoso | `totalAmount` 400 y 15 %: `commissionAmount` 60.00, `commissionStatus` `CALCULATED`, fila en `commission_audit` |
 | US1 | 2 porcentaje inválido | Menor que 0 o mayor que 100: `400` `INVALID_COMMISSION_PERCENTAGE` y la reserva no se persiste |
 | US2 | 1 conciliación | Reservas `COMPLETED` y `CALCULATED` pasan a `RECONCILED` cuando los montos coinciden; queda auditoría con el canal `MODULE3` |
-| US2 | 2 cancelada por la OTA | Su `commissionAmount` y `commissionStatus` no cambian, ni al cancelar ni al conciliar (`RESERVATION_CANCELLED`) |
-| US3 | 1 registro | Una `Ota` nueva nace `CONNECTED`, con `linkedAt` y `lastSyncAt` de ese mensaje |
-| US3 | 2 actualización | Un nuevo porcentaje se guarda y solo aplica a reservas futuras |
-| US3 | 3 datos inválidos | `name` o `hotelAccountId` vacío, o porcentaje fuera de rango: `400` con los campos inválidos |
-| US3 | 4 desvinculación | `DISCONNECTED`, `lastSyncAt` actualizado, la `Ota` y sus reservas se conservan y sigue visible en la pantalla |
-| US3 | 5 revinculación | `CONNECTED`, `lastSyncAt` actualizado, sin `Ota` nueva ni cambio de `linkedAt` |
-| US3 | 6 `lastSyncAt` | Cualquier mensaje de la OTA lo actualiza sin tocar otro dato |
+| US2 | 2 cancelada por Booking | Su `commissionAmount` y `commissionStatus` no cambian, ni al cancelar ni al conciliar (`RESERVATION_CANCELLED`) |
+| US3 | 1 registro por configuración | Una `Ota` "Booking.com" nace `CONNECTED` con `linkedAt`, sin duplicarse al reiniciar |
+| US3 | 2 cambio del porcentaje | El nuevo porcentaje se guarda y solo aplica a reservas futuras |
+| US3 | 3 Channex rechaza la conexión | `DISCONNECTED`; la `Ota` y sus reservas se conservan y sigue visible en la pantalla |
+| US3 | 4 conexión recuperada | `CONNECTED`, sin `Ota` nueva ni cambio de `linkedAt` |
+| US3 | 5 `lastSyncAt` | Cada lectura del feed que termina bien lo actualiza |
 | Casos borde | Código duplicado | Mismo `externalConfirmationCode` para la misma `Ota`: `400` y sin comisión duplicada; mismo código en otra `Ota`: se acepta |
 | Casos borde | Simultaneidad | Dos solicitudes con el mismo código a la vez: una se crea y la otra falla por la restricción única |
 | Casos borde | Dos actualizaciones de la misma reserva | Se procesan en secuencia con el bloqueo de fila |
@@ -560,7 +560,7 @@ frontend/src/pages/otas/                            # pantalla "Agencias OTA" (s
 
 ## Dependencies & Execution Order
 
-- **Depende de**: el plan base (tablas `ota`, `reservation` y `commission_audit`, roles, `decimal.js`).
+- **Depende de**: el plan base (tablas `ota`, `reservation` y `commission_audit`, `decimal.js`).
 - **Necesitan de este caso de uso**: `generate-ota-reservation` (calcula la comisión al registrar la
   reserva) y `cancel-reservation` (no debe tocar la comisión de una reserva OTA).
 - **Orden**: T001–T005 → US1 (T006–T010) → US2 (T011–T014) → US3 (T015–T019) → Polish. Va **antes de
@@ -577,7 +577,7 @@ frontend/src/pages/otas/                            # pantalla "Agencias OTA" (s
 | FR-005 | Código duplicado y restricción única | T006, T009 |
 | FR-006 | `ReconcileCommissions` (A2) | T012, T013 |
 | FR-007 | Rechazo de reservas canceladas | T013, T014 |
-| FR-008, FR-008a, FR-008b | `ManageOta`, `TouchOtaSync` y las consultas de agencias | T015–T017 |
+| FR-008, FR-008a | `ManageOta`, `OtaConnectionTracker` y las consultas de agencias | T015–T017 |
 | FR-009 | Mapeo a 400 | T005 |
 | FR-010 | `commission_audit` | T007, T012 |
 | NFR-001 | Prueba de tiempo | T020 |
@@ -600,19 +600,16 @@ frontend/src/pages/otas/                            # pantalla "Agencias OTA" (s
    la agencia no cambia lo ya registrado.
 8. **`GET /api/otas` devuelve más campos que el plan base** (`hotelAccountId`, `linkedAt`, `lastSyncAt` y
    `activeReservations`), porque la pantalla de agencias los muestra.
-9. **Los servicios de registro y conexión** (`ManageOta`, `TouchOtaSync`) se implementan ya, sin rutas; las
-   define "Configurar OTA".
+9. **La comisión se recalcula** con el porcentaje congelado cuando Booking cambia el valor (`recalculate`).
 
 ## Puntos abiertos
 
 | # | Pendiente | Con quién |
 |---|---|---|
-| 1 | **Rutas de la OTA** para registrarse, actualizar sus datos y avisar su conexión: el spec (historia 3) las pide, pero el plan base las deja para el caso de uso futuro "Configurar OTA" | Equipo del Módulo 2 |
-| 2 | **`DISPUTED`** aparece en el enumerado y en la auditoría pero ningún spec define cuándo se usa ni cómo se sale de él. Hoy un desajuste de montos solo rechaza el ítem | Equipo del Módulo 2 y Módulo 3 |
-| 3 | Estructura exacta de la conciliación que enviará el Módulo 3 (periodo, identificador del cierre, montos) y de la consulta de comisiones | Módulo 3 |
-| 4 | Cómo expresa el Módulo 3 el porcentaje de comisión (0 a 100) | Módulo 3 |
-| 5 | Qué pasa con la comisión de una reserva OTA que queda en `NO_SHOW`: el spec solo trata `COMPLETED` y `CANCELLED` | Equipo del Módulo 2 |
-| 6 | Una OTA `DISCONNECTED` que envía una reserva nueva: el spec no lo define (lo resuelve `generate-ota-reservation`) | Equipo del Módulo 2 |
+| 1 | **`DISPUTED`** aparece en el enumerado y en la auditoría pero ningún spec define cuándo se usa ni cómo se sale de él. Hoy un desajuste de montos solo rechaza el ítem | Equipo del Módulo 2 y Módulo 3 |
+| 2 | Estructura exacta de la conciliación que enviará el Módulo 3 (periodo, identificador del cierre, montos) y de la consulta de comisiones | Módulo 3 |
+| 3 | Cómo expresa el Módulo 3 el porcentaje de comisión (0 a 100) | Módulo 3 |
+| 4 | Qué pasa con la comisión de una reserva OTA que queda en `NO_SHOW`: el spec solo trata `COMPLETED` y `CANCELLED` | Equipo del Módulo 2 |
 
 ## Notes
 

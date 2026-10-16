@@ -31,10 +31,11 @@ las mismas reglas de transición y de concurrencia.
 
 ### Flujo de Usuario de Alto Nivel
 
-1. La **Recepcionista** o la **Ota** localiza la reserva mediante "Consultar
-   reservas" y valida que esté en `ACTIVE` o `PENDING`. La Recepcionista solo modifica reservas de
-   canal `DIRECT`; una reserva de canal `OTA` solo la modifica la Ota por su API, porque sus datos
-   los envía la agencia y no se editan en el hotel.
+1. La **Recepcionista** localiza la reserva mediante "Consultar reservas" y valida que esté en
+   `ACTIVE` o `PENDING`. La Recepcionista solo modifica reservas de canal `DIRECT`. Los cambios de una
+   reserva de canal `OTA` los envía Booking por el feed de Channex ("Generar reservación por OTA") y
+   se aplican con este mismo caso de uso; sus datos no se editan en el hotel. La única excepción es
+   **asignar la habitación** de una reserva OTA en conflicto.
 2. El solicitante edita uno o varios de estos datos:
    - Las fechas de la estadía (`startDate`, `endDate`), comunes a todas las habitaciones.
    - Las habitaciones de la reserva: agregar una habitación, quitar una habitación (la reserva
@@ -62,7 +63,7 @@ las mismas reglas de transición y de concurrencia.
    hace entrar o salir la reserva de la lista del día).
 
 Adicionalmente, esta funcionalidad recibe el cambio de `status` que solicitan otros procesos:
-"Generar reservación por OTA" (confirmación de pago o garantía), "Generar reservación directa" y
+"Generar reservación por OTA" (cambios que envía Booking), "Generar reservación directa" y
 la notificación de Check-In, la notificación de Check-Out y
 el cierre automático del día (No-Show), descritos a continuación. Todos ellos cambian el `status` de
 la reserva a `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED` o `NO_SHOW`, de modo que las reglas de
@@ -130,7 +131,8 @@ El Check-Out también se notifica **por habitación**.
 
 ### User Story 1 - Modificación de Datos de Reservación (Priority: P1)
 
-Un solicitante —la Recepcionista para las reservas directas, o la Ota por su API para las suyas—
+Un solicitante —la Recepcionista para las reservas directas, o Booking, por el feed de Channex, para
+las suyas—
 modifica una reserva que aún no ha iniciado su estadía. Puede cambiar fechas, agregar, quitar o cambiar habitaciones, cambiar la
 cantidad de personas, corregir datos personales, o editar las observaciones. Cuando el cambio afecta fechas o habitaciones, el sistema valida disponibilidad y delega el
 recálculo en el Módulo 3, mostrando la tarifa de cada habitación afectada, como al crear la reserva, antes de
@@ -162,7 +164,7 @@ los cambios. Se repite con datos personales (sin recálculo) y sobre reservas `I
    - **Then** el sistema guarda los cambios sin invocar al Módulo 3 ni alterar fechas o categoría
 
 3. **Scenario**: Cambio de estado solicitado por un proceso interno
-   - **Given** una confirmación de pago OTA o una notificación de Check-In, Check-Out o No-Show válida
+   - **Given** una notificación de Check-In, Check-Out o No-Show válida
    - **When** el proceso correspondiente ejecuta "Actualizar reservación"
    - **Then** el sistema cambia el `status` a `CANCELLED`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED` o
      `NO_SHOW` según la transición permitida
@@ -227,6 +229,21 @@ los cambios. Se repite con datos personales (sin recálculo) y sobre reservas `I
     - **Then** el sistema responde **HTTP 400** con el mensaje "La cantidad de personas supera la
       capacidad de la habitación." (3) o "Cada habitación debe tener al menos una persona." (0), sin
       guardar nada
+
+13. **Scenario**: Cambio de Booking sin disponibilidad (conflicto)
+    - **Given** una `Reservation` OTA en `ACTIVE` y ninguna habitación libre de su categoría en las
+      fechas nuevas que envía Booking
+    - **When** "Generar reservación por OTA" aplica el cambio
+    - **Then** el sistema guarda las fechas nuevas con la habitación **sin asignar** y marca la reserva
+      en conflicto con el motivo `NO_ROOM_AVAILABLE`, sin rechazar el cambio ni invocar al Módulo 3
+
+14. **Scenario**: Asignar habitación a una reserva de Booking en conflicto
+    - **Given** una `Reservation` OTA en conflicto con una habitación sin asignar, y la `Room` 204 de su
+      categoría libre en esas fechas
+    - **When** la Recepcionista le asigna la `Room` 204
+    - **Then** el sistema verifica la disponibilidad, asigna la habitación y, si ya no queda ninguna
+      habitación sin asignar ni capacidad superada, quita la marca de conflicto; si la llegada es hoy,
+      avisa al Módulo 1 con `UPDATED`. La Recepcionista no puede cambiar ningún otro dato de esa reserva
 
 ---
 
@@ -415,6 +432,10 @@ sin enviar ninguna orden de liberación al Módulo 1.
 
 **Check-In y Check-Out**
 
+- ¿Qué sucede si el Módulo 1 notifica el Check-In de una reserva de Booking que tiene una habitación
+  sin asignar? La habitación sin asignar viaja en la lista del día sin número; la Recepcionista debe
+  asignarla (FR-025) antes del Check-In. Un Check-In con un `roomId` que no pertenece a la reserva se
+  rechaza como cualquier otro (escenario 6 de la historia 2).
 - ¿Qué sucede si la notificación de Check-In o de Check-Out llega vacía, sin la `reservationRef` o
   sin el `roomId`? El sistema intercepta el error de inmediato y responde **HTTP 400** con el
   mensaje: "El payload de notificación es inválido. Falta el identificador de la reserva o de la
@@ -464,7 +485,8 @@ sin enviar ninguna orden de liberación al Módulo 1.
   personales del `Guest` titular (`firstName`, `lastName`, `documentType`, `documentNumber`, `contactPhone`,
   `contactEmail` — no `nationality`), y editar `notes` (máximo 500 caracteres).
 - **FR-001a**: El sistema debe rechazar con **HTTP 400** que la Recepcionista modifique una reserva
-  de canal `OTA`: esas reservas solo las modifica la Ota que las originó, por su API.
+  de canal `OTA`: sus cambios llegan de Booking por el feed de Channex. La única excepción es asignar
+  la habitación de una reserva OTA en conflicto (FR-025).
 
 - **FR-002**: El sistema debe validar la disponibilidad mediante "Verificar disponibilidades" de
   cada habitación que quedaría en la reserva cuando cambien las fechas, y de cada habitación nueva
@@ -488,9 +510,9 @@ sin enviar ninguna orden de liberación al Módulo 1.
   reserva conserve entre 1 y 10 habitaciones, sin habitaciones repetidas, y que el `guestCount` de
   cada habitación sea al menos 1 y no supere su `maxCapacity` (el de la reserva es la suma),
   respondiendo **HTTP 400** con el mensaje correspondiente en caso contrario.
-- **FR-006**: El sistema debe ser el punto de cambio de `status` de la reserva para la confirmación
-  OTA, el Check-In, el Check-Out y el No-Show, aceptando las
-  transiciones `PENDING`→`ACTIVE`, `ACTIVE`→`IN_PROGRESS`, `IN_PROGRESS`→`COMPLETED`, `ACTIVE` o
+- **FR-006**: El sistema debe ser el punto de cambio de `status` de la reserva para el Check-In, el
+  Check-Out y el No-Show, aceptando las
+  transiciones `PENDING`→`ACTIVE` (hoy sin uso: las reservas de Booking llegan confirmadas), `ACTIVE`→`IN_PROGRESS`, `IN_PROGRESS`→`COMPLETED`, `ACTIVE` o
   `PENDING`→`NO_SHOW` (No-Show de cualquier canal); cualquier otra transición debe rechazarse con **HTTP
   400**. La cancelación explícita la ejecuta "Cancelar reservación" directamente, con las mismas
   transiciones y el mismo control de concurrencia.
@@ -553,6 +575,16 @@ sin enviar ninguna orden de liberación al Módulo 1.
   cola que nunca se reinicia. El sistema no reordena las notificaciones: valida cada una contra el
   estado de la habitación y, si detecta un salto de secuencia, lo registra en el log sin detener el
   procesamiento.
+- **FR-024**: Al aplicar un cambio que envía Booking, el sistema no debe rechazarlo por falta de
+  disponibilidad ni de capacidad: para cada habitación que no se pueda conservar busca otra libre de
+  la misma categoría y, si no hay, la deja **sin asignar**; en ese caso, o si se supera la capacidad,
+  marca la reserva en conflicto (`NO_ROOM_AVAILABLE` o `CAPACITY_EXCEEDED`). No invoca al Módulo 3 y
+  recalcula la comisión con el porcentaje congelado de la reserva.
+- **FR-025**: El sistema debe permitir que la Recepcionista asigne una habitación a cada
+  `ReservationRoom` sin asignar de una reserva OTA en conflicto, verificando la disponibilidad
+  mediante "Verificar disponibilidades". Cuando ya no queda ninguna habitación sin asignar ni
+  capacidad superada, el sistema quita la marca de conflicto. Ninguna otra modificación de la reserva
+  OTA está permitida.
 
 ### Non-Functional Requirements
 
@@ -567,9 +599,11 @@ sin enviar ninguna orden de liberación al Módulo 1.
 
 - **Reservation**: Entidad principal actualizada. Atributos: `reservationRef`, `guestRef`,
   `guestCount` (suma de los de sus habitaciones), `startDate`, `endDate`, `updatedAt`,
-  `source` (`DIRECT` | `OTA`), `notes` y `status` (`PENDING`, `ACTIVE`,
+  `source` (`DIRECT` | `OTA`), `notes`, `conflictReason` y `conflictDetectedAt` (solo reservas OTA en
+  conflicto) y `status` (`PENDING`, `ACTIVE`,
   `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`).
-- **ReservationRoom**: Habitación de la reserva. Atributos: `reservationRef`, `roomId`,
+- **ReservationRoom**: Habitación de la reserva. Atributos: `reservationRef`, `roomId` (vacío si una
+  reserva OTA quedó sin habitación asignada),
   `roomNumber`, `categoryRoom`, `guestCount` (personas de la habitación), `roomGrossAmount` (tarifa de la
   habitación, solo canal `DIRECT`), `quoteId` (cotización que dio esa tarifa, solo canal `DIRECT`) y `stayStatus`
   (`EXPECTED` | `CHECKED_IN` | `CHECKED_OUT` | `NOT_ARRIVED`).

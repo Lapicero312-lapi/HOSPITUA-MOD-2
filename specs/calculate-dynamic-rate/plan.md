@@ -69,7 +69,8 @@ Lo propio de este caso de uso:
 Los nombres son los de la API del Módulo 3 y equivalen a los del Módulo 2: `roomType` = `categoryRoom`,
 `checkInDate` = `startDate`, `checkOutDate` = `endDate`. Se pide **una cotización por habitación**.
 
-**Cabeceras**: `Authorization: Bearer <JWT de servicio>`, `Content-Type: application/json`.
+**Cabeceras**: `Content-Type: application/json`. Sin autenticación: la seguridad es una capa aparte (regla
+transversal 10 del plan base).
 
 **Solicitud**
 
@@ -121,7 +122,7 @@ interface RoomQuote {
   lodgingAmount: Money;
 }
 
-type QuoteContext = 'NEW_RESERVATION' | 'RECALCULATION';   // decide el mensaje de error
+type QuoteContext = 'NEW_RESERVATION' | 'RECALCULATION' | 'CHANNEX_RATES';   // decide el mensaje de error
 
 interface CalculateDynamicRate {
   // B1: una cotización por habitación, todo o nada
@@ -179,7 +180,7 @@ enviado por el cliente**: lo que se persiste es el de la cotización nueva, con 
 
 ### C. REST del Módulo 2: pantalla "Tarifas" (FR-009)
 
-**C1. `GET /api/rates/reference`** (solo rol `RECEPTIONIST`; sin parámetros)
+**C1. `GET /api/rates/reference`** (pantalla de la Recepcionista; sin parámetros)
 
 ```json
 {
@@ -292,7 +293,6 @@ sequenceDiagram
     participant K as Configuración RATE_REFERENCE
 
     R->>C: GET /api/rates/reference
-    C->>C: Guard de rol RECEPTIONIST (si no, 403)
     C->>U: execute()
     U->>K: categorías con tarifa base y porcentaje único
     U->>U: effectiveRate = baseRate x (1 + porcentaje / 100)
@@ -347,8 +347,6 @@ Todo error sale con `{ "errorCode", "message", "timestamp", "path" }` y **siempr
 | Otro 4xx del Módulo 3 (parámetros ausentes, rango incoherente) | Módulo 3 | 400 | `INVALID_STAY_DATES` o el de indisponibilidad (ver "Puntos abiertos") | El correspondiente |
 | La tarifa cambió entre la vista previa y la confirmación | M2 (`verifyQuotes`) | 400 | `RATE_CHANGED` | "La tarifa cambió, vuelva a cotizar." |
 | Habitaciones de una reserva con monedas distintas al sumar el total | M2 | 400 | `CURRENCY_MISMATCH` | "Las tarifas de la reserva no tienen la misma moneda." |
-| Sin token o token inválido (pantalla "Tarifas") | Guard | 401 | `UNAUTHENTICATED` | Genérico |
-| Rol distinto de `RECEPTIONIST` (pantalla "Tarifas") | Guard | 403 | `FORBIDDEN` | Genérico |
 
 - **Todo o nada** (FR-002a): si una sola cotización falla, el conjunto falla; no se guarda ninguna
   tarifa y, en una reserva nueva, no se crea la reserva ni se persiste ningún registro.
@@ -429,7 +427,7 @@ frontend/src/pages/rates/                        # pantalla "Tarifas"
 seguro ante un Módulo 3 caído.
 
 - [ ] T008 [US1] `CalculateDynamicRate.quoteRooms`: una cotización por habitación, en paralelo con tope, todo o nada
-- [ ] T009 [US1] Selección del mensaje de error según el contexto (`NEW_RESERVATION` o `RECALCULATION`)
+- [ ] T009 [US1] Selección del mensaje de error según el contexto (`NEW_RESERVATION`, `RECALCULATION` o `CHANNEX_RATES`)
 - [ ] T010 [US1] DTO compartido de la vista previa (`rooms` con `nightlyRates` y `total`)
 - [ ] T011 [US1] Pruebas de contrato del adaptador: éxito, categoría rechazada, 400, 503, tiempo agotado, respuesta mal formada, `lodgingAmount` en cero y con más de dos decimales
 - [ ] T012 [US1] Pruebas de integración de los escenarios 1 a 3 y del caso borde de categoría inexistente
@@ -444,7 +442,7 @@ seguro ante un Módulo 3 caído.
 ## Phase 5: Pantalla "Tarifas" (FR-009)
 
 - [ ] T017 `GetReferenceRates` y `rate-reference.config.ts` (tarifa base por categoría y un porcentaje único)
-- [ ] T018 `GET /api/rates/reference` (C1) con el guard de rol
+- [ ] T018 `GET /api/rates/reference` (C1)
 - [ ] T019 [P] Prueba de que la referencia no llama al Módulo 3, no escribe nada y no es convertible a `RoomQuote`
 - [ ] T020 [P] Frontend: pantalla "Tarifas" (categoría, tarifa base, ajuste y tarifa efectiva; sin capacidad)
 
@@ -471,7 +469,7 @@ seguro ante un Módulo 3 caído.
 | D1 | Tarifa cambió | Dos llamadas con importes distintos: `400` `RATE_CHANGED` y nada se guarda |
 | NFR-002 | Precisión | Importes con dos decimales se conservan exactos; con tres decimales o en cero se rechazan |
 | FR-002 | Total | La suma de los `lodgingAmount` coincide y no se guarda en ninguna columna |
-| FR-009 | Pantalla "Tarifas" | Resultado con la tarifa efectiva calculada; sin llamar al Módulo 3, sin capacidad y rol sin permiso: 403 |
+| FR-009 | Pantalla "Tarifas" | Resultado con la tarifa efectiva calculada; sin llamar al Módulo 3 y sin capacidad |
 | NFR-001 | Tiempo | 10 cotizaciones en paralelo en menos de 1,5 s con el Módulo 3 simulado a 300 ms |
 
 ## Dependencies & Execution Order

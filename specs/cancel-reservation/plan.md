@@ -6,8 +6,8 @@
 
 ## Summary
 
-Las reservas se cancelan por dos canales: la **Recepcionista** (reservas directas) y la **OTA** por su API
-(reservas de su agencia). Este caso de uso procesa la baja de **toda la reserva**, con todas sus
+Las reservas se cancelan por dos canales: la **Recepcionista** (reservas directas) y **Booking** (sus
+reservas), cuya cancelación llega por el feed de Channex y la aplica `generate-ota-reservation`. Este caso de uso procesa la baja de **toda la reserva**, con todas sus
 habitaciones, en una sola transacción:
 
 1. Localiza la reserva y valida el canal, el estado y la concurrencia.
@@ -30,8 +30,8 @@ Quitar solo una habitación de una reserva con varias **no es una cancelación**
 |---|---|
 | Caso de uso | Cancelación de reservación (`cancel-reservation`) |
 | Spec | [spec.md](./spec.md), historia 1 y FR-001 a FR-007 |
-| Actores | Recepcionista (reservas `DIRECT`); OTA (sus propias reservas) |
-| Disparador | REST: `POST /api/reservations/{reservationRef}/cancellation` (Recepcionista) y `POST /api/ota/reservations/{reservationRef}/cancellation` (OTA, ruta propuesta) |
+| Actores | Recepcionista (reservas `DIRECT`); `generate-ota-reservation` (cancelaciones de Booking) |
+| Disparador | REST `POST /api/reservations/{reservationRef}/cancellation` (Recepcionista) y llamada interna `CancelReservation` (B) |
 | Naturaleza | Escribe `reservation`, `reservation_room`, `cancellation` y, por `DailyListChangeRecorder`, `daily_list_message` |
 
 ## Technical Context
@@ -48,8 +48,9 @@ Lo propio de este caso de uso:
 
 ### A. Cancelación por la Recepcionista: `POST /api/reservations/{reservationRef}/cancellation`
 
-Rol `RECEPTIONIST`. **Cabeceras**: `Authorization: Bearer <JWT>`, `Content-Type: application/json`. Sin
-token, 401; con otro rol, 403.
+Pantalla de la Recepcionista. **Cabeceras**: `Content-Type: application/json` y `X-User` (nombre de la
+Recepcionista del login simulado; se guarda tal cual en `processed_by`). Sin seguridad (regla transversal
+10 del plan base).
 
 **Solicitud**
 
@@ -83,23 +84,30 @@ token, 401; con otro rol, 403.
 }
 ```
 
-### B. Cancelación por la OTA: `POST /api/ota/reservations/{reservationRef}/cancellation`
+### B. Cancelación de Booking (llamada interna)
 
-Rol `OTA`. La agencia solo cancela **sus** reservas. **Ruta propuesta**: el plan base deja para el caso de
-uso futuro "Configurar OTA" definir por qué rutas la OTA cancela sus reservas, pero el spec exige esta
-operación (escenario 2); se implementa en la misma familia de rutas de `generate-ota-reservation`.
+No hay ruta para la OTA. Cuando el feed de Channex trae una revisión `cancelled`, `generate-ota-reservation`
+llama al puerto de entrada `CancelReservation` dentro de su transacción:
 
-**Solicitud** (el propio JSON es la confirmación, sin casilla):
-
-```json
-{ "reason": "Cancelada por el huésped en la agencia" }
+```typescript
+interface CancelReservation {
+  // A (Recepcionista) y B (Booking) usan el mismo servicio
+  cancel(tx: Transaction, command: {
+    reservationRef: string;
+    channel: 'RECEPTION' | 'OTA_API';
+    processedBy: string;        // X-User en A; 'Booking.com' en B
+    reason: string | null;
+    acknowledged?: boolean;     // obligatorio en A
+    expectedUpdatedAt?: string; // obligatorio en A
+  }): Promise<Reservation>;
+}
 ```
 
-- `reason`: opcional, máximo 500 caracteres. **No** se exige `updatedAt` ni `acknowledged`; si la OTA envía
-  `updatedAt`, se usa como control de concurrencia.
-
-**Respuesta 200**: la misma de A, con `channel: "OTA_API"` y `processedBy` igual al identificador de la
-agencia.
+- En B no se exigen `acknowledged` ni `updatedAt`: la cancelación de Booking es la confirmación, y el orden
+  lo da el feed.
+- Si la reserva ya está `CANCELLED`, B no hace nada (sin error): Booking puede repetir la revisión.
+- Si está en `IN_PROGRESS`, `COMPLETED` o `NO_SHOW`, B no cancela y devuelve el estado a
+  `generate-ota-reservation`, que marca el conflicto `CHANGE_NOT_APPLICABLE`.
 
 ### C. Errores 400 (los mismos para A y B; el mensaje es el literal del spec cuando existe)
 
@@ -107,8 +115,8 @@ agencia.
 |---|---|---|
 | `RESERVATION_REF_REQUIRED` | La referencia viene vacía, solo con espacios o nula | "La referencia de la reserva es obligatoria." |
 | `INVALID_RESERVATION_CODE` | La referencia no cumple el formato `RSV-` más 8 hexadecimales | "Debe proveer un código de reserva válido para la consulta." |
-| `RESERVATION_NOT_FOUND` | La reserva no existe, o es de otro canal u otra agencia (para la OTA) | "La reserva no existe." |
-| `OTA_RESERVATION_CANCEL_VIA_API` | La Recepcionista intenta cancelar una reserva de OTA | "La cancelación de una reserva de OTA debe llegar por la API de la agencia." |
+| `RESERVATION_NOT_FOUND` | La reserva no existe | "La reserva no existe." |
+| `OTA_RESERVATION_CANCEL_VIA_API` | La Recepcionista intenta cancelar una reserva de OTA | "La cancelación de una reserva de OTA debe llegar desde Booking." |
 | `STATUS_NOT_CANCELLABLE` | La reserva está en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` o `NO_SHOW` | "El estado actual de la reserva no admite cancelación." |
 | `CANCELLATION_NOT_CONFIRMED` | La Recepcionista no envía `acknowledged: true` | "Debe confirmar que entiende que la cancelación no se puede deshacer." |
 | `CONCURRENT_UPDATE` | `updatedAt` no coincide: otra cancelación o cambio simultáneo | "Esta reserva ya fue actualizada o cancelada recientemente" |
@@ -116,8 +124,7 @@ agencia.
 | `INVALID_CHARACTERS` | Caracteres no válidos en `reason` | "El formato de los datos contiene caracteres no válidos." |
 | `REQUEST_NOT_PROCESSED` | Excepción inesperada | "No fue posible procesar la solicitud." |
 
-Sin token, `401` `UNAUTHENTICATED`; con un rol sin permiso para la ruta, `403` `FORBIDDEN`. El cuerpo es
-siempre `{ "errorCode", "message", "timestamp", "path" }`. **Nunca 500.**
+El cuerpo es siempre `{ "errorCode", "message", "timestamp", "path" }`. **Nunca 500.**
 
 ### D. Puertos que usa
 
@@ -127,19 +134,18 @@ siempre `{ "errorCode", "message", "timestamp", "path" }`. **Nunca 500.**
 | `ReservationStatusService.transition` | `update-reservation` | `ACTIVE` o `PENDING` → `CANCELLED` y `blocks_inventory = false` |
 | `DailyListChangeRecorder.record` | `check-view-reservation` | Aviso `REMOVED` con motivo `CANCELLED` |
 | `CancellationRepository` | Este caso de uso | Guardar la `Cancellation` |
-| `TouchOtaSync.touch` | `register-ota-information-commission` | `lastSyncAt` con cada mensaje de la OTA |
+| `AriChangeRecorder.record` | `configure-ota` | Disponibilidad liberada para Channex |
 | `Clock` | Plan base | Fecha de la cancelación |
 
 ## Reglas de negocio
 
-1. **Quién cancela qué**: la Recepcionista, solo reservas `DIRECT` (canal `RECEPTION`); la OTA, solo las
-   reservas de **su** agencia (canal `OTA_API`). Una reserva de otra agencia o directa responde como
-   inexistente para la OTA.
+1. **Quién cancela qué**: la Recepcionista, solo reservas `DIRECT` (canal `RECEPTION`); Booking, solo sus
+   reservas, cuando llega su cancelación por el feed (canal `OTA_API`).
 2. **Estado**: solo `ACTIVE` o `PENDING`. Una reserva con varias habitaciones donde una ya tuvo Check-In
    está `IN_PROGRESS` y **no se puede cancelar**; las que no lleguen quedan `NOT_ARRIVED` en el cierre del
    día.
 3. **Orden de las verificaciones** (la primera que falla responde):
-   1. Autenticación y rol; referencia con formato válido.
+   1. Referencia con formato válido.
    2. La reserva existe y es del canal que corresponde.
    3. Para la Recepcionista, `acknowledged: true`.
    4. **`updatedAt`** coincide (si viene). Va **antes** del estado para que la segunda de dos cancelaciones
@@ -156,7 +162,10 @@ siempre `{ "errorCode", "message", "timestamp", "path" }`. **Nunca 500.**
 7. **Sin efectos financieros**: ni penalidad, ni llamada al Módulo 3, ni cambio de `commissionAmount` ni de
    `commissionStatus` de una reserva de OTA (`register-ota-information-commission`, FR-007).
 8. **Sin órdenes al Módulo 1**: las habitaciones no se liberan desde aquí.
-9. **`processedBy`**: el identificador del usuario de la Recepcionista (del token) o el de la agencia.
+9. **`processedBy`**: el nombre de la Recepcionista que llega en `X-User` (sin validar), o `Booking.com`
+   en las cancelaciones de Booking.
+10. **Disponibilidad para Channex**: toda cancelación llama a `AriChangeRecorder.record` dentro de la
+    transacción (`configure-ota`).
 
 ## Diagramas de secuencia
 
@@ -172,8 +181,8 @@ sequenceDiagram
     participant DB as PostgreSQL
     participant R as DailyListChangeRecorder
 
-    S->>C: POST /cancellation (JWT)
-    C->>C: Guard de rol, validar la referencia y el cuerpo
+    S->>C: POST /cancellation (X-User)
+    C->>C: Validar la referencia y el cuerpo
     alt referencia vacía o inválida
         C-->>S: 400 RESERVATION_REF_REQUIRED o INVALID_RESERVATION_CODE
     end
@@ -260,7 +269,7 @@ ACTIVE | PENDING --cancelar (Recepcionista o OTA)--> CANCELLED      (estado fina
 
 | Módulo | Dirección | Mecanismo | Contrato | Fallo |
 |---|---|---|---|---|
-| OTA | OTA → M2 | REST `POST /api/ota/reservations/{reservationRef}/cancellation` | B | Respuesta 4xx estructurada |
+| Booking (por Channex) | Channex → `generate-ota-reservation` → este caso de uso | Llamada interna `CancelReservation` | B | La revisión no se confirma y se reintenta |
 | Módulo 1 | M2 → M1 | Lista del día (vía `DailyListChangeRecorder`) | Plan de `check-view-reservation` | Mensaje `PENDING` con reintento en orden; **la cancelación no se revierte** |
 
 - **No hay llamadas síncronas** a otros módulos: ni al Módulo 1 ni al Módulo 3 (FR-006).
@@ -316,8 +325,8 @@ canal y `REMOVED`); una con llegada futura (sin aviso); y los intentos sobre `IN
 - [ ] T005 [US1] `CancelReservation`: localizar con bloqueo, validar canal, confirmación, `updatedAt` y estado, en ese orden
 - [ ] T006 [US1] Transición a `CANCELLED` con `ReservationStatusService`, liberación de `blocks_inventory` e inserción de la `Cancellation` en una sola transacción
 - [ ] T007 [US1] Llamada a `DailyListChangeRecorder` dentro de la transacción (`REMOVED` solo si estaba en la lista)
-- [ ] T008 [US1] `POST /api/reservations/{reservationRef}/cancellation` (A) con el guard de rol
-- [ ] T009 [US1] `POST /api/ota/reservations/{reservationRef}/cancellation` (B) con el filtro por agencia y `TouchOtaSync`
+- [ ] T008 [US1] `POST /api/reservations/{reservationRef}/cancellation` (A), con `X-User` como `processedBy`
+- [ ] T009 [US1] Canal B de `CancelReservation` (sin `acknowledged` ni `updatedAt`, repetición sin error) y llamada a `AriChangeRecorder`
 - [ ] T010 [US1] Prueba de que no se modifica ningún campo de comisión ni se llama al Módulo 3
 - [ ] T011 [US1] Pruebas de integración de los escenarios 1 a 6
 - [ ] T012 [US1] Pruebas de los casos borde: referencia vacía, fallo de publicación, dos cancelaciones simultáneas y reserva con un Check-In
@@ -333,7 +342,7 @@ canal y `REMOVED`); una con llegada futura (sin aviso); y los intentos sobre `IN
 | Historia | Escenario | Qué se verifica |
 |---|---|---|
 | US1 | 1 Recepcionista, llegada hoy | `CANCELLED`, una `Cancellation` con canal `RECEPTION` y aviso `REMOVED` con motivo `CANCELLED` |
-| US1 | 2 OTA por su API | `ACTIVE` o `PENDING` con llegada hoy: `200`, `CANCELLED`, canal `OTA_API` y `REMOVED` solo si estaba en la lista (una `PENDING` no estaba) |
+| US1 | 2 cancelación de Booking | `ACTIVE` con llegada hoy: `CANCELLED`, canal `OTA_API`, `processedBy` `Booking.com` y `REMOVED` si estaba en la lista; repetirla no cambia nada |
 | US1 | 3 llegada futura | `CANCELLED` y `Cancellation`, sin ningún aviso al Módulo 1 |
 | US1 | 4 estado no cancelable | `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`: `400` `STATUS_NOT_CANCELLABLE`, sin aviso |
 | US1 | 5 varias habitaciones | Una sola `Cancellation` y un solo `REMOVED` para toda la reserva |
@@ -351,7 +360,8 @@ canal y `REMOVED`); una con llegada futura (sin aviso); y los intentos sobre `IN
 
 - **Depende de**: `check-view-reservation` (`ReservationLookup` y `DailyListChangeRecorder`),
   `update-reservation` (`ReservationStatusService`), `register-ota-information-commission`
-  (`TouchOtaSync` y la regla de no tocar la comisión), y la tabla `cancellation` del plan base.
+  (la regla de no tocar la comisión), `configure-ota` (`AriChangeRecorder`), y la tabla `cancellation` del
+  plan base.
 - **Necesitan de este caso de uso**: ninguno.
 - **Orden**: T001–T004 → US1 (T005–T013) → Polish.
 
@@ -372,15 +382,15 @@ canal y `REMOVED`); una con llegada futura (sin aviso); y los intentos sobre `IN
 
 ## Puntos que este plan propone (el spec no los dice)
 
-1. **Ruta de cancelación de la OTA**: `POST /api/ota/reservations/{reservationRef}/cancellation`, en la
-   familia de rutas de `generate-ota-reservation`. El plan base la deja al caso de uso futuro "Configurar
-   OTA", pero el spec exige la operación.
+1. **Un solo servicio para los dos canales** (`CancelReservation`): la Recepcionista por REST y Booking por
+   llamada interna desde `generate-ota-reservation`.
 2. **`acknowledged` en el cuerpo**: el spec exige la casilla en la pantalla; este plan la exige también en
    el servidor, para que la API no se pueda saltar.
-3. **`updatedAt` obligatorio para la Recepcionista y opcional para la OTA.**
+3. **`updatedAt` obligatorio para la Recepcionista; Booking no lo usa** (el orden lo da el feed).
 4. **Orden de verificaciones** con `updatedAt` antes del estado, para dar el mensaje de concurrencia del spec.
 5. **`reason` opcional**, de máximo 500 caracteres.
-6. **Una reserva ajena responde como inexistente para la OTA** (no se revela su existencia).
+6. **La cancelación de Booking se busca por su código** (`externalConfirmationCode`), en
+   `generate-ota-reservation`.
 7. **`status_reason`**: `CANCELLED_BY_RECEPTION` y `CANCELLED_BY_OTA`.
 8. **Códigos y mensajes** que el spec no da: `OTA_RESERVATION_CANCEL_VIA_API`, `STATUS_NOT_CANCELLABLE`,
    `CANCELLATION_NOT_CONFIRMED`, `REASON_TOO_LONG` e `INVALID_RESERVATION_CODE`.
@@ -389,11 +399,8 @@ canal y `REMOVED`); una con llegada futura (sin aviso); y los intentos sobre `IN
 
 | # | Pendiente | Con quién |
 |---|---|---|
-| 1 | **Reintento de la OTA**: si la OTA repite una cancelación que ya se aplicó, recibe `400` (la reserva ya está `CANCELLED`). Una OTA que no recibió la respuesta puede creer que falló. Conviene devolver `200` si la cancelación fue de la misma agencia | Equipo del Módulo 2 y las OTA |
-| 2 | **Mensaje de `CONCURRENT_UPDATE` distinto** entre este spec ("Esta reserva ya fue actualizada o cancelada recientemente") y `update-reservation` ("...modificada por otra persona. Recargue..."). Cada plan respeta el literal de su spec con el mismo `errorCode` | Equipo del Módulo 2 |
-| 3 | La OTA **cancela por la misma API desde la que envía sus reservas**; las rutas definitivas dependerán de "Configurar OTA" | Equipo del Módulo 2 |
-| 4 | Una reserva de OTA en `PENDING` con llegada hoy no está en la lista del día, así que su cancelación no genera aviso. Confirmar que es lo esperado | Módulo 1 |
-| 5 | El spec salta de SC-002 a SC-004 (falta SC-003) | Equipo del Módulo 2 |
+| 1 | **Mensaje de `CONCURRENT_UPDATE` distinto** entre este spec ("Esta reserva ya fue actualizada o cancelada recientemente") y `update-reservation` ("...modificada por otra persona. Recargue..."). Cada plan respeta el literal de su spec con el mismo `errorCode` | Equipo del Módulo 2 |
+| 2 | El spec salta de SC-002 a SC-004 (falta SC-003) | Equipo del Módulo 2 |
 
 ## Notes
 
