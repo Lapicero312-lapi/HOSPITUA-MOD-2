@@ -219,6 +219,7 @@ esperar al Módulo 1** (FR-007).
 | `ConsultRoomInventory` | `consult-room-inventory` | `maxCapacity` de cada habitación asignada (viene en `Room`) |
 | `ReservationStatusService` | `update-reservation` | Estado inicial `ACTIVE` y `stayStatus` `EXPECTED` |
 | `DailyListChangeRecorder.record` | `check-view-reservation` | Aviso `ADDED` de la lista del día |
+| `AriChangeRecorder.record` | `configure-ota` | Disponibilidad ocupada para Channex |
 | `Clock` | Plan base | Día operativo en curso |
 | `GuestRepository.findLatestByDocument` | Plan base (persistencia de `guest`) | Precarga del titular (E) |
 
@@ -480,7 +481,7 @@ y por caída del Módulo 3.
 - [ ] T007 [US1] `PreviewDirectReservation` y `POST /api/reservations/direct/preview` (A): validaciones, disponibilidad, asignación, capacidad y cotización
 - [ ] T008 [US1] `CreateDirectReservation` y `POST /api/reservations/direct` (B): `verifyQuotes`, transacción, `201` y `Location`
 - [ ] T009 [US1] Reintento de asignación ante el rechazo por solape y `NO_AVAILABILITY` cuando no hay otra habitación
-- [ ] T010 [US1] Llamada a `DailyListChangeRecorder` dentro de la transacción (`ADDED` solo con llegada hoy y lista ya enviada)
+- [ ] T010 [US1] Llamadas a `DailyListChangeRecorder` (`ADDED` solo con llegada hoy y lista ya enviada) y a `AriChangeRecorder` (categorías y fechas) dentro de la transacción
 - [ ] T011 [US1] Pruebas de integración de los escenarios 1 a 7 y 9
 - [ ] T012 [US1] Pruebas de todos los casos borde (fechas, habitaciones, personas, `notes`, Módulo 3 parcial, concurrencia)
 - [ ] T013 [US1] Prueba de concurrencia: dos solicitudes simultáneas por la última habitación; solo una se crea
