@@ -131,8 +131,7 @@ interface SelectForeignMovements {
 
 ### C. REST del Módulo 2: vista de huéspedes alojados
 
-Roles: solo `RECEPTIONIST`. La `OTA`, el Módulo 1 y el Módulo 3 reciben **403** (escenario 9 de la
-historia 3). Sin token, 401.
+Pantalla de la Recepcionista. Sin seguridad (regla transversal 10 del plan base).
 
 **C1. `GET /api/guest-stays`**
 
@@ -310,15 +309,10 @@ sequenceDiagram
 sequenceDiagram
     actor R as Recepcionista
     participant C as GuestStaysController
-    participant G as Guard de rol
     participant U as ListGuestStays
     participant DB as PostgreSQL
 
     R->>C: GET /api/guest-stays?nationality=...&presence=...&search=...&page=...
-    C->>G: ¿rol RECEPTIONIST?
-    alt otro rol (OTA, Módulo 1, Módulo 3)
-        G-->>R: 403 FORBIDDEN
-    end
     C->>C: Validar filtros (enumerados, fechas, un año, nombre de 3 letras)
     alt filtro inválido
         C-->>R: 400 con el mensaje del filtro, sin consultar
@@ -408,8 +402,6 @@ Todo error sale con `{ "errorCode", "message", "timestamp", "path" }` y **siempr
 
 | Situación | HTTP | `errorCode` |
 |---|---|---|
-| Sin token o token inválido | 401 | `UNAUTHENTICATED` |
-| Rol distinto de `RECEPTIONIST` (OTA, Módulo 1, Módulo 3) | 403 | `FORBIDDEN` |
 | Filtros inválidos | 400 | Los de la tabla de C1 |
 | Huésped o reserva inexistente | 400 | `GUEST_NOT_FOUND` |
 | Excepción inesperada | 400 | `REQUEST_NOT_PROCESSED` |
@@ -494,8 +486,8 @@ frontend/src/pages/guest-stays/              # vista de huéspedes alojados y su
 
 - [ ] T015 [US3] `ListGuestStays` y `GET /api/guest-stays` (C1): filtros, búsqueda, orden, paginación y mensaje vacío
 - [ ] T016 [US3] `GetGuestStayDetail` y C2, con el enlace a la reserva
-- [ ] T017 [US3] Guard de rol (403 para otros actores) y validadores de filtros
-- [ ] T018 [US3] Pruebas de los escenarios 1 a 9
+- [ ] T017 [US3] Validadores de filtros
+- [ ] T018 [US3] Pruebas de los escenarios 1 a 8
 - [ ] T019 [P] [US3] Frontend: vista de huéspedes alojados y su detalle (pantalla de referencia en el wireframe)
 
 ## Phase N: Polish
@@ -522,13 +514,12 @@ frontend/src/pages/guest-stays/              # vista de huéspedes alojados y su
 | US3 | 6 detalle | Todos los datos, vacíos como `null`, enlace a la reserva y movimientos |
 | US3 | 7 sin resultados | `200`, lista vacía y el mensaje del spec |
 | US3 | 8 filtros inválidos | Un caso por fila de la tabla de errores de C1, sin consultar |
-| US3 | 9 otros actores | OTA, Módulo 1 y Módulo 3: `403` |
 | FR-016 | Reservas sin Check-In | `CANCELLED`, `NO_SHOW`, `PENDING` y `ACTIVE` sin ingreso: sus huéspedes no aparecen |
 | NFR-001, NFR-003 | Tiempo | 10 huéspedes en menos de 500 ms; una página con 50 000 movimientos en menos de 1 s |
 
 ## Dependencies & Execution Order
 
-- **Depende de**: el plan base (esquema de `guest_data` y `migratory_movement`, mensajería, roles).
+- **Depende de**: el plan base (esquema de `guest_data` y `migratory_movement`, mensajería).
 - **Se integra con**: `update-reservation` (consumidor de las colas, que llama a `RegisterGuestMovements`)
   y `export-sire-file` (consume `SelectForeignMovements`). Los tres deben acordar la transacción única.
 - **Orden**: T001–T005 → US1 (T006–T011) → US2 (T012–T014) → US3 (T015–T019) → Polish. Va antes de
@@ -546,7 +537,7 @@ frontend/src/pages/guest-stays/              # vista de huéspedes alojados y su
 | FR-006 | Conservar el Check-In o Check-Out | T008, T011 |
 | FR-007 | Procesar cada huésped por separado (omisión individual) | T006 |
 | FR-008 | `SelectForeignMovements` | T012 |
-| FR-009, FR-015 | Vista solo de lectura y guard de rol | T015, T017 |
+| FR-009, FR-015 | Vista solo de lectura | T015, T017 |
 | FR-010 | Validación y saneo del payload | T003, T008 |
 | FR-011, FR-012, FR-013 | `ListGuestStays`, C1, filtros y paginación | T015 |
 | FR-014 | `GetGuestStayDetail`, C2 | T016 |

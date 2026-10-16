@@ -70,8 +70,9 @@ Lo propio de este caso de uso:
 
 ## Contratos
 
-Rol `RECEPTIONIST` en las tres rutas. **Cabeceras**: `Authorization: Bearer <JWT>`. Sin token, `401`; con
-otro rol (OTA, Módulo 1 o Módulo 3), `403`.
+Pantalla de la Recepcionista en las tres rutas. **Cabeceras**: `X-User` (nombre de la Recepcionista del
+login simulado; se guarda tal cual en `processed_by` y sirve para el límite de solicitudes). Sin seguridad
+(regla transversal 10 del plan base).
 
 ### A. Exportar: `POST /api/sire/exports`
 
@@ -186,7 +187,6 @@ Access-Control-Expose-Headers: Export-Id, Content-Disposition
 | 400 | `MOVEMENT_NOT_FOUND` | El `movementId` no existe, es de un colombiano o tiene formato inválido | "El movimiento no existe." |
 | 400 | `INVALID_PAGE` | `page` menor que 1 | "El número de página debe ser 1 o mayor." |
 | **429** | `TOO_MANY_REQUESTS` | Se superó el límite de solicitudes de exportación | "Se superó el límite de solicitudes de exportación. Intente de nuevo en unos segundos." |
-| 401, 403 | `UNAUTHENTICATED`, `FORBIDDEN` | Sin token, o rol distinto de `RECEPTIONIST` | Genérico |
 
 El cuerpo es siempre `{ "errorCode", "message", "timestamp", "path" }`; en 429 se agrega la cabecera
 `Retry-After`. **Nunca 500**: una excepción inesperada sale como 400 `REQUEST_NOT_PROCESSED`.
@@ -234,10 +234,10 @@ Doce campos, en este orden, separados por `SIRE_FIELD_SEPARATOR`:
    a mitad (por ejemplo, un carácter que no se puede codificar), **no queda `SireExport`** y la respuesta es
    400.
 8. **Registro** (FR-007): la `SireExport` se inserta con `exportDate`, `exportKind`, `recordsCount`, las
-   fechas del periodo (solo en `PERIOD`) y `processedBy` (el usuario de la Recepcionista). La descarga
+   fechas del periodo (solo en `PERIOD`) y `processedBy` (el nombre de la Recepcionista que llega en `X-User`). La descarga
    individual tiene `recordsCount = 1` y no lleva fechas.
 9. **Sin envío a Migración**: el sistema entrega el archivo y nada más.
-10. **Límite de solicitudes**: un limitador por usuario y de concurrencia evita agotar la memoria con
+10. **Límite de solicitudes**: un limitador por `X-User` y de concurrencia evita agotar la memoria con
     exportaciones repetidas o simultáneas.
 
 ## Diagramas de secuencia
@@ -255,7 +255,6 @@ sequenceDiagram
     participant DB as PostgreSQL
 
     R->>C: POST /api/sire/exports (PERIOD, startDate, endDate)
-    C->>C: Guard RECEPTIONIST
     C->>L: ¿dentro del límite?
     alt se superó el límite
         L-->>R: 429 TOO_MANY_REQUESTS con Retry-After
@@ -294,7 +293,7 @@ sequenceDiagram
     participant DB as PostgreSQL
 
     R->>C: GET /api/sire/movements/{movementId}/preview  o  POST /api/sire/exports (SINGLE_MOVEMENT)
-    C->>C: Guard RECEPTIONIST y validar movementId
+    C->>C: Validar movementId
     C->>U: execute(movementId)
     U->>S: byMovementId(movementId)
     alt no existe o es de un colombiano
@@ -320,7 +319,7 @@ sequenceDiagram
     participant S as SelectForeignMovements
 
     R->>C: GET /api/sire/movements?startDate=...&endDate=...&page=...
-    C->>C: Guard RECEPTIONIST y validar el periodo y la página
+    C->>C: Validar el periodo y la página
     alt parámetro inválido
         C-->>R: 400 con el mensaje correspondiente
     end
@@ -387,7 +386,7 @@ opera sobre datos locales. Solo usa el puerto interno `SelectForeignMovements` d
 | `application/use-cases/export-sire-file/` | **Entrada**: `ExportSireFile`, `ListSireMovements`, `PreviewSireMovement`; validador del periodo |
 | `application/ports/out/` | `SireExportRepository`, `SelectForeignMovements` (de `process-guest-data`), `SireConfig` y `Clock` |
 | `infrastructure/in/rest/` | `SireController` |
-| `infrastructure/in/security/` | `SireRateLimiter` (por usuario y de concurrencia) |
+| `infrastructure/in/rest/` (limitador) | `SireRateLimiter` (por `X-User` y de concurrencia) |
 | `infrastructure/out/persistence/` | `SireExportRepository` |
 | `infrastructure/config/` | `sire.config.ts` (las variables `SIRE_*`) |
 
@@ -404,7 +403,7 @@ backend/src/
 │   └── sire-period.validator.ts
 ├── infrastructure/
 │   ├── in/rest/sire.controller.ts
-│   ├── in/security/sire-rate-limiter.ts
+│   ├── in/rest/sire-rate-limiter.ts
 │   ├── out/persistence/sire-export.repository.ts
 │   └── config/sire.config.ts
 backend/test/
@@ -423,7 +422,7 @@ frontend/src/pages/sire/                 # pantalla "Exportar SIRE"
 - [ ] T002 [P] `formatSireLine`: los 12 campos en orden, `E` y `S`, mayúsculas en nombres, fechas con el formato configurado, vacíos para los nulos, y detección de caracteres no codificables o que contienen el separador (con pruebas unitarias de cada campo)
 - [ ] T003 [P] Validador del periodo (obligatorio, fechas reales, orden, máximo un año) con los mensajes literales
 - [ ] T004 `SireExportRepository` (solo inserción y lectura)
-- [ ] T005 `SireRateLimiter` (por usuario y concurrencia) y su respuesta `429` con `Retry-After`
+- [ ] T005 `SireRateLimiter` (por `X-User` y concurrencia) y su respuesta `429` con `Retry-After`
 - [ ] T006 Códigos de error y mensajes de la tabla D
 
 ## Phase 3: User Story 1 - Generación y exportación de SIRE (P2)
@@ -434,7 +433,7 @@ solo movimiento.
 12 campos, una segunda exportación del mismo periodo y un periodo sin extranjeros.
 
 - [ ] T007 [US1] `ExportSireFile` para `PERIOD`: seleccionar, formatear todo en memoria, insertar `SireExport` y entregar el archivo con `Export-Id`
-- [ ] T008 [US1] `POST /api/sire/exports` (A) con el guard de rol, la cabecera `Content-Disposition` y la exposición de las cabeceras
+- [ ] T008 [US1] `POST /api/sire/exports` (A) con `X-User` como `processedBy`, la cabecera `Content-Disposition` y la exposición de las cabeceras
 - [ ] T009 [US1] Descarga individual (`SINGLE_MOVEMENT`) con su propia `SireExport` de un registro
 - [ ] T010 [US1] `ListSireMovements` y `GET /api/sire/movements` (B) con paginación
 - [ ] T011 [US1] `PreviewSireMovement` y `GET /api/sire/movements/{movementId}/preview` (C), sin registrar nada
@@ -469,13 +468,13 @@ solo movimiento.
 | Casos borde | Mismo huésped, entrada y salida | Dos líneas con sus fechas |
 | FR-005 | Formato | `E` y `S`, mayúsculas en nombres y apellidos, vacío para procedencia o destino nulos, fechas con el formato configurado |
 | FR-008 | Respuesta | Solo el archivo y la cabecera `Export-Id`; sin advertencias mezcladas |
-| NFR-002 | Acceso | OTA, Módulo 1 y Módulo 3: `403`; y ningún log con datos personales |
+| NFR-002 | Registro | Cada descarga queda en `sire_export` con el `X-User`; ningún log con datos personales |
 | NFR-001 | Tiempo | 500 movimientos en menos de 2 s |
 
 ## Dependencies & Execution Order
 
 - **Depende de**: `process-guest-data` (`SelectForeignMovements` y los datos de `guest_data` y
-  `migratory_movement`), la tabla `sire_export` y los roles del plan base.
+  `migratory_movement`), la tabla `sire_export` y las cabeceras del plan base.
 - **Necesitan de este caso de uso**: ninguno.
 - **Orden**: T001–T006 → US1 (T007–T015) → Polish. Es el **último** del orden recomendado del plan base.
 
@@ -483,7 +482,7 @@ solo movimiento.
 
 | Requisito | Componente | Tarea |
 |---|---|---|
-| FR-001 | Guard `RECEPTIONIST` y ninguna llamada a Migración | T008 |
+| FR-001 | Ruta de la pantalla de la Recepcionista y ninguna llamada a Migración | T008 |
 | FR-002 | Validador del periodo y filtro por `movementDate` | T003, T007 |
 | FR-003, FR-004 | `SelectForeignMovements` (todos los huéspedes extranjeros) | T007 |
 | FR-005 | `formatSireLine` y la configuración `SIRE_*` | T001, T002, T014 |
@@ -493,7 +492,7 @@ solo movimiento.
 | FR-009 | Mapeo a 400 y límite de solicitudes (429) | T005, T006, T013 |
 | FR-010 | Listado, vista previa y descarga individual | T009, T010, T011 |
 | NFR-001 | Prueba de tiempo | T016 |
-| NFR-002 | Rol exclusivo y logs sin datos personales | T008, T017 |
+| NFR-002 | Registro en `sire_export` y logs sin datos personales | T008, T017 |
 | SC-001 a SC-003 | Pruebas por escenario | T012, T013, T014 |
 
 ## Puntos que este plan propone (el spec no los dice)
@@ -506,7 +505,7 @@ solo movimiento.
 4. **Configuración `SIRE_*`**: valores por defecto (tabulador, `dd/MM/yyyy`, `CRLF`, `utf-8`) mientras no se
    confirme el manual de cargue de SIRE.
 5. **Tope de `SIRE_MAX_RECORDS` líneas** por archivo, para no agotar la memoria.
-6. **Límite de solicitudes propio**, en memoria por instancia: 10 por minuto por usuario y 3 simultáneas.
+6. **Límite de solicitudes propio**, en memoria por instancia: 10 por minuto por `X-User` y 3 simultáneas.
 7. **Rechazar (400) un dato que contenga el separador o un salto de línea**, porque rompería el formato
    de la línea.
 8. **Nombres y apellidos en mayúsculas** en el archivo (como las demás entidades de SIRE), aunque el spec

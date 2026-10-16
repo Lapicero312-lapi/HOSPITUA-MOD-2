@@ -556,8 +556,8 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
 
 - **FR-010**: El sistema debe responder 200 con una lista vacía, y no un error, cuando los filtros
   son válidos pero ninguna reserva los cumple.
-- **FR-011**: El sistema debe restringir la vista y la búsqueda a la Recepcionista y a los procesos
-  internos del Módulo 2. Ni la Ota ni el Módulo 1 tienen acceso a la vista ni a la búsqueda.
+- **FR-011**: La vista y la búsqueda son de la Recepcionista y de los procesos internos del Módulo 2;
+  ni la Ota ni el Módulo 1 las usan. El Módulo 2 no implementa seguridad: es una capa aparte.
 - **FR-012**: El sistema debe ejecutar, una vez por día operativo, a las 00:00 de Colombia (UTC-5),
   un proceso automático que envíe al Módulo 1 la lista de las
   `Reservation` con `startDate` igual al día operativo y `status` `ACTIVE`.
@@ -597,8 +597,7 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
   los reintentos, registrar una alerta para revisión humana.
 - **FR-021**: El envío al Módulo 1 no debe cambiar el `status` de ninguna reserva ni el estado de
   ninguna `Room`.
-- **FR-023**: El sistema debe permitir que el Módulo 1 consulte, con una credencial de servicio (actor
-  `Modulo1`), las reservas cuya estadía se cruza con un rango de fechas, con fecha de inicio (`dateFrom`) y fecha
+- **FR-023**: El sistema debe permitir que el Módulo 1 consulte las reservas cuya estadía se cruza con un rango de fechas, con fecha de inicio (`dateFrom`) y fecha
   de fin (`dateTo`) obligatorias, ambas con formato `AAAA-MM-DD` y la misma regla de cruce de FR-003, y,
   opcionalmente, las de una habitación (`roomId`), para que verifique un mantenimiento al registrarlo o dé
   de baja una habitación (las fechas son las de inicio y fin del mantenimiento o de la baja). Solo devuelve reservas vigentes
@@ -607,7 +606,7 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
   huésped. El Módulo 2 solo informa: no decide qué hacer con la reserva ni modifica nada, esa lógica
   la aplica el Módulo 1. Es de solo lectura.
 - **FR-022**: El sistema debe permitir que el Módulo 3 consulte una reserva por su `reservationRef`
-  con una credencial de servicio (actor `Modulo3`), para que genere la liquidación en el Check-Out. La
+  para que genere la liquidación en el Check-Out. La
   respuesta lleva `reservationRef`, `channel` (`DIRECT` | `OTA`) y `quoteIds`, la lista con el
   `quoteId` de cada `ReservationRoom` (una cotización por habitación; la lista va vacía en las
   reservas `OTA`, que no tienen cotización). Solo si el canal es `OTA`, también lleva `otaId` (el `id`

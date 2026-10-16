@@ -28,7 +28,7 @@ describe lo propio.
 - **Framework backend**: NestJS
 - **Primary Dependencies**: `@nestjs/config`, `@nestjs/typeorm` + `typeorm` + `pg`, `class-validator`,
   `class-transformer`, `@golevelup/nestjs-rabbitmq`, `@nestjs/schedule`, `@nestjs/axios`,
-  `@nestjs/passport` + `@nestjs/jwt`, `@nestjs/swagger`, `nestjs-pino`, `decimal.js`, `luxon`
+  `@nestjs/swagger`, `nestjs-pino`, `decimal.js`, `luxon`
 - **Storage**: PostgreSQL
 - **Messaging**: RabbitMQ
 - **Architecture**: hexagonal (puertos y adaptadores), con un solo dominio general (`src/domain/`)
@@ -64,7 +64,7 @@ describe lo propio.
 | Control de concurrencia | Comparación de `updatedAt` (`@UpdateDateColumn` de TypeORM, con precisión de microsegundos) al guardar | Edición y cancelación simultáneas (`CONCURRENT_UPDATE`) |
 | Dinero | `decimal.js`, columnas `numeric(14,2)`, redondeo `ROUND_HALF_UP`; **nunca `number`** | Comisión exacta |
 | Fechas | Fechas puras `AAAA-MM-DD` (texto `date` en la base) y `luxon` para el día operativo en `America/Bogota` | Evita corrimientos por zona horaria. Se guardan e intercambian como `AAAA-MM-DD`; las pantallas las muestran como `dd/mm/aaaa` |
-| Autenticación y autorización | Passport + JWT y guards por rol | Las specs exigen interfaces seguras y que cada Ota vea solo sus reservas |
+| Seguridad | **No se implementa en el Módulo 2**: es una capa aparte del sistema de microservicios. El frontend simula el login. Quién llama se indica con la cabecera `X-Client` (`RECEPTIONIST`, `MODULE1`, `MODULE3`) y quién hizo la acción con `X-User`; ninguna se valida | Ver la regla transversal 10 |
 | Tareas programadas | `@nestjs/schedule` con `timeZone: 'America/Bogota'` | Envío de la lista del día (00:00), cierre del día (23:59) y reintento de avisos pendientes |
 | Exclusión mutua de tareas con varias instancias | Bloqueo asesor de PostgreSQL (C10) | Evitar que dos instancias ejecuten el mismo cierre del día |
 | Timeouts y reintentos REST | `@nestjs/axios` con timeout; `cockatiel` si se necesitan reintentos o corte de circuito | No asumir disponibilidad ante caídas |
@@ -311,9 +311,9 @@ El contenido exacto de cada mensaje está en el plan de su caso de uso:
 
 | Recurso | Quién lo consume | Caso de uso |
 |---|---|---|
-| `GET /api/reservations` con paginación de 10, filtros (`search` por código, documento o nombre; `status`; `source`; `otaId`; rango de estadía `dateFrom` y `dateTo`) y `order` por `startDate`. Con rol `MODULE1` es la consulta por fechas de FR-023 | Recepcionista, procesos internos; Módulo 1 | `check-view-reservation` |
+| `GET /api/reservations` con paginación de 10, filtros (`search` por código, documento o nombre; `status`; `source`; `otaId`; rango de estadía `dateFrom` y `dateTo`) y `order` por `startDate`. Con `X-Client: MODULE1` es la consulta por fechas de FR-023 | Recepcionista, procesos internos; Módulo 1 | `check-view-reservation` |
 | `GET /api/reservations/day-summary` (llegadas y salidas esperadas hoy) | Recepcionista | `check-view-reservation` |
-| `GET /api/reservations/{reservationRef}` (detalle) | Recepcionista; Módulo 3 con credencial de servicio (devuelve `quoteIds`, canal y, solo si es OTA, `otaId`, `otaConfirmationCode` y `otaCommissionPercentage`; 404 si no existe) | `check-view-reservation` |
+| `GET /api/reservations/{reservationRef}` (detalle) | Recepcionista; Módulo 3 con `X-Client: MODULE3` (devuelve `quoteIds`, canal y, solo si es OTA, `otaId`, `otaConfirmationCode` y `otaCommissionPercentage`; 404 si no existe) | `check-view-reservation` |
 | `POST /api/reservations/direct/preview` y `POST /api/reservations/direct` (canal directo) | Recepcionista | `generate-direct-reservation` |
 | `POST /api/reservations/{reservationRef}/modification-preview` y `PATCH /api/reservations/{reservationRef}` | Recepcionista (solo directas); la OTA modifica las suyas por su canal | `update-reservation` |
 | `POST /api/reservations/{reservationRef}/cancellation` | Recepcionista (solo directas); la OTA cancela las suyas por su canal | `cancel-reservation` |
@@ -416,7 +416,6 @@ backend/
     │   │   ├── messaging/        # publicadores RabbitMQ, idempotencia (processed_message)
     │   │   └── clock/            # reloj del hotel (America/Bogota)
     │   ├── config/               # configuración por entorno (@nestjs/config), RabbitMQ, TypeORM
-    │   ├── security/             # JWT, guards y roles
     │   └── shared/               # ApiError, filtro global de excepciones, correlación de logs
     └── migrations/               # migraciones SQL de TypeORM
 test/
@@ -855,6 +854,14 @@ Se inserta en la misma transacción que el cambio que produce el mensaje.
    en PascalCase (`Available`, `Reserved`, `Occupied`, ...).
 9. **OTA solo lectura.** Las reservas de canal OTA solo las cambian o cancelan la propia OTA (canal
    `OTA_API`); la Recepcionista no puede. Cancelar una reserva OTA no toca la comisión.
+10. **Sin seguridad.** El Módulo 2 no implementa autenticación ni autorización: es una capa aparte del
+    sistema de microservicios. El frontend **simula** el login y guarda el nombre de la Recepcionista.
+    - `X-Client` dice quién llama (`RECEPTIONIST`, `MODULE1` o `MODULE3`) cuando una misma ruta responde
+      distinto según el llamador. Sin esa cabecera, o con otro valor, se responde 400.
+    - `X-User` trae el nombre de quien hizo la acción y se guarda tal cual en `processed_by` o
+      `performed_by`.
+    - Ninguna de las dos se valida. Cómo se identifica cada OTA lo define el caso de uso futuro
+      "Configurar OTA".
 
 ### Decisiones de diseño tomadas al escribir los planes de caso de uso
 
@@ -912,7 +919,7 @@ Se inserta en la misma transacción que el cambio que produce el mensaje.
 - [ ] T014 Crear `processed_message` y la idempotencia por `messageId` en `messaging/`
 - [ ] T015 Configurar la infraestructura de pruebas (Jest, supertest y Testcontainers de PostgreSQL y RabbitMQ)
 - [ ] T016 [P] Esqueleto del frontend: enrutamiento, cliente HTTP, TanStack Query y manejo de errores de API
-- [ ] T017 Configurar autenticación y autorización (Passport + JWT, guards) con los roles `RECEPTIONIST`, `OTA`, `MODULE1` y `MODULE3` (los dos últimos, de servicio a servicio)
+- [ ] T017 Lectura de las cabeceras `X-Client` y `X-User` (sin validar quién llama) y login simulado en el frontend
 - [ ] T018 Configurar logs (`nestjs-pino`) y correlación de solicitudes
 - [ ] T019 Configurar el bloqueo asesor de PostgreSQL y el planificador (`@nestjs/schedule`, `America/Bogota`) para las tareas programadas
 - [ ] T020 Configurar OpenAPI (`@nestjs/swagger`) y la verificación de dependencias entre capas en CI

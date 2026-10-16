@@ -77,7 +77,8 @@ la ruta exacta; este plan propone las siguientes y se confirman con ese equipo.
 - Una categoría sin habitaciones devuelve una lista vacía.
 - Errores del Módulo 1 (los mismos de la consulta de mantenimientos): **404** si la habitación no existe;
   **400** si el `roomId` o la `categoryRoom` tienen formato inválido. Nunca 500.
-- Autenticación de servicio a servicio (JWT de servicio), igual que el resto de integraciones.
+- Sin autenticación de servicio a servicio: la seguridad es una capa aparte (regla transversal 10 del plan
+  base).
 - Los valores de los ejemplos son ilustrativos.
 
 ### B. Puerto de entrada interno (lo usa "Verificar disponibilidades")
@@ -101,7 +102,7 @@ interface ConsultRoomInventory {
 
 ### C. REST del Módulo 2: pantalla "Habitaciones" (FR-006)
 
-**C1. `GET /api/rooms`** (solo rol `RECEPTIONIST`; sin parámetros; sin paginar)
+**C1. `GET /api/rooms`** (pantalla de la Recepcionista; sin parámetros; sin paginar)
 
 **Respuesta 200**
 
@@ -138,7 +139,7 @@ interface ConsultRoomInventory {
 - Sin habitaciones: `200` con `items: []`, `total: 0`.
 - Si el inventario falla: `400` `INVENTORY_UNAVAILABLE`.
 
-**Cabeceras**: `Authorization: Bearer <JWT>`; respuesta `Content-Type: application/json`.
+Respuesta `Content-Type: application/json`.
 
 ## Diagramas de secuencia
 
@@ -210,7 +211,6 @@ sequenceDiagram
     participant M1 as Módulo 1
 
     R->>C: GET /api/rooms
-    C->>C: Guard de rol RECEPTIONIST (si no, 403)
     C->>U: execute()
     U->>I: listAll() (una consulta por categoría, en paralelo)
     I->>M1: GET /api/rooms?categoryRoom=... por cada categoría
@@ -258,8 +258,6 @@ Todo error sale con `{ "errorCode", "message", "timestamp", "path" }` y **siempr
 | El Módulo 1 responde 400 | Módulo 1 | 400 | `INVALID_ROOM_ID` o `INVALID_CATEGORY` (según la consulta) | Los de arriba |
 | Tiempo agotado, error de red o respuesta 5xx del Módulo 1 | Módulo 1 | 400 | `INVENTORY_UNAVAILABLE` | "No se pudo consultar el inventario de habitaciones en este momento. Intente de nuevo." |
 | Respuesta del Módulo 1 con campos faltantes o de tipo incorrecto (por ejemplo, `maxCapacity` no entero o menor que 1) | Módulo 1 | 400 | `INVENTORY_UNAVAILABLE` | El mismo; el detalle va al log |
-| Sin token o con token inválido | Guard | 401 | `UNAUTHENTICATED` | Genérico |
-| Rol distinto de `RECEPTIONIST` en `GET /api/rooms` | Guard | 403 | `FORBIDDEN` | Genérico |
 
 - **Una categoría sin habitaciones no es un error**: devuelve una lista vacía (escenario 3).
 - **Una habitación ocupada hoy se devuelve igual**: es vendible; si está libre en unas fechas lo decide
@@ -338,8 +336,8 @@ fallos del Módulo 1.
 
 - [ ] T010 `ConsultRoomInventory.listAll` (una consulta por categoría, en paralelo) y el origen de la lista de categorías (ver "Puntos abiertos")
 - [ ] T011 `ListRoomsWithMaintenance`: mantenimiento próximo por habitación con `ConsultMaintenanceCalendar`, tope de concurrencia y estado `UNAVAILABLE` por habitación
-- [ ] T012 `GET /api/rooms` (C1) con el guard de rol y el orden por categoría y número
-- [ ] T013 [P] Pruebas de integración de C1: éxito, categoría con falla, calendario con falla, sin habitaciones, rol sin permiso
+- [ ] T012 `GET /api/rooms` (C1) con el orden por categoría y número
+- [ ] T013 [P] Pruebas de integración de C1: éxito, categoría con falla, calendario con falla y sin habitaciones
 - [ ] T014 [P] Frontend: pantalla "Habitaciones" (número, categoría, capacidad y mantenimiento próximo; sin estado)
 
 ## Phase N: Polish
@@ -363,7 +361,7 @@ fallos del Módulo 1.
 
 ## Dependencies & Execution Order
 
-- **Depende de**: el plan base (fase 2: `Module1Port`, configuración, filtro de errores, guards).
+- **Depende de**: el plan base (fase 2: `Module1Port`, configuración, filtro de errores).
 - **Necesitan de este caso de uso**: `check-room-availability` (la usa como insumo) y, para el
   `maxCapacity`, `generate-direct-reservation`, `generate-ota-reservation` y `update-reservation`.
 - **Depende para la pantalla**: `consult-maintenance-calendar` (mantenimiento próximo).
@@ -406,7 +404,7 @@ fallos del Módulo 1.
 |---|---|---|
 | 1 | **Origen de la lista de categorías** para la pantalla (FR-006 dice "una vez por categoría" pero no de dónde sale esa lista). Opciones: un endpoint del Módulo 1 que las liste, o una lista configurada en el Módulo 2 | Módulo 1 |
 | 2 | Forma canónica de `categoryRoom` (por ejemplo `DOBLE`, en mayúsculas y sin tildes) y su patrón de validación | Módulo 1 |
-| 3 | Rutas definitivas del inventario y autenticación de servicio | Módulo 1 |
+| 3 | Rutas definitivas del inventario | Módulo 1 |
 | 4 | Costo de la pantalla: una consulta por categoría más una de mantenimientos por habitación. Si el hotel crece, conviene que el Módulo 1 acepte consultar mantenimientos por categoría (B6 de las decisiones anteriores) | Módulo 1 |
 
 ## Notes

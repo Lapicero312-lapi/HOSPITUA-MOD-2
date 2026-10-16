@@ -92,7 +92,8 @@ Se consulta **una vez por cada habitación candidata** de la categoría pedida.
 - Cada consulta responde en menos de 1 segundo en condiciones normales.
 - Si el Módulo 1 falla o no responde, el Módulo 2 no asume que la habitación está libre: responde un
   error controlado (HTTP 400) a quien consulta.
-- Autenticación de servicio a servicio (JWT de servicio), igual que el resto de integraciones.
+- Sin autenticación de servicio a servicio: la seguridad es una capa aparte (regla transversal 10 del plan
+  base).
 - Los valores de los ejemplos son ilustrativos.
 
 ### B. Puerto de entrada interno
@@ -362,7 +363,7 @@ contiguo, más los fallos del Módulo 1.
 
 | # | Pendiente | Con quién |
 |---|---|---|
-| 1 | Ruta definitiva, autenticación de servicio y confirmar que `maintenanceEnd` es inclusivo | Módulo 1 |
+| 1 | Ruta definitiva y confirmar que `maintenanceEnd` es inclusivo | Módulo 1 |
 | 2 | **Una consulta por habitación** puede ser costosa (una por candidata, y una por habitación en la pantalla). Conviene que el Módulo 1 acepte consultar por categoría o por varias habitaciones | Módulo 1 |
 | 3 | El spec (Key Entities) lista el `reason` del mantenimiento, pero el contrato acordado **no lo trae**. Hay que decidir si se ajusta el spec o se pide el motivo | Equipo del Módulo 2 y Módulo 1 |
 | 4 | El spec lista `status` (`Available`, `Reserved`, `Occupied`) en `Room`, pero `consult-room-inventory` ya dice que el inventario no trae estado. Ajustar el spec cuando se permita | Equipo del Módulo 2 |

@@ -48,8 +48,8 @@ Lo propio de este caso de uso:
 
 ### A. Vista previa: `POST /api/reservations/direct/preview`
 
-Rol `RECEPTIONIST`. **Cabeceras**: `Authorization: Bearer <JWT>`, `Content-Type: application/json`. Sin
-token, 401; con otro rol, 403. **No guarda nada.**
+Pantalla de la Recepcionista. **Cabeceras**: `Content-Type: application/json`. Sin seguridad (regla
+transversal 10 del plan base). **No guarda nada.**
 
 **Solicitud**
 
@@ -121,7 +121,7 @@ token, 401; con otro rol, 403. **No guarda nada.**
 
 ### B. Creación: `POST /api/reservations/direct`
 
-Mismo rol y cabeceras. **Solicitud** = la de la vista previa más el titular, las observaciones y las
+Mismas cabeceras. **Solicitud** = la de la vista previa más el titular, las observaciones y las
 tarifas que el solicitante vio:
 
 ```json
@@ -224,7 +224,7 @@ esperar al Módulo 1** (FR-007).
 
 ### E. Precarga del titular: `GET /api/guests/lookup` (FR-011)
 
-Rol `RECEPTIONIST`. Solo lectura.
+Pantalla de la Recepcionista. Solo lectura.
 
 **Solicitud:** `GET /api/guests/lookup?documentType=CC&documentNumber=123`. Los dos parámetros son
 obligatorios.
@@ -301,7 +301,7 @@ sequenceDiagram
     participant Q as CalculateDynamicRate
 
     R->>C: POST /api/reservations/direct/preview
-    C->>C: Guard RECEPTIONIST y validar el DTO
+    C->>C: Validar el DTO
     C->>U: execute(solicitud)
     U->>U: Validar habitaciones, personas y fechas (día operativo)
     alt dato inválido
@@ -406,8 +406,6 @@ Todo error sale con `{ "errorCode", "message", "timestamp", "path" }` y **siempr
 | Situación | HTTP | `errorCode` |
 |---|---|---|
 | Errores de validación y de integración de la tabla C | 400 | Los de la tabla C |
-| Sin token o token inválido | 401 | `UNAUTHENTICATED` |
-| Rol distinto de `RECEPTIONIST` | 403 | `FORBIDDEN` |
 | Excepción inesperada | 400 | `REQUEST_NOT_PROCESSED` |
 
 - **Todo o nada**: si falla la disponibilidad, la cotización de una sola habitación o el guardado, **no se

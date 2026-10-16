@@ -60,10 +60,11 @@ Lo propio de este caso de uso:
 
 ### A. REST del Módulo 2
 
-Roles: `RECEPTIONIST`, `MODULE3` (servicio a servicio) y `OTA`. **Cabeceras**:
-`Authorization: Bearer <JWT>`, `Content-Type: application/json`. Sin token, 401; con un rol sin permiso, 403.
+Las usan la Recepcionista, el Módulo 3 y la OTA. **Cabeceras**: `Content-Type: application/json`. Sin
+seguridad (regla transversal 10 del plan base): cada ruta la usa un llamador distinto, así que no necesita
+`X-Client`; cómo se identifica la OTA lo define "Configurar OTA".
 
-**A1. `GET /api/ota-commissions`** (solo `MODULE3`): comisiones de las reservas OTA de un periodo.
+**A1. `GET /api/ota-commissions`** (la usa el Módulo 3): comisiones de las reservas OTA de un periodo.
 
 | Parámetro | Tipo | Obligatorio | Regla |
 |---|---|---|---|
@@ -102,7 +103,7 @@ Roles: `RECEPTIONIST`, `MODULE3` (servicio a servicio) y `OTA`. **Cabeceras**:
 - Solo reservas de canal `OTA`. Sin resultados: `200` con `items: []`.
 - Los importes van como **texto decimal**; los porcentajes, de `0.00` a `100.00`.
 
-**A2. `POST /api/ota-commissions/reconciliations`** (solo `MODULE3`): el Módulo 3 le indica al Módulo 2 qué
+**A2. `POST /api/ota-commissions/reconciliations`** (la usa el Módulo 3): el Módulo 3 le indica al Módulo 2 qué
 comisiones pasan a `RECONCILED` o `PAID`.
 
 ```json
@@ -166,8 +167,8 @@ la fecha final."), `DATE_RANGE_TOO_LARGE` ("El rango de fechas no puede superar 
 `INVALID_COMMISSION_STATUS` ("El estado de la comisión no es válido.") e `INVALID_STATUS` ("El estado
 indicado no es válido.").
 
-**A3. Consulta de agencias** (solo lectura): `GET /api/otas` y `GET /api/otas/{otaId}`, para `RECEPTIONIST`
-y `MODULE3`.
+**A3. Consulta de agencias** (solo lectura): `GET /api/otas` y `GET /api/otas/{otaId}`, para la Recepcionista
+y el Módulo 3, con la misma respuesta para los dos.
 
 ```json
 {
@@ -330,7 +331,7 @@ sequenceDiagram
     participant DB as PostgreSQL
 
     M3->>K: POST /api/ota-commissions/reconciliations
-    K->>K: Guard MODULE3 y validar el cuerpo
+    K->>K: Validar el cuerpo
     alt solicitud inválida
         K-->>M3: 400 sin procesar ningún ítem
     end
@@ -362,15 +363,10 @@ sequenceDiagram
 sequenceDiagram
     participant X as Módulo 3 o Recepcionista
     participant C as Controller
-    participant G as Guard de rol
     participant U as Caso de uso de consulta
     participant DB as PostgreSQL
 
     X->>C: GET /api/ota-commissions (Módulo 3) o GET /api/otas (Recepcionista o Módulo 3)
-    C->>G: rol permitido para esa ruta
-    alt rol sin permiso
-        G-->>X: 403
-    end
     C->>C: Validar parámetros
     alt parámetro inválido
         C-->>X: 400 con el mensaje correspondiente
@@ -435,8 +431,6 @@ Todo error REST sale con `{ "errorCode", "message", "timestamp", "path" }` y **s
 | Situación | HTTP | `errorCode` |
 |---|---|---|
 | Errores de las tablas de A1, A2, A3, B1 y B2 | 400 | Los de cada tabla |
-| Sin token o token inválido | 401 | `UNAUTHENTICATED` |
-| Rol sin permiso para la ruta | 403 | `FORBIDDEN` |
 | Excepción inesperada o fallo de integración | 400 | `REQUEST_NOT_PROCESSED` |
 
 - **Un porcentaje inválido o un código duplicado impiden crear la reserva**: el error se lanza antes de
@@ -455,7 +449,7 @@ Todo error REST sale con `{ "errorCode", "message", "timestamp", "path" }` y **s
 | OTA | OTA → M2 | Sus mensajes actualizan `lastSyncAt`; el registro y la conexión llegarán por "Configurar OTA" | B2 y B3 | Idem |
 
 - Este caso de uso **no llama a ningún módulo** de forma síncrona y **no usa colas**.
-- **Autenticación**: el Módulo 3 y la OTA llaman con su credencial (JWT de servicio, plan base).
+- **Sin autenticación**: la seguridad es una capa aparte (regla transversal 10 del plan base).
 
 ## Arquitectura (capas del plan base)
 
@@ -560,7 +554,7 @@ frontend/src/pages/otas/                            # pantalla "Agencias OTA" (s
 
 ## Dependencies & Execution Order
 
-- **Depende de**: el plan base (tablas `ota`, `reservation` y `commission_audit`, roles, `decimal.js`).
+- **Depende de**: el plan base (tablas `ota`, `reservation` y `commission_audit`, `decimal.js`).
 - **Necesitan de este caso de uso**: `generate-ota-reservation` (calcula la comisión al registrar la
   reserva) y `cancel-reservation` (no debe tocar la comisión de una reserva OTA).
 - **Orden**: T001–T005 → US1 (T006–T010) → US2 (T011–T014) → US3 (T015–T019) → Polish. Va **antes de

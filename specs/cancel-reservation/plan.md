@@ -48,8 +48,9 @@ Lo propio de este caso de uso:
 
 ### A. Cancelación por la Recepcionista: `POST /api/reservations/{reservationRef}/cancellation`
 
-Rol `RECEPTIONIST`. **Cabeceras**: `Authorization: Bearer <JWT>`, `Content-Type: application/json`. Sin
-token, 401; con otro rol, 403.
+Pantalla de la Recepcionista. **Cabeceras**: `Content-Type: application/json` y `X-User` (nombre de la
+Recepcionista del login simulado; se guarda tal cual en `processed_by`). Sin seguridad (regla transversal
+10 del plan base).
 
 **Solicitud**
 
@@ -85,7 +86,8 @@ token, 401; con otro rol, 403.
 
 ### B. Cancelación por la OTA: `POST /api/ota/reservations/{reservationRef}/cancellation`
 
-Rol `OTA`. La agencia solo cancela **sus** reservas. **Ruta propuesta**: el plan base deja para el caso de
+La agencia solo cancela **sus** reservas; cómo se identifica la OTA lo define el caso de uso futuro
+"Configurar OTA". **Ruta propuesta**: el plan base deja para el caso de
 uso futuro "Configurar OTA" definir por qué rutas la OTA cancela sus reservas, pero el spec exige esta
 operación (escenario 2); se implementa en la misma familia de rutas de `generate-ota-reservation`.
 
@@ -116,8 +118,7 @@ agencia.
 | `INVALID_CHARACTERS` | Caracteres no válidos en `reason` | "El formato de los datos contiene caracteres no válidos." |
 | `REQUEST_NOT_PROCESSED` | Excepción inesperada | "No fue posible procesar la solicitud." |
 
-Sin token, `401` `UNAUTHENTICATED`; con un rol sin permiso para la ruta, `403` `FORBIDDEN`. El cuerpo es
-siempre `{ "errorCode", "message", "timestamp", "path" }`. **Nunca 500.**
+El cuerpo es siempre `{ "errorCode", "message", "timestamp", "path" }`. **Nunca 500.**
 
 ### D. Puertos que usa
 
@@ -139,7 +140,7 @@ siempre `{ "errorCode", "message", "timestamp", "path" }`. **Nunca 500.**
    está `IN_PROGRESS` y **no se puede cancelar**; las que no lleguen quedan `NOT_ARRIVED` en el cierre del
    día.
 3. **Orden de las verificaciones** (la primera que falla responde):
-   1. Autenticación y rol; referencia con formato válido.
+   1. Referencia con formato válido.
    2. La reserva existe y es del canal que corresponde.
    3. Para la Recepcionista, `acknowledged: true`.
    4. **`updatedAt`** coincide (si viene). Va **antes** del estado para que la segunda de dos cancelaciones
@@ -156,7 +157,8 @@ siempre `{ "errorCode", "message", "timestamp", "path" }`. **Nunca 500.**
 7. **Sin efectos financieros**: ni penalidad, ni llamada al Módulo 3, ni cambio de `commissionAmount` ni de
    `commissionStatus` de una reserva de OTA (`register-ota-information-commission`, FR-007).
 8. **Sin órdenes al Módulo 1**: las habitaciones no se liberan desde aquí.
-9. **`processedBy`**: el identificador del usuario de la Recepcionista (del token) o el de la agencia.
+9. **`processedBy`**: el nombre de la Recepcionista que llega en `X-User` (sin validar) o el identificador
+   de la agencia, según lo defina "Configurar OTA".
 
 ## Diagramas de secuencia
 
@@ -172,8 +174,8 @@ sequenceDiagram
     participant DB as PostgreSQL
     participant R as DailyListChangeRecorder
 
-    S->>C: POST /cancellation (JWT)
-    C->>C: Guard de rol, validar la referencia y el cuerpo
+    S->>C: POST /cancellation (X-User)
+    C->>C: Validar la referencia y el cuerpo
     alt referencia vacía o inválida
         C-->>S: 400 RESERVATION_REF_REQUIRED o INVALID_RESERVATION_CODE
     end
@@ -316,7 +318,7 @@ canal y `REMOVED`); una con llegada futura (sin aviso); y los intentos sobre `IN
 - [ ] T005 [US1] `CancelReservation`: localizar con bloqueo, validar canal, confirmación, `updatedAt` y estado, en ese orden
 - [ ] T006 [US1] Transición a `CANCELLED` con `ReservationStatusService`, liberación de `blocks_inventory` e inserción de la `Cancellation` en una sola transacción
 - [ ] T007 [US1] Llamada a `DailyListChangeRecorder` dentro de la transacción (`REMOVED` solo si estaba en la lista)
-- [ ] T008 [US1] `POST /api/reservations/{reservationRef}/cancellation` (A) con el guard de rol
+- [ ] T008 [US1] `POST /api/reservations/{reservationRef}/cancellation` (A), con `X-User` como `processedBy`
 - [ ] T009 [US1] `POST /api/ota/reservations/{reservationRef}/cancellation` (B) con el filtro por agencia y `TouchOtaSync`
 - [ ] T010 [US1] Prueba de que no se modifica ningún campo de comisión ni se llama al Módulo 3
 - [ ] T011 [US1] Pruebas de integración de los escenarios 1 a 6

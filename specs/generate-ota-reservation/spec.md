@@ -169,7 +169,7 @@ crea una reserva y que todos devuelven una respuesta JSON de error estructurada.
 
 ### Functional Requirements
 
-- **FR-001**: El sistema debe proveer un endpoint de API REST seguro para la recepción de
+- **FR-001**: El sistema debe proveer un endpoint de API REST para la recepción de
   solicitudes de reservas de canales externos (`Ota`).
 - **FR-002**: El sistema debe exigir el atributo de texto `externalConfirmationCode` como parámetro
   obligatorio en el canal OTA.

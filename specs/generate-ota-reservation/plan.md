@@ -32,7 +32,7 @@ definirá el caso de uso futuro "Configurar OTA" (plan base).
 |---|---|
 | Caso de uso | Generar reservación por OTA (`generate-ota-reservation`) |
 | Spec | [spec.md](./spec.md), historia 1 y FR-001 a FR-009 |
-| Actor principal | La OTA (rol `OTA`, sistema externo) |
+| Actor principal | La OTA (sistema externo) |
 | Disparador | REST: `POST /api/ota/reservations` y `POST /api/ota/reservations/{reservationRef}/confirmation` |
 | Naturaleza | Escribe `reservation`, `reservation_room`, `guest` y `commission_audit`; no usa colas |
 
@@ -43,8 +43,9 @@ Lo propio de este caso de uso:
 
 - **Dependencias nuevas**: ninguna.
 - **Almacenamiento**: `reservation`, `reservation_room`, `guest`, `commission_audit` (plan base).
-- **Autenticación**: JWT de servicio con el rol `OTA` y el `otaId` de la agencia como dato del token. Cada
-  agencia **solo ve y confirma sus propias reservas**.
+- **Identificación de la OTA**: sin seguridad (regla transversal 10 del plan base). Cómo se sabe qué
+  agencia llama (su `otaId`) lo define el caso de uso futuro "Configurar OTA". Cada agencia **solo ve y
+  confirma sus propias reservas**.
 - **Configuración**: `ASSIGNMENT_MAX_RETRIES` (compartida con `generate-direct-reservation`).
 - **Performance** (NFR-001): crear la reserva en menos de 1,5 s en condiciones normales.
 
@@ -52,8 +53,8 @@ Lo propio de este caso de uso:
 
 ### A. Crear la reserva: `POST /api/ota/reservations`
 
-Rol `OTA`. **Cabeceras**: `Authorization: Bearer <JWT>`, `Content-Type: application/json`. Sin token, 401;
-con otro rol, 403.
+La OTA. **Cabeceras**: `Content-Type: application/json`; la forma de identificar a la agencia la define
+"Configurar OTA".
 
 **Solicitud**
 
@@ -114,7 +115,7 @@ con otro rol, 403.
 
 ### B. Confirmar el pago o la garantía: `POST /api/ota/reservations/{reservationRef}/confirmation`
 
-Rol `OTA`. La agencia solo puede confirmar **sus** reservas.
+La agencia solo puede confirmar **sus** reservas.
 
 **Solicitud**
 
@@ -164,8 +165,6 @@ El conflicto de disponibilidad es **409**; todo lo demás es **400**.
 | 400 | `INVALID_STATUS_TRANSITION` | La reserva no está en `PENDING` ni `ACTIVE` (por ejemplo `CANCELLED`) | "La transición de estado no está permitida." |
 | 400 | `INVENTORY_UNAVAILABLE`, `MAINTENANCE_CHECK_UNAVAILABLE`, `INVALID_CATEGORY`, `INVALID_ROOM_ID` | Categoría o `roomId` inválidos, o fallos del Módulo 1 | Los de `consult-room-inventory` y `consult-maintenance-calendar` |
 | **409** | `NO_AVAILABILITY` | Una habitación o una categoría no tiene disponibilidad, o la tomó otra solicitud | "No hay disponibilidad para la habitación seleccionada: {roomNumber o categoryRoom}" |
-| 401 | `UNAUTHENTICATED` | Sin token o token inválido | Genérico |
-| 403 | `FORBIDDEN` | Rol distinto de `OTA` | Genérico |
 
 El cuerpo del error es siempre `{ "errorCode", "message", "timestamp", "path" }`. Una excepción inesperada
 sale como 400 `REQUEST_NOT_PROCESSED`; **nunca 500**.
@@ -184,7 +183,7 @@ sale como 400 `REQUEST_NOT_PROCESSED`; **nunca 500**.
 ## Reglas de negocio
 
 1. **Orden de validación** al crear (la primera falla responde):
-   1. Autenticación y rol `OTA` (con el `otaId` del token).
+   1. El `otaId` de la agencia que llama (según "Configurar OTA").
    2. Estructura del JSON y campos obligatorios, incluido el `externalConfirmationCode`.
    3. Habitaciones (1 a 10 distintas, `roomId` o `categoryRoom`) y `guestCount` entero positivo.
    4. Fechas, `notes`, caracteres válidos, datos del titular, `totalAmount` y `currency`.
@@ -207,7 +206,7 @@ sale como 400 `REQUEST_NOT_PROCESSED`; **nunca 500**.
 7. **Reserva que nunca se confirma**: queda en `PENDING`; se puede cancelar por la vía estándar o la marca
    `NO_SHOW` el cierre del día si su fecha de inicio pasa sin ingreso (`update-reservation`).
 8. **Titular propio de la reserva**: se crea un `guest` nuevo ligado a esta reserva.
-9. **Cada agencia solo ve sus reservas**: toda consulta y confirmación se filtra por el `otaId` del token.
+9. **Cada agencia solo ve sus reservas**: toda consulta y confirmación se filtra por el `otaId` de la agencia que llama.
 10. **`lastSyncAt`**: cada mensaje de la OTA actualiza su última sincronización (interceptor).
 
 ## Diagramas de secuencia
@@ -223,8 +222,8 @@ sequenceDiagram
     participant K as RegisterOtaConfirmationAndCommission
     participant DB as PostgreSQL
 
-    O->>C: POST /api/ota/reservations (JWT con otaId)
-    C->>C: Guard OTA, interceptor TouchOtaSync y validar el DTO
+    O->>C: POST /api/ota/reservations (con su otaId)
+    C->>C: Resolver el otaId, interceptor TouchOtaSync y validar el DTO
     alt dato inválido o falta el código de confirmación
         C-->>O: 400 con el errorCode y el mensaje del spec
     end
@@ -287,7 +286,7 @@ sequenceDiagram
     participant DB as PostgreSQL
 
     O->>C: POST /api/ota/reservations/{ref}/confirmation
-    C->>C: Guard OTA y validar el cuerpo
+    C->>C: Resolver el otaId y validar el cuerpo
     C->>U: execute(otaId, reservationRef, confirmationType)
     U->>DB: BEGIN y SELECT reserva FOR UPDATE
     alt no existe o es de otra agencia
@@ -367,7 +366,7 @@ sequenceDiagram
 | `domain/reservation/` | Fábrica `Reservation.createOta(...)` con sus invariantes y el estado inicial `PENDING` |
 | `application/use-cases/generate-ota-reservation/` | **Entrada**: `CreateOtaReservation` y `ConfirmOtaReservation`; validador y saneador del payload |
 | `application/ports/out/` | `ReservationRepository`, `Clock` y los puertos de otros casos de uso (D) |
-| `infrastructure/in/rest/` | `OtaReservationsController`; guard del rol `OTA` con el `otaId` |
+| `infrastructure/in/rest/` | `OtaReservationsController`; `OtaIdentityResolver` (provisional, lo define "Configurar OTA") |
 | `infrastructure/out/persistence/` | Repositorio compartido con `generate-direct-reservation` |
 
 ```text
@@ -380,7 +379,7 @@ backend/src/
 │   ├── confirm-ota-reservation.service.ts
 │   └── ota-reservation-request.validator.ts
 ├── infrastructure/in/rest/ota-reservations.controller.ts
-└── infrastructure/security/ota-auth.guard.ts    # rol OTA y otaId del token
+└── infrastructure/in/rest/ota-identity.resolver.ts  # otaId de la agencia que llama (provisional)
 backend/test/
 ├── unit/generate-ota-reservation/               # validador, saneador, fábrica
 ├── integration/generate-ota-reservation/        # Testcontainers: creación, confirmación, concurrencia
@@ -389,7 +388,7 @@ backend/test/
 
 ## Phase 1: Setup
 
-- [ ] T001 Guard del rol `OTA` con el `otaId` del token y su aplicación a las dos rutas
+- [ ] T001 `OtaIdentityResolver`: obtener el `otaId` de la agencia que llama en las dos rutas (provisional, hasta "Configurar OTA")
 
 ## Phase 2: Foundational
 
@@ -456,7 +455,7 @@ backend/test/
 
 | Requisito | Componente | Tarea |
 |---|---|---|
-| FR-001 | `POST /api/ota/reservations`, guard `OTA` | T001, T006 |
+| FR-001 | `POST /api/ota/reservations` y `OtaIdentityResolver` | T001, T006 |
 | FR-002 | Validación del `externalConfirmationCode` | T003, T006 |
 | FR-003, FR-003a | `VerifyAvailability`, asignación y reglas de habitaciones | T003, T007 |
 | FR-004 | `RegisterOtaConfirmationAndCommission` y `source = OTA` | T006, T008 |

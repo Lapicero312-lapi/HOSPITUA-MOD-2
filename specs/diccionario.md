@@ -132,5 +132,4 @@ Glosario técnico-funcional compartido por los tres módulos del proyecto **HOSP
 ##### Gestión y consulta
 * **Consulta de liquidación** : Petición síncrona realizada por un actor autorizado para obtener el estado y desglose financiero de una estancia.
 * **Resultado de consulta** : Estructura devuelta que contiene hospedaje, comisión OTA, IVA, ingreso neto y la factura asociada.
-* **Ámbito de acceso por actor** : Política de seguridad que restringe a cada OTA a consultar únicamente las liquidaciones y comisiones de sus propias reservas.
 * **Resumen consolidado** : Reporte financiero acumulado por rangos de fechas utilizado por el Administrador para conciliar el cobro de comisiones con cada OTA.

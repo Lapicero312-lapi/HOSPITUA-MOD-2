@@ -19,7 +19,7 @@ no es un actor del sistema.
 
 ### Flujo de Usuario de Alto Nivel
 
-1. La **Recepcionista** se autentica y abre la pantalla de exportación SIRE.
+1. La **Recepcionista** inicia sesión (login simulado en el frontend) y abre la pantalla de exportación SIRE.
 2. La Recepcionista define el periodo del reporte (`startDate` y `endDate`), que se compara con la
    fecha de cada movimiento migratorio (`movementDate`).
 3. El sistema ejecuta "Procesar datos de huéspedes" para obtener los movimientos del
@@ -134,7 +134,7 @@ controlado.
 
 ### Functional Requirements
 
-- **FR-001**: El sistema debe proveer una interfaz segura, exclusiva de la Recepcionista, para
+- **FR-001**: El sistema debe proveer una interfaz de la Recepcionista para
   generar y descargar el archivo. El sistema no debe enviar el archivo a Migración.
 - **FR-002**: El sistema debe filtrar por un periodo obligatorio (`startDate` y `endDate`, máximo un
   año), aplicado a la `movementDate` de cada movimiento migratorio.
@@ -177,8 +177,9 @@ controlado.
 
 - **NFR-001**: La generación del archivo debe tardar menos de 2 segundos para consultas de hasta 500
   movimientos.
-- **NFR-002**: El archivo descargado contiene datos personales: el acceso queda limitado a la
-  Recepcionista y las descargas quedan registradas en `SireExport`.
+- **NFR-002**: El archivo descargado contiene datos personales: es para la Recepcionista y las
+  descargas quedan registradas en `SireExport`. El Módulo 2 no controla el acceso: la seguridad es una
+  capa aparte.
 
 ### Key Entities *(include if feature involves data)*
 

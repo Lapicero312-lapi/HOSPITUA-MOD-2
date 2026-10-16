@@ -152,8 +152,8 @@ errores y fallos está en el plan base ("Traducción de respuestas HTTP a cola")
 
 ### B. REST del Módulo 2: modificación de una reserva directa (decisión D8)
 
-Rol `RECEPTIONIST`. **Cabeceras**: `Authorization: Bearer <JWT>`, `Content-Type: application/json`.
-Sin token, 401; con otro rol, 403.
+Pantalla de la Recepcionista. **Cabeceras**: `Content-Type: application/json`. Sin seguridad (regla
+transversal 10 del plan base).
 
 **Cuerpo de cambio** (el mismo en B1 y B2). Todo es opcional salvo `updatedAt`; lo que no se envía
 queda igual:
@@ -443,7 +443,7 @@ sequenceDiagram
     participant Q as CalculateDynamicRate
 
     R->>C: POST /modification-preview (cuerpo de cambio)
-    C->>C: Guard RECEPTIONIST y validar el DTO
+    C->>C: Validar el DTO
     C->>U: execute(reservationRef, cambio)
     U->>L: findByRef(reservationRef)
     alt no existe, es OTA o su estado no admite cambios
@@ -639,8 +639,6 @@ Los errores de B1 y B2 están en el contrato B. Además:
 
 | Situación | HTTP | `errorCode` |
 |---|---|---|
-| Sin token o token inválido | 401 | `UNAUTHENTICATED` |
-| Rol distinto de `RECEPTIONIST` | 403 | `FORBIDDEN` |
 | Excepción inesperada | 400 | `REQUEST_NOT_PROCESSED` |
 | Transición de estado no permitida (la lanza `ReservationStatusService`) | 400 | `INVALID_STATUS_TRANSITION`, "La transición de estado no está permitida." |
 
@@ -811,7 +809,7 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
 
 ## Dependencies & Execution Order
 
-- **Depende de**: el plan base (esquema, mensajería, `processed_message`, roles, bloqueo asesor),
+- **Depende de**: el plan base (esquema, mensajería, `processed_message`, bloqueo asesor),
   `check-view-reservation` (`ReservationLookup`, `DailyListChangeRecorder`), `check-room-availability`,
   `calculate-dynamic-rate`, `consult-room-inventory` y `process-guest-data`.
 - **Necesitan de este caso de uso** (`ReservationStatusService`): `generate-direct-reservation`,

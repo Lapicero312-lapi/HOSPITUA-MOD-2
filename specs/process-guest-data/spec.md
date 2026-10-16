@@ -222,11 +222,6 @@ vista no permite modificar nada.
    - **When** la Recepcionista aplica los filtros
    - **Then** el sistema responde **HTTP 400** con el mensaje del filtro inválido, sin consultar
 
-9. **Scenario**: Acceso de otros actores (Error)
-   - **Given** la Ota, el Módulo 1 o el Módulo 3
-   - **When** intentan usar esta vista
-   - **Then** el sistema la rechaza con **HTTP 403**: la vista es exclusiva de la Recepcionista
-
 ### Casos Borde
 
 - ¿Qué sucede si llega un `DEPARTURE` de un huésped sin `ENTRY` registrado? No debería ocurrir, porque
@@ -306,8 +301,7 @@ vista no permite modificar nada.
 - **FR-014**: El sistema debe mostrar el detalle de un huésped con todos sus `GuestData`, la reserva
   (con enlace a su detalle en "Consultar y buscar reservas") y sus movimientos de entrada y
   salida.
-- **FR-015**: La vista debe ser de solo lectura y exclusiva de la Recepcionista; cualquier otro actor
-  recibe **HTTP 403**. Con filtros inválidos debe responder **HTTP 400** con el mensaje correspondiente.
+- **FR-015**: La vista debe ser de solo lectura y es de la Recepcionista. Con filtros inválidos debe responder **HTTP 400** con el mensaje correspondiente.
 - **FR-016**: La vista no debe mostrar a los huéspedes de reservas sin Check-In (`CANCELLED`, `NO_SHOW`,
   `PENDING` o `ACTIVE` sin ingreso), porque no tienen movimientos.
 
