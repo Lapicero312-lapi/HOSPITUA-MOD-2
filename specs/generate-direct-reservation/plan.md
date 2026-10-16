@@ -28,9 +28,9 @@ ordena nada al Módulo 1**: la reserva se crea sin depender de él.
 | Dato | Valor |
 |---|---|
 | Caso de uso | Generar reservación directa (`generate-direct-reservation`) |
-| Spec | [spec.md](./spec.md), historia 1 y FR-001 a FR-010 |
+| Spec | [spec.md](./spec.md), historia 1 y FR-001 a FR-011 |
 | Actor principal | Recepcionista |
-| Disparador | REST: `POST /api/reservations/direct/preview` y `POST /api/reservations/direct` |
+| Disparador | REST: `POST /api/reservations/direct/preview`, `POST /api/reservations/direct` y `GET /api/guests/lookup` (precarga del titular) |
 | Naturaleza | Escribe `reservation`, `reservation_room` y `guest`; no tiene colas propias |
 
 ## Technical Context
@@ -220,6 +220,43 @@ esperar al Módulo 1** (FR-007).
 | `ReservationStatusService` | `update-reservation` | Estado inicial `ACTIVE` y `stayStatus` `EXPECTED` |
 | `DailyListChangeRecorder.record` | `check-view-reservation` | Aviso `ADDED` de la lista del día |
 | `Clock` | Plan base | Día operativo en curso |
+| `GuestRepository.findLatestByDocument` | Plan base (persistencia de `guest`) | Precarga del titular (E) |
+
+### E. Precarga del titular: `GET /api/guests/lookup` (FR-011)
+
+Rol `RECEPTIONIST`. Solo lectura.
+
+**Solicitud:** `GET /api/guests/lookup?documentType=CC&documentNumber=123`. Los dos parámetros son
+obligatorios.
+
+**Respuesta `200` con datos:** los del titular de la reserva **más reciente** (por `created_at`) con ese
+tipo y número de documento.
+
+```json
+{
+  "found": true,
+  "guest": {
+    "firstName": "Ana",
+    "lastName": "Pérez",
+    "documentType": "CC",
+    "documentNumber": "123",
+    "nationality": "Colombia",
+    "contactPhone": "+57 300 000 0000",
+    "contactEmail": "ana@correo.com"
+  }
+}
+```
+
+**Respuesta `200` sin datos:** `{ "found": false, "guest": null }`. No encontrar al titular no es un
+error: la Recepcionista escribe los datos completos.
+
+- Errores: `INVALID_DOCUMENT_TYPE` si el tipo no es `RC`, `TI`, `CC`, `CE`, `PAS` o `NIT`;
+  `GUEST_DATA_REQUIRED` si falta el tipo o el número; `INVALID_CHARACTERS` si traen caracteres no
+  válidos. Todos 400.
+- Los datos **se copian** en la solicitud de creación (B) como cualquier otro titular: la reserva nueva
+  guarda su propio `guest` y no queda ligada a la anterior.
+- Consulta `guest` por `(document_type, document_number)` con el índice por `document_number` del plan
+  base, unida a `reservation` para tomar la de `created_at` más reciente.
 
 ## Reglas de negocio
 
@@ -450,6 +487,7 @@ y por caída del Módulo 3.
 - [ ] T012 [US1] Pruebas de todos los casos borde (fechas, habitaciones, personas, `notes`, Módulo 3 parcial, concurrencia)
 - [ ] T013 [US1] Prueba de concurrencia: dos solicitudes simultáneas por la última habitación; solo una se crea
 - [ ] T014 [P] [US1] Frontend: pantalla "Nueva reserva directa" (disponibilidad y tarifa al cambiar categoría, habitaciones y fechas; confirmar)
+- [ ] T018 [US1] `LookupGuest` y `GET /api/guests/lookup` (E): búsqueda por documento y precarga en la pantalla "Nueva reserva directa"; pruebas de los escenarios 10 y 11
 
 ## Phase N: Polish
 
@@ -468,6 +506,8 @@ y por caída del Módulo 3.
 | US1 | 5 grupo con varias habitaciones | Una `Reservation` con dos `ReservationRoom` en `EXPECTED`, cada una con su tarifa y sin total |
 | US1 | 6 una habitación no disponible | Habitación pedida por `roomId` con mantenimiento: `400` que nombra la habitación 102 y no se crea nada |
 | US1 | 7 personas fuera de capacidad | 3 personas: "La cantidad de personas supera la capacidad de la habitación."; 0: "Cada habitación debe tener al menos una persona." |
+| US1 | 10 precarga del titular | Con dos reservas anteriores del mismo documento, `GET /api/guests/lookup` devuelve los datos de la más reciente; la reserva nueva guarda su propio `guest` y la anterior no cambia |
+| US1 | 11 documento sin reservas | `{ "found": false, "guest": null }` y ningún error |
 | US1 | 9 fecha anterior a hoy | Con el reloj simulado: el día anterior se rechaza, el mismo día se acepta, y al día siguiente el mínimo avanza |
 | Casos borde | Fechas | Salida anterior, vacía o inexistente: `400` sin consultar disponibilidad ni cotizar |
 | Casos borde | Concurrencia | Dos creaciones por la última habitación: una `201`, la otra `NO_AVAILABILITY` (o toma otra habitación libre) |
@@ -501,6 +541,7 @@ y por caída del Módulo 3.
 | FR-007 | La creación no depende del Módulo 1 y responde `201` | T008 |
 | FR-009 | `DailyListChangeRecorder` dentro de la transacción | T010 |
 | FR-010 | Mapeo a 400 de toda validación e integración | T006, T012 |
+| FR-011 | `LookupGuest` y `GET /api/guests/lookup` | T018 |
 | NFR-001 | Índice GiST de D3 y prueba de tiempo | T015 |
 | SC-001 a SC-004 | Pruebas por escenario y de concurrencia | T011, T013 |
 
@@ -528,8 +569,7 @@ y por caída del Módulo 3.
 | 2 | **Mensaje de caída del Módulo 3**: este spec dice "...no se encuentra disponible. Por favor intente más tarde" y `calculate-dynamic-rate` (escenario 2) lo dice sin la última frase. Este plan usa el de este spec en la creación; conviene alinear los dos specs | Equipo del Módulo 2 |
 | 3 | El flujo del spec asigna habitaciones automáticamente, pero los escenarios 5 y 6 nombran habitaciones concretas. Confirmar si la API debe aceptar `roomId` | Equipo del Módulo 2 |
 | 4 | Una habitación con mantenimiento programado **entre** la verificación y el guardado no se detecta (el calendario no se consulta dentro de la transacción) | Equipo del Módulo 2 |
-| 5 | Si el titular debe poder reutilizar datos de una reserva anterior (por documento). Hoy se escriben completos en cada reserva | Equipo del Módulo 2 |
-| 6 | La Recepcionista no elige el número de habitación: confirmar si necesita poder hacerlo para alguna petición del huésped (por ejemplo, una habitación en un piso) | Equipo del Módulo 2 |
+| 5 | La Recepcionista no elige el número de habitación: confirmar si necesita poder hacerlo para alguna petición del huésped (por ejemplo, una habitación en un piso) | Equipo del Módulo 2 |
 
 ## Notes
 
