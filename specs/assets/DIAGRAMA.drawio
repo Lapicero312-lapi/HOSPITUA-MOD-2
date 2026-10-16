@@ -1,6 +1,6 @@
 <mxfile host="app.diagrams.net">
   <diagram name="Page-1" id="MNUw032JQ2F8opHYpW9j">
-    <mxGraphModel dx="1746" dy="2224" grid="1" gridSize="10" guides="0" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+    <mxGraphModel dx="2060" dy="2426" grid="1" gridSize="10" guides="0" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
       <root>
         <mxCell id="0" />
         <mxCell id="1" parent="0" />
@@ -126,7 +126,7 @@
           <mxGeometry height="30" width="60" x="560" y="545" as="geometry" />
         </mxCell>
         <mxCell id="cU8x0W2CoCBTHrcppXnH-35" parent="1" style="ellipse;whiteSpace=wrap;html=1;shapeInside=1;fillColor=light-dark(#6A00FF,#CC00CC);strokeColor=#6F0000;fontColor=#ffffff;" value="Procesar datos de huéspedes" vertex="1">
-          <mxGeometry height="80" width="160" x="820" y="40" as="geometry" />
+          <mxGeometry height="80" width="160" x="740" y="50" as="geometry" />
         </mxCell>
         <mxCell id="cU8x0W2CoCBTHrcppXnH-36" parent="1" style="ellipse;whiteSpace=wrap;html=1;shapeInside=1;fillColor=light-dark(#6A00FF,#CC00CC);fontColor=default;strokeColor=#3700CC;" value="Registrar confirmación y comisión de ota" vertex="1">
           <mxGeometry height="80" width="160" x="510" y="760" as="geometry" />
@@ -310,6 +310,22 @@
             </Array>
             <mxPoint x="260" y="120" as="sourcePoint" />
             <mxPoint x="385" y="600" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="g6aMNe-JGjyOaFZ76DUi-1" parent="1" style="ellipse;whiteSpace=wrap;html=1;shapeInside=1;fillColor=light-dark(#6A00FF,#CC00CC);strokeColor=#6F0000;fontColor=#ffffff;" value="Configurar Ota" vertex="1">
+          <mxGeometry height="80" width="160" x="930" y="-20" as="geometry" />
+        </mxCell>
+        <mxCell id="g6aMNe-JGjyOaFZ76DUi-3" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;fillColor=#a20025;fontColor=#ffffff;strokeColor=#6F0000;" value="&lt;span style=&quot;color: light-dark(rgb(0, 0, 0), rgb(255, 255, 255));&quot;&gt;Channex&lt;/span&gt;&lt;div&gt;&lt;font color=&quot;#ffffff&quot;&gt;&lt;br&gt;&lt;/font&gt;&lt;div&gt;&lt;br&gt;&lt;/div&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="60" width="30" x="1160" y="100" as="geometry" />
+        </mxCell>
+        <mxCell id="g6aMNe-JGjyOaFZ76DUi-5" edge="1" parent="1" source="g6aMNe-JGjyOaFZ76DUi-1" style="edgeStyle=orthogonalEdgeStyle;rounded=1;orthogonalLoop=1;jettySize=auto;html=1;endArrow=none;endFill=0;strokeColor=#A50040;strokeWidth=2;entryX=0;entryY=0.3333333333333333;entryDx=0;entryDy=0;entryPerimeter=0;fillColor=#d80073;" target="g6aMNe-JGjyOaFZ76DUi-3">
+          <mxGeometry relative="1" x="-0.15" as="geometry">
+            <Array as="points">
+              <mxPoint x="1110" y="20" />
+              <mxPoint x="1110" y="70" />
+            </Array>
+            <mxPoint x="1255" y="-130" as="sourcePoint" />
+            <mxPoint x="1060" y="170" as="targetPoint" />
           </mxGeometry>
         </mxCell>
       </root>
