@@ -45,22 +45,18 @@
     <div class="mermaid">
     stateDiagram-v2
         %% Estados Base
-        [*] --> PENDING : Generación OTA (Pendiente)
         [*] --> ACTIVE : Generación Directa Confirmada
-
-        PENDING --> ACTIVE : Pago/Garantía Confirmada
+        [*] --> ACTIVE : Reserva de Booking (llega confirmada por Channex)
 
         %% Flujo de Operación (Notificado por Módulo 1)
         ACTIVE --> IN_PROGRESS : Notificación Check-In (Módulo 1)
         IN_PROGRESS --> COMPLETED : Notificación Check-Out (Módulo 1)
 
         %% Flujos de Anulación
-        ACTIVE --> CANCELLED : Cancelación Manual / OTA
-        PENDING --> CANCELLED : Cancelación Manual / OTA
+        ACTIVE --> CANCELLED : Cancelación Manual / Booking
 
         %% Validación Automática de Fin de Día
         ACTIVE --> NO_SHOW : Fin de Día sin ingreso
-        PENDING --> NO_SHOW : Fin de Día sin ingreso
 
         %% Fin de ciclo
         CANCELLED --> [*]
@@ -94,7 +90,7 @@
             </tr>
             <tr>
                 <td><strong>Creación (llegada futura)</strong></td>
-                <td>Crea entidad <code>Reservation</code>: <code>ACTIVE</code> si es directa, <code>PENDING</code> si es de OTA (pasa a <code>ACTIVE</code> cuando la agencia confirma el pago o la garantía).</td>
+                <td>Crea entidad <code>Reservation</code>: <code>ACTIVE</code>, sea directa o de Booking (Booking la envía ya confirmada por Channex; <code>PENDING</code> se conserva sin uso).</td>
                 <td>No se avisa a M1 hasta el día de la llegada.</td>
             </tr>
             <tr>

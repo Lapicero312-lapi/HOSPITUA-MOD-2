@@ -369,9 +369,10 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
    - **When** la Recepcionista crea una reserva directa con llegada hoy y queda `ACTIVE`
    - **Then** el Módulo 1 recibe una actualización `ADDED` con el detalle completo de la reserva
 
-2. **Scenario**: Confirmación de una reserva OTA con llegada hoy (`ADDED`)
-   - **Given** una reserva OTA `PENDING` con llegada hoy, que no estaba en la lista
-   - **When** la OTA confirma el pago o la garantía y la reserva pasa a `ACTIVE`
+2. **Scenario**: Reserva de Booking con llegada hoy (`ADDED`)
+   - **Given** la lista del día ya enviada
+   - **When** llega de Booking, por el feed de Channex, una reserva nueva con llegada hoy y queda en
+     `ACTIVE`
    - **Then** el Módulo 1 recibe una actualización `ADDED` con el detalle completo
 
 3. **Scenario**: Cambio de datos de una reserva de la lista (`UPDATED`)
