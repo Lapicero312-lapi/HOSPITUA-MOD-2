@@ -96,6 +96,7 @@ Un único cuadro de búsqueda (`search`) cubre código de reserva, código de la
 | `status` | `PENDING` \| `ACTIVE` \| `IN_PROGRESS` \| `COMPLETED` \| `CANCELLED` \| `NO_SHOW` | No | Sin valor: todos los estados |
 | `source` | `DIRECT` \| `OTA` | No | |
 | `otaId` | id de agencia | No | Solo con `source=OTA` (ver "Puntos que este plan propone") |
+| `inConflict` | `true` | No | Solo las reservas de Booking en conflicto (FR-002a) |
 | `dateFrom`, `dateTo` | `AAAA-MM-DD` | Ambos o ninguno | Rango inclusivo; cruce: `startDate ≤ dateTo` y `endDate > dateFrom`; máximo 366 días |
 | `order` | `asc` \| `desc` | No | Por `startDate`. Por defecto `desc` |
 | `page` | entero ≥ 1 | No | Por defecto `1`. Tamaño fijo de 10 (no hay `pageSize`) |
@@ -116,7 +117,8 @@ Un único cuadro de búsqueda (`search`) cubre código de reserva, código de la
       "endDate": "2026-10-25",
       "status": "ACTIVE",
       "migrationStatus": "AWAITING_CHECK_IN",
-      "actions": { "canModify": true, "canCancel": true }
+      "conflict": null,
+      "actions": { "canModify": true, "canCancel": true, "canAssignRoom": false }
     }
   ],
   "page": 1,
@@ -131,6 +133,11 @@ Un único cuadro de búsqueda (`search`) cubre código de reserva, código de la
 - `externalConfirmationCode` y `otaName` solo vienen con valor en reservas `OTA`.
 - `actions.canModify` y `actions.canCancel` son `true` solo si la reserva es `DIRECT` y está `ACTIVE` o
   `PENDING` (FR-005).
+- `conflict` es `null`, o `{ "reason": "NO_ROOM_AVAILABLE", "detectedAt": "..." }` en una reserva de
+  Booking en conflicto; la pantalla la muestra con la marca "En conflicto". `actions.canAssignRoom` es
+  `true` cuando la reserva está en conflicto y tiene alguna habitación sin asignar (`update-reservation`,
+  B3).
+- Una habitación sin asignar aparece con `roomNumber: null` ("Sin asignar").
 - Sin resultados: `200` con `items: []`, `totalItems: 0`, `totalPages: 0` y
   `message: "No se encontraron reservas con los filtros aplicados."` (FR-010).
 - Si `page` supera `totalPages`, se devuelve la **última página válida** y `page` refleja la que se
@@ -184,6 +191,7 @@ fechas (formato, completitud, orden, 366 días) → `order` → `page` → longi
   "guestCount": 3,
   "notes": "",
   "createdAt": "2026-10-01T09:14:00-05:00",
+  "conflict": null,
   "rooms": [
     {
       "roomNumber": "204",
@@ -203,6 +211,8 @@ fechas (formato, completitud, orden, 366 días) → `order` → `page` → longi
 
 - `roomGrossAmount` es `null` en reservas `OTA`. El dinero va como **texto decimal** (`decimal.js`),
   nunca como número.
+- `conflict` tiene la misma forma que en C1; una habitación sin asignar trae `roomNumber: null`.
+- En reservas de Booking el titular puede venir sin `documentType` ni `documentNumber` (`null`).
 - `cancellation` solo viene en reservas `CANCELLED` por solicitud explícita:
   `{ "cancellationDate", "channel", "reason", "processedBy" }`. El No-Show no tiene `Cancellation`.
 - Si la reserva no existe: `400` `RESERVATION_NOT_FOUND`, "La reserva no existe." (regla del plan base:
@@ -329,8 +339,9 @@ es el contrato **ya acordado con el equipo del Módulo 1**; el plan lo adopta ta
   (`updatedAt` con microsegundos, porque es el control de concurrencia). Los valores de los ejemplos son
   ilustrativos.
 - La lista y sus actualizaciones llevan el detalle de FR-014 de la spec. El campo `source` viaja como
-  `DIRECTA` para las reservas directas o con el nombre de la agencia (por ejemplo `BOOKING`) para las
-  `OTA`.
+  `DIRECTA` para las reservas directas o con el nombre de la agencia en mayúsculas y sin el dominio para
+  las `OTA`: `Booking.com` viaja como `BOOKING`.
+- En una reserva de Booking con una habitación sin asignar, su `roomId` y su `roomNumber` viajan `null`.
 
 ### Lista del día (FR-013, FR-014)
 
@@ -821,7 +832,9 @@ publica por cola y responde consultas. No necesita `Module1Port` ni `Module3Port
 `ReservationLookup` (`findByRef`, `findByCode`, `findForUpdate`), que devuelve la reserva completa con
 `updatedAt` y comisión, y `findBlockingRooms(roomIds, startDate, endDate, excludeReservationRef?)`, que
 usa `check-room-availability` para saber qué habitaciones ya ocupan inventario (su contrato está en el
-plan de ese caso de uso). No usan la ruta REST ni las clases internas de este caso de uso (regla 6 de la
+plan de ese caso de uso). También expone `countBlockingByCategory(categoryRoom, dateFrom, dateTo)`, que
+devuelve, por cada noche del rango, cuántas habitaciones de la categoría bloquean inventario; lo usa
+`configure-ota` para la disponibilidad de Channex. No usan la ruta REST ni las clases internas de este caso de uso (regla 6 de la
 arquitectura).
 
 **Integración con otros casos de uso**: `cancel-reservation`, `update-reservation`,
@@ -904,8 +917,10 @@ devuelven exactamente lo esperado, con totales y páginas correctos.
 **Goal**: encontrar una reserva por `reservationRef` o código de la OTA y ver todo su detalle.
 
 - [ ] T015 [US2] Búsqueda por código en paralelo (referencia y código de la OTA) que ignora los demás filtros
-- [ ] T016 [US2] `GetReservationDetail` y `GET /api/reservations/{reservationRef}` para `RECEPTIONIST` (C3), con `Cancellation` y datos de Check-In/Check-Out
+- [ ] T016 [US2] `GetReservationDetail` y `GET /api/reservations/{reservationRef}` para `RECEPTIONIST` (C3), con `Cancellation` y conflicto
 - [ ] T016a [US2] `ReservationLookup.findBlockingRooms` (lo usa `check-room-availability`), con su consulta sobre `reservation_room`
+- [ ] T016b [US1] Filtro `inConflict`, campo `conflict`, `actions.canAssignRoom` y habitaciones sin asignar en C1 y C3 (FR-002a)
+- [ ] T016c `ReservationLookup.countBlockingByCategory` (lo usa `configure-ota`), con su consulta sobre `reservation_room`
 - [ ] T017 [US2] Errores `RESERVATION_NOT_FOUND` e `INVALID_RESERVATION_CODE` sin llegar a la base de datos cuando el formato es inválido
 - [ ] T018 [US2] Pruebas de integración de los escenarios 1 a 6
 - [ ] T019 [P] [US2] Frontend: pantalla de detalle
@@ -1005,9 +1020,8 @@ Cada uno se puede cambiar sin romper el resto; se anotan para que no pasen desap
 
 | # | Pendiente | Con quién |
 |---|---|---|
-| 1 | Regla para convertir `Ota.name` en el `source` de la lista (`Booking.com` → `BOOKING`): ¿mayúsculas sin dominio, o un código propio de la agencia? | Módulo 1 |
-| 2 | Tipo de `otaCommissionPercentage` en la respuesta C4 (número o texto) y su escala (0 a 100) | Módulo 3 |
-| 3 | Campos exactos que espera el Módulo 1 en C5 | Módulo 1 |
+| 1 | Tipo de `otaCommissionPercentage` en la respuesta C4 (número o texto) y su escala (0 a 100) | Módulo 3 |
+| 2 | Campos exactos que espera el Módulo 1 en C5 | Módulo 1 |
 
 ## Trazabilidad: requisito → componente → tarea
 
@@ -1015,6 +1029,7 @@ Cada uno se puede cambiar sin romper el resto; se anotan para que no pasen desap
 |---|---|---|
 | FR-001, FR-003a | `ListReservations`, `ReservationQueryPort` (paginación de 10 y orden) | T005, T009 |
 | FR-002, FR-003 | Filtros de estado y de cruce de fechas en `ReservationQueryPort` | T005, T009 |
+| FR-002a | Filtro `inConflict` y campo `conflict` | T016b |
 | FR-004 | `ResolveSearchCriteria` (documento, nombre, canal, agencia) | T006, T020 |
 | FR-005 | Fila del listado y `actions` | T010 |
 | FR-005a | `GetDaySummary` y `GET /api/reservations/day-summary` | T012 |
