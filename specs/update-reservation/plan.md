@@ -298,7 +298,9 @@ habitaciones sin asignar de una reserva de Booking en conflicto. Cabecera `X-Use
   reserva) y que sea de la **misma categoría** que la habitación sin asignar.
 - Guarda `room_id`, `room_number` y `blocks_inventory = true`. Si ya no queda ninguna habitación sin
   asignar ni capacidad superada, **quita la marca de conflicto**.
-- Avisa `UPDATED` a la lista del día si corresponde y anota el cambio para Channex (`AriChangeRecorder`).
+- Avisa a la lista del día con `DailyListChangeRecorder` si corresponde: `ADDED` cuando la reserva, con llegada hoy,
+  ya no tiene habitaciones sin asignar y no estaba en la lista (o `UPDATED` si ya estaba), y anota el cambio
+  para Channex (`AriChangeRecorder`).
 - Responde `200` con el detalle de la reserva (C3 de `check-view-reservation`).
 
 | `errorCode` | Cuándo | `message` |

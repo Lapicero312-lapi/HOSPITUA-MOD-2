@@ -341,7 +341,7 @@ es el contrato **ya acordado con el equipo del Módulo 1**; el plan lo adopta ta
 - La lista y sus actualizaciones llevan el detalle de FR-014 de la spec. El campo `source` viaja como
   `DIRECTA` para las reservas directas o con el nombre de la agencia en mayúsculas y sin el dominio para
   las `OTA`: `Booking.com` viaja como `BOOKING`.
-- En una reserva de Booking con una habitación sin asignar, su `roomId` y su `roomNumber` viajan `null`.
+- Una reserva con alguna habitación sin asignar no viaja: cuando la Recepcionista asigna la última, entra con `ADDED` (`ROOM_UNASSIGNED` es el motivo del `REMOVED` si ya estaba).
 
 ### Lista del día (FR-013, FR-014)
 
@@ -435,7 +435,7 @@ vigente de FR-014, no solo lo que cambió:
 
 ### Actualización `REMOVED` (FR-016)
 
-Misma routing key. No lleva `reservation`; `removalReason` es `CANCELLED`, `DATE_CHANGED` o `NO_SHOW`:
+Misma routing key. No lleva `reservation`; `removalReason` es `CANCELLED`, `DATE_CHANGED`, `NO_SHOW` o `ROOM_UNASSIGNED`:
 
 ```json
 {
@@ -465,7 +465,8 @@ La regla vive en el **dominio** (`DailyListMembership`), no en cada caso de uso,
 `DailyListChangeRecorder`. Los demás casos de uso lo llaman **dentro de su transacción**, con la reserva
 antes y después del cambio.
 
-Una reserva **pertenece a la lista** si `startDate` es el día operativo y `status` es `ACTIVE`. El día
+Una reserva **pertenece a la lista** si `startDate` es el día operativo, `status` es `ACTIVE` **y ninguna
+de sus habitaciones está sin asignar** (`room_id` vacío). El día
 operativo es el **en curso**, salvo que quien llama indique otro: el cierre del día de `update-reservation`
 corre después de las 00:00 y pasa la fecha del día que acaba de terminar, para que el `REMOVED` por
 `NO_SHOW` use la secuencia y la `operationalDate` de la lista a la que pertenecía.
@@ -478,6 +479,7 @@ corre después de las 00:00 y pasa la fecha del día que acaba de terminar, para
 | Pertenece | `status` = `CANCELLED` | `REMOVED` con `CANCELLED` |
 | Pertenece | `startDate` distinto del día operativo | `REMOVED` con `DATE_CHANGED` |
 | Pertenece | `status` = `NO_SHOW` | `REMOVED` con `NO_SHOW` |
+| Pertenece | Una habitación queda sin asignar | `REMOVED` con `ROOM_UNASSIGNED` |
 | Pertenece | `status` = `IN_PROGRESS` o `COMPLETED` | **Nada**: Check-In y Check-Out los ejecuta el Módulo 1 (FR-017) |
 | No pertenece | No pertenece | Nada (llegada futura u otro día) |
 

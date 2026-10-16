@@ -142,7 +142,8 @@ Devuelve las revisiones **no confirmadas**, de la más antigua a la más recient
 6. Calcula la comisión con `RegisterOtaConfirmationAndCommission.calculate` y escribe su auditoría.
 7. Si hay habitaciones sin asignar, marca `NO_ROOM_AVAILABLE`; si alguna supera su `maxCapacity`,
    `CAPACITY_EXCEEDED` (si hay las dos, la primera).
-8. Llama a `DailyListChangeRecorder.record` (`ADDED` si la llegada es hoy y la lista ya salió) y a
+8. Llama a `DailyListChangeRecorder.record` (`ADDED` si la llegada es hoy, la lista ya salió y no quedó
+   ninguna habitación sin asignar; con alguna sin asignar no se avisa nada) y a
    `AriChangeRecorder.record` (categorías y fechas).
 9. Inserta la fila de `ota_booking_revision` (`APPLIED` o `CONFLICT`).
 

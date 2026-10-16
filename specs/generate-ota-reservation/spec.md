@@ -44,9 +44,11 @@ habitaciones: el Módulo 1 decide qué hace con la lista del día.
    ninguna habitación libre de la categoría, la habitación queda **sin asignar**.
 7. Después de guardar, el sistema **confirma la revisión a Channex** (`ack`). Si el guardado falla por
    un problema temporal, no la confirma y la vuelve a procesar en la siguiente consulta.
-8. Si la reserva llega hoy y la lista del día ya se envió, el sistema avisa al Módulo 1 mediante
-   "Enviar reservas del día al Módulo 1" (`ADDED`, `UPDATED` o `REMOVED`). Cada cambio se anota para
-   el envío de disponibilidad a Channex ("Configurar OTA").
+8. Si la reserva llega hoy, la lista del día ya se envió y **ninguna habitación quedó sin asignar**, el
+   sistema avisa al Módulo 1 mediante
+   "Enviar reservas del día al Módulo 1" (`ADDED`, `UPDATED` o `REMOVED`). Una reserva con alguna
+   habitación sin asignar **no se envía** al Módulo 1 hasta que se asigne. Cada cambio se anota para el
+   envío de disponibilidad a Channex ("Configurar OTA").
 
 ## User Scenarios & Testing *(mandatory)*
 

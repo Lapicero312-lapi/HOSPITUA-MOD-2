@@ -242,8 +242,8 @@ los cambios. Se repite con datos personales (sin recálculo) y sobre reservas `I
       categoría libre en esas fechas
     - **When** la Recepcionista le asigna la `Room` 204
     - **Then** el sistema verifica la disponibilidad, asigna la habitación y, si ya no queda ninguna
-      habitación sin asignar ni capacidad superada, quita la marca de conflicto; si la llegada es hoy,
-      avisa al Módulo 1 con `UPDATED`. La Recepcionista no puede cambiar ningún otro dato de esa reserva
+      habitación sin asignar ni capacidad superada, quita la marca de conflicto; si la llegada es hoy y
+      la reserva ya cumple las condiciones, avisa al Módulo 1 con `ADDED` (o `UPDATED` si ya estaba). La Recepcionista no puede cambiar ningún otro dato de esa reserva
 
 ---
 
@@ -433,8 +433,8 @@ sin enviar ninguna orden de liberación al Módulo 1.
 **Check-In y Check-Out**
 
 - ¿Qué sucede si el Módulo 1 notifica el Check-In de una reserva de Booking que tiene una habitación
-  sin asignar? La habitación sin asignar viaja en la lista del día sin número; la Recepcionista debe
-  asignarla (FR-025) antes del Check-In. Un Check-In con un `roomId` que no pertenece a la reserva se
+  sin asignar? La reserva con una habitación sin asignar no viaja en la lista del día, así que el Módulo 1 no
+  sabe de ella; la Recepcionista debe asignarla (FR-025) antes de la llegada. Un Check-In con un `roomId` que no pertenece a la reserva se
   rechaza como cualquier otro (escenario 6 de la historia 2).
 - ¿Qué sucede si la notificación de Check-In o de Check-Out llega vacía, sin la `reservationRef` o
   sin el `roomId`? El sistema intercepta el error de inmediato y responde **HTTP 400** con el

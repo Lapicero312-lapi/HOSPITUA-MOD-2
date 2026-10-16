@@ -248,7 +248,8 @@ El diagrama con las tablas, sus columnas y sus relaciones está en "Modelo de da
   - Solo se modifican o cancelan reservas en `ACTIVE` o `PENDING`; las `OTA` solo cuando Booking lo envía
     por el feed de Channex. La Recepcionista solo puede asignar la habitación de una reserva OTA en
     conflicto.
-  - Una habitación sin asignar (`roomId` vacío) no bloquea inventario y deja la reserva en conflicto.
+  - Una habitación sin asignar (`roomId` vacío) no bloquea inventario, deja la reserva en conflicto y
+    hace que la reserva **no viaje en la lista del día** hasta que se asigne (`ROOM_UNASSIGNED`).
   - `PENDING` se conserva sin uso: las reservas directas y las de Booking nacen en `ACTIVE`.
   - Las reservas `DIRECT` no guardan un total (se calcula al mostrarlo) y no tienen comisión; las `OTA` no tienen tarifa ni cotización por habitación.
 - **`Guest`**: parte del agregado `Reservation` (su titular); se crea y se corrige solo a través de su reserva.
@@ -853,7 +854,7 @@ Inmutable. Índice `(reservation_id)`.
 | `message_kind` | `varchar(6)` | no | `LIST`, `UPDATE` |
 | `update_type` | `varchar(8)` | sí | Solo `UPDATE`: `ADDED`, `UPDATED`, `REMOVED` |
 | `reservation_id` | `uuid` | sí | FK → `reservation`; solo `UPDATE` |
-| `removal_reason` | `varchar(12)` | sí | Solo `REMOVED`: `CANCELLED`, `DATE_CHANGED`, `NO_SHOW` |
+| `removal_reason` | `varchar(15)` | sí | Solo `REMOVED`: `CANCELLED`, `DATE_CHANGED`, `NO_SHOW`, `ROOM_UNASSIGNED` |
 | `payload` | `jsonb` | no | El JSON exacto que se publica |
 | `publish_status` | `varchar(9)` | no | `PENDING`, `PUBLISHED`, `FAILED` |
 | `attempts` | `smallint` | no | `0` por defecto |
@@ -991,7 +992,7 @@ las envía y las borra.
 | D10 | **Arquitectura hexagonal** con un solo `domain/` general para todo el Módulo 2 y las capas `application` (un caso de uso por cada spec) e `infrastructure` (in/out). Verificada en CI. | Este plan |
 | D11 | **Migraciones escritas en SQL**, no generadas desde las clases de TypeORM, para controlar `EXCLUDE`, índices parciales y bloqueos. | Este plan |
 | D12 | **Booking.com por Channex, leyendo el feed.** Una tarea consulta `GET /api/v1/booking_revisions/feed` cada 60 s y confirma cada revisión con `POST /api/v1/booking_revisions/{id}/ack` después del commit. No se usan webhooks: no exigen una URL pública y el feed sirve igual en desarrollo. Cada revisión se procesa una sola vez (`ota_booking_revision`); las reservas de Booking nacen en `ACTIVE`. | `generate-ota-reservation` |
-| D13 | **Conflictos de Booking.** Booking ya aceptó la reserva, así que nunca se rechaza: si no hay habitación libre de la categoría, la habitación queda sin asignar (`room_id` vacío, sin bloquear inventario); si se supera la capacidad o un cambio no se puede aplicar, la reserva queda marcada (`conflict_reason`). La Recepcionista asigna la habitación. | `generate-ota-reservation`, `update-reservation` |
+| D13 | **Conflictos de Booking.** Booking ya aceptó la reserva, así que nunca se rechaza: si no hay habitación libre de la categoría, la habitación queda sin asignar (`room_id` vacío, sin bloquear inventario); si se supera la capacidad o un cambio no se puede aplicar, la reserva queda marcada (`conflict_reason`). La Recepcionista asigna la habitación. Una reserva con alguna habitación sin asignar **no viaja en la lista del día** hasta que se asigne: si ya estaba, sale con `REMOVED` y motivo `ROOM_UNASSIGNED`; al asignar la última, entra con `ADDED`. | `generate-ota-reservation`, `update-reservation`, `check-view-reservation` |
 | D14 | **Disponibilidad y tarifas hacia Channex.** La disponibilidad (vendibles del Módulo 1 menos las que ocupan las reservas) se envía al cambiar, agrupada cada 10 s; las tarifas de los próximos 90 días, cotizadas con el Módulo 3 y convertidas a GBP con una tasa fija de configuración (`4000` COP = 1 GBP), a las 03:00. Se respeta el límite de 10 solicitudes por minuto. Los mantenimientos no se descuentan. | `configure-ota` |
 
 ## Estrategia de testing base
