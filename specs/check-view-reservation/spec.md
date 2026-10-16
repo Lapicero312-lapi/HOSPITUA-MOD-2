@@ -484,6 +484,9 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
 - **FR-002**: El sistema debe permitir filtrar el listado por `status` (`PENDING`, `ACTIVE`,
   `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`). Sin filtro de estado, debe incluir todos los
   estados.
+- **FR-002a**: El sistema debe permitir filtrar el listado para ver solo las reservas en conflicto
+  (reservas de Booking que no se pudieron ubicar o cuyo cambio no se pudo aplicar; ver "Generar
+  reservación por OTA").
 - **FR-003**: El sistema debe permitir filtrar el listado por un rango inclusivo de fechas
   (`dateFrom` y `dateTo`, formato `AAAA-MM-DD`, hora de Colombia) sobre la estadía: muestra las
   reservas cuya estadía se cruza con el rango (`startDate` ≤ `dateTo` y `endDate` > `dateFrom`).
@@ -500,9 +503,11 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
 - **FR-005**: Cada fila del listado debe mostrar: `reservationRef` (y, si es `OTA`, el
   `externalConfirmationCode`), el `fullName` y el `documentNumber` del titular, los `roomNumber` y la
   `categoryRoom` de sus habitaciones, el canal (`source` y, si es `OTA`, el `name` de la agencia),
-  `startDate` y `endDate`, `status`, su estado migratorio (`migrationStatus`, FR-005b) y las acciones
-  Ver detalle, Modificar y Cancelar. Modificar y Cancelar solo se habilitan en reservas directas
-  `ACTIVE` o `PENDING`. El número de noches y `guestCount` se ven en el detalle
+  `startDate` y `endDate`, `status`, su estado migratorio (`migrationStatus`, FR-005b), la marca "En
+  conflicto" cuando la reserva lo está, y las acciones Ver detalle, Modificar y Cancelar. Modificar y
+  Cancelar solo se habilitan en reservas directas `ACTIVE` o `PENDING`; en una reserva de Booking en
+  conflicto con una habitación sin asignar se habilita, en su lugar, Asignar habitación
+  ("Actualizar reservación", FR-025). El número de noches y `guestCount` se ven en el detalle
   (FR-006).
 - **FR-005a**: Encima del listado, el sistema debe mostrar a la Recepcionista un resumen del día
   operativo, calculado solo con datos del Módulo 2:
@@ -524,8 +529,9 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
   la o las reservas encontradas ignorando los demás filtros, y permitir abrir desde ahí el detalle
   completo de una reserva:
   - Datos de la reserva: `reservationRef`, `status`, `source`, `externalConfirmationCode` (solo
-    `OTA`), `startDate`, `endDate`, número de noches, `guestCount` (total), `notes`, `createdAt`.
-  - Habitaciones (`ReservationRoom`): por cada una, `roomNumber`, `categoryRoom`,
+    `OTA`), `startDate`, `endDate`, número de noches, `guestCount` (total), `notes`, `createdAt` y, si
+    está en conflicto, su motivo (`conflictReason`) y desde cuándo (`conflictDetectedAt`).
+  - Habitaciones (`ReservationRoom`): por cada una, `roomNumber` ("Sin asignar" si no tiene), `categoryRoom`,
     `guestCount` (personas de la habitación), `roomGrossAmount` (tarifa, informativa; vacía en reservas
     `OTA`) y `stayStatus`.
   - Titular (`Guest`): `firstName`, `lastName`, `documentType`, `documentNumber`, `nationality`,
@@ -571,7 +577,8 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
     `notes` (observaciones) y `updatedAt`. El campo `source` viaja como `DIRECTA` para las reservas
     directas o con el nombre de la agencia (por ejemplo `BOOKING` o `EXPEDIA`) para las `OTA`.
   - Habitaciones (`rooms`): por cada `ReservationRoom`, `roomId`, `roomNumber`, `categoryRoom` y
-    `guestCount` (personas de esa habitación; la suma es el `guestCount` de la reserva).
+    `guestCount` (personas de esa habitación; la suma es el `guestCount` de la reserva). En una reserva
+    de Booking con una habitación sin asignar, su `roomId` y su `roomNumber` viajan vacíos.
   - Titular (`guest`): `guestRef`, `firstName`, `lastName`, `fullName` (para mostrar),
     `documentType`, `documentNumber`, `nationality`, `contactPhone` y `contactEmail`.
 
@@ -629,9 +636,11 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
 
 - **Reservation**: Entidad consultada. Atributos: `reservationRef`, `guestRef`, `guestCount` (suma de los de sus habitaciones),
   `startDate`, `endDate`, `source` (`DIRECT` | `OTA`), `externalConfirmationCode`,
-  `notes`, `createdAt`, `updatedAt` y `status` (`PENDING`, `ACTIVE`,
+  `notes`, `createdAt`, `updatedAt`, `conflictReason` y `conflictDetectedAt` (solo reservas de Booking en
+  conflicto) y `status` (`PENDING`, `ACTIVE`,
   `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`).
-- **ReservationRoom**: Cada habitación de la reserva. Atributos: `reservationRef`, `roomId`,
+- **ReservationRoom**: Cada habitación de la reserva. Atributos: `reservationRef`, `roomId` (vacío si
+  quedó sin asignar),
   `roomNumber`, `categoryRoom`, `guestCount`, `stayStatus` (`EXPECTED` | `CHECKED_IN` |
   `CHECKED_OUT` | `NOT_ARRIVED`).
 - **Guest**: Titular de la reserva. Atributos: `id`, `firstName`, `lastName` (el nombre completo, `fullName`, se arma uniéndolos), `documentType` (tipo de documento: `RC`, `TI`, `CC`, `CE`, `PAS` o `NIT`),
