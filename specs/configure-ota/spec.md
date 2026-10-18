@@ -31,7 +31,7 @@ precios** (eso es del Módulo 3).
 **Configuración inicial (una sola vez, a mano)**
 
 1. En Channex staging se crea, a mano, **la propiedad**, que es **una sola y fija**: el software no crea
-   propiedades. Se configura con la zona horaria `America/Bogota`, la moneda GBP y las
+   propiedades. Se configura con la zona horaria `America/Bogota`, la moneda USD (la del hotel de Booking `10485037`) y las
    actualizaciones automáticas de disponibilidad por **modificación y por cancelación apagadas**
    (`allow_availability_autoupdate_on_modification` y `allow_availability_autoupdate_on_cancellation`
    en `false`): la disponibilidad la recalcula y la envía el Módulo 2, para no descontarla dos veces.

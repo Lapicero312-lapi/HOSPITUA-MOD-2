@@ -77,7 +77,7 @@ Devuelve las revisiones **no confirmadas**, de la más antigua a la más recient
     "arrival_date": "2026-11-10",
     "departure_date": "2026-11-12",
     "amount": "220.00",
-    "currency": "GBP",
+    "currency": "USD",
     "notes": "Llegada tarde",
     "customer": {
       "name": "Ana",
@@ -194,7 +194,7 @@ Después del commit envía el `ack` (A2) y guarda `acked_at`.
    lectura, para no aplicar un cambio antes que su alta).
 4. **Nunca se rechaza** una reserva o un cambio de Booking (D13).
 5. **Sin cotización**: no llama al Módulo 3 (decisión C5). El valor bruto se guarda tal cual, en la moneda
-   de Booking (`GBP` en el hotel de prueba).
+   de Booking (`USD` en el hotel `10485037`).
 6. **Estado inicial `ACTIVE`**; `PENDING` no se usa.
 7. **Titular propio de la reserva**, sin documento y con la nacionalidad informativa.
 8. **`lastSyncAt`**: cada lectura del feed que termina bien lo actualiza, traiga o no revisiones.

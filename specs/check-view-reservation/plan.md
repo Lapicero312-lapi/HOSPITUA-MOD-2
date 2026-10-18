@@ -246,7 +246,8 @@ de uso `GetReservationForBilling` y entrega solo esto:
 - `quoteIds`: el `quoteId` de cada `ReservationRoom`, una cotización por habitación. Va **vacía** en
   reservas `OTA`, que no tienen cotización.
 - `otaId`, `otaConfirmationCode` y `otaCommissionPercentage` **solo** si `channel` es `OTA`
-  (`otaCommissionPercentage` es el `commissionPercentage` congelado en la reserva).
+  (`otaCommissionPercentage` es el `commissionPercentage` congelado en la reserva, como **número** JSON
+  de 0 a 100 con hasta dos decimales).
 - No incluye otros datos financieros ni del huésped.
 - Si la reserva no existe: **`404`** `RESERVATION_NOT_FOUND`. Es la única respuesta 404 del Módulo 2:
   el Módulo 3 la espera así (ver el plan base, sección "Errores").
@@ -1022,8 +1023,7 @@ Cada uno se puede cambiar sin romper el resto; se anotan para que no pasen desap
 
 | # | Pendiente | Con quién |
 |---|---|---|
-| 1 | Tipo de `otaCommissionPercentage` en la respuesta C4 (número o texto) y su escala (0 a 100) | Módulo 3 |
-| 2 | Campos exactos que espera el Módulo 1 en C5 | Módulo 1 |
+| 1 | Campos exactos que espera el Módulo 1 en C5 | Módulo 1 |
 
 ## Trazabilidad: requisito → componente → tarea
 

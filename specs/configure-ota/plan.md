@@ -48,7 +48,7 @@ propio de este caso de uso:
 - **Dependencias nuevas**: ninguna (`ChannexPort` es del plan base).
 - **Almacenamiento**: `ota`, `ota_room_type_mapping` y `ari_pending_change` (plan base).
 - **Configuración** (plan base): `CHANNEX_BASE_URL`, `CHANNEX_API_KEY`, `CHANNEX_PROPERTY_ID`,
-  `BOOKING_HOTEL_ID`, `BOOKING_COMMISSION_PERCENTAGE`, `CHANNEX_ARI_INTERVAL_SECONDS` (`30`) y
+  `BOOKING_HOTEL_ID` (`10485037`, el hotel de Booking que se usa), `BOOKING_COMMISSION_PERCENTAGE`, `CHANNEX_ARI_INTERVAL_SECONDS` (`30`) y
   `CHANNEX_ARI_DAYS` (`90`).
 - **Límites de Channex**: 10 solicitudes por minuto por propiedad para disponibilidad. Con una cada 30 s
   quedan 2 por minuto; Channex recomienda agrupar cada 30 a 60 s.
@@ -70,7 +70,7 @@ crea propiedades):
 | Ajuste | Valor | Por qué |
 |---|---|---|
 | `timezone` | `America/Bogota` | El mismo día operativo que el Módulo 2 |
-| `currency` | `GBP` | La moneda del hotel de prueba de Booking |
+| `currency` | `USD` | La moneda del hotel de Booking `10485037` |
 | `allow_availability_autoupdate_on_modification` | `false` | La disponibilidad la recalcula y la envía el Módulo 2 |
 | `allow_availability_autoupdate_on_cancellation` | `false` | Ídem; evita descontar o sumar dos veces |
 
@@ -398,7 +398,7 @@ reserva.
 
 | # | Pendiente | Con quién |
 |---|---|---|
-| 1 | El Módulo 3 debe crear los planes de tarifa por tipo de habitación y enviar los precios a Channex con su propia integración; acordar el nombre de cada plan y la moneda (GBP) | Módulo 3 |
+| 1 | El Módulo 3 crea los planes de tarifa por tipo de habitación (nombres a su criterio) y envía los precios en USD a Channex con su propia integración; la conversión desde COP es suya | Módulo 3 |
 | 2 | Restricciones de venta (estancia mínima, cierre de llegadas): hoy no las envía nadie; si el Módulo 3 las necesita, van en sus planes de tarifa | Módulo 3 |
 
 ## Notes
