@@ -519,10 +519,8 @@ solo movimiento.
 |---|---|---|
 | 1 | **Formato exacto de SIRE**: separador, formato de fecha, fin de línea, codificación, si lleva una línea de encabezado y si los nombres van en mayúsculas. El spec lo remite al manual del portal de SIRE. Mientras tanto se usan los valores por defecto de la configuración | Equipo del Módulo 2 |
 | 2 | **Límite de solicitudes con varias instancias**: el limitador en memoria no se comparte entre instancias. Si el backend corre en más de una, habría que moverlo a la base de datos o a un servicio compartido | Equipo del Módulo 2 |
-| 3 | El spec nombra la dependencia como **"Procesar datos de huéspedes extranjeros"** (FR-004), pero el caso de uso se llama "Procesar datos de huéspedes" | Equipo del Módulo 2 |
-| 4 | **Huésped repetido entre reservas**: un huésped con dos estadías aparece con las líneas de ambas. Confirmar que Migración las espera así | Equipo del Módulo 2 |
-| 5 | **Hasta cuándo se conservan las `SireExport`**: son un registro auditable; el spec no fija retención | Equipo del Módulo 2 |
-| 6 | La **numeración del spec** salta de FR-008 a FR-010 y luego FR-009 | Equipo del Módulo 2 |
+| 3 | **Huésped repetido entre reservas**: un huésped con dos estadías aparece con las líneas de ambas. Confirmar que Migración las espera así | Equipo del Módulo 2 |
+| 4 | **Hasta cuándo se conservan las `SireExport`**: son un registro auditable; el spec no fija retención | Equipo del Módulo 2 |
 
 ## Notes
 

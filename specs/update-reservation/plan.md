@@ -266,7 +266,7 @@ tarifas que el solicitante vio:
 | `RESERVATION_NOT_FOUND` | La reserva no existe | "La reserva no existe." |
 | `OTA_RESERVATION_READ_ONLY` | La Recepcionista modifica una reserva `OTA` | "Las reservas de OTA solo las modifica Booking. Si está en conflicto, solo se le puede asignar la habitación." |
 | `STATUS_NOT_EDITABLE` | La reserva está en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` o `NO_SHOW` | "El estado actual de la reserva no admite modificaciones." |
-| `CONCURRENT_UPDATE` | `updatedAt` no coincide (otra persona la modificó) | "La reserva fue modificada por otra persona. Recargue la información e intente de nuevo." |
+| `CONCURRENT_UPDATE` | `updatedAt` no coincide (otra persona la modificó o la canceló) | "Esta reserva ya fue actualizada o cancelada recientemente" (el mismo de `cancel-reservation`) |
 | `INVALID_STAY_DATES` | Fechas vacías o salida no posterior a la entrada | "La fecha de salida debe ser posterior a la de entrada." |
 | `START_DATE_IN_PAST` | Entrada anterior al día operativo en curso | "La fecha de entrada no puede ser anterior a hoy." |
 | `ROOM_ALREADY_IN_RESERVATION` | Una habitación repetida en `rooms` | "La habitación ya forma parte de la reserva." |
@@ -913,7 +913,7 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
 ## Puntos que este plan propone (el spec no los dice)
 
 1. **Cierre del día a las 00:00:30**, procesando el día que acaba de terminar con su `operationalDate`
-   explícito. El plan base dice "al terminar las 23:59". Así el cierre no compite con una notificación de
+   explícito; el plan base lo fija igual ("al terminar las 23:59", a las 00:00:30). Así el cierre no compite con una notificación de
    las 23:59 y el aviso `REMOVED` lleva la fecha del día cerrado.
 2. **`rooms` como lista completa por `roomId`**, y la herencia de tarifa en un cambio de habitación de la
    misma categoría (la nueva toma la tarifa de la quitada).
@@ -934,10 +934,8 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
 
 | # | Pendiente | Con quién |
 |---|---|---|
-| 1 | **Hora del cierre del día**: 00:00:30 contra "23:59" del plan base | Equipo del Módulo 2 |
-| 2 | **Habitaciones `NOT_ARRIVED` en una reserva `IN_PROGRESS`**: el spec dice que se quitan de la lista del día, pero la reserva ya no está en la lista (está `IN_PROGRESS`), así que no hay aviso. Confirmar que es lo esperado | Módulo 1 |
-| 3 | El Módulo 1 debería conservar el mismo `messageId` en los reintentos y no reiniciar el `sequenceNumber` (FR-023); confirmar | Módulo 1 |
-| 4 | El spec menciona en FR-003 un texto confuso ("sin mostrar la tarifa nueva"): se interpretó como "sin mostrar la tarifa anterior", coherente con el resto del spec y con `calculate-dynamic-rate` | Equipo del Módulo 2 |
+| 1 | **Habitaciones `NOT_ARRIVED` en una reserva `IN_PROGRESS`**: el spec dice que se quitan de la lista del día, pero la reserva ya no está en la lista (está `IN_PROGRESS`), así que no hay aviso. Confirmar que es lo esperado | Módulo 1 |
+| 2 | El Módulo 1 debería conservar el mismo `messageId` en los reintentos y no reiniciar el `sequenceNumber` (FR-023); confirmar | Módulo 1 |
 
 ## Notes
 

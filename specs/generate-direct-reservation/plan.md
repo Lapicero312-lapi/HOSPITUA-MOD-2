@@ -565,10 +565,9 @@ y por caída del Módulo 3.
 | # | Pendiente | Con quién |
 |---|---|---|
 | 1 | **Doble envío**: como las habitaciones se asignan solas, dos envíos iguales del formulario crean **dos reservas** en habitaciones distintas. Conviene una cabecera `Idempotency-Key` con una tabla pequeña que la guarde, o deshabilitar el botón en la pantalla | Equipo del Módulo 2 |
-| 2 | **Mensaje de caída del Módulo 3**: este spec dice "...no se encuentra disponible. Por favor intente más tarde" y `calculate-dynamic-rate` (escenario 2) lo dice sin la última frase. Este plan usa el de este spec en la creación; conviene alinear los dos specs | Equipo del Módulo 2 |
-| 3 | El flujo del spec asigna habitaciones automáticamente, pero los escenarios 5 y 6 nombran habitaciones concretas. Confirmar si la API debe aceptar `roomId` | Equipo del Módulo 2 |
-| 4 | Una habitación con mantenimiento programado **entre** la verificación y el guardado no se detecta (el calendario no se consulta dentro de la transacción) | Equipo del Módulo 2 |
-| 5 | La Recepcionista no elige el número de habitación: confirmar si necesita poder hacerlo para alguna petición del huésped (por ejemplo, una habitación en un piso) | Equipo del Módulo 2 |
+| 2 | El flujo del spec asigna habitaciones automáticamente, pero los escenarios 5 y 6 nombran habitaciones concretas. Confirmar si la API debe aceptar `roomId` | Equipo del Módulo 2 |
+| 3 | Una habitación con mantenimiento programado **entre** la verificación y el guardado no se detecta (el calendario no se consulta dentro de la transacción) | Equipo del Módulo 2 |
+| 4 | La Recepcionista no elige el número de habitación: confirmar si necesita poder hacerlo para alguna petición del huésped (por ejemplo, una habitación en un piso) | Equipo del Módulo 2 |
 
 ## Notes
 

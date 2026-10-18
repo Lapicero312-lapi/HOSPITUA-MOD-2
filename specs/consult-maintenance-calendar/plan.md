@@ -365,9 +365,6 @@ contiguo, más los fallos del Módulo 1.
 |---|---|---|
 | 1 | Ruta definitiva y confirmar que `maintenanceEnd` es inclusivo | Módulo 1 |
 | 2 | **Una consulta por habitación** puede ser costosa (una por candidata, y una por habitación en la pantalla). Conviene que el Módulo 1 acepte consultar por categoría o por varias habitaciones | Módulo 1 |
-| 3 | El spec (Key Entities) lista el `reason` del mantenimiento, pero el contrato acordado **no lo trae**. Hay que decidir si se ajusta el spec o se pide el motivo | Equipo del Módulo 2 y Módulo 1 |
-| 4 | El spec lista `status` (`Available`, `Reserved`, `Occupied`) en `Room`, pero `consult-room-inventory` ya dice que el inventario no trae estado. Ajustar el spec cuando se permita | Equipo del Módulo 2 |
-| 5 | Un mantenimiento programado **después** de crear la reserva no se detecta aquí; el Módulo 1 gestiona la reubicación. Falta acordar cómo avisa el Módulo 1 al Módulo 2 si cancelan reservas por esa causa | Módulo 1 |
 
 ## Notes
 

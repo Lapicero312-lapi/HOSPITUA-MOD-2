@@ -338,7 +338,7 @@ Todo error sale con `{ "errorCode", "message", "timestamp", "path" }` y **siempr
 
 | Situación | Origen | HTTP | `errorCode` | `message` |
 |---|---|---|---|---|
-| El Módulo 3 no responde, agota el tiempo o devuelve 5xx al cotizar una **reserva nueva** | Módulo 3 | 400 | `PRICING_UNAVAILABLE` | "Error 400: El servicio de cotización de tarifas no se encuentra disponible" |
+| El Módulo 3 no responde, agota el tiempo o devuelve 5xx al cotizar una **reserva nueva** | Módulo 3 | 400 | `PRICING_UNAVAILABLE` | "Error 400: El servicio de cotización de tarifas no se encuentra disponible. Por favor intente más tarde" |
 | Lo mismo al **recotizar** una reserva `ACTIVE` | Módulo 3 | 400 | `RECALCULATION_UNAVAILABLE` | "No se pudo calcular la nueva tarifa en este momento. Intente más tarde." |
 | Respuesta del Módulo 3 inválida (campos faltantes, `lodgingAmount` ≤ 0, más de 2 decimales, moneda inválida, fechas fuera del rango) | Módulo 3 | 400 | El de la fila anterior según el contexto | El de la fila anterior; el detalle va al log |
 | `categoryRoom` vacía o con caracteres no permitidos | M2, antes de llamar | 400 | `INVALID_CATEGORY` | "La categoría indicada no es válida." |
@@ -518,12 +518,10 @@ seguro ante un Módulo 3 caído.
 
 | # | Pendiente | Con quién |
 |---|---|---|
-| 1 | **El spec se contradice**: FR-002 permite sumar los `lodgingAmount` para mostrar el total de la reserva y FR-005 dice "ni sumas, ni diferencias". Este plan implementa FR-002 (la única suma permitida). Hay que dejar FR-005 igual que FR-002 | Equipo del Módulo 2 |
-| 2 | Formato del cuerpo de error del Módulo 3 (4xx): cómo distingue categoría inexistente, rango inválido y parámetros ausentes. Mientras tanto, todo 4xx se trata como `INVALID_CATEGORY` o `INVALID_STAY_DATES` según la validación local | Módulo 3 |
-| 3 | Escala de los importes (¿máximo dos decimales?) y tipo en el JSON (número o texto) | Módulo 3 |
-| 4 | **Vigencia del `quoteId`**: si una cotización caduca, el Módulo 3 cobraría contra una cotización vencida. Hoy se re-cotiza al confirmar (D1), pero falta saber si el `quoteId` guardado se puede usar días después en el Check-Out | Módulo 3 |
-| 5 | Autenticación de servicio hacia el Módulo 3 y límite de llamadas por segundo | Módulo 3 |
-| 6 | **Origen de las categorías y de las tarifas base** de la pantalla "Tarifas": hoy una configuración local. Las categorías pueden salir de la consulta de todas las habitaciones vendibles del Módulo 1 (`consult-room-inventory`, A3); las tarifas base siguen sin origen definido | Equipo del Módulo 2 y Módulo 3 |
+| 1 | Formato del cuerpo de error del Módulo 3 (4xx): cómo distingue categoría inexistente, rango inválido y parámetros ausentes. Mientras tanto, todo 4xx se trata como `INVALID_CATEGORY` o `INVALID_STAY_DATES` según la validación local | Módulo 3 |
+| 2 | Escala de los importes (¿máximo dos decimales?) y tipo en el JSON (número o texto) | Módulo 3 |
+| 3 | **Vigencia del `quoteId`**: si una cotización caduca, el Módulo 3 cobraría contra una cotización vencida. Hoy se re-cotiza al confirmar (D1), pero falta saber si el `quoteId` guardado se puede usar días después en el Check-Out | Módulo 3 |
+| 4 | **Origen de las tarifas base** de la pantalla "Tarifas": hoy una configuración local. Las categorías salen de la consulta de todas las habitaciones vendibles del Módulo 1 (`consult-room-inventory`, A3) | Equipo del Módulo 2 y Módulo 3 |
 
 ## Notes
 

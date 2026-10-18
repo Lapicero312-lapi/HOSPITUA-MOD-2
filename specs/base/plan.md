@@ -72,7 +72,7 @@ describe lo propio.
 | Fechas | Fechas puras `AAAA-MM-DD` (texto `date` en la base) y `luxon` para el día operativo en `America/Bogota` | Evita corrimientos por zona horaria. Se guardan e intercambian como `AAAA-MM-DD`; las pantallas las muestran como `dd/mm/aaaa` |
 | Seguridad | **No se implementa en el Módulo 2**: es una capa aparte del sistema de microservicios. El frontend simula el login. Quién llama se indica con la cabecera `X-Client` (`RECEPTIONIST`, `MODULE1`, `MODULE3`) y quién hizo la acción con `X-User`; ninguna se valida | Ver la regla transversal 10 |
 | Integración con Booking.com | **Channex** (entorno de pruebas `staging.channex.io`), por REST con la cabecera `user-api-key`. Las reservas se leen del *feed* (`GET /api/v1/booking_revisions/feed`) y se confirman con `ack`; el Módulo 2 crea los tipos de habitación (`POST`/`PUT /api/v1/room_types`) y envía la disponibilidad (`POST /api/v1/availability`). Los planes de tarifa y los precios los envía el **Módulo 3** directamente a Channex. La propiedad es fija y la crea un administrador en Channex | Booking no llama al Módulo 2: el Módulo 2 consulta a Channex, así que no necesita una URL pública (D12) |
-| Tareas programadas | `@nestjs/schedule` con `timeZone: 'America/Bogota'` | Envío de la lista del día (00:00), cierre del día (23:59) y reintento de avisos pendientes |
+| Tareas programadas | `@nestjs/schedule` con `timeZone: 'America/Bogota'` | Envío de la lista del día (00:00), cierre del día (al terminar las 23:59: se ejecuta a las 00:00:30) y reintento de avisos pendientes |
 | Exclusión mutua de tareas con varias instancias | Bloqueo asesor de PostgreSQL (C10) | Evitar que dos instancias ejecuten el mismo cierre del día |
 | Timeouts y reintentos REST | `@nestjs/axios` con timeout; `cockatiel` si se necesitan reintentos o corte de circuito | No asumir disponibilidad ante caídas |
 | Logs y correlación | `nestjs-pino` + `AsyncLocalStorage` (identificador de correlación por solicitud) | Seguir un mensaje o una solicitud de punta a punta |
@@ -129,7 +129,7 @@ están en "Modelo de datos base".
 | `source` | `ReservationSource` | `DIRECT` u `OTA` |
 | `otaId` | referencia a `Ota` | Solo si `source` es `OTA` |
 | `externalConfirmationCode` | texto | Solo `OTA`; único por agencia |
-| `grossAmount`, `currency` | dinero | Solo `OTA`: valor bruto que envía la agencia (`totalAmount` en su JSON); base de la comisión |
+| `grossAmount`, `currency` | dinero | Solo `OTA`: valor bruto que envía la agencia (`amount` en la revisión de Channex); base de la comisión |
 | `commissionPercentage`, `commissionAmount` | decimal | `0` en `DIRECT`; en `OTA`, `grossAmount × commissionPercentage / 100` |
 | `commissionStatus` | `CommissionStatus` | Solo `OTA` |
 | `notes` | texto | Opcional, máximo 500 caracteres |
@@ -445,7 +445,7 @@ backend/
     │   ├── in/
     │   │   ├── rest/             # controladores REST
     │   │   ├── messaging/        # consumidores RabbitMQ (Check-In, Check-Out, mantenimiento e inventario)
-    │   │   └── jobs/             # lista del día (00:00), cierre del día (23:59), reintentos, feed de
+    │   │   └── jobs/             # lista del día (00:00), cierre del día (00:00:30), reintentos, feed de
     │   │                         #   Channex y disponibilidad (30 s), tipos y disponibilidad completa (03:00)
     │   ├── out/
     │   │   ├── persistence/      # clases de tabla TypeORM, mapeadores y repositorios
@@ -730,7 +730,7 @@ tablas se unen por sus claves. Hay tres excepciones a propósito:
 | `status` | `varchar(12)` | no | `PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW` |
 | `status_reason` | `varchar(200)` | sí | Motivo de la última transición (D6) |
 | `notes` | `varchar(500)` | sí | |
-| `gross_amount` | `numeric(14,2)` | sí | Solo `OTA`: valor bruto que envía la agencia (`totalAmount`) |
+| `gross_amount` | `numeric(14,2)` | sí | Solo `OTA`: valor bruto que envía la agencia (`amount` en la revisión de Channex) |
 | `currency` | `char(3)` | sí | Solo `OTA`: moneda del `gross_amount` |
 | `commission_percentage` | `numeric(5,2)` | no | `0` por defecto; de 0 a 100; en `OTA`, el de la agencia al registrar la reserva |
 | `commission_amount` | `numeric(14,2)` | no | `0` por defecto; `CHECK (commission_amount >= 0)`; en `OTA`, `gross_amount × commission_percentage / 100` |
@@ -956,7 +956,8 @@ las envía y las borra.
    del día operativo, se publica después de confirmar el cambio y, si falla, queda pendiente y se
    reintenta en orden.
 4. **Tareas programadas** (zona horaria `America/Bogota`, idempotentes, con bloqueo asesor): envío de la
-   lista del día a las 00:00; cierre del día al terminar las 23:59 (No-Show:
+   lista del día a las 00:00; cierre del día al terminar las 23:59 (se ejecuta a las 00:00:30 y
+   procesa el día que terminó; No-Show:
    `NO_SHOW` para cualquier canal, sin `Cancellation`; habitaciones no llegadas pasan a
    `NOT_ARRIVED`); reintento de los avisos pendientes; lectura del feed de Channex y, a continuación,
    envío de la disponibilidad pendiente, cada 30 segundos; y sincronización de tipos de

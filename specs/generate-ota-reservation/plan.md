@@ -126,7 +126,7 @@ Devuelve las revisiones **no confirmadas**, de la más antigua a la más recient
 | `booking_id` | `ota_booking_revision.booking_id` |
 | `ota_reservation_code` | `reservation.external_confirmation_code` |
 | `arrival_date`, `departure_date` | `start_date`, `end_date` |
-| `amount`, `currency` | `gross_amount` (`totalAmount`), `currency` |
+| `amount`, `currency` | `gross_amount`, `currency` |
 | `notes` | `notes`, saneado y recortado a 500 caracteres |
 | `customer.name`, `surname`, `mail`, `phone` | `guest.first_name`, `last_name`, `contact_email`, `contact_phone` |
 | `customer.country` | `guest.nationality`: nombre del país según la tabla `CountryNames` (`CO` → `Colombia`); vacía si el código no está |

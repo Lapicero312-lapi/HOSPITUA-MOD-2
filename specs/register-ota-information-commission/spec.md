@@ -18,11 +18,11 @@ fórmula contractual y deje el importe neto listo para la conciliación mensual 
 ### Flujo de Usuario de Alto Nivel
 
 1. El caso de uso "Generar Reservación por OTA" invoca internamente "Registrar confirmación y
-   comisión de ota" al validar una nueva reserva, enviando el `totalAmount` recibido de la OTA y el
+   comisión de ota" al validar una nueva reserva, enviando el `grossAmount` recibido de la OTA y el
    `externalConfirmationCode`.
 2. El sistema consulta el `commissionPercentage` contractual configurado para esa `Ota`.
 3. El sistema calcula el `commissionAmount` aplicando estrictamente la fórmula del glosario:
-   `totalAmount × commissionPercentage / 100` (el porcentaje va de 0 a 100: `30` es el 30 %).
+   `grossAmount × commissionPercentage / 100` (el porcentaje va de 0 a 100: `30` es el 30 %).
 4. El sistema persiste el `commissionAmount` y el `commissionPercentage` en la `Reservation`, junto
    con el `externalConfirmationCode`, y marca el `commissionStatus` como `CALCULATED`.
 5. Durante el ciclo de vida de la reserva, el Módulo 3 (finanzas) concilia la comisión contra el
@@ -35,7 +35,7 @@ fórmula contractual y deje el importe neto listo para la conciliación mensual 
 ### User Story 1 - Cálculo y Registro de Comisión al Confirmar una Reserva OTA (Priority: P1)
 
 Al validarse una nueva reserva proveniente de una `Ota`, el sistema aplica el porcentaje
-contractual configurado para esa agencia sobre el `totalAmount` recibido, calcula el
+contractual configurado para esa agencia sobre el `grossAmount` recibido, calcula el
 `commissionAmount` y lo persiste junto con el `externalConfirmationCode` en la `Reservation`, con
 `commissionStatus` `CALCULATED`. Esta historia es el flujo maestro (Happy Path), invocado siempre
 como parte de "Generar Reservación por OTA".
@@ -44,7 +44,7 @@ como parte de "Generar Reservación por OTA".
 terceros: sin ella, el hotel recibiría reservas de OTA sin registrar con exactitud la comisión
 pactada ni el ingreso neto real de cada una.
 
-**Independent Test**: Se prueba invocando el caso de uso con un `totalAmount` de \$400 y un
+**Independent Test**: Se prueba invocando el caso de uso con un `grossAmount` de \$400 y un
 `commissionPercentage` del 15% configurado para la agencia. Se verifica que el sistema calcule un
 `commissionAmount` de \$60, lo persista junto al `externalConfirmationCode`, y marque el
 `commissionStatus` como `CALCULATED`. Se completa enviando un `commissionPercentage` inválido,
@@ -56,8 +56,8 @@ confirmando el rechazo con **HTTP 400**.
    - **Given** una reserva proveniente de una `Ota` válida con `commissionPercentage`
      contractual configurado
    - **When** "Generar Reservación por OTA" invoca "Registrar confirmación y comisión de ota" con
-     el `totalAmount` y el `externalConfirmationCode`
-   - **Then** el sistema calcula el `commissionAmount` aplicando `totalAmount ×
+     el `grossAmount` y el `externalConfirmationCode`
+   - **Then** el sistema calcula el `commissionAmount` aplicando `grossAmount ×
      commissionPercentage / 100`, lo persiste en la `Reservation`, y marca el `commissionStatus` como
      `CALCULATED`
 
@@ -170,7 +170,7 @@ se confirma que el cambio no afecta las reservas ya registradas.
 ### Functional Requirements
 
 - **FR-001**: El sistema debe calcular automáticamente el `commissionAmount` aplicando la fórmula
-  `totalAmount × commissionPercentage / 100` (el porcentaje va de 0 a 100) al registrar una nueva reserva
+  `grossAmount × commissionPercentage / 100` (el porcentaje va de 0 a 100) al registrar una nueva reserva
   de canal OTA, y recalcularlo con el mismo porcentaje congelado si Booking cambia el valor de la reserva.
 - **FR-002**: El sistema debe consultar el `commissionPercentage` contractual configurado para la
   `Ota` que origina cada reserva.
@@ -208,9 +208,9 @@ se confirma que el cambio no afecta las reservas ya registradas.
 ### Key Entities *(include if feature involves data)*
 
 - **Reservation**: Representa la reserva de canal OTA sobre la que se calcula la comisión.
-  Atributos: `reservationRef`, `guestRef`, `guestCount`, `totalAmount` (valor bruto total de todas
+  Atributos: `reservationRef`, `guestRef`, `guestCount`, `grossAmount` (valor bruto total de todas
   las habitaciones, recibido de la OTA), `currency`, `commissionAmount` (comisión calculada sobre el
-  `totalAmount` completo; se recalcula si Booking cambia el valor), `commissionPercentage`
+  `grossAmount` completo; se recalcula si Booking cambia el valor), `commissionPercentage`
   (porcentaje contractual aplicado), `commissionStatus` (`CALCULATED` | `RECONCILED` | `PAID` |
   `DISPUTED`), `externalConfirmationCode`, `source` (`OTA`), y `status` con estados permitidos:
   `PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`. Una reserva de Booking se crea

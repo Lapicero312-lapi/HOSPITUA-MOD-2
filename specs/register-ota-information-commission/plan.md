@@ -10,7 +10,7 @@ Cada reserva de una OTA trae una obligación con la agencia: una comisión pacta
 la estadía. Este caso de uso hace cuatro cosas:
 
 1. **Calcula y registra la comisión** de cada reserva OTA nueva, al registrarla
-   (`generate-ota-reservation` lo llama): `commissionAmount = totalAmount × commissionPercentage / 100`,
+   (`generate-ota-reservation` lo llama): `commissionAmount = grossAmount × commissionPercentage / 100`,
    con precisión decimal exacta, y estado inicial `CALCULATED`. La **recalcula** con el mismo porcentaje
    congelado cuando Booking cambia el valor de la reserva. Nunca calcula con un porcentaje fuera de 0 a
    100.
@@ -202,14 +202,14 @@ y el Módulo 3, con la misma respuesta para los dos.
 ```typescript
 interface CommissionInput {
   otaId: string;
-  totalAmount: Money;                  // valor bruto de toda la reserva, recibido de la OTA
+  grossAmount: Money;                  // valor bruto de toda la reserva, recibido de la OTA
   externalConfirmationCode: string;
 }
 
 interface CommissionResult {
   otaId: string;
   commissionPercentage: string;        // el de la agencia en este momento, de 0 a 100
-  commissionAmount: Money;             // totalAmount × commissionPercentage / 100, 2 decimales, ROUND_HALF_UP
+  commissionAmount: Money;             // grossAmount × commissionPercentage / 100, 2 decimales, ROUND_HALF_UP
   commissionStatus: 'CALCULATED';
 }
 
@@ -279,9 +279,9 @@ interface OtaConnectionTracker {
 
 ## Reglas de negocio
 
-1. **Fórmula**: `commissionAmount = totalAmount × commissionPercentage / 100`, con `decimal.js`, **dos
+1. **Fórmula**: `commissionAmount = grossAmount × commissionPercentage / 100`, con `decimal.js`, **dos
    decimales y redondeo `ROUND_HALF_UP`**; el valor queda positivo (el signo lo aplica el Módulo 3).
-   Se calcula **una sola vez por reserva**, sobre el `totalAmount` completo, no por habitación.
+   Se calcula **una sola vez por reserva**, sobre el `grossAmount` completo, no por habitación.
    Ejemplo: `400 × 15 / 100 = 60.00`.
 2. **Estado inicial** `CALCULATED`, desde el momento del registro de la reserva.
 3. **Conciliación**: solo reservas OTA en `COMPLETED`, solo con los montos que coinciden, y con las
@@ -310,7 +310,7 @@ sequenceDiagram
     participant R as OtaRepository
     participant DB as PostgreSQL
 
-    G->>C: calculate(otaId, totalAmount, externalConfirmationCode)
+    G->>C: calculate(otaId, grossAmount, externalConfirmationCode)
     C->>R: findById(otaId)
     alt la agencia no existe
         C-->>G: BusinessError OTA_NOT_FOUND (400)
@@ -323,7 +323,7 @@ sequenceDiagram
     alt duplicado
         C-->>G: BusinessError DUPLICATE_CONFIRMATION_CODE (400), sin comisión duplicada
     end
-    C->>C: commissionAmount = totalAmount x porcentaje / 100 (decimal.js, 2 decimales)
+    C->>C: commissionAmount = grossAmount x porcentaje / 100 (decimal.js, 2 decimales)
     C-->>G: CommissionResult (CALCULATED)
     G->>DB: INSERT reservation con la comisión (en su transacción)
     G->>C: recordAudit(tx, reservationId, result, performedBy)
@@ -511,7 +511,7 @@ frontend/src/pages/otas/                            # pantalla "Agencias OTA" (s
 ## Phase 3: User Story 1 - Cálculo y registro de la comisión (P1)
 
 **Goal**: toda reserva OTA nueva queda con su comisión exacta y `CALCULATED`.
-**Independent Test**: `totalAmount` de 400 y 15 % dan 60 y `CALCULATED`; un porcentaje inválido se rechaza.
+**Independent Test**: `grossAmount` de 400 y 15 % dan 60 y `CALCULATED`; un porcentaje inválido se rechaza.
 
 - [ ] T006 [US1] `RegisterOtaConfirmationAndCommission.calculate`: agencia, porcentaje de 0 a 100, código duplicado y fórmula
 - [ ] T007 [US1] `recordAudit` y la inserción de `commission_audit` dentro de la transacción de quien llama
@@ -543,7 +543,7 @@ frontend/src/pages/otas/                            # pantalla "Agencias OTA" (s
 
 | Historia | Escenario | Qué se verifica |
 |---|---|---|
-| US1 | 1 registro exitoso | `totalAmount` 400 y 15 %: `commissionAmount` 60.00, `commissionStatus` `CALCULATED`, fila en `commission_audit` |
+| US1 | 1 registro exitoso | `grossAmount` 400 y 15 %: `commissionAmount` 60.00, `commissionStatus` `CALCULATED`, fila en `commission_audit` |
 | US1 | 2 porcentaje inválido | Menor que 0 o mayor que 100: `400` `INVALID_COMMISSION_PERCENTAGE` y la reserva no se persiste |
 | US2 | 1 conciliación | Reservas `COMPLETED` y `CALCULATED` pasan a `RECONCILED` cuando los montos coinciden; queda auditoría con el canal `MODULE3` |
 | US2 | 2 cancelada por Booking | Su `commissionAmount` y `commissionStatus` no cambian, ni al cancelar ni al conciliar (`RESERVATION_CANCELLED`) |

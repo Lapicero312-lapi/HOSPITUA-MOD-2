@@ -74,7 +74,7 @@ ya no aparezca en el feed.
    - **When** el sistema lee el feed
    - **Then** registra la `Reservation` en `ACTIVE` con `source` `OTA`, el `externalConfirmationCode`
      igual al código de Booking, el valor bruto y la moneda de Booking, la `Room` 201 en `EXPECTED` y
-     la comisión `totalAmount × commissionPercentage / 100`; luego confirma la revisión a Channex
+     la comisión `grossAmount × commissionPercentage / 100`; luego confirma la revisión a Channex
 
 2. **Scenario**: Revisión repetida
    - **Given** una revisión ya procesada
@@ -194,11 +194,12 @@ pase a `CANCELLED` con una `Cancellation` del canal `OTA_API`.
   tipo de habitación no tiene relación, no debe confirmarla.
 - **FR-003**: Ante una revisión `new`, el sistema debe registrar la `Reservation` en `ACTIVE` con
   `source` `OTA`, la agencia Booking.com, el código de Booking como `externalConfirmationCode`, el
-  valor bruto (`totalAmount`) y la moneda (`currency`) de Booking sin recalcularlos, y una
+  valor bruto (`grossAmount`, el campo `amount` de la revisión de Channex) y la moneda (`currency`) de
+  Booking sin recalcularlos, y una
   `ReservationRoom` en `EXPECTED` por cada habitación, con su categoría (según "Configurar OTA") y la
   `Room` asignada mediante "Verificar disponibilidades".
 - **FR-004**: El sistema debe calcular la comisión con "Registrar confirmación y comisión de ota":
-  `totalAmount × commissionPercentage / 100`, con el porcentaje de la agencia, que queda congelado en
+  `grossAmount × commissionPercentage / 100`, con el porcentaje de la agencia, que queda congelado en
   la reserva.
 - **FR-005**: Ante una revisión `modified`, el sistema debe aplicar el cambio mediante "Actualizar
   reservación" y recalcular la comisión con el porcentaje congelado de la reserva.
@@ -229,13 +230,13 @@ pase a `CANCELLED` con una `Cancellation` del canal `OTA_API`.
 ### Key Entities *(include if feature involves data)*
 
 - **Reservation**: Reserva registrada desde Booking. Atributos: `reservationRef`, `guestRef`,
-  `guestCount` (suma de los de sus habitaciones), `startDate`, `endDate`, `totalAmount` (valor bruto
+  `guestCount` (suma de los de sus habitaciones), `startDate`, `endDate`, `grossAmount` (valor bruto
   total enviado por Booking), `currency`, `commissionPercentage`, `commissionAmount`,
   `externalConfirmationCode` (código de Booking), `notes`, `source` (`OTA`), `createdAt`, `status` (en
   este flujo nace en `ACTIVE`), `conflictReason` (vacío si no hay conflicto) y `conflictDetectedAt`.
 - **ReservationRoom**: Cada habitación de la reserva. Atributos: `reservationRef`, `roomId` (vacío si
   quedó sin asignar), `roomNumber`, `categoryRoom`, `guestCount` y `stayStatus` (nace en `EXPECTED`).
-  En canal OTA no tiene valor por habitación: el valor es el `totalAmount` de la reserva.
+  En canal OTA no tiene valor por habitación: el valor es el `grossAmount` de la reserva.
 - **Guest**: Titular de la reserva. Atributos: `firstName`, `lastName`, `contactEmail`,
   `contactPhone`, `nationality` (informativa) y `documentType` y `documentNumber` (vacíos en reservas
   de Booking).

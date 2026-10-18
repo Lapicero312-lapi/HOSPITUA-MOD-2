@@ -130,7 +130,7 @@ respuesta es un **HTTP 400 (Bad Request)** controlado, sin tarifas asumidas.
      espera o devuelve un error de disponibilidad
    - **Then** el Módulo 2 aplica un bloqueo seguro, no crea la reserva, no asume ninguna tarifa por
      defecto ni a cero, y responde con **HTTP 400 (Bad Request)** con el mensaje "Error 400: El
-     servicio de cotización de tarifas no se encuentra disponible"
+     servicio de cotización de tarifas no se encuentra disponible. Por favor intente más tarde"
 
 3. **Scenario**: Sin disponibilidad, no se invoca al Módulo 3
    - **Given** que "Verificar disponibilidades" indica que no hay disponibilidad para la
@@ -195,7 +195,7 @@ cambio no se aplica y que la respuesta es un **HTTP 400** controlado.
 - ¿Qué sucede si el servicio de Pricing del Módulo 3 no responde durante la cotización de una
   reserva nueva? El sistema aplica un bloqueo seguro: cancela la transacción de forma local, no
   persiste ningún registro y responde **HTTP 400 (Bad Request)** con el mensaje "Error 400: El
-  servicio de cotización de tarifas no se encuentra disponible". No se permite crear la reserva con
+  servicio de cotización de tarifas no se encuentra disponible. Por favor intente más tarde". No se permite crear la reserva con
   una tarifa por defecto, estimada, heredada ni a cero.
 - ¿Qué sucede si el Módulo 3 no responde mientras se recotiza una reserva `ACTIVE`? El sistema
   detiene la recotización: no aplica ningún cambio de fechas ni de categoría, conserva las tarifas
@@ -230,8 +230,8 @@ cambio no se aplica y que la respuesta es un **HTTP 400** controlado.
 - **FR-004**: El sistema debe detener la recotización de una actualización de fechas o categoría
   cuando el servicio de Pricing no responde, sin aplicar ningún cambio, conservando las tarifas
   vigentes y respondiendo **HTTP 400 (Bad Request)**.
-- **FR-005**: El sistema no debe realizar ningún cálculo con la tarifa recibida: ni sumas, ni
-  diferencias, ni IVA, ni comisiones. Los cálculos que se necesiten con la tarifa no son
+- **FR-005**: El sistema no debe realizar ningún cálculo con la tarifa recibida aparte del total de la
+  reserva de FR-002: ni diferencias, ni IVA, ni comisiones. Los cálculos que se necesiten con la tarifa no son
   del Módulo 2; el IVA lo fija exclusivamente el Módulo 3 al facturar.
 - **FR-006**: El sistema no debe verificar disponibilidad ni realizar llamadas al Módulo 1 dentro de
   este caso de uso: el flujo invocador (generar reservación directa o actualizar reservación)

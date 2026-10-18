@@ -103,9 +103,10 @@ se informe como inhabilitada, indicando las fechas del cruce.
 
 - **MaintenanceCalendar**: Calendario de mantenimientos, propiedad del Módulo 1, con las
   programaciones por habitación. Atributos:
-  `roomId`, `maintenanceStart`, `maintenanceEnd` y `reason`. Esta funcionalidad solo la consulta.
-- **Room**: Habitación física. Atributos: `id`, `roomNumber`, `categoryRoom` y `status`
-  (`Available` | `Reserved` | `Occupied`).
+  `roomId`, `maintenanceStart` y `maintenanceEnd`, ambas incluidas (el motivo no llega al Módulo 2).
+  Esta funcionalidad solo la consulta.
+- **Room**: Habitación física. Atributos: `id`, `roomNumber`, `categoryRoom` y `maxCapacity`, sin
+  estado: todas las que entrega el Módulo 1 son vendibles.
 - **Reservation**: Se referencia de forma informativa: es la reserva que se intenta crear o
   modificar. Atributos: `startDate`, `endDate` y el `roomId` de cada una de sus habitaciones
   (`ReservationRoom`), que se consultan una por una.

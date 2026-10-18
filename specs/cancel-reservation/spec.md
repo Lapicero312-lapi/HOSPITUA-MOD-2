@@ -175,5 +175,5 @@ se bloquea con un error controlado.
   Módulo 1 como `REMOVED` con motivo `CANCELLED`.
 - **SC-002**: El 100% de los intentos inválidos de cancelación se rechazan con **HTTP 400**, con
   cero errores **HTTP 500**.
-- **SC-004**: El 100% de las cancelaciones quedan registradas en `Cancellation` con su canal de
+- **SC-003**: El 100% de las cancelaciones quedan registradas en `Cancellation` con su canal de
   origen.
