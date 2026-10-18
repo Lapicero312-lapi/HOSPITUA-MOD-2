@@ -9,8 +9,8 @@ caso de uso reutilizan.
 
 El Módulo 2 (Operación de Reservas y Cumplimiento Legal) es el dueño del ciclo de vida de las
 reservas (`Reservation.status`) y de `ReservationRoom.stayStatus`. Registra reservas directas
-(Recepcionista) y lee las de Booking.com desde el feed de Channex, les envía la disponibilidad y las
-tarifas, las modifica, las cancela, cierra el día (No-Show),
+(Recepcionista) y lee las de Booking.com desde el feed de Channex, le envía los tipos de habitación
+y la disponibilidad, las modifica, las cancela, cierra el día (No-Show),
 recibe del Módulo 1 los avisos de Check-In y Check-Out por habitación (con los datos de todos los
 huéspedes de la habitación), y genera el reporte SIRE.
 Consulta al Módulo 1 (inventario y calendario de mantenimientos) y al Módulo 3 (tarifa dinámica), le
@@ -51,13 +51,13 @@ describe lo propio.
   nunca se asume disponibilidad ni tarifa); ningún error sale como 500; no se escriben datos
   personales en los logs; el día operativo es el de Colombia (`America/Bogota`); disponible 24/7,
   porque Booking reserva a cualquier hora; límite de Channex de 10 solicitudes por minuto por propiedad
-  para disponibilidad y 10 para tarifas.
+  para disponibilidad.
 - **Scale/Scope**: hasta 100 habitaciones en hasta 10 categorías, 5 recepcionistas a la vez, 1
   agencia OTA (Booking.com, por Channex staging), 300 reservas nuevas por día y 50 000 reservas guardadas en total.
 - **Configuración de Channex** (variables de entorno, nunca en la base de datos): `CHANNEX_BASE_URL`
   (`https://staging.channex.io`), `CHANNEX_API_KEY`, `CHANNEX_PROPERTY_ID`, `BOOKING_HOTEL_ID`,
-  `BOOKING_COMMISSION_PERCENTAGE`, `CHANNEX_COP_PER_GBP` (`4000`), `CHANNEX_FEED_INTERVAL_SECONDS`
-  (`60`), `CHANNEX_ARI_INTERVAL_SECONDS` (`10`) y `CHANNEX_ARI_DAYS` (`90`).
+  `BOOKING_COMMISSION_PERCENTAGE`, `CHANNEX_FEED_INTERVAL_SECONDS` (`60`),
+  `CHANNEX_ARI_INTERVAL_SECONDS` (`30`) y `CHANNEX_ARI_DAYS` (`90`).
 
 ### Decisiones de stack
 
@@ -72,7 +72,7 @@ describe lo propio.
 | Dinero | `decimal.js`, columnas `numeric(14,2)`, redondeo `ROUND_HALF_UP`; **nunca `number`** | Comisión exacta |
 | Fechas | Fechas puras `AAAA-MM-DD` (texto `date` en la base) y `luxon` para el día operativo en `America/Bogota` | Evita corrimientos por zona horaria. Se guardan e intercambian como `AAAA-MM-DD`; las pantallas las muestran como `dd/mm/aaaa` |
 | Seguridad | **No se implementa en el Módulo 2**: es una capa aparte del sistema de microservicios. El frontend simula el login. Quién llama se indica con la cabecera `X-Client` (`RECEPTIONIST`, `MODULE1`, `MODULE3`) y quién hizo la acción con `X-User`; ninguna se valida | Ver la regla transversal 10 |
-| Integración con Booking.com | **Channex** (entorno de pruebas `staging.channex.io`), por REST con la cabecera `user-api-key`. Las reservas se leen del *feed* (`GET /api/v1/booking_revisions/feed`) y se confirman con `ack`; la disponibilidad y las tarifas se envían con `POST /api/v1/availability` y `POST /api/v1/restrictions` | Booking no llama al Módulo 2: el Módulo 2 consulta a Channex, así que no necesita una URL pública (D12) |
+| Integración con Booking.com | **Channex** (entorno de pruebas `staging.channex.io`), por REST con la cabecera `user-api-key`. Las reservas se leen del *feed* (`GET /api/v1/booking_revisions/feed`) y se confirman con `ack`; el Módulo 2 crea los tipos de habitación (`POST`/`PUT /api/v1/room_types`) y envía la disponibilidad (`POST /api/v1/availability`). Los planes de tarifa y los precios los envía el **Módulo 3** directamente a Channex. La propiedad es fija y la crea un administrador en Channex | Booking no llama al Módulo 2: el Módulo 2 consulta a Channex, así que no necesita una URL pública (D12) |
 | Tareas programadas | `@nestjs/schedule` con `timeZone: 'America/Bogota'` | Envío de la lista del día (00:00), cierre del día (23:59) y reintento de avisos pendientes |
 | Exclusión mutua de tareas con varias instancias | Bloqueo asesor de PostgreSQL (C10) | Evitar que dos instancias ejecuten el mismo cierre del día |
 | Timeouts y reintentos REST | `@nestjs/axios` con timeout; `cockatiel` si se necesitan reintentos o corte de circuito | No asumir disponibilidad ante caídas |
@@ -171,7 +171,9 @@ están en "Modelo de datos base".
 | `linkedAt`, `lastSyncAt` | fecha y hora | `lastSyncAt`: última lectura del feed de Channex que terminó bien |
 
 **OtaRoomTypeMapping** (relación de tipos de habitación, `configure-ota`): `otaId`, `channexRoomTypeId`,
-`channexRatePlanId` y `categoryRoom`. Un tipo de habitación de Channex por categoría, y viceversa.
+`categoryRoom`, `countOfRooms` y `occupancy` (los últimos enviados a Channex). Un tipo de habitación de
+Channex por categoría, y viceversa; el Módulo 2 lo crea a partir de las habitaciones vendibles del
+Módulo 1.
 
 **OtaBookingRevision** (revisión de Channex ya procesada, `generate-ota-reservation`): `revisionId`,
 `otaId`, `bookingId`, `status` (`new`, `modified`, `cancelled`), la reserva afectada, el resultado y
@@ -282,7 +284,8 @@ Regla: **proactiva** (el módulo avisa un evento y no espera respuesta) → **co
 | Consultar las reservas de un rango de fechas (y habitación) para validar un mantenimiento o dar de baja una habitación | M1 → M2 | REST GET | Reactiva | `check-view-reservation` (FR-023) |
 | Consultar una reserva por su referencia (`quoteIds`, canal y datos de la OTA) para liquidar en el Check-Out | M3 → M2 | REST GET | Reactiva | `check-view-reservation` (FR-022) |
 | Leer las reservas de Booking (feed de revisiones) y confirmarlas (`ack`) | M2 → Channex | REST GET y POST, cada 60 s | El Módulo 2 pregunta | `generate-ota-reservation` |
-| Enviar disponibilidad (al cambiar) y tarifas (03:00) | M2 → Channex | REST POST | Proactiva | `configure-ota` |
+| Crear y actualizar tipos de habitación (al iniciar y 03:00) y enviar disponibilidad (al cambiar y 03:00) | M2 → Channex | REST GET, POST y PUT | Proactiva | `configure-ota` |
+| Crear planes de tarifa y enviar precios | M3 → Channex | REST (fuera del Módulo 2) | Proactiva | Módulo 3 |
 
 El Módulo 1 **ya no consulta la lista de reservas** al Módulo 2 por REST: la recibe por cola. Solo
 consulta las reservas entre una fecha de inicio y una de fin al registrar un mantenimiento o dar de baja una habitación (`check-view-reservation`,
@@ -355,7 +358,8 @@ El contenido exacto de cada mensaje está en el plan de su caso de uso:
 | `POST /api/ota-commissions/reconciliations` (conciliación de comisiones) | Módulo 3 (finanzas) | `register-ota-information-commission` |
 
 **Booking.com no llama al Módulo 2**: no hay rutas para la OTA. El Módulo 2 lee sus reservas del feed de
-Channex (`generate-ota-reservation`) y le envía la disponibilidad y las tarifas (`configure-ota`). La
+Channex (`generate-ota-reservation`) y le envía los tipos de habitación y la disponibilidad
+(`configure-ota`); los precios los envía el Módulo 3. La
 agencia se registra por configuración; no hay rutas de alta ni edición manual (`POST`/`PUT /api/otas`
 quedan fuera).
 
@@ -365,9 +369,9 @@ quedan fuera).
 |---|---|---|
 | Habitaciones vendibles por `categoryRoom` o por `roomId` (contrato en [`consult-room-inventory/plan.md`](../consult-room-inventory/plan.md)) | M1 GET | `consult-room-inventory` |
 | Calendario de mantenimientos por `roomId` y rango de fechas (contrato en [`consult-maintenance-calendar/plan.md`](../consult-maintenance-calendar/plan.md)) | M1 GET | `consult-maintenance-calendar` |
-| Tarifa dinámica por habitación (contrato en [`calculate-dynamic-rate/plan.md`](../calculate-dynamic-rate/plan.md)) | M3 POST | `calculate-dynamic-rate` (también la usa `configure-ota` para las tarifas de Channex) |
+| Tarifa dinámica por habitación (contrato en [`calculate-dynamic-rate/plan.md`](../calculate-dynamic-rate/plan.md)) | M3 POST | `calculate-dynamic-rate` |
 | Feed de revisiones de reserva y `ack` (`/api/v1/booking_revisions/feed`, `/api/v1/booking_revisions/{id}/ack`) | Channex GET y POST | `generate-ota-reservation` |
-| Disponibilidad por tipo de habitación y tarifas por plan de tarifa (`/api/v1/availability`, `/api/v1/restrictions`) | Channex POST | `configure-ota` |
+| Propiedades (`/api/v1/properties/options`), tipos de habitación (`/api/v1/room_types`) y disponibilidad (`/api/v1/availability`) | Channex GET, POST y PUT | `configure-ota` |
 
 **Errores**: cuerpo `{ "errorCode", "message", "timestamp", "path" }` con HTTP 400 (por defecto, también
 para recursos inexistentes, como piden los specs, y para la falta de disponibilidad) o 429 (exportación
@@ -421,7 +425,7 @@ backend/
     │   ├── integration/          # objetos de integración: Room, MaintenanceCalendar, RateQuote, BookingRevision
     │   └── use-cases/            # un caso de uso por cada spec (puerto de entrada + servicio):
     │       ├── generate-direct-reservation/
-    │       ├── configure-ota/                # agencia, tipos de habitación, disponibilidad y tarifas a Channex
+    │       ├── configure-ota/                # agencia, tipos de habitación y disponibilidad en Channex
     │       ├── generate-ota-reservation/     # lectura del feed de Channex
     │       ├── check-view-reservation/       # incluye la lista del día al Módulo 1
     │       ├── update-reservation/           # incluye Check-In, Check-Out y cierre del día
@@ -438,7 +442,7 @@ backend/
     │   │   ├── rest/             # controladores REST
     │   │   ├── messaging/        # consumidores RabbitMQ (Check-In y Check-Out)
     │   │   └── jobs/             # lista del día (00:00), cierre del día (23:59), reintentos, feed de
-    │   │                         #   Channex (60 s), disponibilidad (10 s), tarifas (03:00)
+    │   │                         #   Channex (60 s), disponibilidad (30 s), tipos y disponibilidad completa (03:00)
     │   ├── out/
     │   │   ├── persistence/      # clases de tabla TypeORM, mapeadores y repositorios
     │   │   ├── module1/          # cliente HTTP del Módulo 1
@@ -632,8 +636,9 @@ erDiagram
         uuid id PK
         uuid ota_id FK
         uuid channex_room_type_id UK
-        uuid channex_rate_plan_id
         varchar category_room "UK con ota_id"
+        integer count_of_rooms "ultimo enviado"
+        smallint occupancy "ultima enviada"
     }
     ota_booking_revision {
         uuid revision_id PK "id de Channex"
@@ -897,10 +902,11 @@ Se inserta en la misma transacción que el cambio que produce el mensaje.
 | `id` | `uuid` | no | PK |
 | `ota_id` | `uuid` | no | FK → `ota` |
 | `channex_room_type_id` | `uuid` | no | Único; tipo de habitación en Channex |
-| `channex_rate_plan_id` | `uuid` | no | Plan de tarifa de Channex donde se publica el precio |
 | `category_room` | `varchar(50)` | no | Categoría del Módulo 2; único `(ota_id, category_room)` |
+| `count_of_rooms` | `integer` | no | Habitaciones vendibles enviadas a Channex la última vez |
+| `occupancy` | `smallint` | no | Capacidad máxima enviada a Channex la última vez |
 
-Se carga como registro inicial al instalar (`configure-ota`).
+La llena `SyncRoomTypes` (`configure-ota`) al crear o actualizar los tipos en Channex.
 
 **`ota_booking_revision`** — revisiones de Channex ya procesadas (`generate-ota-reservation`)
 
@@ -949,8 +955,8 @@ las envía y las borra.
    lista del día a las 00:00; cierre del día al terminar las 23:59 (No-Show:
    `NO_SHOW` para cualquier canal, sin `Cancellation`; habitaciones no llegadas pasan a
    `NOT_ARRIVED`); reintento de los avisos pendientes; lectura del feed de Channex cada 60 segundos;
-   envío de la disponibilidad pendiente a Channex cada 10 segundos; y envío de tarifas y disponibilidad
-   completa a Channex a las 03:00. El día operativo es fijo y no es configurable.
+   envío de la disponibilidad pendiente a Channex cada 30 segundos; y sincronización de tipos de
+   habitación y disponibilidad completa con Channex a las 03:00. El día operativo es fijo y no es configurable.
 5. **Errores uniformes.** Un filtro global de excepciones traduce toda excepción a `ApiError` 4xx; un
    conflicto de `updatedAt` (ediciones o cancelaciones simultáneas) es siempre 400 `CONCURRENT_UPDATE`.
    Ningún error no controlado sale como 500; el filtro genérico registra el detalle en el log y responde
@@ -993,7 +999,7 @@ las envía y las borra.
 | D11 | **Migraciones escritas en SQL**, no generadas desde las clases de TypeORM, para controlar `EXCLUDE`, índices parciales y bloqueos. | Este plan |
 | D12 | **Booking.com por Channex, leyendo el feed.** Una tarea consulta `GET /api/v1/booking_revisions/feed` cada 60 s y confirma cada revisión con `POST /api/v1/booking_revisions/{id}/ack` después del commit. No se usan webhooks: no exigen una URL pública y el feed sirve igual en desarrollo. Cada revisión se procesa una sola vez (`ota_booking_revision`); las reservas de Booking nacen en `ACTIVE`. | `generate-ota-reservation` |
 | D13 | **Conflictos de Booking.** Booking ya aceptó la reserva, así que nunca se rechaza: si no hay habitación libre de la categoría, la habitación queda sin asignar (`room_id` vacío, sin bloquear inventario); si se supera la capacidad o un cambio no se puede aplicar, la reserva queda marcada (`conflict_reason`). La Recepcionista asigna la habitación. Una reserva con alguna habitación sin asignar **no viaja en la lista del día** hasta que se asigne: si ya estaba, sale con `REMOVED` y motivo `ROOM_UNASSIGNED`; al asignar la última, entra con `ADDED`. | `generate-ota-reservation`, `update-reservation`, `check-view-reservation` |
-| D14 | **Disponibilidad y tarifas hacia Channex.** La disponibilidad (vendibles del Módulo 1 menos las que ocupan las reservas) se envía al cambiar, agrupada cada 10 s; las tarifas de los próximos 90 días, cotizadas con el Módulo 3 y convertidas a GBP con una tasa fija de configuración (`4000` COP = 1 GBP), a las 03:00. Se respeta el límite de 10 solicitudes por minuto. Los mantenimientos no se descuentan. | `configure-ota` |
+| D14 | **Tipos de habitación y disponibilidad hacia Channex.** El Módulo 2 crea un tipo de habitación por categoría a partir de las habitaciones vendibles del Módulo 1 (cantidad y capacidad máxima) y lo sincroniza al iniciar y a las 03:00, sin borrar. La disponibilidad (vendibles menos las que ocupan las reservas) se envía al cambiar, agrupada cada 30 s, y completa (90 días) a las 03:00. Los mantenimientos no se descuentan. **Los planes de tarifa y los precios los envía el Módulo 3** directamente a Channex. | `configure-ota` |
 
 ## Estrategia de testing base
 
@@ -1040,7 +1046,7 @@ las envía y las borra.
 - [ ] T018 Configurar logs (`nestjs-pino`) y correlación de solicitudes
 - [ ] T019 Configurar el bloqueo asesor de PostgreSQL y el planificador (`@nestjs/schedule`, `America/Bogota`) para las tareas programadas
 - [ ] T020 Configurar OpenAPI (`@nestjs/swagger`) y la verificación de dependencias entre capas en CI
-- [ ] T021 [P] Implementar `ChannexPort` con su adaptador HTTP (`user-api-key`, feed, `ack`, disponibilidad y tarifas) y el manejo de `429` con espera creciente
+- [ ] T021 [P] Implementar `ChannexPort` con su adaptador HTTP (`user-api-key`, propiedades, feed, `ack`, tipos de habitación y disponibilidad) y el manejo de `429` con espera creciente
 
 **Checkpoint**: Base lista; los planes de caso de uso pueden implementarse.
 

@@ -122,7 +122,7 @@ interface RoomQuote {
   lodgingAmount: Money;
 }
 
-type QuoteContext = 'NEW_RESERVATION' | 'RECALCULATION' | 'CHANNEX_RATES';   // decide el mensaje de error
+type QuoteContext = 'NEW_RESERVATION' | 'RECALCULATION';   // decide el mensaje de error
 
 interface CalculateDynamicRate {
   // B1: una cotización por habitación, todo o nada
@@ -427,7 +427,7 @@ frontend/src/pages/rates/                        # pantalla "Tarifas"
 seguro ante un Módulo 3 caído.
 
 - [ ] T008 [US1] `CalculateDynamicRate.quoteRooms`: una cotización por habitación, en paralelo con tope, todo o nada
-- [ ] T009 [US1] Selección del mensaje de error según el contexto (`NEW_RESERVATION`, `RECALCULATION` o `CHANNEX_RATES`)
+- [ ] T009 [US1] Selección del mensaje de error según el contexto (`NEW_RESERVATION` o `RECALCULATION`)
 - [ ] T010 [US1] DTO compartido de la vista previa (`rooms` con `nightlyRates` y `total`)
 - [ ] T011 [US1] Pruebas de contrato del adaptador: éxito, categoría rechazada, 400, 503, tiempo agotado, respuesta mal formada, `lodgingAmount` en cero y con más de dos decimales
 - [ ] T012 [US1] Pruebas de integración de los escenarios 1 a 3 y del caso borde de categoría inexistente

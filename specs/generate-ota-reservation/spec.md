@@ -19,7 +19,7 @@ financiero** con la agencia, porque la comisión pactada se calcula sobre el val
 El negocio necesita un proceso automático que lea las reservas de Booking desde Channex, las registre
 con su comisión, aplique sus cambios y cancelaciones, y deje cada reserva lista para la lista de
 reservas del día del Módulo 1. La configuración de la agencia, la relación de tipos de habitación y el
-envío de disponibilidad y tarifas a Channex son de "Configurar OTA". El Módulo 2 no aparta ni libera
+envío de disponibilidad a Channex son de "Configurar OTA"; los precios los envía el Módulo 3. El Módulo 2 no aparta ni libera
 habitaciones: el Módulo 1 decide qué hace con la lista del día.
 
 ### Flujo de Usuario de Alto Nivel
