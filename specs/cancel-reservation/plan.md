@@ -373,7 +373,7 @@ canal y `REMOVED`); una con llegada futura (sin aviso); y los intentos sobre `IN
 | FR-002, FR-002a | Reglas de estado y de canal | T002, T005 |
 | FR-002b | `acknowledged` en el servidor y casilla en la pantalla | T003, T005, T013 |
 | FR-003 | `ReservationStatusService` dentro de la transacción | T006 |
-| FR-004a | `DailyListChangeRecorder` (`REMOVED`, `CANCELLED`) | T007 |
+| FR-004 | `DailyListChangeRecorder` (`REMOVED`, `CANCELLED`) | T007 |
 | FR-005 | `Cancellation` con canal y quién la procesó | T001, T006 |
 | FR-006 | Sin penalidades, sin Módulo 3 y sin tocar la comisión | T010 |
 | FR-007 | Mapeo a 400 y control de concurrencia | T004, T012 |

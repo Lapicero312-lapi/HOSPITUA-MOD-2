@@ -270,7 +270,7 @@ tarifas que el solicitante vio:
 | `INVALID_STAY_DATES` | Fechas vacías o salida no posterior a la entrada | "La fecha de salida debe ser posterior a la de entrada." |
 | `START_DATE_IN_PAST` | Entrada anterior al día operativo en curso | "La fecha de entrada no puede ser anterior a hoy." |
 | `ROOM_ALREADY_IN_RESERVATION` | Una habitación repetida en `rooms` | "La habitación ya forma parte de la reserva." |
-| `INVALID_ROOM_COUNT` | Menos de 1 o más de 10 habitaciones | "Una reserva lleva entre 1 y 10 habitaciones." |
+| `INVALID_ROOM_COUNT` | Menos de 1 o más de 10 habitaciones | "Una reserva debe tener entre 1 y 10 habitaciones." |
 | `LAST_ROOM_CANNOT_BE_REMOVED` | `rooms` dejaría la reserva sin habitaciones | "La reserva debe conservar al menos una habitación." |
 | `GUEST_COUNT_EXCEEDS_CAPACITY` | `guestCount` mayor que el `maxCapacity` | "La cantidad de personas supera la capacidad de la habitación." |
 | `GUEST_COUNT_TOO_LOW` | `guestCount` menor que 1 | "Cada habitación debe tener al menos una persona." |
@@ -722,7 +722,7 @@ traducción del plan base:
 
 Mensajes del log (literales del spec): Check-In, "La reserva notificada no existe en el sistema de
 reservas.", "La habitación notificada no pertenece a la reserva." y que "la reserva no admite un Check-In en
-su estado actual"; Check-Out, "Referencia de reserva no encontrada", "La habitación notificada aún no
+su estado actual"; Check-Out, "La reserva notificada no existe en el sistema de reservas.", "La habitación notificada aún no
 registra un ingreso." y que "la reserva aún no registra un ingreso".
 
 ### Cierre del día
@@ -871,6 +871,7 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
 | US2 | 7 y 8 Check-Out | Última habitación: `COMPLETED`; parcial: la reserva sigue `IN_PROGRESS` |
 | US2 | Casos borde | Payload vacío o sin identificadores: dead-letter queue; reserva inexistente; Check-In anticipado; Check-Out retrasado; salto de secuencia (advertencia, sigue); `NOT_ARRIVED` |
 | US3 | 1 No-Show | `ACTIVE` y `PENDING` de cualquier canal: `NO_SHOW`, habitaciones `NOT_ARRIVED`, `REMOVED` `NO_SHOW` con la fecha operativa del día cerrado y sin `Cancellation` |
+| US3 | 2 No-Show de Booking | `NO_SHOW` y fila `PENDING` en `ota_no_show_report` en la misma transacción |
 | US3 | 3 llegada parcial | La habitación sin ingreso pasa a `NOT_ARRIVED` y la reserva sigue `IN_PROGRESS` |
 | US3 | 4 todo ingresó | Se ignora |
 | US3 | 5 fallo aislado | Una reserva corrupta no detiene el lote |
@@ -908,6 +909,7 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
 | FR-023 | `processed_message` y control de secuencia | T017 |
 | FR-024 | `ApplyOtaChange` | T029 |
 | FR-025 | `AssignRoom` y B3 | T030 |
+| FR-026 | `AriChangeRecorder.record` en la misma transacción (C5) | T030 |
 | NFR-001 a NFR-003 | Pruebas de tiempo | T026 |
 | SC-001 a SC-008 | Pruebas por escenario | T013, T019, T024 |
 

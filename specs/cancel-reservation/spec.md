@@ -1,7 +1,7 @@
 # Feature Specification: Cancelación de Reservación
 
 **Created**: 2026-09-19
-**Updated**: 2026-09-29
+**Updated**: 2026-10-18
 
 ## Use Case (Caso de Uso)
 
@@ -35,6 +35,8 @@ en curso.
    lista mediante "Enviar reservas del día al Módulo 1" (`REMOVED` con motivo `CANCELLED`). El Módulo
    1 decide qué hace con la habitación: el Módulo 2 no le ordena nada.
 6. El sistema registra la cancelación en `Cancellation` para auditoría.
+7. El sistema anota la categoría y las fechas liberadas para el envío de disponibilidad a Channex
+   ("Configurar OTA").
 
 La cancelación aplica siempre a la reserva completa, con todas sus habitaciones. Para quitar solo
 una habitación de una reserva con varias, se usa "Actualizar reservación".
@@ -85,10 +87,11 @@ se bloquea con un error controlado.
 
 4. **Scenario**: Bloqueo de cancelación para estadía en curso o finalizada (Error)
    - **Given** una `Reservation` en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` o `NO_SHOW`
-   - **When** cualquier canal intenta cancelarla
-   - **Then** el sistema bloquea la acción, no avisa nada al Módulo 1 y responde con un
-     error controlado **HTTP 400 (Bad Request)** indicando que el estado actual no admite
-     cancelación
+   - **When** se intenta cancelarla
+   - **Then** si la intenta la Recepcionista, el sistema bloquea la acción, no avisa nada al Módulo 1
+     y responde **HTTP 400 (Bad Request)** indicando que el estado actual no admite cancelación; si
+     la envía Booking, "Generar reservación por OTA" marca la reserva en conflicto
+     (`CHANGE_NOT_APPLICABLE`) o, si ya estaba cancelada, la ignora
 
 5. **Scenario**: Cancelación de una reserva con varias habitaciones y llegada hoy (Happy Path)
    - **Given** una `Reservation` `ACTIVE` con llegada hoy y las `Room` 101 y 102
@@ -99,8 +102,8 @@ se bloquea con un error controlado.
 6. **Scenario**: La Recepcionista intenta cancelar una reserva OTA (Error)
    - **Given** una `Reservation` con `source` `OTA` en `ACTIVE` o `PENDING`
    - **When** la Recepcionista intenta cancelarla
-   - **Then** el sistema la rechaza con **HTTP 400** indicando que la cancelación debe llegar por la
-     API de la agencia, y no registra ninguna `Cancellation`
+   - **Then** el sistema la rechaza con **HTTP 400** indicando que la cancelación debe llegar de
+     Booking por el feed de Channex, y no registra ninguna `Cancellation`
 
 ### Casos Borde
 
@@ -136,7 +139,7 @@ se bloquea con un error controlado.
   confirmarse la solicitud, de forma atómica dentro de la transacción de cancelación y aplicando las
   transiciones `ACTIVE` o `PENDING` → `CANCELLED` y el control de concurrencia, sin requerir la
   invocación del flujo de modificación de reservación.
-- **FR-004a**: El sistema debe avisar al Módulo 1, mediante "Enviar reservas del día al Módulo 1",
+- **FR-004**: El sistema debe avisar al Módulo 1, mediante "Enviar reservas del día al Módulo 1",
   la cancelación de una reserva que forme parte de la lista del día ya enviada (`REMOVED` con motivo
   `CANCELLED`).
 - **FR-005**: El sistema debe registrar cada cancelación en `Cancellation` con la referencia de la
@@ -163,8 +166,9 @@ se bloquea con un error controlado.
   `PENDING`.
 - **ReservationRoom**: Habitaciones de la reserva. Atributos: `reservationRef`,
   `roomId`, `roomNumber` y `stayStatus`.
-- **Room**: Habitación física, propiedad del Módulo 1. Atributos: `id`, `roomNumber`, `categoryRoom`
-  y `status` (`Available` | `Reserved` | `Occupied`). Solo se menciona: el Módulo 2 no la modifica.
+- **Room**: Habitación física del Módulo 1. Atributos que recibe el Módulo 2: `id`, `roomNumber`,
+  `categoryRoom` y `maxCapacity`. El estado físico lo maneja el Módulo 1 y no llega al Módulo 2; el
+  Módulo 2 no la modifica.
 - **Guest**: Titular de la reserva. Atributos: `id`, `firstName`, `lastName`, `documentNumber`, `contactEmail`.
 
 ## Success Criteria *(mandatory)*
