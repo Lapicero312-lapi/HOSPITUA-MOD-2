@@ -1,6 +1,7 @@
 # Feature Specification: Generar Reservación Directa
 
 **Created**: 2026-09-23
+**Updated**: 2026-10-18
 
 ## Use Case (Caso de Uso)
 
@@ -20,15 +21,16 @@ de captura de reservas de canal directo que valide la disponibilidad antes de re
 valor de hospedaje bruto con el área de precios (Módulo 3) de forma informativa, y avise al Módulo 1
 de las reservas del día. El Módulo 2 no aparta ni libera habitaciones: el Módulo 1, dueño del estado de
 las habitaciones, decide qué hacer con la lista de reservas del día que le enviamos. Las reservas con
-llegada futura solo bloquean la disponibilidad en el Módulo 2 hasta el día de su llegada.
+llegada futura bloquean la disponibilidad en el Módulo 2 y en Channex desde que se crean, y solo se
+avisan al Módulo 1 el día de su llegada.
 
 ### Flujo de Usuario de Alto Nivel
 
 1. La **Recepcionista** indica las fechas de estadía (`startDate` y `endDate`, comunes a toda la
    reserva), una única `categoryRoom` para toda la reserva, la cantidad de habitaciones de esa categoría
    (entre 1 y 10) y la cantidad de personas de cada habitación (`guestCount` de la habitación). El sistema asigna automáticamente las
-   `Room` específicas disponibles de esa categoría; la Recepcionista no elige el número de habitación
-   ni puede combinar categorías distintas en una misma reserva desde esta pantalla (para eso existe
+   `Room` disponibles de esa categoría, la de menor `roomNumber`, salvo que la Recepcionista elija una
+   habitación concreta de la categoría. No puede combinar categorías distintas en una misma reserva desde esta pantalla (para eso existe
    "Actualizar reservación", que sí permite cambiar una habitación por otra de distinta categoría).
 2. El sistema ejecuta "Verificar disponibilidades" para **cada** habitación: obtiene del Módulo 1 las
    habitaciones vendibles de la categoría, cruza las fechas contra las reservas locales del Módulo 2 y
@@ -52,6 +54,8 @@ llegada futura solo bloquean la disponibilidad en el Módulo 2 hasta el día de 
    "Enviar reservas del día al Módulo 1" (`ADDED`); si la lista del día aún no se envía, la reserva
    viaja en ella. El Módulo 1 decide qué hace con la habitación: el Módulo 2 no le ordena nada.
    Si la llegada es futura, no se avisa nada hasta el día de la llegada.
+8. El sistema anota la categoría y las fechas ocupadas para el envío de disponibilidad a Channex
+   ("Configurar OTA").
 
 El sistema guarda en cada `ReservationRoom` la tarifa devuelta por el Módulo 3 para esa habitación
 (`roomGrossAmount`: tarifa bruta de hospedaje de esa habitación, antes de comisión e impuestos) y el
@@ -140,6 +144,11 @@ reserva y se devuelve un error controlado.
    - **Then** el sistema no crea la reserva y responde **HTTP 400** con el mensaje "La cantidad de
      personas supera la capacidad de la habitación." (3) o "Cada habitación debe tener al menos
      una persona." (0)
+
+8. **Scenario**: Doble envío de la misma solicitud
+   - **Given** una reserva directa ya creada con una solicitud
+   - **When** la misma solicitud llega otra vez (doble clic o reintento)
+   - **Then** el sistema responde la misma reserva, sin crear otra (FR-008)
 
 9. **Scenario**: Fecha de entrada anterior a hoy (Error)
    - **Given** que el día operativo en curso, cuando se genera la reserva, es el 2026-09-28
@@ -257,8 +266,9 @@ reserva y se devuelve un error controlado.
 - **RateQuote**: Cotización del valor de hospedaje de una habitación calculada por el Módulo 3, con
   carácter informativo. Atributos: `quoteId`, `nightlyRates` (lista de `date` y `rate`) y
   `lodgingAmount`.
-- **Room**: Habitación física, cuyo estado es propiedad del Módulo 1. Atributos: `id`,
-  `roomNumber`, `categoryRoom`, `maxCapacity` y `status` (`Available` | `Reserved` | `Occupied`). Solo se consulta.
+- **Room**: Habitación física del Módulo 1. Atributos que recibe el Módulo 2: `id`, `roomNumber`,
+  `categoryRoom` y `maxCapacity`. El estado físico lo maneja el Módulo 1 y no llega al Módulo 2; el
+  Módulo 2 no la modifica.
 
 ## Success Criteria *(mandatory)*
 
