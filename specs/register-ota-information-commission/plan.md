@@ -84,9 +84,9 @@ Las usan la Recepcionista y el Módulo 3. **Cabeceras**: `Content-Type: applicat
       "status": "COMPLETED",
       "startDate": "2026-10-10",
       "endDate": "2026-10-12",
-      "grossAmount": { "amount": "400.00", "currency": "COP" },
-      "commissionPercentage": "15.00",
-      "commissionAmount": { "amount": "60.00", "currency": "COP" },
+      "grossAmount": { "amount": "400.00", "currency": "USD" },
+      "commissionPercentage": 15.00,
+      "commissionAmount": { "amount": "60.00", "currency": "USD" },
       "commissionStatus": "CALCULATED"
     }
   ],
@@ -98,7 +98,9 @@ Las usan la Recepcionista y el Módulo 3. **Cabeceras**: `Content-Type: applicat
 ```
 
 - Solo reservas de canal `OTA`. Sin resultados: `200` con `items: []`.
-- Los importes van como **texto decimal**; los porcentajes, de `0.00` a `100.00`.
+- Los importes van como **texto decimal**, en la moneda de la reserva (`USD` en las de Booking); los
+  porcentajes, como **número** JSON de 0 a 100 con hasta dos decimales (igual que
+  `otaCommissionPercentage` en la consulta para liquidar de `check-view-reservation`).
 
 **A2. `POST /api/ota-commissions/reconciliations`** (la usa el Módulo 3): el Módulo 3 le indica al Módulo 2 qué
 comisiones pasan a `RECONCILED` o `PAID`.
@@ -173,8 +175,8 @@ y el Módulo 3, con la misma respuesta para los dos.
     {
       "id": "uuid",
       "name": "Booking.com",
-      "hotelAccountId": "Hotel ID 8841207",
-      "commissionPercentage": "15.00",
+      "hotelAccountId": "10485037",
+      "commissionPercentage": 15.00,
       "connectionStatus": "CONNECTED",
       "linkedAt": "2026-03-02T09:14:00-05:00",
       "lastSyncAt": "2026-10-09T07:58:00-05:00",
@@ -608,7 +610,6 @@ frontend/src/pages/otas/                            # pantalla "Agencias OTA" (s
 |---|---|---|
 | 1 | **`DISPUTED`** aparece en el enumerado y en la auditoría pero ningún spec define cuándo se usa ni cómo se sale de él. Hoy un desajuste de montos solo rechaza el ítem | Equipo del Módulo 2 y Módulo 3 |
 | 2 | Estructura exacta de la conciliación que enviará el Módulo 3 (periodo, identificador del cierre, montos) y de la consulta de comisiones | Módulo 3 |
-| 3 | Cómo expresa el Módulo 3 el porcentaje de comisión (0 a 100) | Módulo 3 |
 | 4 | Qué pasa con la comisión de una reserva OTA que queda en `NO_SHOW`: el spec solo trata `COMPLETED` y `CANCELLED` | Equipo del Módulo 2 |
 
 ## Notes
