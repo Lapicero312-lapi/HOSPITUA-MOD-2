@@ -41,6 +41,75 @@ Se ejecutan desde la raíz. Cambia `backend` por `frontend` para el otro paquete
 
 Antes de abrir una PR, corre `lint`, `typecheck`, `format` y `test`: es lo mismo que revisa el CI.
 
+## Dónde va cada cosa
+
+El equipo trabaja casi solo en `backend/src/` y `backend/test/`. La estructura sigue el
+[plan base](specs/base/plan.md) ("Project Structure"); las carpetas vacías tienen un `.gitkeep` para que
+Git las guarde.
+
+```text
+backend/
+├── src/
+│   ├── domain/              Reglas de negocio. TypeScript puro: sin Nest, sin base de datos, sin colas
+│   │   ├── reservation/     Reservation, ReservationRoom, transiciones de estado
+│   │   ├── guest/           Guest (titular)
+│   │   ├── ota/             Ota, relación de tipos de habitación, regla de comisión
+│   │   ├── cancellation/    Cancellation
+│   │   ├── migration/       GuestData, MigratoryMovement, SireExport
+│   │   └── shared/          Enumerados, dinero (decimal.js), día operativo, errores de negocio
+│   ├── application/         Los casos de uso
+│   │   ├── use-cases/       Una carpeta por spec (13): puerto de entrada + servicio
+│   │   ├── ports/out/       Lo que los casos de uso necesitan de afuera (repositorios, Módulo 1, ...)
+│   │   └── integration/     Datos que vienen de otros módulos (Room, RateQuote, ...), no se guardan
+│   ├── infrastructure/      Todo lo que toca el mundo real
+│   │   ├── in/              Por donde entra algo: rest/ (controladores), messaging/ (colas), jobs/ (tareas)
+│   │   ├── out/             Por donde sale algo: persistence/, module1/, module3/, channex/, messaging/, clock/
+│   │   ├── config/          Variables de entorno
+│   │   └── shared/          Errores de API, filtro de excepciones, logs
+│   └── migrations/          Cambios de la base de datos (SQL)
+└── test/
+    ├── unit/                Dominio y casos de uso, sin base de datos ni cola
+    ├── integration/         Con PostgreSQL y RabbitMQ reales (Testcontainers)
+    └── contract/            Contratos REST y de mensajes
+
+frontend/src/
+├── pages/                   Pantallas de la Recepcionista
+├── components/              Piezas reutilizables
+├── services/                Llamadas a la API del backend
+└── test/                    Configuración de las pruebas
+```
+
+Las dependencias solo van hacia adentro: `infrastructure → application → domain`. Si no sabes dónde
+poner algo: ¿es una regla de negocio? `domain/`. ¿Un caso de uso? `application/`. ¿Habla con la base de
+datos, una cola, un controlador o un servicio externo? `infrastructure/`.
+
+## Archivos de configuración
+
+Hay muchos porque cada herramienta tiene el suyo. **Rara vez se tocan.** Si no sabes qué hace uno, no lo
+cambies sin preguntar.
+
+| Archivo | Para qué sirve |
+|---|---|
+| `package.json` (raíz, `backend/`, `frontend/`) | Las librerías del proyecto y los comandos (`pnpm test`, `pnpm build`, ...) |
+| `pnpm-lock.yaml` | Las versiones exactas de todo. Lo genera pnpm: **nunca se edita a mano**, pero sí se sube |
+| `pnpm-workspace.yaml` | Dice que `backend` y `frontend` son un solo proyecto |
+| `tsconfig*.json` | Las reglas con las que TypeScript revisa y compila el código |
+| `.oxlintrc.json`, `.prettierrc` | Las reglas del lint y el formato único del código |
+| `backend/.dependency-cruiser.cjs` | Las reglas de las capas (qué carpeta puede importar de cuál) |
+| `vitest.config*.ts` | Cómo corren las pruebas |
+| `.nvmrc` | La versión de Node que usa todo el equipo |
+| `.gitignore`, `.gitattributes` | Qué archivos ignora Git y cómo guarda los saltos de línea |
+| `backend/.env.example` | Plantilla de tu configuración local (`backend/.env`, que no se sube) |
+| `docker-compose.yml` | PostgreSQL y RabbitMQ para desarrollo |
+| `.github/workflows/ci.yml` | La revisión automática de cada PR |
+
+## Si algo falla
+
+- **VS Code marca en rojo un `tsconfig.json`** después de reinstalar dependencias: es un caché del
+  editor. `Ctrl + Shift + P` → **TypeScript: Restart TS Server**. Para usar el TypeScript del proyecto:
+  `Ctrl + Shift + P` → **TypeScript: Select TypeScript Version** → *Use Workspace Version*.
+- **`pnpm` no se reconoce:** ejecuta `corepack enable` y abre una terminal nueva.
+
 ## Reglas del equipo
 
 - **Los specs mandan.** Si el código obliga a cambiar un contrato, una regla o un nombre, primero se
