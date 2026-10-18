@@ -35,7 +35,7 @@ describe lo propio.
 - **Messaging**: RabbitMQ
 - **Architecture**: hexagonal (puertos y adaptadores), con un solo dominio general (`src/domain/`)
 - **Package manager**: pnpm (monorepo con `pnpm-workspace.yaml`)
-- **Testing**: Jest, supertest, Testcontainers para Node; Vitest + Testing Library en el frontend
+- **Testing**: Vitest, supertest y Testcontainers en el backend; Vitest + Testing Library en el frontend
 - **Target Platform**: servidor Linux/Windows + navegador web
 - **Project Type**: web application (`backend/` + `frontend/`)
 - **API**: REST, documentada con OpenAPI (`@nestjs/swagger`)
@@ -105,8 +105,9 @@ Reglas:
    objetos de integración en `application/`, no entidades del dominio.
 4. La inyección de dependencias de Nest une los puertos con sus adaptadores (símbolos como
    `RESERVATION_REPOSITORY`); el dominio nunca usa `@Injectable`.
-5. Las dependencias entre capas se verifican en CI con `eslint-plugin-boundaries` (o
-   `dependency-cruiser`): `domain/` no importa nada de `application/` ni de `infrastructure/`.
+5. Las dependencias entre capas se verifican en CI con `dependency-cruiser`
+   (`backend/.dependency-cruiser.cjs`, dentro de `pnpm lint`): `domain/` no importa nada de `application/`
+   ni de `infrastructure/`.
 6. Los casos de uso no se llaman entre sí por sus clases internas: si uno necesita a otro (por ejemplo,
    cancelar y modificar usan "Consultar y buscar reservas"), lo usa por su puerto de entrada.
 
@@ -1067,9 +1068,9 @@ Se inserta en la misma transacción que la reserva.
 
 ## Estrategia de testing base
 
-- **Unitarios** (Jest): dominio y casos de uso sin base de datos ni cola; reglas de negocio, tabla de
+- **Unitarios** (Vitest): dominio y casos de uso sin base de datos ni cola; reglas de negocio, tabla de
   transiciones, cálculo de comisión (`decimal.js`), reglas del día operativo.
-- **Integración** (Jest + Testcontainers): PostgreSQL y RabbitMQ reales; concurrencia optimista
+- **Integración** (Vitest + Testcontainers): PostgreSQL y RabbitMQ reales; concurrencia optimista
   (`updatedAt`), unicidad de `(operational_date, sequence_number)` en los avisos al Módulo 1,
   restricción anti-solape, idempotencia de consumidores (`messageId`), dead-letter.
 - **Contrato**: adaptadores de `Module1Port` y `Module3Port` contra respuestas simuladas (por ejemplo
@@ -1086,7 +1087,7 @@ Se inserta en la misma transacción que la reserva.
 - [ ] T001 Crear el monorepo pnpm: `pnpm-workspace.yaml`, `package.json` raíz, `.nvmrc` (Node 22 LTS) y las carpetas `backend/` y `frontend/`
 - [ ] T002 Generar `backend/` con Nest CLI (TypeScript `strict`, versión fija) e instalar las dependencias de Technical Context
 - [ ] T003 Inicializar `frontend/` con React + Vite + TypeScript
-- [ ] T004 [P] Configurar ESLint, Prettier y `eslint-plugin-boundaries` (capas hexagonales) en backend y frontend
+- [ ] T004 [P] Configurar oxlint y Prettier en backend y frontend, y `dependency-cruiser` (capas hexagonales) en el backend
 - [ ] T005 [P] Crear `docker-compose.yml` con PostgreSQL y RabbitMQ para desarrollo
 - [ ] T006 Configurar `@nestjs/config` por entorno (dev, test) con variables de entorno validadas
 
@@ -1104,7 +1105,7 @@ Se inserta en la misma transacción que la reserva.
 - [ ] T012 [P] Implementar los puertos `Module1Port` y `Module3Port` con sus adaptadores HTTP (timeouts) y objetos de integración
 - [ ] T013 Configurar RabbitMQ con `@golevelup/nestjs-rabbitmq`: exchange `hospitua.events`, colas, routing keys, reintentos y dead-letter
 - [ ] T014 Crear `processed_message` y la idempotencia por `messageId` en `messaging/`
-- [ ] T015 Configurar la infraestructura de pruebas (Jest, supertest y Testcontainers de PostgreSQL y RabbitMQ)
+- [ ] T015 Configurar la infraestructura de pruebas (Vitest, supertest y Testcontainers de PostgreSQL y RabbitMQ)
 - [ ] T016 [P] Esqueleto del frontend: enrutamiento, cliente HTTP, TanStack Query y manejo de errores de API
 - [ ] T017 Lectura de las cabeceras `X-Client` y `X-User` (sin validar quién llama) y login simulado en el frontend
 - [ ] T018 Configurar logs (`nestjs-pino`) y correlación de solicitudes
