@@ -12,7 +12,8 @@ reservas (`Reservation.status`) y de `ReservationRoom.stayStatus`. Registra rese
 (Recepcionista) y lee las de Booking.com desde el feed de Channex, le envía los tipos de habitación
 y la disponibilidad, las modifica, las cancela, cierra el día (No-Show),
 recibe del Módulo 1 los avisos de Check-In y Check-Out por habitación (con los datos de todos los
-huéspedes de la habitación), y genera el reporte SIRE.
+huéspedes de la habitación) y los de mantenimiento e inventario, reporta a Channex los no-shows de
+Booking y genera el reporte SIRE.
 Consulta al Módulo 1 (inventario y calendario de mantenimientos) y al Módulo 3 (tarifa dinámica), le
 envía por cola la lista de reservas del día y sus actualizaciones. **No le ordena apartar ni liberar
 habitaciones**: el Módulo 1, dueño del estado de las habitaciones, decide qué hace con esa lista.
@@ -180,6 +181,12 @@ cuándo se confirmó a Channex (`ack`).
 
 **AriPendingChange** (disponibilidad pendiente de enviar a Channex, `configure-ota`): `categoryRoom`,
 `dateFrom` y `dateTo`.
+
+**OtaNoShowReport** (no-show de Booking pendiente o ya reportado a Channex, `generate-ota-reservation`):
+la reserva, su `bookingId` de Channex, el resultado (`PENDING`, `REPORTED` o `REJECTED`) y los intentos.
+
+**IdempotencyKey** (creación de reserva directa ya atendida, `generate-direct-reservation`): la clave
+`Idempotency-Key`, el resumen del cuerpo y la reserva creada; vale 24 horas.
 
 **Cancellation** (registro inmutable de la anulación): `cancellationId`, `reservationRef`,
 `cancellationDate`, `reason` (opcional), `channel` (`RECEPTION` | `OTA_API`), `processedBy`, `status`
