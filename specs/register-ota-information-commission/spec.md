@@ -181,11 +181,12 @@ se confirma que el cambio no afecta las reservas ya registradas.
 - **FR-005**: El sistema no debe registrar dos reservas OTA con el mismo `externalConfirmationCode` para
   la misma `Ota`: una revisión con un código ya registrado se aplica a esa reserva.
 - **FR-006**: El sistema debe proveer al Módulo 3 (finanzas) una función de conciliación que cambie
-  el `commissionStatus` de `CALCULATED` a `RECONCILED` o `PAID`. La Recepcionista no concilia
-  comisiones.
+  el `commissionStatus` de `CALCULATED` a `RECONCILED` o `PAID`, solo para reservas `COMPLETED`. La
+  Recepcionista no concilia comisiones.
 - **FR-007**: El sistema no debe modificar el `commissionAmount` ni el `commissionStatus` de una
-  reserva OTA cuando Booking la cancela: solo cambia su `status` a `CANCELLED`, porque la agencia ya
-  sabe que no cobrará comisión por esa reserva.
+  reserva OTA cuando Booking la cancela ni cuando queda en `NO_SHOW`: solo cambia su `status`. Booking
+  no cobra comisión por una cancelación, y el no-show se le reporta por Channex sin cobrar penalidad al
+  huésped ("Generar reservación por OTA"), así que tampoco la cobra. Esas comisiones no se concilian.
 - **FR-008**: El sistema debe registrar la `Ota` "Booking.com" por configuración, con su `name`,
   su `hotelAccountId` (el id del hotel de Booking en Channex) y su `commissionPercentage`, sin
   duplicarla. La Recepcionista no crea ni edita agencias; solo las consulta.
@@ -211,8 +212,8 @@ se confirma que el cambio no afecta las reservas ya registradas.
   Atributos: `reservationRef`, `guestRef`, `guestCount`, `grossAmount` (valor bruto total de todas
   las habitaciones, recibido de la OTA), `currency`, `commissionAmount` (comisión calculada sobre el
   `grossAmount` completo; se recalcula si Booking cambia el valor), `commissionPercentage`
-  (porcentaje contractual aplicado), `commissionStatus` (`CALCULATED` | `RECONCILED` | `PAID` |
-  `DISPUTED`), `externalConfirmationCode`, `source` (`OTA`), y `status` con estados permitidos:
+  (porcentaje contractual aplicado), `commissionStatus` (`CALCULATED` | `RECONCILED` |
+  `PAID`), `externalConfirmationCode`, `source` (`OTA`), y `status` con estados permitidos:
   `PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`. Una reserva de Booking se crea
   directamente en `ACTIVE`, porque Booking ya la confirmó; la comisión se calcula desde el momento de su
   registro.

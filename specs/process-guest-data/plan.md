@@ -567,9 +567,8 @@ frontend/src/pages/guest-stays/              # vista de huéspedes alojados y su
 | # | Pendiente | Con quién |
 |---|---|---|
 | 1 | Transacción única entre `update-reservation` (estado y `processed_message`) y este caso de uso: confirmarlo en el plan de `update-reservation` | Equipo del Módulo 2 |
-| 2 | El spec exige que el Módulo 2 **no valide** los datos, pero la base tiene columnas obligatorias: confirmar que omitir al huésped incompleto es aceptable | Equipo del Módulo 2 |
-| 3 | Tamaño máximo de un mensaje (cantidad de huéspedes) para protegerse de payloads desmedidos | Módulo 1 |
-| 4 | Si la nacionalidad llega con otra escritura ("COLOMBIA", "colombiana"), hoy se trataría como extranjera. Confirmar con el Módulo 1 que siempre envía `Colombia` | Módulo 1 |
+| 2 | Tamaño máximo de un mensaje (cantidad de huéspedes) para protegerse de payloads desmedidos | Módulo 1 |
+| 3 | Si la nacionalidad llega con otra escritura ("COLOMBIA", "colombiana"), hoy se trataría como extranjera. Confirmar con el Módulo 1 que siempre envía `Colombia` | Módulo 1 |
 
 ## Notes
 

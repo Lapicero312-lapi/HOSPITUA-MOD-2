@@ -565,7 +565,8 @@ sin enviar ninguna orden de liberación al Módulo 1.
   `NOT_ARRIVED` y las reservas `NO_SHOW` se quitan de la lista del día (`REMOVED`) y el Módulo 1 decide
   qué hace con ellas.
 - **FR-021**: El sistema no debe registrar una `Cancellation` por un No-Show: la reserva queda en
-  `NO_SHOW`, no en `CANCELLED`.
+  `NO_SHOW`, no en `CANCELLED`. Si la reserva es de Booking, debe dejar pendiente, en la misma
+  transacción, el reporte del no-show a Booking ("Generar reservación por OTA", FR-011).
 - **FR-022**: El sistema debe procesar cada registro del lote del cierre del día con manejo
   individual de excepciones, de modo que un error de validación no interrumpa el lote ni exponga
   errores **HTTP 500**.

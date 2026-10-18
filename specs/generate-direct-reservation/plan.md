@@ -69,8 +69,9 @@ transversal 10 del plan base). **No guarda nada.**
   reservación").
 - `rooms`: una entrada por habitación (entre 1 y 10), con su `guestCount`. La cantidad de habitaciones es
   la longitud de la lista.
-- `roomId` es **opcional** en cada entrada. La pantalla no lo envía: el sistema asigna. Si viene, se
-  verifica esa habitación concreta, que debe ser de `categoryRoom`.
+- `roomId` es **opcional** en cada entrada. La pantalla permite elegirlo; si no viene, el sistema asigna
+  la disponible de menor `roomNumber`. Si viene, se verifica esa habitación concreta, que debe ser de
+  `categoryRoom`.
 
 **Respuesta 200**
 
@@ -121,7 +122,8 @@ transversal 10 del plan base). **No guarda nada.**
 
 ### B. Creación: `POST /api/reservations/direct`
 
-Mismas cabeceras. **Solicitud** = la de la vista previa más el titular, las observaciones y las
+Mismas cabeceras, más **`Idempotency-Key`** (UUID, obligatoria; la pantalla genera una por formulario).
+**Solicitud** = la de la vista previa más el titular, las observaciones y las
 tarifas que el solicitante vio:
 
 ```json
@@ -183,6 +185,10 @@ de la reserva con la forma de `check-view-reservation` (C3):
 }
 ```
 
+**Idempotencia** (FR-008): si la `Idempotency-Key` ya existe (tabla `idempotency_key`, 24 horas) con el
+mismo cuerpo, responde `201` con la misma reserva, sin crear otra ni volver a cotizar; con otro cuerpo,
+`400` `IDEMPOTENCY_KEY_REUSED`. La fila se inserta en la misma transacción que la reserva.
+
 La reserva se guarda con `source` `DIRECT`, `commissionPercentage` y `commissionAmount` en `0`,
 `externalConfirmationCode` en `null`, y **sin total** ni IVA. El `201` se responde una vez persistida, **sin
 esperar al Módulo 1** (FR-007).
@@ -203,6 +209,8 @@ esperar al Módulo 1** (FR-007).
 | `NO_AVAILABILITY` | Otra solicitud tomó la última habitación | "Ya no hay disponibilidad para las fechas solicitadas." |
 | `PRICING_UNAVAILABLE` | El Módulo 3 no responde al cotizar | "Error 400: El servicio de cotización de tarifas no se encuentra disponible. Por favor intente más tarde" |
 | `RATE_CHANGED` | La tarifa cambió entre la vista previa y la creación | "La tarifa cambió, vuelva a cotizar." |
+| `IDEMPOTENCY_KEY_REQUIRED` | Falta la cabecera `Idempotency-Key` o no es un UUID (solo B) | "Falta el identificador de la solicitud." |
+| `IDEMPOTENCY_KEY_REUSED` | La misma `Idempotency-Key` con otro cuerpo (solo B) | "La solicitud ya se usó con otros datos." |
 | `NOTES_TOO_LONG` | `notes` de más de 500 caracteres | "Las observaciones no pueden superar 500 caracteres." |
 | `INVALID_CHARACTERS` | Caracteres no válidos en `notes` o en los datos del titular | "El formato de los datos contiene caracteres no válidos." |
 | `GUEST_DATA_REQUIRED` | Falta un dato obligatorio del titular | "Los datos del titular son obligatorios." |
@@ -288,6 +296,10 @@ error: la Recepcionista escribe los datos completos.
 8. **Aviso de la lista del día**: dentro de la transacción, `DailyListChangeRecorder.record(tx, null,
    reserva)`. Si la llegada es hoy y la lista ya se envió, genera `ADDED`; si aún no se envió, la reserva
    viaja en la lista; si la llegada es futura, no se avisa nada.
+9. **Mantenimientos al confirmar**: la creación (B) vuelve a ejecutar la verificación de disponibilidad
+   completa (paso 5, con mantenimientos), no reutiliza la de la vista previa. Queda solo el lapso entre esa
+   verificación y el `COMMIT`; un mantenimiento registrado en ese instante lo maneja el Módulo 1, que
+   consulta las reservas antes de registrarlo.
 
 ## Diagramas de secuencia
 
@@ -486,6 +498,7 @@ y por caída del Módulo 3.
 - [ ] T012 [US1] Pruebas de todos los casos borde (fechas, habitaciones, personas, `notes`, Módulo 3 parcial, concurrencia)
 - [ ] T013 [US1] Prueba de concurrencia: dos solicitudes simultáneas por la última habitación; solo una se crea
 - [ ] T014 [P] [US1] Frontend: pantalla "Nueva reserva directa" (disponibilidad y tarifa al cambiar categoría, habitaciones y fechas; confirmar)
+- [ ] T019 [US1] `Idempotency-Key` en B: tabla `idempotency_key`, misma reserva con el mismo cuerpo, `IDEMPOTENCY_KEY_REUSED` con otro, y borrado de las vencidas en el cierre del día
 - [ ] T018 [US1] `LookupGuest` y `GET /api/guests/lookup` (E): búsqueda por documento y precarga en la pantalla "Nueva reserva directa"; pruebas de los escenarios 10 y 11
 
 ## Phase N: Polish
@@ -538,6 +551,7 @@ y por caída del Módulo 3.
 | FR-005 | Estado inicial `ACTIVE` y habitaciones `EXPECTED` | T002, T008 |
 | FR-006 | Persistencia de tarifa, `quoteId`, comisión `0` y código `null` | T005, T008 |
 | FR-007 | La creación no depende del Módulo 1 y responde `201` | T008 |
+| FR-008 | `Idempotency-Key` e `idempotency_key` | T019 |
 | FR-009 | `DailyListChangeRecorder` dentro de la transacción | T010 |
 | FR-010 | Mapeo a 400 de toda validación e integración | T006, T012 |
 | FR-011 | `LookupGuest` y `GET /api/guests/lookup` | T018 |
@@ -562,12 +576,7 @@ y por caída del Módulo 3.
 
 ## Puntos abiertos
 
-| # | Pendiente | Con quién |
-|---|---|---|
-| 1 | **Doble envío**: como las habitaciones se asignan solas, dos envíos iguales del formulario crean **dos reservas** en habitaciones distintas. Conviene una cabecera `Idempotency-Key` con una tabla pequeña que la guarde, o deshabilitar el botón en la pantalla | Equipo del Módulo 2 |
-| 2 | El flujo del spec asigna habitaciones automáticamente, pero los escenarios 5 y 6 nombran habitaciones concretas. Confirmar si la API debe aceptar `roomId` | Equipo del Módulo 2 |
-| 3 | Una habitación con mantenimiento programado **entre** la verificación y el guardado no se detecta (el calendario no se consulta dentro de la transacción) | Equipo del Módulo 2 |
-| 4 | La Recepcionista no elige el número de habitación: confirmar si necesita poder hacerlo para alguna petición del huésped (por ejemplo, una habitación en un piso) | Equipo del Módulo 2 |
+Ninguno: los puntos de este plan quedaron resueltos.
 
 ## Notes
 

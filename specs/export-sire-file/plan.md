@@ -512,6 +512,8 @@ solo movimiento.
    dice "tal cual" solo para tipo de documento y nacionalidad.
 9. **Códigos y mensajes** que el spec no da: `INVALID_DATE`, `INCOMPLETE_DATE_RANGE`,
    `INVALID_DATE_RANGE`, `INVALID_EXPORT_KIND`, `MOVEMENT_NOT_FOUND`, `TOO_MANY_REQUESTS`.
+10. **Huésped con varias estadías**: aparece con las líneas de cada una, porque cada movimiento es real.
+11. **Las `SireExport` no se borran**: son un registro auditable, sin borrado automático.
 
 ## Puntos abiertos
 
@@ -519,8 +521,6 @@ solo movimiento.
 |---|---|---|
 | 1 | **Formato exacto de SIRE**: separador, formato de fecha, fin de línea, codificación, si lleva una línea de encabezado y si los nombres van en mayúsculas. El spec lo remite al manual del portal de SIRE. Mientras tanto se usan los valores por defecto de la configuración | Equipo del Módulo 2 |
 | 2 | **Límite de solicitudes con varias instancias**: el limitador en memoria no se comparte entre instancias. Si el backend corre en más de una, habría que moverlo a la base de datos o a un servicio compartido | Equipo del Módulo 2 |
-| 3 | **Huésped repetido entre reservas**: un huésped con dos estadías aparece con las líneas de ambas. Confirmar que Migración las espera así | Equipo del Módulo 2 |
-| 4 | **Hasta cuándo se conservan las `SireExport`**: son un registro auditable; el spec no fija retención | Equipo del Módulo 2 |
 
 ## Notes
 

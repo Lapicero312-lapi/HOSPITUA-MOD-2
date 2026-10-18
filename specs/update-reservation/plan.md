@@ -476,11 +476,12 @@ reserva** (así un registro corrupto no interrumpe el lote, FR-022):
 
 | Reserva | Qué hace |
 |---|---|
-| `ACTIVE` o `PENDING` con `startDate` = día procesado | `NO_SHOW` (cualquier canal, sin `Cancellation`, FR-021), todas sus habitaciones `NOT_ARRIVED`, y `DailyListChangeRecorder` con `REMOVED` motivo `NO_SHOW` **del día procesado** |
+| `ACTIVE` o `PENDING` con `startDate` = día procesado | `NO_SHOW` (cualquier canal, sin `Cancellation`, FR-021), todas sus habitaciones `NOT_ARRIVED`, `DailyListChangeRecorder` con `REMOVED` motivo `NO_SHOW` **del día procesado** y, si es de Booking, `OtaNoShowReporter.record` (`generate-ota-reservation`) |
 | `IN_PROGRESS` con habitaciones en `EXPECTED` | Esas habitaciones pasan a `NOT_ARRIVED`; la reserva sigue `IN_PROGRESS`, o pasa a `COMPLETED` si ya no queda ninguna `CHECKED_IN`; no avisa a la lista |
 | `IN_PROGRESS` con todas las habitaciones ingresadas | Se ignora |
 | Cualquier estado final | Se ignora |
 
+- **Limpieza**: al terminar, borra las filas de `idempotency_key` con más de 24 horas (`generate-direct-reservation`).
 - **Idempotente**: ignora reservas que ya no están en `ACTIVE`, `PENDING` ni `IN_PROGRESS` y habitaciones
   que ya no están en `EXPECTED` (NFR-003).
 - **Recuperación al arrancar**: la aplicación ejecuta el cierre del día anterior si está pendiente (es

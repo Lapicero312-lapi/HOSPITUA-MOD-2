@@ -211,7 +211,7 @@ movimientos.
 | `ReservationStatus` | `PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW` |
 | `StayStatus` | `EXPECTED`, `CHECKED_IN`, `CHECKED_OUT`, `NOT_ARRIVED` |
 | `ReservationSource` | `DIRECT`, `OTA` |
-| `CommissionStatus` | `CALCULATED`, `RECONCILED`, `PAID`, `DISPUTED` |
+| `CommissionStatus` | `CALCULATED`, `RECONCILED`, `PAID` |
 | `DocumentType` | `RC`, `TI`, `CC`, `CE`, `PAS`, `NIT` |
 | `MovementType` | `ENTRY`, `DEPARTURE` |
 | `MigrationStatus` (derivado, no se guarda) | `AWAITING_CHECK_IN`, `COMPLETE`, `NOT_REQUIRED`, `NO_CHECK_IN` |
@@ -286,6 +286,7 @@ Regla: **proactiva** (el módulo avisa un evento y no espera respuesta) → **co
 | Consultar una reserva por su referencia (`quoteIds`, canal y datos de la OTA) para liquidar en el Check-Out | M3 → M2 | REST GET | Reactiva | `check-view-reservation` (FR-022) |
 | Leer las reservas de Booking (feed de revisiones) y confirmarlas (`ack`) | M2 → Channex | REST GET y POST, cada 30 s, antes de enviar la disponibilidad | El Módulo 2 pregunta | `generate-ota-reservation` |
 | Crear y actualizar tipos de habitación (al iniciar y 03:00) y enviar disponibilidad (al cambiar y 03:00) | M2 → Channex | REST GET, POST y PUT | Proactiva | `configure-ota` |
+| Reportar el no-show de una reserva de Booking (`POST /api/v1/bookings/{booking_id}/no_show`) | M2 → Channex | REST POST, después del cierre del día | Proactiva | `generate-ota-reservation` |
 | Crear planes de tarifa y enviar precios | M3 → Channex | REST (fuera del Módulo 2) | Proactiva | Módulo 3 |
 
 El Módulo 1 **ya no consulta la lista de reservas** al Módulo 2 por REST: la recibe por cola. Solo
@@ -351,7 +352,7 @@ El contenido exacto de cada mensaje está en el plan de su caso de uso:
 | `GET /api/reservations` con paginación de 10, filtros (`search` por código, documento o nombre; `status`; `source`; `otaId`; rango de estadía `dateFrom` y `dateTo`) y `order` por `startDate`. Con `X-Client: MODULE1` es la consulta por fechas de FR-023 | Recepcionista, procesos internos; Módulo 1 | `check-view-reservation` |
 | `GET /api/reservations/day-summary` (llegadas y salidas esperadas hoy) | Recepcionista | `check-view-reservation` |
 | `GET /api/reservations/{reservationRef}` (detalle) | Recepcionista; Módulo 3 con `X-Client: MODULE3` (devuelve `quoteIds`, canal y, solo si es OTA, `otaId`, `otaConfirmationCode` y `otaCommissionPercentage`; 404 si no existe) | `check-view-reservation` |
-| `POST /api/reservations/direct/preview` y `POST /api/reservations/direct` (canal directo) | Recepcionista | `generate-direct-reservation` |
+| `POST /api/reservations/direct/preview` y `POST /api/reservations/direct` (canal directo; la creación exige la cabecera `Idempotency-Key`) | Recepcionista | `generate-direct-reservation` |
 | `POST /api/reservations/{reservationRef}/modification-preview` y `PATCH /api/reservations/{reservationRef}` | Recepcionista (solo directas); los cambios de Booking llegan por el feed de Channex | `update-reservation` |
 | `PATCH /api/reservations/{reservationRef}/room-assignment` (asignar habitación a una reserva de Booking en conflicto) | Recepcionista | `update-reservation` |
 | `POST /api/reservations/{reservationRef}/cancellation` | Recepcionista (solo directas); las cancelaciones de Booking llegan por el feed de Channex | `cancel-reservation` |
@@ -446,7 +447,7 @@ backend/
     │   │   ├── rest/             # controladores REST
     │   │   ├── messaging/        # consumidores RabbitMQ (Check-In, Check-Out, mantenimiento e inventario)
     │   │   └── jobs/             # lista del día (00:00), cierre del día (00:00:30), reintentos, feed de
-    │   │                         #   Channex y disponibilidad (30 s), tipos y disponibilidad completa (03:00)
+    │   │                         #   Channex, disponibilidad y no-shows pendientes (30 s), tipos y disponibilidad completa (03:00)
     │   ├── out/
     │   │   ├── persistence/      # clases de tabla TypeORM, mapeadores y repositorios
     │   │   ├── module1/          # cliente HTTP del Módulo 1
@@ -607,7 +608,7 @@ erDiagram
         uuid id PK
         uuid reservation_id FK
         uuid ota_id FK
-        varchar action "CALCULATED RECONCILED PAID DISPUTED"
+        varchar action "CALCULATED RECONCILED PAID"
         varchar previous_status "nulo"
         numeric gross_amount
         numeric commission_percentage
@@ -661,6 +662,20 @@ erDiagram
         date date_to
         timestamptz created_at
     }
+    ota_no_show_report {
+        uuid reservation_id PK "FK"
+        uuid booking_id "id de Channex"
+        varchar result "PENDING REPORTED REJECTED"
+        smallint attempts
+        timestamptz created_at
+        timestamptz reported_at "nulo"
+    }
+    idempotency_key {
+        uuid key PK
+        varchar request_hash
+        uuid reservation_id FK
+        timestamptz created_at
+    }
 
     reservation ||--|| guest : "reservation_id"
     ota |o--o{ reservation : "ota_id"
@@ -674,6 +689,8 @@ erDiagram
     ota ||--o{ ota_room_type_mapping : "ota_id"
     ota ||--o{ ota_booking_revision : "ota_id"
     reservation |o--o{ ota_booking_revision : "reservation_id"
+    reservation ||--o| ota_no_show_report : "reservation_id"
+    reservation ||--o| idempotency_key : "reservation_id"
 ```
 
 **Normalización.** El modelo está en tercera forma normal: cada dato se guarda en una sola tabla y las
@@ -734,7 +751,7 @@ tablas se unen por sus claves. Hay tres excepciones a propósito:
 | `currency` | `char(3)` | sí | Solo `OTA`: moneda del `gross_amount` |
 | `commission_percentage` | `numeric(5,2)` | no | `0` por defecto; de 0 a 100; en `OTA`, el de la agencia al registrar la reserva |
 | `commission_amount` | `numeric(14,2)` | no | `0` por defecto; `CHECK (commission_amount >= 0)`; en `OTA`, `gross_amount × commission_percentage / 100` |
-| `commission_status` | `varchar(10)` | sí | Solo `OTA`: `CALCULATED`, `RECONCILED`, `PAID`, `DISPUTED` |
+| `commission_status` | `varchar(10)` | sí | Solo `OTA`: `CALCULATED`, `RECONCILED`, `PAID` |
 | `created_at` | `timestamptz` | no | |
 | `conflict_reason` | `varchar(25)` | sí | Solo reservas de Booking en conflicto: `NO_ROOM_AVAILABLE`, `CAPACITY_EXCEEDED`, `CHANGE_NOT_APPLICABLE` (D13) |
 | `conflict_detected_at` | `timestamptz` | sí | Cuándo se detectó el conflicto |
@@ -842,7 +859,7 @@ huésped cuyo documento coincide con el `guest` de la reserva.
 | `id` | `uuid` | no | PK |
 | `reservation_id` | `uuid` | no | FK → `reservation` |
 | `ota_id` | `uuid` | no | FK → `ota` |
-| `action` | `varchar(12)` | no | `CALCULATED`, `RECONCILED`, `PAID`, `DISPUTED` |
+| `action` | `varchar(12)` | no | `CALCULATED`, `RECONCILED`, `PAID` |
 | `previous_status` | `varchar(10)` | sí | Estado de la comisión antes de la acción |
 | `gross_amount` | `numeric(14,2)` | no | |
 | `commission_percentage` | `numeric(5,2)` | no | |
@@ -940,6 +957,31 @@ Se inserta en la misma transacción que el cambio de la reserva; el `ack` se env
 Se inserta en la misma transacción que el cambio de la reserva; la tarea de disponibilidad las agrupa,
 las envía y las borra.
 
+**`ota_no_show_report`** — no-shows de Booking pendientes de reportar a Channex (`generate-ota-reservation`)
+
+| Columna | Tipo | Nulo | Regla |
+|---|---|---|---|
+| `reservation_id` | `uuid` | no | PK y FK → `reservation` |
+| `booking_id` | `uuid` | no | `booking_id` de Channex (de `ota_booking_revision`) |
+| `result` | `varchar(8)` | no | `PENDING`, `REPORTED` o `REJECTED` |
+| `attempts` | `smallint` | no | Intentos de envío |
+| `created_at` | `timestamptz` | no | |
+| `reported_at` | `timestamptz` | sí | Cuándo Channex respondió `200` |
+
+La inserta el cierre del día (`update-reservation`), en la misma transacción que el `NO_SHOW`;
+`ChannexSyncJob` envía las `PENDING`. Índice parcial `(created_at) WHERE result = 'PENDING'`.
+
+**`idempotency_key`** — creaciones de reservas directas ya atendidas (`generate-direct-reservation`)
+
+| Columna | Tipo | Nulo | Regla |
+|---|---|---|---|
+| `key` | `uuid` | no | PK; la cabecera `Idempotency-Key` |
+| `request_hash` | `varchar(64)` | no | SHA-256 del cuerpo de la solicitud |
+| `reservation_id` | `uuid` | no | FK → `reservation` creada |
+| `created_at` | `timestamptz` | no | Vale 24 horas; el cierre del día borra las vencidas |
+
+Se inserta en la misma transacción que la reserva.
+
 `migrationStatus` es solo un dato de pantalla: se calcula, no se guarda.
 
 ### Reglas transversales que todos los planes de caso de uso heredan
@@ -1005,6 +1047,8 @@ las envía y las borra.
 | D12 | **Booking.com por Channex, leyendo el feed.** Una tarea consulta `GET /api/v1/booking_revisions/feed` cada 30 s (todas las páginas, de hasta 100) y confirma cada revisión con `POST /api/v1/booking_revisions/{id}/ack` después del commit. No se usan webhooks: exigen una URL pública y el feed sirve igual en desarrollo. En el mismo ciclo, después del feed, se envía la disponibilidad, para no devolverle a Booking un cupo que Channex ya descontó. Cada revisión se procesa una sola vez (`ota_booking_revision`); las reservas de Booking nacen en `ACTIVE`. | `generate-ota-reservation` |
 | D13 | **Conflictos de Booking.** Booking ya aceptó la reserva, así que nunca se rechaza: si no hay habitación libre de la categoría, la habitación queda sin asignar (`room_id` vacío, sin bloquear inventario); si se supera la capacidad o un cambio no se puede aplicar, la reserva queda marcada (`conflict_reason`). La Recepcionista asigna la habitación. Una reserva con alguna habitación sin asignar **no viaja en la lista del día** hasta que se asigne: si ya estaba, sale con `REMOVED` y motivo `ROOM_UNASSIGNED`; al asignar la última, entra con `ADDED`. | `generate-ota-reservation`, `update-reservation`, `check-view-reservation` |
 | D14 | **Tipos de habitación y disponibilidad hacia Channex.** El Módulo 2 crea un tipo de habitación por categoría a partir de las habitaciones vendibles del Módulo 1 (cantidad y capacidad máxima) y lo sincroniza al iniciar y a las 03:00, sin borrar. La disponibilidad (vendibles menos las que ocupan las reservas) se envía al cambiar, agrupada cada 30 s, y completa (90 días) a las 03:00. Las habitaciones en mantenimiento se descuentan solo en sus fechas; el Módulo 1 avisa por cola los mantenimientos y los cambios de inventario. **Los planes de tarifa y los precios los envía el Módulo 3** directamente a Channex. | `configure-ota` |
+| D15 | **No-show de Booking.** Al cierre del día, una reserva de Booking que pasa a `NO_SHOW` deja pendiente su reporte a Channex (`POST /api/v1/bookings/{booking_id}/no_show` con `waived_fees: true`), en la misma transacción; `ChannexSyncJob` lo envía. Booking no cobra comisión y el Módulo 2 no la concilia. | `generate-ota-reservation`, `update-reservation` |
+| D16 | **Idempotencia de la reserva directa.** La creación exige `Idempotency-Key`; la misma clave con el mismo cuerpo devuelve la misma reserva durante 24 horas. | `generate-direct-reservation` |
 
 ## Estrategia de testing base
 
@@ -1051,7 +1095,7 @@ las envía y las borra.
 - [ ] T018 Configurar logs (`nestjs-pino`) y correlación de solicitudes
 - [ ] T019 Configurar el bloqueo asesor de PostgreSQL y el planificador (`@nestjs/schedule`, `America/Bogota`) para las tareas programadas
 - [ ] T020 Configurar OpenAPI (`@nestjs/swagger`) y la verificación de dependencias entre capas en CI
-- [ ] T021 [P] Implementar `ChannexPort` con su adaptador HTTP (`user-api-key`, propiedades, feed, `ack`, tipos de habitación y disponibilidad) y el manejo de `429` (pausa de un minuto por propiedad y después espera creciente)
+- [ ] T021 [P] Implementar `ChannexPort` con su adaptador HTTP (`user-api-key`, propiedades, feed, `ack`, reporte de no-show, tipos de habitación y disponibilidad) y el manejo de `429` (pausa de un minuto por propiedad y después espera creciente)
 
 **Checkpoint**: Base lista; los planes de caso de uso pueden implementarse.
 

@@ -220,6 +220,14 @@ pase a `CANCELLED` con una `Cancellation` del canal `OTA_API`.
 - **FR-010**: Una falla de Channex no debe dejar reservas a medias: cada revisión se guarda en una sola
   transacción, y las que fallan se procesan en la siguiente consulta, con espera creciente ante
   respuestas `429` o fallas repetidas.
+- **FR-011**: Cuando una reserva de Booking pase a `NO_SHOW` en el cierre del día ("Actualizar
+  reservación"), el sistema debe reportar el no-show a Booking por Channex, sin cobrar penalidad al
+  huésped, para que Booking no cobre comisión por esa reserva. Un fallo de Channex no revierte el
+  `NO_SHOW`: el reporte queda pendiente y se reintenta. Channex lo acepta desde la medianoche del día de
+  llegada y hasta 48 horas después.
+- **FR-012**: Si las habitaciones de una revisión traen fechas distintas a las de la reserva, el sistema
+  debe registrar la reserva con las fechas de la reserva y marcarla en conflicto
+  (`CHANGE_NOT_APPLICABLE`) para que la Recepcionista la revise.
 
 ### Non-Functional Requirements
 

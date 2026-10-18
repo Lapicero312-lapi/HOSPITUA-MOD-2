@@ -202,6 +202,8 @@ reserva y se devuelve un error controlado.
 - **FR-002**: El sistema debe exigir entre 1 y 10 habitaciones distintas por reserva y un
   `guestCount` entero por habitación, mayor o igual a 1 y menor o igual a su `maxCapacity`. El
   `guestCount` de la reserva es la suma de los de sus habitaciones. `notes` es opcional, con máximo 500 caracteres.
+  La Recepcionista puede indicar una `Room` concreta de la categoría para cada habitación; si no la
+  indica, el sistema asigna la disponible de menor `roomNumber`.
 - **FR-003**: El sistema debe exigir como requisito obligatorio invocar al Módulo 3 ("Calcular
   tarifa dinámica") para obtener el valor de hospedaje bruto de cada habitación antes de registrar
   la reserva.
@@ -218,6 +220,8 @@ reserva y se devuelve un error controlado.
 - **FR-007**: El sistema no debe ordenar al Módulo 1 que aparte o libere habitaciones: el estado de la
   `Room` es del Módulo 1, que decide qué hacer con la lista de reservas del día. La creación de la
   reserva no depende del Módulo 1 y responde 201 (Created) una vez persistida.
+- **FR-008**: El sistema no debe crear dos reservas por un mismo envío del formulario: si la misma
+  solicitud de creación llega dos veces (doble clic o reintento), debe responder la reserva ya creada.
 - **FR-009**: El sistema debe avisar al Módulo 1, mediante "Enviar reservas del día al Módulo 1",
   cada reserva creada con llegada hoy después de enviada la lista del día (`ADDED`).
 - **FR-010**: El sistema debe interceptar cualquier error de validación de campos, fechas o

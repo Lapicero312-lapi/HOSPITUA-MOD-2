@@ -22,8 +22,8 @@ la estadía. Este caso de uso hace cuatro cosas:
    configura `configure-ota`, y `OtaConnectionTracker` lleva el `connectionStatus` y el `lastSyncAt` a
    partir de las lecturas del feed de Channex (`generate-ota-reservation`). No hay rutas para la OTA.
 
-La comisión de una reserva **cancelada por Booking no se toca** (FR-007): la agencia ya sabe que no la
-cobrará.
+La comisión de una reserva **cancelada por Booking o en `NO_SHOW` no se toca ni se concilia** (FR-007):
+Booking no la cobra (el no-show se le reporta por Channex desde `generate-ota-reservation`).
 
 ## Resumen técnico e identificación
 
@@ -66,7 +66,7 @@ Las usan la Recepcionista y el Módulo 3. **Cabeceras**: `Content-Type: applicat
 | Parámetro | Tipo | Obligatorio | Regla |
 |---|---|---|---|
 | `dateFrom`, `dateTo` | `AAAA-MM-DD` | Sí, ambos | Rango inclusivo sobre la **`endDate`** de la reserva; máximo 366 días |
-| `commissionStatus` | `CALCULATED` \| `RECONCILED` \| `PAID` \| `DISPUTED` | No | Sin valor: todos |
+| `commissionStatus` | `CALCULATED` \| `RECONCILED` \| `PAID` | No | Sin valor: todos |
 | `reservationStatus` | `ReservationStatus` | No | Por ejemplo `COMPLETED` |
 | `otaId` | id | No | Una agencia |
 | `page` | entero ≥ 1 | No | Por defecto `1`; tamaño fijo de 100 |
@@ -144,12 +144,13 @@ comisiones pasan a `RECONCILED` o `PAID`.
 | `RESERVATION_NOT_FOUND` | La referencia no existe |
 | `NOT_OTA_RESERVATION` | La reserva es de canal directo |
 | `RESERVATION_CANCELLED` | La reserva está `CANCELLED`: su comisión no se toca (FR-007) |
+| `RESERVATION_NO_SHOW` | La reserva está `NO_SHOW`: su comisión no se toca (FR-007) |
 | `RESERVATION_NOT_COMPLETED` | La reserva no está `COMPLETED` (solo se concilian las que finalizaron su estadía) |
 | `AMOUNT_MISMATCH` | El `grossAmount` o el `commissionAmount` enviados no coinciden con los guardados |
 | `INVALID_TRANSITION` | La transición de `commissionStatus` no está permitida |
 
 **Transiciones de `commissionStatus` permitidas**: `CALCULATED → RECONCILED`, `CALCULATED → PAID` y
-`RECONCILED → PAID`. `DISPUTED` no tiene flujo definido en el spec (ver "Puntos abiertos").
+`RECONCILED → PAID`.
 
 **Errores 400 de la solicitud completa** (no se procesa ningún ítem):
 
@@ -428,7 +429,7 @@ sequenceDiagram
 ```text
 CALCULATED --conciliación--> RECONCILED --pago--> PAID
 CALCULATED --pago----------> PAID
-(CANCELLED por la OTA: la comisión no cambia)        DISPUTED: sin flujo definido
+(CANCELLED o NO_SHOW: la comisión no cambia ni se concilia)
 ```
 
 **`connectionStatus` de la `Ota`**: `CONNECTED` (nace así) ⇄ `DISCONNECTED`, solo por mensajes de la OTA.
@@ -608,9 +609,7 @@ frontend/src/pages/otas/                            # pantalla "Agencias OTA" (s
 
 | # | Pendiente | Con quién |
 |---|---|---|
-| 1 | **`DISPUTED`** aparece en el enumerado y en la auditoría pero ningún spec define cuándo se usa ni cómo se sale de él. Hoy un desajuste de montos solo rechaza el ítem | Equipo del Módulo 2 y Módulo 3 |
-| 2 | Estructura exacta de la conciliación que enviará el Módulo 3 (periodo, identificador del cierre, montos) y de la consulta de comisiones | Módulo 3 |
-| 4 | Qué pasa con la comisión de una reserva OTA que queda en `NO_SHOW`: el spec solo trata `COMPLETED` y `CANCELLED` | Equipo del Módulo 2 |
+| 1 | Estructura exacta de la conciliación que enviará el Módulo 3 (periodo, identificador del cierre, montos) y de la consulta de comisiones | Módulo 3 |
 
 ## Notes
 

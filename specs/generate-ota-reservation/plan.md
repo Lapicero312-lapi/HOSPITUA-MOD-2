@@ -107,7 +107,22 @@ Devuelve las revisiones **no confirmadas**, de la más antigua a la más recient
 **A2. Confirmar una revisión**: `POST {CHANNEX_BASE_URL}/api/v1/booking_revisions/{id}/ack`. Responde
 `200`. Una revisión sin confirmar vuelve a aparecer en el feed (Channex avisa por correo a los 30 minutos).
 
-**Respuestas de Channex y qué hace el sistema**:
+**A3. Reportar un no-show**: `POST {CHANNEX_BASE_URL}/api/v1/bookings/{booking_id}/no_show` (solo Booking.com)
+
+```json
+{ "no_show_report": { "waived_fees": true } }
+```
+
+- `booking_id`: el de `ota_booking_revision` de esa reserva. La página de Channex nombra así el parámetro
+  pero no dice explícitamente que sea el id de la reserva y no el de la revisión: se confirma en staging.
+- `waived_fees: true`: el hotel no cobra penalidad, así que Booking no cobra comisión.
+- Se acepta desde la medianoche del día de llegada y hasta 48 horas después. El cierre del día corre a las
+  00:00:30 del día siguiente, dentro de esa ventana.
+- Responde `200`. `404` (`resource_not_found`) o `422` (`method_not_supported`): la fila pasa a `REJECTED`
+  y se registra en el log, sin reintentar. `401`, `429`, `5xx` o sin respuesta: sigue `PENDING` y se
+  reintenta en el ciclo siguiente.
+
+**Respuestas de Channex y qué hace el sistema** (A1 y A2):
 
 | Respuesta | Qué hace |
 |---|---|
@@ -143,17 +158,20 @@ Devuelve las revisiones **no confirmadas**, de la más antigua a la más recient
    confirma** la revisión: queda en el feed hasta que se complete la relación en `configure-ota` o el mapeo
    en Channex, y se registra en el log. Channex avisa por correo si una revisión lleva 30 minutos sin
    confirmar.
-4. Consulta la disponibilidad de cada categoría (`VerifyAvailability.check`) y asigna con `assignRooms` la
+4. Si alguna habitación trae `checkin_date` o `checkout_date` distintos de `arrival_date` y
+   `departure_date`, usa las fechas de la reserva y marca `CHANGE_NOT_APPLICABLE` (FR-012).
+5. Consulta la disponibilidad de cada categoría (`VerifyAvailability.check`) y asigna con `assignRooms` la
    de menor `roomNumber`, sin repetir. Las que no tengan habitación libre quedan **sin asignar**
    (`room_id` vacío, `blocks_inventory = false`).
-5. Crea la `Reservation` en `ACTIVE`, con `source = OTA`, `ota_id` de Booking.com y el titular nuevo.
-6. Calcula la comisión con `RegisterOtaConfirmationAndCommission.calculate` y escribe su auditoría.
-7. Si hay habitaciones sin asignar, marca `NO_ROOM_AVAILABLE`; si alguna supera su `maxCapacity`,
-   `CAPACITY_EXCEEDED` (si hay las dos, la primera).
-8. Llama a `DailyListChangeRecorder.record` (`ADDED` si la llegada es hoy, la lista ya salió y no quedó
+6. Crea la `Reservation` en `ACTIVE`, con `source = OTA`, `ota_id` de Booking.com y el titular nuevo.
+7. Calcula la comisión con `RegisterOtaConfirmationAndCommission.calculate` y escribe su auditoría.
+8. Si hay habitaciones sin asignar, marca `NO_ROOM_AVAILABLE`; si alguna supera su `maxCapacity`,
+   `CAPACITY_EXCEEDED` (si hay varios motivos, el primero en este orden: `NO_ROOM_AVAILABLE`,
+   `CAPACITY_EXCEEDED`, `CHANGE_NOT_APPLICABLE`).
+9. Llama a `DailyListChangeRecorder.record` (`ADDED` si la llegada es hoy, la lista ya salió y no quedó
    ninguna habitación sin asignar; con alguna sin asignar no se avisa nada) y a
    `AriChangeRecorder.record` (categorías y fechas).
-9. Inserta la fila de `ota_booking_revision` (`APPLIED` o `CONFLICT`).
+10. Inserta la fila de `ota_booking_revision` (`APPLIED` o `CONFLICT`).
 
 Después del commit envía el `ack` (A2) y guarda `acked_at`.
 
@@ -179,7 +197,7 @@ Después del commit envía el `ack` (A2) y guarda `acked_at`.
 
 | Puerto | De | Para qué |
 |---|---|---|
-| `ChannexPort.fetchBookingFeed` y `ackBookingRevision` | Plan base | A1 y A2 |
+| `ChannexPort.fetchBookingFeed`, `ackBookingRevision` y `reportNoShow` | Plan base | A1, A2 y A3 |
 | `OtaRoomTypeMappingRepository.findByChannexRoomType` | `configure-ota` | Categoría de cada habitación |
 | `VerifyAvailability.check` y `assignRooms` | `check-room-availability` | Disponibilidad y asignación (sin `requireAvailable`: nunca se rechaza) |
 | `RegisterOtaConfirmationAndCommission.calculate` y `recordAudit` | `register-ota-information-commission` | Comisión y auditoría |
@@ -206,6 +224,9 @@ Después del commit envía el `ack` (A2) y guarda `acked_at`.
 6. **Estado inicial `ACTIVE`**; `PENDING` no se usa.
 7. **Titular propio de la reserva**, sin documento y con la nacionalidad informativa.
 8. **`lastSyncAt`**: cada lectura del feed que termina bien lo actualiza, traiga o no revisiones.
+9. **Reporte de no-show** (FR-011): el cierre del día llama a `OtaNoShowReporter.record(tx, reserva)`, que
+   inserta una fila `PENDING` en `ota_no_show_report`. En cada ciclo, después del feed y de la
+   disponibilidad, `ChannexSyncJob` envía las pendientes (A3) con `PublishPendingNoShows`.
 
 ## Diagramas de secuencia
 
@@ -270,7 +291,7 @@ sequenceDiagram
 
 ## Modelo de datos y entidades involucradas
 
-**No se crean tablas**: usa las del plan base.
+**No se crean tablas**: usa las del plan base, incluida `ota_no_show_report`.
 
 | Tabla | Qué guarda |
 |---|---|
@@ -279,6 +300,7 @@ sequenceDiagram
 | `guest` | Titular nuevo, sin documento |
 | `commission_audit` | Fila `CALCULATED` (`register-ota-information-commission`) |
 | `ota_booking_revision` | Una fila por revisión procesada, con su resultado y `acked_at` |
+| `ota_no_show_report` | Un no-show pendiente o ya reportado a Channex |
 
 ## Reglas de validación y manejo de errores
 
@@ -299,7 +321,7 @@ revisión se confirma.
 
 | Sistema | Dirección | Mecanismo | Ante fallo |
 |---|---|---|---|
-| Channex | M2 → Channex | REST GET (feed) y POST (`ack`) | Ver la tabla de A |
+| Channex | M2 → Channex | REST GET (feed) y POST (`ack` y no-show) | Ver la tabla de A y A3 |
 | Módulo 1 | M2 → M1 | REST GET, a través de `check-room-availability` | La revisión no se confirma y se reintenta |
 
 ## Arquitectura (capas del plan base)
@@ -308,11 +330,11 @@ revisión se confirma.
 |---|---|
 | `domain/reservation/` | Fábrica `Reservation.createOta(...)` (estado `ACTIVE`, habitaciones sin asignar, conflicto) |
 | `domain/shared/` | `CountryNames` (código de dos letras → nombre del país) |
-| `application/use-cases/generate-ota-reservation/` | **Entrada**: `ReadBookingFeed`, `ProcessBookingRevision`; mapeador de la revisión |
+| `application/use-cases/generate-ota-reservation/` | **Entrada**: `ReadBookingFeed`, `ProcessBookingRevision`, `OtaNoShowReporter`, `PublishPendingNoShows`; mapeador de la revisión |
 | `application/ports/out/` | `ChannexPort`, `OtaBookingRevisionRepository`, `ReservationRepository` y los puertos de C |
-| `infrastructure/in/jobs/` | `ChannexSyncJob` (cada 30 s, con bloqueo asesor: feed y luego disponibilidad de `configure-ota`) |
+| `infrastructure/in/jobs/` | `ChannexSyncJob` (cada 30 s, con bloqueo asesor: feed, disponibilidad de `configure-ota` y no-shows pendientes) |
 | `infrastructure/out/channex/` | Adaptador HTTP de `ChannexPort` (plan base) |
-| `infrastructure/out/persistence/` | `OtaBookingRevisionRepository` |
+| `infrastructure/out/persistence/` | `OtaBookingRevisionRepository` y `OtaNoShowReportRepository` |
 
 ## Phase 1: Setup
 
@@ -336,6 +358,8 @@ revisión se confirma.
 - [ ] T009 [US2] `modified` (B2) con `ApplyOtaChange`
 - [ ] T010 [US2] `cancelled` (B3) con `CancelReservation`
 - [ ] T011 [US2] Pruebas de integración de los escenarios 1 a 5
+- [ ] T011b `OtaNoShowReporter` y `PublishPendingNoShows` (A3): pendiente en la transacción del cierre, envío en `ChannexSyncJob`, `REJECTED` ante 404/422
+- [ ] T011c Fechas distintas por habitación (FR-012): fechas de la reserva y `CHANGE_NOT_APPLICABLE`
 
 ## Phase N: Polish
 
@@ -380,6 +404,8 @@ revisión se confirma.
 | FR-008 | Mapeador y `CountryNames` | T001, T003 |
 | FR-009 | `DailyListChangeRecorder` y `AriChangeRecorder` | T006 |
 | FR-010 | Una transacción por revisión y reintentos | T005, T006 |
+| FR-011 | `OtaNoShowReporter`, `PublishPendingNoShows` y A3 | T011b |
+| FR-012 | Paso 4 de B1 | T011c |
 
 ## Puntos que este plan propone (el spec no los dice)
 
@@ -392,7 +418,7 @@ revisión se confirma.
 
 | # | Pendiente | Con quién |
 |---|---|---|
-| 1 | Las reservas con varias habitaciones de **fechas distintas** dentro de la misma reserva (Channex lo permite por habitación): el Módulo 2 usa fechas comunes; hoy se toman las de la reserva (`arrival_date`, `departure_date`) | Equipo del Módulo 2 |
+| 1 | Confirmar en staging que `{booking_id}` de A3 es el `booking_id` de la revisión | Channex (prueba) |
 
 ## Notes
 
