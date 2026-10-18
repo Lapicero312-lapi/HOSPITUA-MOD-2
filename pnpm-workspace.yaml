@@ -1,0 +1,8 @@
+packages:
+  - backend
+  - frontend
+
+# pnpm bloquea por seguridad los scripts de instalación de las dependencias.
+# @scarf/scarf es solo telemetría (la trae swagger-ui): se ignora a propósito.
+allowBuilds:
+  '@scarf/scarf': false
