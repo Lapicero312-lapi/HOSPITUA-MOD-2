@@ -246,7 +246,8 @@ de uso `GetReservationForBilling` y entrega solo esto:
 - `quoteIds`: el `quoteId` de cada `ReservationRoom`, una cotización por habitación. Va **vacía** en
   reservas `OTA`, que no tienen cotización.
 - `otaId`, `otaConfirmationCode` y `otaCommissionPercentage` **solo** si `channel` es `OTA`
-  (`otaCommissionPercentage` es el `commissionPercentage` congelado en la reserva).
+  (`otaCommissionPercentage` es el `commissionPercentage` congelado en la reserva, como **número** JSON
+  de 0 a 100 con hasta dos decimales).
 - No incluye otros datos financieros ni del huésped.
 - Si la reserva no existe: **`404`** `RESERVATION_NOT_FOUND`. Es la única respuesta 404 del Módulo 2:
   el Módulo 3 la espera así (ver el plan base, sección "Errores").
@@ -341,7 +342,7 @@ es el contrato **ya acordado con el equipo del Módulo 1**; el plan lo adopta ta
 - La lista y sus actualizaciones llevan el detalle de FR-014 de la spec. El campo `source` viaja como
   `DIRECTA` para las reservas directas o con el nombre de la agencia en mayúsculas y sin el dominio para
   las `OTA`: `Booking.com` viaja como `BOOKING`.
-- En una reserva de Booking con una habitación sin asignar, su `roomId` y su `roomNumber` viajan `null`.
+- Una reserva con alguna habitación sin asignar no viaja: cuando la Recepcionista asigna la última, entra con `ADDED` (`ROOM_UNASSIGNED` es el motivo del `REMOVED` si ya estaba).
 
 ### Lista del día (FR-013, FR-014)
 
@@ -435,7 +436,7 @@ vigente de FR-014, no solo lo que cambió:
 
 ### Actualización `REMOVED` (FR-016)
 
-Misma routing key. No lleva `reservation`; `removalReason` es `CANCELLED`, `DATE_CHANGED` o `NO_SHOW`:
+Misma routing key. No lleva `reservation`; `removalReason` es `CANCELLED`, `DATE_CHANGED`, `NO_SHOW` o `ROOM_UNASSIGNED`:
 
 ```json
 {
@@ -465,7 +466,8 @@ La regla vive en el **dominio** (`DailyListMembership`), no en cada caso de uso,
 `DailyListChangeRecorder`. Los demás casos de uso lo llaman **dentro de su transacción**, con la reserva
 antes y después del cambio.
 
-Una reserva **pertenece a la lista** si `startDate` es el día operativo y `status` es `ACTIVE`. El día
+Una reserva **pertenece a la lista** si `startDate` es el día operativo, `status` es `ACTIVE` **y ninguna
+de sus habitaciones está sin asignar** (`room_id` vacío). El día
 operativo es el **en curso**, salvo que quien llama indique otro: el cierre del día de `update-reservation`
 corre después de las 00:00 y pasa la fecha del día que acaba de terminar, para que el `REMOVED` por
 `NO_SHOW` use la secuencia y la `operationalDate` de la lista a la que pertenecía.
@@ -478,6 +480,7 @@ corre después de las 00:00 y pasa la fecha del día que acaba de terminar, para
 | Pertenece | `status` = `CANCELLED` | `REMOVED` con `CANCELLED` |
 | Pertenece | `startDate` distinto del día operativo | `REMOVED` con `DATE_CHANGED` |
 | Pertenece | `status` = `NO_SHOW` | `REMOVED` con `NO_SHOW` |
+| Pertenece | Una habitación queda sin asignar | `REMOVED` con `ROOM_UNASSIGNED` |
 | Pertenece | `status` = `IN_PROGRESS` o `COMPLETED` | **Nada**: Check-In y Check-Out los ejecuta el Módulo 1 (FR-017) |
 | No pertenece | No pertenece | Nada (llegada futura u otro día) |
 
@@ -832,8 +835,8 @@ publica por cola y responde consultas. No necesita `Module1Port` ni `Module3Port
 `ReservationLookup` (`findByRef`, `findByCode`, `findForUpdate`), que devuelve la reserva completa con
 `updatedAt` y comisión, y `findBlockingRooms(roomIds, startDate, endDate, excludeReservationRef?)`, que
 usa `check-room-availability` para saber qué habitaciones ya ocupan inventario (su contrato está en el
-plan de ese caso de uso). También expone `countBlockingByCategory(categoryRoom, dateFrom, dateTo)`, que
-devuelve, por cada noche del rango, cuántas habitaciones de la categoría bloquean inventario; lo usa
+plan de ese caso de uso). También expone `blockingRoomsByCategory(categoryRoom, dateFrom, dateTo)`, que
+devuelve, por cada noche del rango, los `roomId` de la categoría que bloquean inventario; lo usa
 `configure-ota` para la disponibilidad de Channex. No usan la ruta REST ni las clases internas de este caso de uso (regla 6 de la
 arquitectura).
 
@@ -920,7 +923,7 @@ devuelven exactamente lo esperado, con totales y páginas correctos.
 - [ ] T016 [US2] `GetReservationDetail` y `GET /api/reservations/{reservationRef}` para `RECEPTIONIST` (C3), con `Cancellation` y conflicto
 - [ ] T016a [US2] `ReservationLookup.findBlockingRooms` (lo usa `check-room-availability`), con su consulta sobre `reservation_room`
 - [ ] T016b [US1] Filtro `inConflict`, campo `conflict`, `actions.canAssignRoom` y habitaciones sin asignar en C1 y C3 (FR-002a)
-- [ ] T016c `ReservationLookup.countBlockingByCategory` (lo usa `configure-ota`), con su consulta sobre `reservation_room`
+- [ ] T016c `ReservationLookup.blockingRoomsByCategory` (lo usa `configure-ota`), con su consulta sobre `reservation_room`
 - [ ] T017 [US2] Errores `RESERVATION_NOT_FOUND` e `INVALID_RESERVATION_CODE` sin llegar a la base de datos cuando el formato es inválido
 - [ ] T018 [US2] Pruebas de integración de los escenarios 1 a 6
 - [ ] T019 [P] [US2] Frontend: pantalla de detalle
@@ -1020,8 +1023,7 @@ Cada uno se puede cambiar sin romper el resto; se anotan para que no pasen desap
 
 | # | Pendiente | Con quién |
 |---|---|---|
-| 1 | Tipo de `otaCommissionPercentage` en la respuesta C4 (número o texto) y su escala (0 a 100) | Módulo 3 |
-| 2 | Campos exactos que espera el Módulo 1 en C5 | Módulo 1 |
+| 1 | Campos exactos que espera el Módulo 1 en C5 | Módulo 1 |
 
 ## Trazabilidad: requisito → componente → tarea
 

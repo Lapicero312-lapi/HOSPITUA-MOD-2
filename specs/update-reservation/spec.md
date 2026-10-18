@@ -1,7 +1,7 @@
 # Feature Specification: Actualizar Reservación
 
 **Created**: 2026-09-19
-**Updated**: 2026-09-29
+**Updated**: 2026-10-18
 
 ## Use Case (Caso de Uso)
 
@@ -61,6 +61,8 @@ las mismas reglas de transición y de concurrencia.
 7. Si la reserva forma parte de la lista del día, el sistema avisa el cambio mediante
    "Enviar reservas del día al Módulo 1" (`UPDATED`, o `ADDED` / `REMOVED` si el cambio de fechas
    hace entrar o salir la reserva de la lista del día).
+8. Si el cambio afecta la ocupación, el sistema lo anota para el envío de disponibilidad a Channex
+   ("Configurar OTA").
 
 Adicionalmente, esta funcionalidad recibe el cambio de `status` que solicitan otros procesos:
 "Generar reservación por OTA" (cambios que envía Booking), "Generar reservación directa" y
@@ -116,7 +118,7 @@ El Check-Out también se notifica **por habitación**.
 
 1. El sistema ejecuta un proceso automático al cierre del día operativo. El día operativo es el día
    calendario de Colombia, fijo: va de las 00:00 a las 23:59 (zona horaria de Colombia, UTC-5) y el
-   cierre ocurre al terminar las 23:59.
+   cierre ocurre al terminar las 23:59 (se ejecuta a las 00:00:30 y procesa el día que terminó).
 2. El sistema recorre las `Reservation` cuya `startDate` corresponde al día procesado.
 3. **No-Show total**: para cada una en `ACTIVE` o `PENDING` (ninguna habitación ingresó) cambia el
    `status` a `NO_SHOW`, sea cual sea el canal, y marca todas sus habitaciones como `NOT_ARRIVED`.
@@ -124,7 +126,8 @@ El Check-Out también se notifica **por habitación**.
    `EXPECTED`, marca esas habitaciones como `NOT_ARRIVED`, sin cambiar el `status` de la reserva. Si con eso ya no queda ninguna habitación
    en `CHECKED_IN` (todas las que ingresaron ya salieron), cambia la reserva a `COMPLETED`.
 5. En el No-Show total, el sistema avisa al Módulo 1 mediante "Enviar reservas del día al Módulo 1"
-   (`REMOVED` con motivo `NO_SHOW`).
+   (`REMOVED` con motivo `NO_SHOW`). Si la reserva es de Booking, deja pendiente el reporte del no-show
+   a Channex ("Generar reservación por OTA").
 6. Se ignoran las reservas en estados finales y las habitaciones ya ingresadas.
 
 ## User Scenarios & Testing *(mandatory)*
@@ -166,8 +169,8 @@ los cambios. Se repite con datos personales (sin recálculo) y sobre reservas `I
 3. **Scenario**: Cambio de estado solicitado por un proceso interno
    - **Given** una notificación de Check-In, Check-Out o No-Show válida
    - **When** el proceso correspondiente ejecuta "Actualizar reservación"
-   - **Then** el sistema cambia el `status` a `CANCELLED`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED` o
-     `NO_SHOW` según la transición permitida
+   - **Then** el sistema cambia el `status` a `IN_PROGRESS`, `COMPLETED` o `NO_SHOW` según la
+     transición permitida
 
 4. **Scenario**: Bloqueo por falta de disponibilidad (Error)
    - **Given** que "Verificar disponibilidades" indica que la `Room` no está disponible en las
@@ -242,8 +245,8 @@ los cambios. Se repite con datos personales (sin recálculo) y sobre reservas `I
       categoría libre en esas fechas
     - **When** la Recepcionista le asigna la `Room` 204
     - **Then** el sistema verifica la disponibilidad, asigna la habitación y, si ya no queda ninguna
-      habitación sin asignar ni capacidad superada, quita la marca de conflicto; si la llegada es hoy,
-      avisa al Módulo 1 con `UPDATED`. La Recepcionista no puede cambiar ningún otro dato de esa reserva
+      habitación sin asignar ni capacidad superada, quita la marca de conflicto; si la llegada es hoy y
+      la reserva ya cumple las condiciones, avisa al Módulo 1 con `ADDED` (o `UPDATED` si ya estaba). La Recepcionista no puede cambiar ningún otro dato de esa reserva
 
 ---
 
@@ -372,6 +375,12 @@ sin enviar ninguna orden de liberación al Módulo 1.
    - **Then** el sistema cambia la reserva a `NO_SHOW`, marca todas sus habitaciones como
      `NOT_ARRIVED` y avisa `REMOVED` (motivo `NO_SHOW`) en la lista del día
 
+2. **Scenario**: No-Show de una reserva de Booking
+   - **Given** una `Reservation` de canal `OTA` con `startDate` de hoy, que sigue en `ACTIVE`
+   - **When** el sistema ejecuta el proceso de fin de día
+   - **Then** el sistema la cambia a `NO_SHOW` y deja pendiente, en la misma transacción, el reporte
+     del no-show a Booking por Channex ("Generar reservación por OTA")
+
 3. **Scenario**: Llegada parcial de un grupo
    - **Given** una `Reservation` de hoy en `IN_PROGRESS` con la `Room` A en `CHECKED_IN` y la `Room`
      B en `EXPECTED`
@@ -412,7 +421,7 @@ sin enviar ninguna orden de liberación al Módulo 1.
 - ¿Qué sucede si se intenta agregar una habitación que ya está en la reserva? El sistema responde
   **HTTP 400**: "La habitación ya forma parte de la reserva."
 - ¿Qué sucede si al agregar habitaciones la reserva supera el máximo de 10 habitaciones? El sistema
-  responde **HTTP 400**: "Una reserva lleva entre 1 y 10 habitaciones."
+  responde **HTTP 400**: "Una reserva debe tener entre 1 y 10 habitaciones."
 - ¿Qué sucede si al cambiar las fechas una sola de las habitaciones no está disponible? El cambio
   completo se rechaza con **HTTP 400** indicando qué habitación no está disponible; no se aplican
   cambios parciales.
@@ -420,7 +429,8 @@ sin enviar ninguna orden de liberación al Módulo 1.
   sistema responde **HTTP 400** con el mensaje de capacidad y no guarda nada; el solicitante debe
   ajustar las personas en la misma modificación.
 - ¿Cómo maneja el sistema dos ediciones simultáneas de la misma reserva? Usa control de concurrencia
-  optimista con el atributo `updatedAt`: la segunda recibe **HTTP 400** indicando que debe recargar.
+  optimista con el atributo `updatedAt`: la segunda recibe **HTTP 400**: "Esta reserva ya fue
+  actualizada o cancelada recientemente".
 - ¿Qué sucede con el Módulo 1 cuando solo cambian las fechas? Por lo general nada. Las únicas
   excepciones son las que cruzan el día actual: si la nueva llegada es hoy, el sistema avisa `ADDED`
   en la lista del día; si la llegada era hoy y deja de serlo, avisa `REMOVED` (motivo
@@ -432,9 +442,12 @@ sin enviar ninguna orden de liberación al Módulo 1.
 
 **Check-In y Check-Out**
 
+- ¿Qué significa "responde 200" o "responde 400" si las notificaciones llegan por cola? "Responde
+  200" es confirmar el mensaje (sin efectos si es un duplicado); "responde 400" es confirmarlo sin
+  aplicarlo y dejarlo en el log. Un mensaje ilegible va a la cola de mensajes fallidos.
 - ¿Qué sucede si el Módulo 1 notifica el Check-In de una reserva de Booking que tiene una habitación
-  sin asignar? La habitación sin asignar viaja en la lista del día sin número; la Recepcionista debe
-  asignarla (FR-025) antes del Check-In. Un Check-In con un `roomId` que no pertenece a la reserva se
+  sin asignar? La reserva con una habitación sin asignar no viaja en la lista del día, así que el Módulo 1 no
+  sabe de ella; la Recepcionista debe asignarla (FR-025) antes de la llegada. Un Check-In con un `roomId` que no pertenece a la reserva se
   rechaza como cualquier otro (escenario 6 de la historia 2).
 - ¿Qué sucede si la notificación de Check-In o de Check-Out llega vacía, sin la `reservationRef` o
   sin el `roomId`? El sistema intercepta el error de inmediato y responde **HTTP 400** con el
@@ -443,8 +456,8 @@ sin enviar ninguna orden de liberación al Módulo 1.
 - ¿Qué sucede en una reserva con varias habitaciones? Cada notificación trae solo los huéspedes de su habitación; los movimientos se identifican por reserva, huésped y tipo de movimiento, según
   "Procesar datos de huéspedes".
 - ¿Qué sucede si la reserva notificada no existe en el Módulo 2? El sistema responde **HTTP 400**
-  con el mensaje "La reserva notificada no existe en el sistema de reservas." (Check-In) o
-  "Referencia de reserva no encontrada" (Check-Out), y lo deja en el log;
+  con el mensaje "La reserva notificada no existe en el sistema de reservas." (en el Check-In y en el
+  Check-Out), y lo deja en el log;
   el Módulo 1 ya ejecutó físicamente el proceso.
 - ¿Qué sucede si la reserva está en `CANCELLED`, `NO_SHOW`, `PENDING` o `COMPLETED` al llegar un
   Check-In? Responde **HTTP 400** sin cambiar el estado y lo deja en el log: la
@@ -496,7 +509,7 @@ sin enviar ninguna orden de liberación al Módulo 1.
 - **FR-003**: El sistema debe invocar "Calcular tarifa dinámica" del Módulo 3 por cada habitación
   afectada cuando cambien las fechas, se agregue una habitación o una habitación cambie de categoría,
   mostrar la tarifa de cada una con el mismo detalle de la cotización que al crear la reserva, sin
-  mostrar la tarifa nueva, sin calcular diferencias (el Módulo 2 no calcula
+  mostrar la tarifa anterior, sin calcular diferencias (el Módulo 2 no calcula
   nada financiero: el valor a pagar lo calcula el Módulo 3 al recibir el Check-Out del Módulo 1), y exigir
   la confirmación del solicitante antes de persistir. Cambiar una habitación por otra de la misma categoría, sin cambiar
   las fechas, no recotiza ni muestra tarifa.
@@ -554,7 +567,7 @@ sin enviar ninguna orden de liberación al Módulo 1.
   otro caso debe responder **HTTP 400** y dejarlo en el log. No debe
   modificar el estado de la `Room`, que gestiona el Módulo 1.
 - **FR-018**: El sistema debe ejecutar un proceso automático al cierre del día operativo (día
-  calendario de Colombia, 00:00 a 23:59, UTC-5), que recorra las `Reservation` cuya `startDate` corresponda al día
+  calendario de Colombia, 00:00 a 23:59, UTC-5; se ejecuta a las 00:00:30), que recorra las `Reservation` cuya `startDate` corresponda al día
   procesado.
 - **FR-019**: En ese proceso, para cada reserva en `ACTIVE` o `PENDING`, el sistema debe cambiar el
   `status` a `NO_SHOW` (sea cual sea el canal) y marcar
@@ -565,7 +578,8 @@ sin enviar ninguna orden de liberación al Módulo 1.
   `NOT_ARRIVED` y las reservas `NO_SHOW` se quitan de la lista del día (`REMOVED`) y el Módulo 1 decide
   qué hace con ellas.
 - **FR-021**: El sistema no debe registrar una `Cancellation` por un No-Show: la reserva queda en
-  `NO_SHOW`, no en `CANCELLED`.
+  `NO_SHOW`, no en `CANCELLED`. Si la reserva es de Booking, debe dejar pendiente, en la misma
+  transacción, el reporte del no-show a Booking ("Generar reservación por OTA", FR-011).
 - **FR-022**: El sistema debe procesar cada registro del lote del cierre del día con manejo
   individual de excepciones, de modo que un error de validación no interrumpa el lote ni exponga
   errores **HTTP 500**.
@@ -585,6 +599,9 @@ sin enviar ninguna orden de liberación al Módulo 1.
   mediante "Verificar disponibilidades". Cuando ya no queda ninguna habitación sin asignar ni
   capacidad superada, el sistema quita la marca de conflicto. Ninguna otra modificación de la reserva
   OTA está permitida.
+- **FR-026**: Cada cambio confirmado que afecte la ocupación (modificación, asignación de habitación,
+  No-Show, Check-Out o habitación `NOT_ARRIVED`) debe anotarse, en la misma transacción, para el envío
+  de disponibilidad a Channex ("Configurar OTA").
 
 ### Non-Functional Requirements
 
@@ -609,10 +626,9 @@ sin enviar ninguna orden de liberación al Módulo 1.
   (`EXPECTED` | `CHECKED_IN` | `CHECKED_OUT` | `NOT_ARRIVED`).
 - **Guest**: Titular de la reserva. Atributos: `id`, `firstName`, `lastName`, `documentType`, `documentNumber`, `nationality`,
   `contactPhone`, `contactEmail`.
-- **Room**: Habitación física controlada por el Módulo 1, referenciada para la disponibilidad: el
-  Módulo 1 la pasa a `Occupied` en el Check-In y la libera en el Check-Out, y maneja `Reserved` y
-  `Available` por su cuenta. Atributos: `id`, `roomNumber`, `categoryRoom`, `maxCapacity` y `status`
-  (`Available` | `Reserved` | `Occupied`).
+- **Room**: Habitación física del Módulo 1. Atributos que recibe el Módulo 2: `id`, `roomNumber`,
+  `categoryRoom` y `maxCapacity`. El estado físico lo maneja el Módulo 1 y no llega al Módulo 2; el
+  Módulo 2 no la modifica.
 - **RateQuote**: Cotización del Módulo 3 para cada habitación afectada por la modificación.
   Atributos: `quoteId`, `nightlyRates` (lista de `date` y `rate`) y `lodgingAmount`. Al confirmar, el
   `quoteId` nuevo reemplaza al anterior en la habitación.

@@ -373,12 +373,12 @@ canal y `REMOVED`); una con llegada futura (sin aviso); y los intentos sobre `IN
 | FR-002, FR-002a | Reglas de estado y de canal | T002, T005 |
 | FR-002b | `acknowledged` en el servidor y casilla en la pantalla | T003, T005, T013 |
 | FR-003 | `ReservationStatusService` dentro de la transacción | T006 |
-| FR-004a | `DailyListChangeRecorder` (`REMOVED`, `CANCELLED`) | T007 |
+| FR-004 | `DailyListChangeRecorder` (`REMOVED`, `CANCELLED`) | T007 |
 | FR-005 | `Cancellation` con canal y quién la procesó | T001, T006 |
 | FR-006 | Sin penalidades, sin Módulo 3 y sin tocar la comisión | T010 |
 | FR-007 | Mapeo a 400 y control de concurrencia | T004, T012 |
 | NFR-001 | Prueba de tiempo | T014 |
-| SC-001, SC-002, SC-004 | Pruebas por escenario | T011, T012 |
+| SC-001, SC-002, SC-003 | Pruebas por escenario | T011, T012 |
 
 ## Puntos que este plan propone (el spec no los dice)
 
@@ -397,10 +397,7 @@ canal y `REMOVED`); una con llegada futura (sin aviso); y los intentos sobre `IN
 
 ## Puntos abiertos
 
-| # | Pendiente | Con quién |
-|---|---|---|
-| 1 | **Mensaje de `CONCURRENT_UPDATE` distinto** entre este spec ("Esta reserva ya fue actualizada o cancelada recientemente") y `update-reservation` ("...modificada por otra persona. Recargue..."). Cada plan respeta el literal de su spec con el mismo `errorCode` | Equipo del Módulo 2 |
-| 2 | El spec salta de SC-002 a SC-004 (falta SC-003) | Equipo del Módulo 2 |
+Ninguno: los puntos de este plan quedaron resueltos.
 
 ## Notes
 

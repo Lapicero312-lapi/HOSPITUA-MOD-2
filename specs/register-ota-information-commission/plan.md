@@ -10,7 +10,7 @@ Cada reserva de una OTA trae una obligación con la agencia: una comisión pacta
 la estadía. Este caso de uso hace cuatro cosas:
 
 1. **Calcula y registra la comisión** de cada reserva OTA nueva, al registrarla
-   (`generate-ota-reservation` lo llama): `commissionAmount = totalAmount × commissionPercentage / 100`,
+   (`generate-ota-reservation` lo llama): `commissionAmount = grossAmount × commissionPercentage / 100`,
    con precisión decimal exacta, y estado inicial `CALCULATED`. La **recalcula** con el mismo porcentaje
    congelado cuando Booking cambia el valor de la reserva. Nunca calcula con un porcentaje fuera de 0 a
    100.
@@ -22,8 +22,8 @@ la estadía. Este caso de uso hace cuatro cosas:
    configura `configure-ota`, y `OtaConnectionTracker` lleva el `connectionStatus` y el `lastSyncAt` a
    partir de las lecturas del feed de Channex (`generate-ota-reservation`). No hay rutas para la OTA.
 
-La comisión de una reserva **cancelada por Booking no se toca** (FR-007): la agencia ya sabe que no la
-cobrará.
+La comisión de una reserva **cancelada por Booking o en `NO_SHOW` no se toca ni se concilia** (FR-007):
+Booking no la cobra (el no-show se le reporta por Channex desde `generate-ota-reservation`).
 
 ## Resumen técnico e identificación
 
@@ -66,7 +66,7 @@ Las usan la Recepcionista y el Módulo 3. **Cabeceras**: `Content-Type: applicat
 | Parámetro | Tipo | Obligatorio | Regla |
 |---|---|---|---|
 | `dateFrom`, `dateTo` | `AAAA-MM-DD` | Sí, ambos | Rango inclusivo sobre la **`endDate`** de la reserva; máximo 366 días |
-| `commissionStatus` | `CALCULATED` \| `RECONCILED` \| `PAID` \| `DISPUTED` | No | Sin valor: todos |
+| `commissionStatus` | `CALCULATED` \| `RECONCILED` \| `PAID` | No | Sin valor: todos |
 | `reservationStatus` | `ReservationStatus` | No | Por ejemplo `COMPLETED` |
 | `otaId` | id | No | Una agencia |
 | `page` | entero ≥ 1 | No | Por defecto `1`; tamaño fijo de 100 |
@@ -84,9 +84,9 @@ Las usan la Recepcionista y el Módulo 3. **Cabeceras**: `Content-Type: applicat
       "status": "COMPLETED",
       "startDate": "2026-10-10",
       "endDate": "2026-10-12",
-      "grossAmount": { "amount": "400.00", "currency": "COP" },
-      "commissionPercentage": "15.00",
-      "commissionAmount": { "amount": "60.00", "currency": "COP" },
+      "grossAmount": { "amount": "400.00", "currency": "USD" },
+      "commissionPercentage": 15.00,
+      "commissionAmount": { "amount": "60.00", "currency": "USD" },
       "commissionStatus": "CALCULATED"
     }
   ],
@@ -98,7 +98,9 @@ Las usan la Recepcionista y el Módulo 3. **Cabeceras**: `Content-Type: applicat
 ```
 
 - Solo reservas de canal `OTA`. Sin resultados: `200` con `items: []`.
-- Los importes van como **texto decimal**; los porcentajes, de `0.00` a `100.00`.
+- Los importes van como **texto decimal**, en la moneda de la reserva (`USD` en las de Booking); los
+  porcentajes, como **número** JSON de 0 a 100 con hasta dos decimales (igual que
+  `otaCommissionPercentage` en la consulta para liquidar de `check-view-reservation`).
 
 **A2. `POST /api/ota-commissions/reconciliations`** (la usa el Módulo 3): el Módulo 3 le indica al Módulo 2 qué
 comisiones pasan a `RECONCILED` o `PAID`.
@@ -142,12 +144,13 @@ comisiones pasan a `RECONCILED` o `PAID`.
 | `RESERVATION_NOT_FOUND` | La referencia no existe |
 | `NOT_OTA_RESERVATION` | La reserva es de canal directo |
 | `RESERVATION_CANCELLED` | La reserva está `CANCELLED`: su comisión no se toca (FR-007) |
+| `RESERVATION_NO_SHOW` | La reserva está `NO_SHOW`: su comisión no se toca (FR-007) |
 | `RESERVATION_NOT_COMPLETED` | La reserva no está `COMPLETED` (solo se concilian las que finalizaron su estadía) |
 | `AMOUNT_MISMATCH` | El `grossAmount` o el `commissionAmount` enviados no coinciden con los guardados |
 | `INVALID_TRANSITION` | La transición de `commissionStatus` no está permitida |
 
 **Transiciones de `commissionStatus` permitidas**: `CALCULATED → RECONCILED`, `CALCULATED → PAID` y
-`RECONCILED → PAID`. `DISPUTED` no tiene flujo definido en el spec (ver "Puntos abiertos").
+`RECONCILED → PAID`.
 
 **Errores 400 de la solicitud completa** (no se procesa ningún ítem):
 
@@ -173,8 +176,8 @@ y el Módulo 3, con la misma respuesta para los dos.
     {
       "id": "uuid",
       "name": "Booking.com",
-      "hotelAccountId": "Hotel ID 8841207",
-      "commissionPercentage": "15.00",
+      "hotelAccountId": "10485037",
+      "commissionPercentage": 15.00,
       "connectionStatus": "CONNECTED",
       "linkedAt": "2026-03-02T09:14:00-05:00",
       "lastSyncAt": "2026-10-09T07:58:00-05:00",
@@ -200,14 +203,14 @@ y el Módulo 3, con la misma respuesta para los dos.
 ```typescript
 interface CommissionInput {
   otaId: string;
-  totalAmount: Money;                  // valor bruto de toda la reserva, recibido de la OTA
+  grossAmount: Money;                  // valor bruto de toda la reserva, recibido de la OTA
   externalConfirmationCode: string;
 }
 
 interface CommissionResult {
   otaId: string;
   commissionPercentage: string;        // el de la agencia en este momento, de 0 a 100
-  commissionAmount: Money;             // totalAmount × commissionPercentage / 100, 2 decimales, ROUND_HALF_UP
+  commissionAmount: Money;             // grossAmount × commissionPercentage / 100, 2 decimales, ROUND_HALF_UP
   commissionStatus: 'CALCULATED';
 }
 
@@ -277,9 +280,9 @@ interface OtaConnectionTracker {
 
 ## Reglas de negocio
 
-1. **Fórmula**: `commissionAmount = totalAmount × commissionPercentage / 100`, con `decimal.js`, **dos
+1. **Fórmula**: `commissionAmount = grossAmount × commissionPercentage / 100`, con `decimal.js`, **dos
    decimales y redondeo `ROUND_HALF_UP`**; el valor queda positivo (el signo lo aplica el Módulo 3).
-   Se calcula **una sola vez por reserva**, sobre el `totalAmount` completo, no por habitación.
+   Se calcula **una sola vez por reserva**, sobre el `grossAmount` completo, no por habitación.
    Ejemplo: `400 × 15 / 100 = 60.00`.
 2. **Estado inicial** `CALCULATED`, desde el momento del registro de la reserva.
 3. **Conciliación**: solo reservas OTA en `COMPLETED`, solo con los montos que coinciden, y con las
@@ -308,7 +311,7 @@ sequenceDiagram
     participant R as OtaRepository
     participant DB as PostgreSQL
 
-    G->>C: calculate(otaId, totalAmount, externalConfirmationCode)
+    G->>C: calculate(otaId, grossAmount, externalConfirmationCode)
     C->>R: findById(otaId)
     alt la agencia no existe
         C-->>G: BusinessError OTA_NOT_FOUND (400)
@@ -321,7 +324,7 @@ sequenceDiagram
     alt duplicado
         C-->>G: BusinessError DUPLICATE_CONFIRMATION_CODE (400), sin comisión duplicada
     end
-    C->>C: commissionAmount = totalAmount x porcentaje / 100 (decimal.js, 2 decimales)
+    C->>C: commissionAmount = grossAmount x porcentaje / 100 (decimal.js, 2 decimales)
     C-->>G: CommissionResult (CALCULATED)
     G->>DB: INSERT reservation con la comisión (en su transacción)
     G->>C: recordAudit(tx, reservationId, result, performedBy)
@@ -426,7 +429,7 @@ sequenceDiagram
 ```text
 CALCULATED --conciliación--> RECONCILED --pago--> PAID
 CALCULATED --pago----------> PAID
-(CANCELLED por la OTA: la comisión no cambia)        DISPUTED: sin flujo definido
+(CANCELLED o NO_SHOW: la comisión no cambia ni se concilia)
 ```
 
 **`connectionStatus` de la `Ota`**: `CONNECTED` (nace así) ⇄ `DISCONNECTED`, solo por mensajes de la OTA.
@@ -509,7 +512,7 @@ frontend/src/pages/otas/                            # pantalla "Agencias OTA" (s
 ## Phase 3: User Story 1 - Cálculo y registro de la comisión (P1)
 
 **Goal**: toda reserva OTA nueva queda con su comisión exacta y `CALCULATED`.
-**Independent Test**: `totalAmount` de 400 y 15 % dan 60 y `CALCULATED`; un porcentaje inválido se rechaza.
+**Independent Test**: `grossAmount` de 400 y 15 % dan 60 y `CALCULATED`; un porcentaje inválido se rechaza.
 
 - [ ] T006 [US1] `RegisterOtaConfirmationAndCommission.calculate`: agencia, porcentaje de 0 a 100, código duplicado y fórmula
 - [ ] T007 [US1] `recordAudit` y la inserción de `commission_audit` dentro de la transacción de quien llama
@@ -541,10 +544,11 @@ frontend/src/pages/otas/                            # pantalla "Agencias OTA" (s
 
 | Historia | Escenario | Qué se verifica |
 |---|---|---|
-| US1 | 1 registro exitoso | `totalAmount` 400 y 15 %: `commissionAmount` 60.00, `commissionStatus` `CALCULATED`, fila en `commission_audit` |
+| US1 | 1 registro exitoso | `grossAmount` 400 y 15 %: `commissionAmount` 60.00, `commissionStatus` `CALCULATED`, fila en `commission_audit` |
 | US1 | 2 porcentaje inválido | Menor que 0 o mayor que 100: `400` `INVALID_COMMISSION_PERCENTAGE` y la reserva no se persiste |
 | US2 | 1 conciliación | Reservas `COMPLETED` y `CALCULATED` pasan a `RECONCILED` cuando los montos coinciden; queda auditoría con el canal `MODULE3` |
 | US2 | 2 cancelada por Booking | Su `commissionAmount` y `commissionStatus` no cambian, ni al cancelar ni al conciliar (`RESERVATION_CANCELLED`) |
+| US2 | 3 en `NO_SHOW` | La conciliación la rechaza (`RESERVATION_NO_SHOW`) y la comisión no cambia |
 | US3 | 1 registro por configuración | Una `Ota` "Booking.com" nace `CONNECTED` con `linkedAt`, sin duplicarse al reiniciar |
 | US3 | 2 cambio del porcentaje | El nuevo porcentaje se guarda y solo aplica a reservas futuras |
 | US3 | 3 Channex rechaza la conexión | `DISCONNECTED`; la `Ota` y sus reservas se conservan y sigue visible en la pantalla |
@@ -606,10 +610,7 @@ frontend/src/pages/otas/                            # pantalla "Agencias OTA" (s
 
 | # | Pendiente | Con quién |
 |---|---|---|
-| 1 | **`DISPUTED`** aparece en el enumerado y en la auditoría pero ningún spec define cuándo se usa ni cómo se sale de él. Hoy un desajuste de montos solo rechaza el ítem | Equipo del Módulo 2 y Módulo 3 |
-| 2 | Estructura exacta de la conciliación que enviará el Módulo 3 (periodo, identificador del cierre, montos) y de la consulta de comisiones | Módulo 3 |
-| 3 | Cómo expresa el Módulo 3 el porcentaje de comisión (0 a 100) | Módulo 3 |
-| 4 | Qué pasa con la comisión de una reserva OTA que queda en `NO_SHOW`: el spec solo trata `COMPLETED` y `CANCELLED` | Equipo del Módulo 2 |
+| 1 | Estructura exacta de la conciliación que enviará el Módulo 3 (periodo, identificador del cierre, montos) y de la consulta de comisiones | Módulo 3 |
 
 ## Notes
 

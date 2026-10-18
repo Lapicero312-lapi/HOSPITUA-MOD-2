@@ -1,6 +1,7 @@
 # Feature Specification: Verificar Disponibilidades
 
 **Created**: 2026-09-19
+**Updated**: 2026-10-18
 
 ## Use Case (Caso de Uso)
 
@@ -33,7 +34,8 @@ para que el flujo invocador elija o asigne las que necesita.
 3. El sistema cruza el rango de cada habitación contra las habitaciones de las reservas locales
    mediante "Consultar reservas", considerando solo las reservas que aún reservan inventario
    (`PENDING`, `ACTIVE` o `IN_PROGRESS`) y, dentro de ellas, solo las habitaciones que no están en
-   `CHECKED_OUT` ni en `NOT_ARRIVED`, y excluyendo la reserva indicada en `reservationRef`. Así se
+   `CHECKED_OUT` ni en `NOT_ARRIVED`, y excluyendo la reserva indicada en `reservationRef`; las habitaciones sin asignar de una
+   reserva de Booking en conflicto no bloquean ninguna habitación. Así se
    detecta también la habitación ocupada hoy, que está en `CHECKED_IN` dentro de una reserva
    `IN_PROGRESS`.
 4. El sistema consulta el calendario del Módulo 1 mediante "Consultar calendario de
@@ -44,8 +46,9 @@ para que el flujo invocador elija o asigne las que necesita.
 
 ### User Story 1 - Consulta y Validación de Disponibilidad (Priority: P1)
 
-La Recepcionista o la OTA necesitan verificar que una `Room` está
-disponible antes de registrar una `Reservation`, para evitar cruces de hospedaje y asegurar que la
+La Recepcionista, al crear o modificar una reserva directa, y el sistema, al registrar una reserva o
+un cambio de Booking, necesitan verificar que una `Room` está disponible antes de registrar una
+`Reservation`, para evitar cruces de hospedaje y asegurar que la
 habitación no esté inhabilitada por mantenimiento. Por tratarse de una única verificación, los
 casos libre, bloqueada por mantenimiento, cruzada con otra reserva y ocupada hoy por un huésped
 alojado se consolidan en esta misma historia de usuario.
@@ -108,8 +111,10 @@ habitaciones vendibles del Módulo 1, devolviendo la disponibilidad precisa en c
 
 - ¿Qué sucede si el Módulo 1 no responde o agota el tiempo de espera durante la consulta? El
   sistema intercepta el fallo, prohíbe la propagación del error y retorna **HTTP 400 (Bad Request)**
-  con el mensaje: "No es posible validar mantenimientos en este momento. Intente de nuevo." No
-  asume disponibilidad.
+  con el mensaje: "No es posible validar mantenimientos en este momento. Intente de nuevo." Si
+  falla la consulta del inventario, el mensaje es el de "Consultar inventario de habitaciones": "No
+  se pudo consultar el inventario de habitaciones en este momento. Intente de nuevo." No asume
+  disponibilidad.
 - ¿Qué sucede si las fechas son inválidas (por ejemplo, salida anterior a llegada)? El sistema
   retorna **HTTP 400** con el mensaje: "Rango de fechas inválido. Verifique las fechas
   seleccionadas."
@@ -131,7 +136,8 @@ habitaciones vendibles del Módulo 1, devolviendo la disponibilidad precisa en c
   locales mediante "Consultar reservas" para descartar solapamientos, considerando únicamente las
   reservas en `PENDING`, `ACTIVE` o `IN_PROGRESS` y, dentro de ellas, las habitaciones que no estén
   en `CHECKED_OUT` ni en `NOT_ARRIVED`; las reservas `COMPLETED`, `CANCELLED` y `NO_SHOW` no deben
-  bloquear la disponibilidad.
+  bloquear la disponibilidad, ni tampoco las habitaciones sin asignar de una reserva de Booking en
+  conflicto.
 - **FR-002a**: El sistema debe responder por habitación: cuando el flujo invocador verifica varias
   habitaciones de una misma reserva, debe indicar cuáles están disponibles y el motivo de cada una
   que no lo esté.
@@ -161,7 +167,7 @@ habitaciones vendibles del Módulo 1, devolviendo la disponibilidad precisa en c
   `stayStatus` (`EXPECTED` | `CHECKED_IN` | `CHECKED_OUT` | `NOT_ARRIVED`).
 - **MaintenanceCalendar**: Mantenimiento programado en el calendario del Módulo 1. Atributos:
   `roomId`,
-  `maintenanceStart`, `maintenanceEnd`.
+  `maintenanceStart` y `maintenanceEnd`, ambas incluidas.
 
 ## Success Criteria *(mandatory)*
 

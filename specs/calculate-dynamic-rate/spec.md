@@ -1,6 +1,7 @@
 # Feature Specification: Calcular Tarifa Dinámica
 
 **Created**: 2026-09-23
+**Updated**: 2026-10-18
 
 ## Use Case (Caso de Uso)
 
@@ -48,6 +49,8 @@ Reglas de la integración que enmarcan este caso de uso:
   invocar al Módulo 3 mediante "Verificar disponibilidades" (reservas locales y calendario del
   Módulo 1). El Módulo 3 calcula el precio sobre la categoría y nunca verifica ni modifica el estado
   de ninguna `Room`.
+- **Reservas de Booking**: no se cotizan. Su valor lo envía Booking, calculado con los precios que el
+  Módulo 3 publica directamente en Channex. El Módulo 2 no pide cotizaciones para Channex.
 
 ### Flujo de Usuario de Alto Nivel
 
@@ -130,7 +133,7 @@ respuesta es un **HTTP 400 (Bad Request)** controlado, sin tarifas asumidas.
      espera o devuelve un error de disponibilidad
    - **Then** el Módulo 2 aplica un bloqueo seguro, no crea la reserva, no asume ninguna tarifa por
      defecto ni a cero, y responde con **HTTP 400 (Bad Request)** con el mensaje "Error 400: El
-     servicio de cotización de tarifas no se encuentra disponible"
+     servicio de cotización de tarifas no se encuentra disponible. Por favor intente más tarde"
 
 3. **Scenario**: Sin disponibilidad, no se invoca al Módulo 3
    - **Given** que "Verificar disponibilidades" indica que no hay disponibilidad para la
@@ -178,15 +181,15 @@ cambio no se aplica y que la respuesta es un **HTTP 400** controlado.
      reserva, y la reserva permanece exactamente en su estado anterior
 
 3. **Scenario**: Cambio de categoría o habitación agregada
-   - **Given** una reserva en estado `ACTIVE` con una habitación `Superior` y tarifa vigente
-   - **When** la recepcionista cambia esa habitación a `Suite`, o agrega una habitación
+   - **Given** una reserva en estado `ACTIVE` con una habitación `SUPERIOR` y tarifa vigente
+   - **When** la recepcionista cambia esa habitación a `SUITE`, o agrega una habitación
    - **Then** el Módulo 2 invoca "Calcular tarifa dinámica" solo por la habitación de categoría
      distinta o por la agregada, y muestra su tarifa con el desglose de la cotización, igual que al
      crear la reserva, sin tarifa anterior ni diferencias
 
 4. **Scenario**: Cambio de habitación por otra de la misma categoría
-   - **Given** una reserva en estado `ACTIVE` con la habitación 204 `Superior`
-   - **When** la recepcionista la cambia por la 203, también `Superior`, sin cambiar las fechas
+   - **Given** una reserva en estado `ACTIVE` con la habitación 204 `SUPERIOR`
+   - **When** la recepcionista la cambia por la 203, también `SUPERIOR`, sin cambiar las fechas
    - **Then** el Módulo 2 no invoca al Módulo 3 ni muestra tarifa, porque el precio depende de la
      categoría y de las fechas y no del número de habitación; la tarifa vigente se conserva
 
@@ -195,7 +198,7 @@ cambio no se aplica y que la respuesta es un **HTTP 400** controlado.
 - ¿Qué sucede si el servicio de Pricing del Módulo 3 no responde durante la cotización de una
   reserva nueva? El sistema aplica un bloqueo seguro: cancela la transacción de forma local, no
   persiste ningún registro y responde **HTTP 400 (Bad Request)** con el mensaje "Error 400: El
-  servicio de cotización de tarifas no se encuentra disponible". No se permite crear la reserva con
+  servicio de cotización de tarifas no se encuentra disponible. Por favor intente más tarde". No se permite crear la reserva con
   una tarifa por defecto, estimada, heredada ni a cero.
 - ¿Qué sucede si el Módulo 3 no responde mientras se recotiza una reserva `ACTIVE`? El sistema
   detiene la recotización: no aplica ningún cambio de fechas ni de categoría, conserva las tarifas
@@ -230,8 +233,8 @@ cambio no se aplica y que la respuesta es un **HTTP 400** controlado.
 - **FR-004**: El sistema debe detener la recotización de una actualización de fechas o categoría
   cuando el servicio de Pricing no responde, sin aplicar ningún cambio, conservando las tarifas
   vigentes y respondiendo **HTTP 400 (Bad Request)**.
-- **FR-005**: El sistema no debe realizar ningún cálculo con la tarifa recibida: ni sumas, ni
-  diferencias, ni IVA, ni comisiones. Los cálculos que se necesiten con la tarifa no son
+- **FR-005**: El sistema no debe realizar ningún cálculo con la tarifa recibida aparte del total de la
+  reserva de FR-002: ni diferencias, ni IVA, ni comisiones. Los cálculos que se necesiten con la tarifa no son
   del Módulo 2; el IVA lo fija exclusivamente el Módulo 3 al facturar.
 - **FR-006**: El sistema no debe verificar disponibilidad ni realizar llamadas al Módulo 1 dentro de
   este caso de uso: el flujo invocador (generar reservación directa o actualizar reservación)
@@ -270,8 +273,8 @@ cambio no se aplica y que la respuesta es un **HTTP 400** controlado.
 - **Reservation** (entidad local del Módulo 2): Reserva cuyas habitaciones llevan la tarifa
   informativa. Atributos: `reservationRef`, `guestRef`, `startDate`, `endDate`, `updatedAt` (control
   de concurrencia optimista), `source` (`DIRECT` | `OTA`), y `status` con estados permitidos:
-  `PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`. Las reservas directas
-  nacen en `ACTIVE` y las de OTA en `PENDING`. No guarda un total de las tarifas de sus habitaciones.
+  `PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`. Todas las reservas nacen
+  en `ACTIVE`: las directas al crearse y las de Booking porque llegan confirmadas. No guarda un total de las tarifas de sus habitaciones.
 - **ReservationRoom** (entidad local del Módulo 2): Habitación de la reserva. Atributos relevantes:
   `roomId`, `categoryRoom` (se envía al Módulo 3 como `roomType`), `roomGrossAmount` (el
   `lodgingAmount` de la `RateQuote` de esa habitación), `quoteId` (el de esa `RateQuote`; vacío en
@@ -283,8 +286,8 @@ cambio no se aplica y que la respuesta es un **HTTP 400** controlado.
   Módulo 2 no persiste esta entidad como registro propio: extrae `lodgingAmount`, `currency` y `quoteId` hacia la
   `ReservationRoom`.
 - **Room**: Se referencia únicamente a través de su categoría (`categoryRoom`) para construir el
-  contrato de entrada del servicio de tarificación. Sus estados en el Módulo 1 son `Available`,
-  `Reserved` y `Occupied`. Este caso de uso no consulta ni modifica el `status` de ninguna `Room`:
+  contrato de entrada del servicio de tarificación. Este caso de uso solo usa su `categoryRoom`; no
+  consulta ni modifica ninguna `Room`:
   la tarificación opera sobre la categoría y la disponibilidad se verifica antes mediante
   "Verificar disponibilidades".
 

@@ -1,6 +1,7 @@
 # Feature Specification: Consultar Calendario de Mantenimientos
 
 **Created**: 2026-09-23
+**Updated**: 2026-10-18
 
 ## Use Case (Caso de Uso)
 
@@ -24,6 +25,10 @@ cualquier reserva.
    existe, informa que no hay mantenimientos que impidan la reserva.
 5. Si el Módulo 1 no responde o los datos enviados son inválidos, el sistema informa el fallo con un
    error de negocio controlado **HTTP 400 (Bad Request)**.
+
+La misma consulta la usan también la pantalla "Habitaciones" (mantenimiento próximo de cada
+habitación) y "Configurar OTA" (habitaciones en mantenimiento por noche, para la disponibilidad de
+Channex).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -72,9 +77,10 @@ se informe como inhabilitada, indicando las fechas del cruce.
   Verifique las fechas seleccionadas."
 - ¿Qué sucede si el `roomId` no existe o tiene caracteres inválidos? El sistema retorna **HTTP 400**
   con el mensaje: "El identificador de la habitación es inválido."
-- ¿Qué sucede si un mantenimiento se programa después de crear la reserva? Esta consulta solo valida
-  el momento de la reserva; el Módulo 1 gestiona la reubicación operativa de las reservas
-  afectadas por mantenimientos posteriores.
+- ¿Qué sucede si un mantenimiento se programa después de crear la reserva? Antes de registrarlo, el
+  Módulo 1 consulta las reservas de esas fechas ("Consultar reservas", FR-023) y decide qué hacer. Al
+  registrarlo, lo avisa al Módulo 2 por cola, y "Configurar OTA" descuenta esa habitación de la
+  disponibilidad de Channex en esas fechas.
 
 ## Requirements *(mandatory)*
 
@@ -93,6 +99,9 @@ se informe como inhabilitada, indicando las fechas del cruce.
   bloquear la validación y responder con un error controlado.
 - **FR-006**: El sistema debe interceptar fechas inválidas, identificadores inválidos y fallos de
   integración, respondiendo con **HTTP 400 (Bad Request)** y prohibiendo **HTTP 500**.
+- **FR-007**: La misma consulta la usan la pantalla "Habitaciones" (mantenimiento próximo de cada
+  habitación) y "Configurar OTA" (habitaciones en mantenimiento por noche, para la disponibilidad de
+  Channex).
 
 ### Non-Functional Requirements
 
@@ -103,9 +112,10 @@ se informe como inhabilitada, indicando las fechas del cruce.
 
 - **MaintenanceCalendar**: Calendario de mantenimientos, propiedad del Módulo 1, con las
   programaciones por habitación. Atributos:
-  `roomId`, `maintenanceStart`, `maintenanceEnd` y `reason`. Esta funcionalidad solo la consulta.
-- **Room**: Habitación física. Atributos: `id`, `roomNumber`, `categoryRoom` y `status`
-  (`Available` | `Reserved` | `Occupied`).
+  `roomId`, `maintenanceStart` y `maintenanceEnd`, ambas incluidas (el motivo no llega al Módulo 2).
+  Esta funcionalidad solo la consulta.
+- **Room**: Habitación física. Atributos: `id`, `roomNumber`, `categoryRoom` y `maxCapacity`, sin
+  estado: todas las que entrega el Módulo 1 son vendibles.
 - **Reservation**: Se referencia de forma informativa: es la reserva que se intenta crear o
   modificar. Atributos: `startDate`, `endDate` y el `roomId` de cada una de sus habitaciones
   (`ReservationRoom`), que se consultan una por una.

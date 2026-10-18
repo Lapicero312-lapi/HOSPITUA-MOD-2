@@ -1,14 +1,14 @@
 # Feature Specification: Consultar Reservas
 
 **Created**: 2026-09-19
-**Updated**: 2026-09-29
+**Updated**: 2026-10-18
 
 ## Use Case (Caso de Uso)
 
 ### Descripción del problema
 
 La Recepcionista necesita una vista única de todas las reservas del hotel para responder llamadas,
-preparar las llegadas del día, revisar qué reservas siguen pendientes de confirmación de una OTA y
+preparar las llegadas del día, revisar las reservas de Booking en conflicto y
 ubicar una reserva puntual antes de modificarla o cancelarla. Sin esa vista, termina armando listas
 por fuera del sistema o preguntando al Módulo 1, que no es el dueño de las reservas. Además, casi
 ninguna operación del Módulo 2 puede ejecutarse a ciegas: antes de cancelar, actualizar, verificar
@@ -28,16 +28,17 @@ El negocio necesita un único servicio de consulta, de solo lectura, que:
 - **Envíe cada día al Módulo 1** la lista de reservas `ACTIVE` que llegan ese día, con toda la
   información que necesita para recibir a los huéspedes, y le avise cada cambio posterior.
 
-El **Módulo 1 no consulta este servicio**: el Módulo 2 le envía la información de las reservas del
+El **Módulo 1 no usa la vista ni la búsqueda**: el Módulo 2 le envía la información de las reservas del
 día mediante "Enviar reservas del día al Módulo 1" (historias 4 y 5 de esta especificación), y el
 Módulo 1 notifica el Check-In y el Check-Out para que "Actualizar reservación" cambie el estado de
-la reserva.
+la reserva. Solo consulta las reservas de un rango de fechas, para validar un mantenimiento o una baja
+de habitación (FR-023).
 
 El Módulo 1 opera el hotel en persona: recibe a los huéspedes, entrega las habitaciones y registra el
 Check-In y el Check-Out. Para hacerlo necesita saber, cada día, quién llega, cuántas personas vienen,
 qué habitaciones se les asignaron, quién es el titular, hasta cuándo se quedan y cualquier
 observación de la reserva. Además, las reservas del día cambian durante el día: se crean reservas
-para hoy, una OTA confirma una reserva pendiente, un huésped cancela o cambia de habitación. Si el
+para hoy, llega de Booking una reserva para hoy, un huésped cancela o cambia de habitación. Si el
 Módulo 1 solo recibiera la lista de la mañana, trabajaría con datos desactualizados. Esta
 funcionalidad solo **informa**: no aparta ni libera habitaciones (el Módulo 1 decide qué hace con la lista) ni cambia el estado de ninguna reserva.
 
@@ -105,15 +106,17 @@ completo (ver FR-006), incluidas todas sus habitaciones y la cantidad de persona
 1. Después de enviada la lista, cualquier evento que agregue, cambie o quite una reserva de la lista
    del día genera una actualización (`DailyReservationUpdate`):
    - `ADDED`: una reserva pasa a formar parte de la lista: se crea una reserva directa `ACTIVE` con
-     llegada hoy, una OTA confirma hoy una reserva con llegada hoy (`PENDING` → `ACTIVE`), o una
-     modificación cambia la llegada a hoy.
+     llegada hoy, llega de Booking una reserva con llegada hoy y todas sus habitaciones asignadas, la
+     Recepcionista asigna la última habitación de una reserva en conflicto, o una modificación cambia
+     la llegada a hoy.
    - `UPDATED`: cambia un dato enviado de una reserva que ya está en la lista: habitaciones
      (agregar, quitar o cambiar), personas de una habitación, `endDate`, datos del titular o `notes`.
    - `REMOVED`: una reserva sale de la lista: se cancela (`CANCELLED`), una modificación mueve su
-     llegada a otro día, o el cierre del día la marca `NO_SHOW`.
+     llegada a otro día, el cierre del día la marca `NO_SHOW`, o una habitación suya queda sin asignar
+     (`ROOM_UNASSIGNED`).
 2. Las actualizaciones `ADDED` y `UPDATED` llevan el detalle completo y vigente de la reserva, no
    solo el campo que cambió. La actualización `REMOVED` lleva la `reservationRef` y el motivo
-   (`CANCELLED`, `DATE_CHANGED`, `NO_SHOW`).
+   (`CANCELLED`, `DATE_CHANGED`, `NO_SHOW`, `ROOM_UNASSIGNED`).
 3. El sistema envía la actualización al Módulo 1 por la misma cola, después de confirmar el cambio
    en el Módulo 2.
 
@@ -132,7 +135,7 @@ localizan reservas mediante este mismo servicio, con los mismos criterios.
 
 La Recepcionista necesita ver todas las reservas del hotel, de a 10 por página, y acotarlas por
 estado, canal, agencia y fecha para preparar el día (por ejemplo, las llegadas de hoy en `ACTIVE`),
-revisar las reservas OTA que siguen en `PENDING` o consultar las salidas de mañana. Por tratarse de
+revisar las reservas de Booking en conflicto o consultar las salidas de mañana. Por tratarse de
 una única vista, el listado sin filtros, cada filtro, el orden, la paginación y los rechazos por
 filtros inválidos se consolidan en esta historia.
 
@@ -357,8 +360,8 @@ bajas y el orden de entrega se consolidan en esta historia.
 **Why this priority**: Una lista que no se actualiza lleva al Módulo 1 a esperar huéspedes que
 cancelaron o a no reconocer reservas creadas durante el día.
 
-**Independent Test**: Después de enviar la lista del día, se crea una reserva directa para hoy, se
-confirma una reserva OTA con llegada hoy, se cambia la cantidad de personas de otra, se agrega una
+**Independent Test**: Después de enviar la lista del día, se crea una reserva directa para hoy, llega
+de Booking una reserva con llegada hoy, se cambia la cantidad de personas de otra, se agrega una
 habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe, en orden, dos
 `ADDED`, dos `UPDATED` y un `REMOVED` con el contenido correcto.
 
@@ -397,6 +400,13 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
    - **Given** una reserva de la lista del día que sigue `ACTIVE` sin Check-In
    - **When** el cierre del día la marca `NO_SHOW`
    - **Then** el Módulo 1 recibe una actualización `REMOVED` con el motivo `NO_SHOW`
+
+6a. **Scenario**: Habitación sin asignar (`REMOVED` y `ADDED`)
+   - **Given** una reserva de Booking con llegada hoy que estaba en la lista del día
+   - **When** un cambio de Booking deja una de sus habitaciones sin asignar
+   - **Then** el Módulo 1 recibe `REMOVED` con el motivo `ROOM_UNASSIGNED`; cuando la Recepcionista
+     asigna la habitación, recibe `ADDED` con el detalle completo. Una reserva de Booking que llega con
+     una habitación sin asignar no se envía hasta que se asigne
 
 7. **Scenario**: Orden de entrega
    - **Given** dos cambios seguidos sobre la misma reserva (por ejemplo, cambio de personas y luego
@@ -443,8 +453,9 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
 - ¿Cómo maneja el sistema una consulta sobre una reserva cuyo `status` cambia en ese instante (por
   ejemplo, llega un Check-In)? Retorna el último estado confirmado en la base de datos; la
   siguiente consulta ya refleja el cambio.
-- ¿Qué sucede si la Ota o el Módulo 1 intentan usar la vista y la búsqueda? El sistema lo rechaza:
-  son exclusivas de la Recepcionista y de los procesos internos del Módulo 2.
+- ¿Qué sucede si la Ota o el Módulo 1 intentan usar la vista y la búsqueda? No las usan: con
+  `X-Client: MODULE1` la misma ruta responde la consulta por fechas (FR-023), y Booking no llama al
+  Módulo 2.
 
 **Envío al Módulo 1**
 
@@ -463,9 +474,8 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
   actualización: el Check-In lo ejecutó el propio Módulo 1.
 - ¿Qué sucede si una reserva ya tuvo Check-In antes del inicio del día (llegada anticipada) y está en
   `IN_PROGRESS` al armar la lista? No se incluye, porque el Módulo 1 ya registró su ingreso.
-- ¿Qué sucede si una reserva `PENDING` de una OTA tiene llegada hoy y nunca se confirma? No viaja en
-  la lista. Si la OTA la confirma
-  durante el día, viaja como `ADDED`; si no, el cierre del día la marca `NO_SHOW`.
+- ¿Qué sucede con una reserva `PENDING` con llegada hoy? Hoy no ocurre: Booking envía las reservas
+  confirmadas. Si en el futuro una agencia usa `PENDING`, la reserva no viaja hasta confirmarse.
 - ¿Qué sucede si una reserva de la lista cambia varias veces en pocos segundos? Se envía una
   actualización por cada cambio confirmado, cada una con el detalle completo vigente en ese momento y
   su `sequenceNumber`; el Módulo 1 se queda con la de mayor secuencia.
@@ -564,10 +574,15 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
 - **FR-010**: El sistema debe responder 200 con una lista vacía, y no un error, cuando los filtros
   son válidos pero ninguna reserva los cumple.
 - **FR-011**: La vista y la búsqueda son de la Recepcionista y de los procesos internos del Módulo 2;
-  ni la Ota ni el Módulo 1 las usan. El Módulo 2 no implementa seguridad: es una capa aparte.
+  ni la Ota ni el Módulo 1 las usan. El Módulo 2 no implementa seguridad: es una capa aparte. Quien
+  llama a las rutas compartidas se indica con la cabecera `X-Client` (`RECEPTIONIST`, `MODULE1` o
+  `MODULE3`).
 - **FR-012**: El sistema debe ejecutar, una vez por día operativo, a las 00:00 de Colombia (UTC-5),
   un proceso automático que envíe al Módulo 1 la lista de las
-  `Reservation` con `startDate` igual al día operativo y `status` `ACTIVE`.
+  `Reservation` con `startDate` igual al día operativo y `status` `ACTIVE`. **No incluye** las reservas
+  que tengan alguna habitación sin asignar (reservas de Booking en conflicto): el Módulo 1 necesita el
+  número de cada habitación. Esas reservas entran a la lista, con `ADDED`, cuando la Recepcionista asigna
+  la última habitación.
 - **FR-013**: La lista debe tener una cabecera con `operationalDate`, `generatedAt`,
   `totalReservations`, `totalRooms` y `totalGuests` (suma de los `guestCount` de las reservas), y debe enviarse aunque no
   haya reservas, con cero reservas y totales en `0`. Debe enviarse una sola vez por día operativo: si
@@ -576,10 +591,10 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
   - Reserva: `reservationRef`, `status`, `source`, `externalConfirmationCode` (solo `OTA`),
     `startDate` (fecha de entrada), `endDate` (fecha de salida), `guestCount` (total de personas),
     `notes` (observaciones) y `updatedAt`. El campo `source` viaja como `DIRECTA` para las reservas
-    directas o con el nombre de la agencia (por ejemplo `BOOKING` o `EXPEDIA`) para las `OTA`.
+    directas o con el nombre de la agencia para las `OTA` (`BOOKING` para las de Booking.com).
   - Habitaciones (`rooms`): por cada `ReservationRoom`, `roomId`, `roomNumber`, `categoryRoom` y
-    `guestCount` (personas de esa habitación; la suma es el `guestCount` de la reserva). En una reserva
-    de Booking con una habitación sin asignar, su `roomId` y su `roomNumber` viajan vacíos.
+    `guestCount` (personas de esa habitación; la suma es el `guestCount` de la reserva). Las reservas con
+    una habitación sin asignar no viajan al Módulo 1.
   - Titular (`guest`): `guestRef`, `firstName`, `lastName`, `fullName` (para mostrar),
     `documentType`, `documentNumber`, `nationality`, `contactPhone` y `contactEmail`.
 
@@ -589,9 +604,11 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
   es aparte y sí entrega los `quoteIds` y el porcentaje de comisión.
 - **FR-016**: Después del envío de la lista, el sistema debe enviar una actualización
   `DailyReservationUpdate` por cada cambio confirmado que afecte a la lista del día: `ADDED` cuando
-  una reserva entra (creación directa para hoy, confirmación OTA con llegada hoy, cambio de llegada
-  a hoy), `UPDATED` cuando cambia un dato de FR-014 de una reserva de la lista, y `REMOVED` cuando
-  sale (motivo `CANCELLED`, `DATE_CHANGED` o `NO_SHOW`).
+  una reserva entra (creación directa para hoy, reserva de Booking nueva con llegada hoy, asignación
+  de la última habitación de una reserva en conflicto, cambio de llegada a hoy), `UPDATED` cuando cambia un dato de FR-014 de una reserva de la lista, y `REMOVED` cuando
+  sale (motivo `CANCELLED`, `DATE_CHANGED`, `NO_SHOW` o `ROOM_UNASSIGNED`). Una reserva con alguna
+  habitación sin asignar no pertenece a la lista: si ya estaba y un cambio deja una habitación sin
+  asignar, sale con `ROOM_UNASSIGNED`; al asignarla vuelve a entrar con `ADDED`.
 - **FR-017**: El sistema no debe enviar actualizaciones por el Check-In ni por el Check-Out, ni por
   cambios en reservas cuya llegada no es el día operativo en curso.
 - **FR-018**: Cada lista y cada actualización deben llevar un identificador único (`messageId`) y un
@@ -605,6 +622,14 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
   los reintentos, registrar una alerta para revisión humana.
 - **FR-021**: El envío al Módulo 1 no debe cambiar el `status` de ninguna reserva ni el estado de
   ninguna `Room`.
+- **FR-022**: El sistema debe permitir que el Módulo 3 consulte una reserva por su `reservationRef`
+  para que genere la liquidación en el Check-Out. La
+  respuesta lleva `reservationRef`, `channel` (`DIRECT` | `OTA`) y `quoteIds`, la lista con el
+  `quoteId` de cada `ReservationRoom` (una cotización por habitación; la lista va vacía en las
+  reservas `OTA`, que no tienen cotización). Solo si el canal es `OTA`, también lleva `otaId` (el `id`
+  de la `Ota`), `otaConfirmationCode` (el `externalConfirmationCode`) y `otaCommissionPercentage` (el
+  `commissionPercentage` congelado, número de 0 a 100). No incluye otros datos financieros ni datos del huésped. Si la reserva no existe, responde **HTTP 404 (Not Found)**. Es de solo lectura y
+  no modifica nada.
 - **FR-023**: El sistema debe permitir que el Módulo 1 consulte las reservas cuya estadía se cruza con un rango de fechas, con fecha de inicio (`dateFrom`) y fecha
   de fin (`dateTo`) obligatorias, ambas con formato `AAAA-MM-DD` y la misma regla de cruce de FR-003, y,
   opcionalmente, las de una habitación (`roomId`), para que verifique un mantenimiento al registrarlo o dé
@@ -613,14 +638,6 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
   cada `ReservationRoom`, `roomId`, `roomNumber` y `categoryRoom`. No incluye datos financieros ni del
   huésped. El Módulo 2 solo informa: no decide qué hacer con la reserva ni modifica nada, esa lógica
   la aplica el Módulo 1. Es de solo lectura.
-- **FR-022**: El sistema debe permitir que el Módulo 3 consulte una reserva por su `reservationRef`
-  para que genere la liquidación en el Check-Out. La
-  respuesta lleva `reservationRef`, `channel` (`DIRECT` | `OTA`) y `quoteIds`, la lista con el
-  `quoteId` de cada `ReservationRoom` (una cotización por habitación; la lista va vacía en las
-  reservas `OTA`, que no tienen cotización). Solo si el canal es `OTA`, también lleva `otaId` (el `id`
-  de la `Ota`), `otaConfirmationCode` (el `externalConfirmationCode`) y `otaCommissionPercentage` (el
-  `commissionPercentage` congelado). No incluye otros datos financieros ni datos del huésped. Si la reserva no existe, responde **HTTP 404 (Not Found)**. Es de solo lectura y
-  no modifica nada.
 
 ### Non-Functional Requirements
 
@@ -655,7 +672,8 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
 - **DailyReservationUpdate**: Actualización de la lista del día. Atributos: `messageId`,
   `operationalDate`, `sequenceNumber`, `updateType` (`ADDED` | `UPDATED` | `REMOVED`),
   `reservationRef`, `reservation` (detalle de FR-014; solo en `ADDED` y `UPDATED`), `removalReason`
-  (`CANCELLED` | `DATE_CHANGED` | `NO_SHOW`; solo en `REMOVED`), `occurredAt` y `publishStatus`
+  (`CANCELLED` | `DATE_CHANGED` | `NO_SHOW` | `ROOM_UNASSIGNED`; solo en `REMOVED`), `occurredAt` y
+  `publishStatus`
   (`PENDING` | `PUBLISHED` | `FAILED`).
 
 ## Success Criteria *(mandatory)*
@@ -671,8 +689,8 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
 - **SC-004**: Cero errores **HTTP 500** ante parámetros vacíos, inválidos o inexistentes.
 - **SC-005**: El Módulo 1 recibe la lista del día el 100% de los días operativos, incluidos los días
   sin llegadas.
-- **SC-006**: El 100% de las reservas `ACTIVE` con llegada en el día están en la lista o llegan como
-  `ADDED` antes de que el huésped se presente.
+- **SC-006**: El 100% de las reservas `ACTIVE` con llegada en el día y todas sus habitaciones
+  asignadas están en la lista o llegan como `ADDED` antes de que el huésped se presente.
 - **SC-007**: El 100% de las cancelaciones y cambios de fecha de reservas de la lista llegan al
   Módulo 1 como `REMOVED` en menos de 5 segundos en condiciones normales.
 - **SC-008**: Cero actualizaciones perdidas o aplicadas fuera de orden: cada día operativo tiene una

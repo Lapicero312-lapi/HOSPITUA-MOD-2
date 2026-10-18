@@ -266,11 +266,11 @@ tarifas que el solicitante vio:
 | `RESERVATION_NOT_FOUND` | La reserva no existe | "La reserva no existe." |
 | `OTA_RESERVATION_READ_ONLY` | La Recepcionista modifica una reserva `OTA` | "Las reservas de OTA solo las modifica Booking. Si está en conflicto, solo se le puede asignar la habitación." |
 | `STATUS_NOT_EDITABLE` | La reserva está en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` o `NO_SHOW` | "El estado actual de la reserva no admite modificaciones." |
-| `CONCURRENT_UPDATE` | `updatedAt` no coincide (otra persona la modificó) | "La reserva fue modificada por otra persona. Recargue la información e intente de nuevo." |
+| `CONCURRENT_UPDATE` | `updatedAt` no coincide (otra persona la modificó o la canceló) | "Esta reserva ya fue actualizada o cancelada recientemente" (el mismo de `cancel-reservation`) |
 | `INVALID_STAY_DATES` | Fechas vacías o salida no posterior a la entrada | "La fecha de salida debe ser posterior a la de entrada." |
 | `START_DATE_IN_PAST` | Entrada anterior al día operativo en curso | "La fecha de entrada no puede ser anterior a hoy." |
 | `ROOM_ALREADY_IN_RESERVATION` | Una habitación repetida en `rooms` | "La habitación ya forma parte de la reserva." |
-| `INVALID_ROOM_COUNT` | Menos de 1 o más de 10 habitaciones | "Una reserva lleva entre 1 y 10 habitaciones." |
+| `INVALID_ROOM_COUNT` | Menos de 1 o más de 10 habitaciones | "Una reserva debe tener entre 1 y 10 habitaciones." |
 | `LAST_ROOM_CANNOT_BE_REMOVED` | `rooms` dejaría la reserva sin habitaciones | "La reserva debe conservar al menos una habitación." |
 | `GUEST_COUNT_EXCEEDS_CAPACITY` | `guestCount` mayor que el `maxCapacity` | "La cantidad de personas supera la capacidad de la habitación." |
 | `GUEST_COUNT_TOO_LOW` | `guestCount` menor que 1 | "Cada habitación debe tener al menos una persona." |
@@ -298,7 +298,9 @@ habitaciones sin asignar de una reserva de Booking en conflicto. Cabecera `X-Use
   reserva) y que sea de la **misma categoría** que la habitación sin asignar.
 - Guarda `room_id`, `room_number` y `blocks_inventory = true`. Si ya no queda ninguna habitación sin
   asignar ni capacidad superada, **quita la marca de conflicto**.
-- Avisa `UPDATED` a la lista del día si corresponde y anota el cambio para Channex (`AriChangeRecorder`).
+- Avisa a la lista del día con `DailyListChangeRecorder` si corresponde: `ADDED` cuando la reserva, con llegada hoy,
+  ya no tiene habitaciones sin asignar y no estaba en la lista (o `UPDATED` si ya estaba), y anota el cambio
+  para Channex (`AriChangeRecorder`).
 - Responde `200` con el detalle de la reserva (C3 de `check-view-reservation`).
 
 | `errorCode` | Cuándo | `message` |
@@ -474,11 +476,12 @@ reserva** (así un registro corrupto no interrumpe el lote, FR-022):
 
 | Reserva | Qué hace |
 |---|---|
-| `ACTIVE` o `PENDING` con `startDate` = día procesado | `NO_SHOW` (cualquier canal, sin `Cancellation`, FR-021), todas sus habitaciones `NOT_ARRIVED`, y `DailyListChangeRecorder` con `REMOVED` motivo `NO_SHOW` **del día procesado** |
+| `ACTIVE` o `PENDING` con `startDate` = día procesado | `NO_SHOW` (cualquier canal, sin `Cancellation`, FR-021), todas sus habitaciones `NOT_ARRIVED`, `DailyListChangeRecorder` con `REMOVED` motivo `NO_SHOW` **del día procesado** y, si es de Booking, `OtaNoShowReporter.record` (`generate-ota-reservation`) |
 | `IN_PROGRESS` con habitaciones en `EXPECTED` | Esas habitaciones pasan a `NOT_ARRIVED`; la reserva sigue `IN_PROGRESS`, o pasa a `COMPLETED` si ya no queda ninguna `CHECKED_IN`; no avisa a la lista |
 | `IN_PROGRESS` con todas las habitaciones ingresadas | Se ignora |
 | Cualquier estado final | Se ignora |
 
+- **Limpieza**: al terminar, borra las filas de `idempotency_key` con más de 24 horas (`generate-direct-reservation`).
 - **Idempotente**: ignora reservas que ya no están en `ACTIVE`, `PENDING` ni `IN_PROGRESS` y habitaciones
   que ya no están en `EXPECTED` (NFR-003).
 - **Recuperación al arrancar**: la aplicación ejecuta el cierre del día anterior si está pendiente (es
@@ -719,7 +722,7 @@ traducción del plan base:
 
 Mensajes del log (literales del spec): Check-In, "La reserva notificada no existe en el sistema de
 reservas.", "La habitación notificada no pertenece a la reserva." y que "la reserva no admite un Check-In en
-su estado actual"; Check-Out, "Referencia de reserva no encontrada", "La habitación notificada aún no
+su estado actual"; Check-Out, "La reserva notificada no existe en el sistema de reservas.", "La habitación notificada aún no
 registra un ingreso." y que "la reserva aún no registra un ingreso".
 
 ### Cierre del día
@@ -868,6 +871,7 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
 | US2 | 7 y 8 Check-Out | Última habitación: `COMPLETED`; parcial: la reserva sigue `IN_PROGRESS` |
 | US2 | Casos borde | Payload vacío o sin identificadores: dead-letter queue; reserva inexistente; Check-In anticipado; Check-Out retrasado; salto de secuencia (advertencia, sigue); `NOT_ARRIVED` |
 | US3 | 1 No-Show | `ACTIVE` y `PENDING` de cualquier canal: `NO_SHOW`, habitaciones `NOT_ARRIVED`, `REMOVED` `NO_SHOW` con la fecha operativa del día cerrado y sin `Cancellation` |
+| US3 | 2 No-Show de Booking | `NO_SHOW` y fila `PENDING` en `ota_no_show_report` en la misma transacción |
 | US3 | 3 llegada parcial | La habitación sin ingreso pasa a `NOT_ARRIVED` y la reserva sigue `IN_PROGRESS` |
 | US3 | 4 todo ingresó | Se ignora |
 | US3 | 5 fallo aislado | Una reserva corrupta no detiene el lote |
@@ -905,13 +909,14 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
 | FR-023 | `processed_message` y control de secuencia | T017 |
 | FR-024 | `ApplyOtaChange` | T029 |
 | FR-025 | `AssignRoom` y B3 | T030 |
+| FR-026 | `AriChangeRecorder.record` en la misma transacción (C5) | T030 |
 | NFR-001 a NFR-003 | Pruebas de tiempo | T026 |
 | SC-001 a SC-008 | Pruebas por escenario | T013, T019, T024 |
 
 ## Puntos que este plan propone (el spec no los dice)
 
 1. **Cierre del día a las 00:00:30**, procesando el día que acaba de terminar con su `operationalDate`
-   explícito. El plan base dice "al terminar las 23:59". Así el cierre no compite con una notificación de
+   explícito; el plan base lo fija igual ("al terminar las 23:59", a las 00:00:30). Así el cierre no compite con una notificación de
    las 23:59 y el aviso `REMOVED` lleva la fecha del día cerrado.
 2. **`rooms` como lista completa por `roomId`**, y la herencia de tarifa en un cambio de habitación de la
    misma categoría (la nueva toma la tarifa de la quitada).
@@ -932,10 +937,8 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
 
 | # | Pendiente | Con quién |
 |---|---|---|
-| 1 | **Hora del cierre del día**: 00:00:30 contra "23:59" del plan base | Equipo del Módulo 2 |
-| 2 | **Habitaciones `NOT_ARRIVED` en una reserva `IN_PROGRESS`**: el spec dice que se quitan de la lista del día, pero la reserva ya no está en la lista (está `IN_PROGRESS`), así que no hay aviso. Confirmar que es lo esperado | Módulo 1 |
-| 3 | El Módulo 1 debería conservar el mismo `messageId` en los reintentos y no reiniciar el `sequenceNumber` (FR-023); confirmar | Módulo 1 |
-| 4 | El spec menciona en FR-003 un texto confuso ("sin mostrar la tarifa nueva"): se interpretó como "sin mostrar la tarifa anterior", coherente con el resto del spec y con `calculate-dynamic-rate` | Equipo del Módulo 2 |
+| 1 | **Habitaciones `NOT_ARRIVED` en una reserva `IN_PROGRESS`**: el spec dice que se quitan de la lista del día, pero la reserva ya no está en la lista (está `IN_PROGRESS`), así que no hay aviso. Confirmar que es lo esperado | Módulo 1 |
+| 2 | El Módulo 1 debería conservar el mismo `messageId` en los reintentos y no reiniciar el `sequenceNumber` (FR-023); confirmar | Módulo 1 |
 
 ## Notes
 

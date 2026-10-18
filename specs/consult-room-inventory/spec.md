@@ -1,6 +1,7 @@
 # Feature Specification: Consultar Inventario de Habitaciones
 
 **Created**: 2026-09-23
+**Updated**: 2026-10-18
 
 ## Use Case (Caso de Uso)
 
@@ -9,17 +10,19 @@
 Para verificar disponibilidad, el Módulo 2 necesita saber qué habitaciones tiene el hotel a la venta
 y sus datos: número, categoría y capacidad máxima. Esa información es propiedad exclusiva del
 Módulo 1, que es quien opera el hotel en persona. Todas las habitaciones que entrega el Módulo 1 son
-vendibles: si una habitación está libre en unas fechas no depende de su estado de hoy, sino de las
+vendibles (las dadas de baja no se entregan): si una habitación está libre en unas fechas no depende de su estado de hoy, sino de las
 reservas del Módulo 2 y de los mantenimientos programados. Si el Módulo 2 guardara una copia propia
 del inventario, o asumiera habitaciones por su cuenta, aparecerían sobreventas o reservas sobre
 habitaciones que no existen. El negocio necesita una consulta de solo lectura, en tiempo real,
 contra el inventario del Módulo 1, que sirva de insumo a "Verificar disponibilidades" antes de crear
-o modificar cualquier reserva.
+o modificar cualquier reserva. También la usan la pantalla "Habitaciones" y "Configurar OTA", que
+traduce las habitaciones vendibles a tipos de habitación de Channex.
 
 ### Flujo de Usuario de Alto Nivel
 
 1. El caso de uso "Verificar disponibilidades" invoca "Consultar inventario de habitaciones"
-   enviando un `roomId` puntual o una categoría (`categoryRoom`).
+   enviando un `roomId` puntual o una categoría (`categoryRoom`). La pantalla "Habitaciones" y
+   "Configurar OTA" piden, en cambio, todas las habitaciones vendibles en una sola consulta.
 2. El sistema consulta de forma síncrona el inventario del **Módulo 1**, fuente de verdad exclusiva
    de las habitaciones del hotel.
 3. Si la consulta es puntual, el sistema retorna los datos de esa `Room`: `id`, `roomNumber`,
@@ -32,7 +35,8 @@ o modificar cualquier reserva.
 **Pantalla de referencia "Habitaciones" (solo lectura, fuera de "Verificar disponibilidades"):**
 además de ser insumo interno de "Verificar disponibilidades", el Módulo 2 ofrece a la Recepcionista
 una pantalla de solo lectura que lista **todas** las `Room` de **todas** las categorías con su
-`categoryRoom` y su capacidad máxima (`maxCapacity`) (reutilizando FR-002, una vez por categoría) y,
+`categoryRoom` y su capacidad máxima (`maxCapacity`) (con una sola consulta al Módulo 1 de todas las
+habitaciones vendibles) y,
 por cada una, si tiene un mantenimiento próximo, lo indica (dato que proviene de "Consultar
 calendario de mantenimientos"). La pantalla no muestra el estado de la habitación. Esta pantalla no
 modifica ningún dato ni sustituye la consulta síncrona que hace "Verificar disponibilidades" al
@@ -84,6 +88,8 @@ comprueba que el listado venga vacío.
 - ¿Qué sucede si se consulta un `roomId` inexistente o con caracteres inválidos? El sistema detecta
   el identificador inválido y retorna **HTTP 400** con el mensaje "El identificador de la
   habitación es inválido."
+- ¿Qué sucede con una categoría vacía o con otro formato? El sistema retorna **HTTP 400** con el
+  mensaje "La categoría indicada no es válida.", sin consultar al Módulo 1.
 - ¿Qué sucede si una habitación está ocupada hoy? Se devuelve igual, porque es vendible; si está
   libre en las fechas pedidas lo decide "Verificar disponibilidades" con las reservas del Módulo 2.
 
@@ -105,6 +111,9 @@ comprueba que el listado venga vacío.
   `Room` de todas las categorías, con su `categoryRoom` y su `maxCapacity`, sin estado y sin opción
   de editar, reutilizando esta misma consulta y la de "Consultar calendario de mantenimientos" para
   indicar el mantenimiento próximo de cada habitación.
+- **FR-007**: El sistema debe permitir consultar todas las habitaciones vendibles del Módulo 1 en una
+  sola consulta. La usan la pantalla "Habitaciones" (FR-006) y "Configurar OTA", para crear y
+  actualizar los tipos de habitación de Channex.
 
 ### Non-Functional Requirements
 
@@ -116,7 +125,9 @@ comprueba que el listado venga vacío.
 - **Room**: Unidad física provista por el Módulo 1. Atributos: `id`, `roomNumber`,
   `categoryRoom` y `maxCapacity` (capacidad máxima de personas, usada para validar el `guestCount` de
   cada habitación de la reserva). Todas las habitaciones del Módulo 1 son vendibles; esta
-  funcionalidad solo las consulta.
+  funcionalidad solo las consulta. `categoryRoom` va en mayúsculas, sin tildes ni `Ñ`, con letras,
+  dígitos y `_`, de 1 a 50 caracteres (por ejemplo `DOBLE`): es la clave que comparten los módulos y
+  Channex.
 - **Reservation**: Se referencia de forma informativa. Atributos: `reservationRef` y `status`
   (`PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`). Sus habitaciones
   (`ReservationRoom.roomId`) se consultan una por una.
