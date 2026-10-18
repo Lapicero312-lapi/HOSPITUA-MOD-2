@@ -15,6 +15,9 @@ reserva pendientes (el *feed*), las procesa y las confirma (`ack`). Cada revisi�
 2. **`modified`**: aplica el cambio con `update-reservation`.
 3. **`cancelled`**: cancela con `cancel-reservation`, por el canal `OTA_API`.
 
+Además, **reporta a Channex el no-show** de cada reserva de Booking que el cierre del día deja en
+`NO_SHOW` (A3), para que Booking no cobre comisión.
+
 Booking ya aceptó la reserva, así que **nunca se rechaza**: si no hay habitación, se supera la capacidad o
 el cambio no se puede aplicar, se registra igual y se marca **en conflicto** (decisión D13 del plan base).
 
@@ -27,7 +30,7 @@ con `DailyListChangeRecorder`, y anota cada cambio de ocupación para el envío 
 | Dato | Valor |
 |---|---|
 | Caso de uso | Generar reservación por OTA (`generate-ota-reservation`) |
-| Spec | [spec.md](./spec.md), historias 1 y 2, FR-001 a FR-010 |
+| Spec | [spec.md](./spec.md), historias 1 y 2, FR-001 a FR-012 |
 | Actor principal | Sistema (tarea programada); Channex como fuente de las reservas de Booking |
 | Disparador | Tarea `ChannexSyncJob`, cada `CHANNEX_SYNC_INTERVAL_SECONDS` (30); después del feed, la misma tarea envía la disponibilidad (`configure-ota`) |
 | Naturaleza | Lee de Channex; escribe `reservation`, `reservation_room`, `guest`, `commission_audit` y `ota_booking_revision` |
@@ -39,6 +42,7 @@ con `DailyListChangeRecorder`, y anota cada cambio de ocupación para el envío 
 | 3 | Procesar una revisión `modified` | Interno | B2 |
 | 4 | Procesar una revisión `cancelled` | Interno | B3 |
 | 5 | Confirmar la revisión a Channex | Después del commit | A2 |
+| 6 | Reportar un no-show | `ChannexSyncJob`, después del cierre del día | A3 |
 
 ## Technical Context
 
@@ -375,13 +379,15 @@ revisión se confirma.
 | US1 | 3 varias habitaciones | Habitaciones 201 y 202 en una sola reserva |
 | US1 | 4 sin habitación | Reserva con la habitación sin asignar y `NO_ROOM_AVAILABLE`; `ack` enviado |
 | US1 | 5 capacidad superada | Reserva con `CAPACITY_EXCEEDED`; `ack` enviado |
-| US1 | 6 tipo sin relación | Nada guardado y **sin** `ack` |
-| US1 | 7 Channex caído o 429 | Nada procesado; reintento en la siguiente lectura |
+| US1 | 6 tipo sin relación o sin mapear en Channex | Nada guardado y **sin** `ack` |
+| US1 | 7 Channex caído o 429 | Nada procesado; pausa de un minuto y reintento |
+| US1 | 8 fechas distintas por habitación | Fechas de la reserva, `CHANGE_NOT_APPLICABLE` y `ack` enviado |
 | US2 | 1 cambio de fechas | `end_date`, valor y comisión nuevos |
 | US2 | 2 cambio sin disponibilidad | Fechas nuevas, habitación sin asignar y `NO_ROOM_AVAILABLE` |
 | US2 | 3 cancelación | `CANCELLED`, `Cancellation` con `OTA_API`, comisión intacta |
 | US2 | 4 cambio no aplicable | Reserva intacta con `CHANGE_NOT_APPLICABLE` |
 | US2 | 5 cancelación repetida | Sin cambios; `ack` enviado |
+| US2 | 6 no-show | Fila `PENDING` en el cierre; `REPORTED` tras el `200`; con Channex caído sigue `PENDING` y la reserva sigue `NO_SHOW` |
 
 ## Dependencies & Execution Order
 

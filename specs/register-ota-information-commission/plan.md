@@ -548,6 +548,7 @@ frontend/src/pages/otas/                            # pantalla "Agencias OTA" (s
 | US1 | 2 porcentaje inválido | Menor que 0 o mayor que 100: `400` `INVALID_COMMISSION_PERCENTAGE` y la reserva no se persiste |
 | US2 | 1 conciliación | Reservas `COMPLETED` y `CALCULATED` pasan a `RECONCILED` cuando los montos coinciden; queda auditoría con el canal `MODULE3` |
 | US2 | 2 cancelada por Booking | Su `commissionAmount` y `commissionStatus` no cambian, ni al cancelar ni al conciliar (`RESERVATION_CANCELLED`) |
+| US2 | 3 en `NO_SHOW` | La conciliación la rechaza (`RESERVATION_NO_SHOW`) y la comisión no cambia |
 | US3 | 1 registro por configuración | Una `Ota` "Booking.com" nace `CONNECTED` con `linkedAt`, sin duplicarse al reiniciar |
 | US3 | 2 cambio del porcentaje | El nuevo porcentaje se guarda y solo aplica a reservas futuras |
 | US3 | 3 Channex rechaza la conexión | `DISCONNECTED`; la `Ota` y sus reservas se conservan y sigue visible en la pantalla |

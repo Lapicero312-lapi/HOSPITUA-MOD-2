@@ -1,7 +1,7 @@
 # Feature Specification: Generar Reservación por OTA
 
 **Created**: 2026-09-23
-**Updated**: 2026-10-16
+**Updated**: 2026-10-18
 
 ## Use Case (Caso de Uso)
 
@@ -39,8 +39,8 @@ habitaciones: el Módulo 1 decide qué hace con la lista del día.
 5. **Cancelación (`cancelled`)**: el sistema cancela la reserva mediante "Cancelar reservación", por
    el canal `OTA_API`.
 6. Booking ya aceptó la reserva o el cambio, así que el sistema **no los rechaza**: si no hay
-   habitación disponible, si se supera la capacidad o si el cambio no se puede aplicar, registra la
-   reserva y la marca **en conflicto** con su motivo, para que la Recepcionista lo resuelva. Si no hay
+   habitación disponible, si se supera la capacidad, si el cambio no se puede aplicar o si sus
+   habitaciones traen fechas distintas a las de la reserva, registra la reserva y la marca **en conflicto** con su motivo, para que la Recepcionista lo resuelva. Si no hay
    ninguna habitación libre de la categoría, la habitación queda **sin asignar**.
 7. Después de guardar, el sistema **confirma la revisión a Channex** (`ack`). Si el guardado falla por
    un problema temporal, no la confirma y la vuelve a procesar en la siguiente consulta.
@@ -49,6 +49,9 @@ habitaciones: el Módulo 1 decide qué hace con la lista del día.
    "Enviar reservas del día al Módulo 1" (`ADDED`, `UPDATED` o `REMOVED`). Una reserva con alguna
    habitación sin asignar **no se envía** al Módulo 1 hasta que se asigne. Cada cambio se anota para el
    envío de disponibilidad a Channex ("Configurar OTA").
+9. Si una reserva de Booking pasa a `NO_SHOW` en el cierre del día ("Actualizar reservación"), el
+   sistema le reporta el no-show a Booking por Channex, sin cobrar penalidad, para que Booking no cobre
+   comisión por esa reserva.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -102,16 +105,22 @@ ya no aparezca en el feed.
 
 6. **Scenario**: Tipo de habitación sin relación
    - **Given** una revisión con un tipo de habitación de Channex que no está relacionado con ninguna
-     categoría
+     categoría, o con una habitación que llega sin tipo de Channex (no está mapeada en Channex)
    - **When** el sistema la procesa
    - **Then** no registra la reserva, lo deja en el log y **no** confirma la revisión, para volver a
-     procesarla cuando se complete la relación en "Configurar OTA"
+     procesarla cuando se complete la relación en "Configurar OTA" o el mapeo en Channex
 
 7. **Scenario**: Channex no responde (Error)
    - **Given** la consulta del feed
    - **When** Channex no responde o responde que se superó su límite de solicitudes
-   - **Then** el sistema no registra nada en esa consulta y lo intenta de nuevo en la siguiente, con
-     espera creciente si el problema sigue
+   - **Then** el sistema no registra nada en esa consulta y lo intenta de nuevo en la siguiente; ante el
+     límite, pausa un minuto y luego reintenta con espera creciente
+
+8. **Scenario**: Habitaciones con fechas distintas a las de la reserva (conflicto)
+   - **Given** una revisión `new` del 10 al 13 con una habitación del 10 al 12
+   - **When** el sistema la procesa
+   - **Then** registra la reserva con las fechas de la reserva (10 al 13), la marca en conflicto con el
+     motivo `CHANGE_NOT_APPLICABLE` para que la Recepcionista la revise y confirma la revisión
 
 ---
 
@@ -159,6 +168,12 @@ pase a `CANCELLED` con una `Cancellation` del canal `OTA_API`.
    - **When** llega otra revisión `cancelled`
    - **Then** el sistema no hace nada más y confirma la revisión
 
+6. **Scenario**: No-show reportado a Booking
+   - **Given** una `Reservation` de Booking en `ACTIVE` con llegada ayer y sin ningún Check-In
+   - **When** el cierre del día la pasa a `NO_SHOW`
+   - **Then** el sistema deja pendiente el reporte del no-show y lo envía a Channex sin cobrar
+     penalidad; si Channex no responde, la reserva sigue en `NO_SHOW` y el reporte se reintenta
+
 ### Casos Borde
 
 - ¿Qué datos del titular llegan? Nombre, apellido, correo, teléfono y país. Booking **no envía el
@@ -191,7 +206,7 @@ pase a `CANCELLED` con una `Cancellation` del canal `OTA_API`.
   para la propiedad configurada y procesarlas de la más antigua a la más reciente.
 - **FR-002**: El sistema debe procesar cada revisión una sola vez (por su identificador) y confirmarla
   a Channex después de guardar el resultado. Si el guardado falla por un problema temporal, o si el
-  tipo de habitación no tiene relación, no debe confirmarla.
+  tipo de habitación no tiene relación o la habitación no está mapeada en Channex, no debe confirmarla.
 - **FR-003**: Ante una revisión `new`, el sistema debe registrar la `Reservation` en `ACTIVE` con
   `source` `OTA`, la agencia Booking.com, el código de Booking como `externalConfirmationCode`, el
   valor bruto (`grossAmount`, el campo `amount` de la revisión de Channex) y la moneda (`currency`) de
@@ -218,8 +233,8 @@ pase a `CANCELLED` con una `Cancellation` del canal `OTA_API`.
   con llegada hoy después de enviada la lista del día, y anotar cada cambio para el envío de
   disponibilidad de "Configurar OTA".
 - **FR-010**: Una falla de Channex no debe dejar reservas a medias: cada revisión se guarda en una sola
-  transacción, y las que fallan se procesan en la siguiente consulta, con espera creciente ante
-  respuestas `429` o fallas repetidas.
+  transacción, y las que fallan se procesan en la siguiente consulta, con una pausa de un minuto y espera
+  creciente ante respuestas `429` o fallas repetidas.
 - **FR-011**: Cuando una reserva de Booking pase a `NO_SHOW` en el cierre del día ("Actualizar
   reservación"), el sistema debe reportar el no-show a Booking por Channex, sin cobrar penalidad al
   huésped, para que Booking no cobre comisión por esa reserva. Un fallo de Channex no revierte el
@@ -249,10 +264,10 @@ pase a `CANCELLED` con una `Cancellation` del canal `OTA_API`.
   `contactPhone`, `nationality` (informativa) y `documentType` y `documentNumber` (vacíos en reservas
   de Booking).
 - **Ota**: La agencia Booking.com, con su `commissionPercentage` (ver "Configurar OTA").
-- **BookingRevision**: Revisión de reserva de Channex. Atributos usados: `id`, `status` (`new`,
+- **BookingRevision**: Revisión de reserva de Channex. Atributos usados: `id`, `booking_id`, `status` (`new`,
   `modified`, `cancelled`), `ota_reservation_code`, `arrival_date`, `departure_date`, `amount`,
   `currency`, `customer` (`name`, `surname`, `mail`, `phone`, `country`), `rooms` (`room_type_id`,
-  `occupancy`) y `notes`.
+  `occupancy`, `checkin_date`, `checkout_date`) y `notes`.
 
 ## Success Criteria *(mandatory)*
 
@@ -263,5 +278,5 @@ pase a `CANCELLED` con una `Cancellation` del canal `OTA_API`.
   su comisión exacta.
 - **SC-003**: Cero reservas de Booking se pierden por falta de disponibilidad: todas quedan registradas,
   en conflicto si no se pudieron ubicar.
-- **SC-004**: El 100% de las reservas de Booking con llegada hoy llegan al Módulo 1 en la lista del
-  día, y ninguna con llegada futura se avisa antes de su día.
+- **SC-004**: El 100% de las reservas de Booking con llegada hoy y todas sus habitaciones asignadas
+  llegan al Módulo 1 en la lista del día, y ninguna con llegada futura se avisa antes de su día.

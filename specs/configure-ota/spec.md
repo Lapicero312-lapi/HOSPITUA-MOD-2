@@ -1,7 +1,7 @@
 # Feature Specification: Configurar OTA
 
 **Created**: 2026-10-16
-**Updated**: 2026-10-17
+**Updated**: 2026-10-18
 
 ## Use Case (Caso de Uso)
 
@@ -9,7 +9,7 @@
 
 El hotel vende sus habitaciones también por agencias de viajes en línea (OTA). En este proyecto la
 única agencia es **Booking.com**, conectada a través de **Channex**, un intermediario que se usa en su
-entorno de pruebas (`staging.channex.io`) con un hotel de prueba de Booking. Para que Booking muestre
+entorno de pruebas (`staging.channex.io`) con el hotel de Booking `10485037`. Para que Booking muestre
 el hotel y le envíe reservas, Channex necesita los **tipos de habitación** del hotel, **cuántas
 habitaciones hay libres** de cada tipo por fecha y **a qué precio**. Y para que el Módulo 2 entienda
 las reservas que llegan, tiene que saber a qué categoría propia corresponde cada tipo de habitación de
@@ -37,11 +37,12 @@ precios** (eso es del Módulo 3).
    en `false`): la disponibilidad la recalcula y la envía el Módulo 2, para no descontarla dos veces.
    Channex descuenta solo una reserva nueva, y eso no se puede apagar.
 2. En la configuración del sistema se indican la dirección de Channex, la clave de acceso
-   (`user-api-key`), el identificador de la propiedad y el porcentaje de comisión de Booking.
+   (`user-api-key`), el identificador de la propiedad, el id del hotel de Booking (`10485037`) y el
+   porcentaje de comisión de Booking.
 3. Al iniciar, el sistema verifica que la propiedad exista en Channex y registra la agencia
    **Booking.com** (`Ota`) con su porcentaje de comisión, si aún no existe.
 
-**Tipos de habitación (al iniciar y cada día)**
+**Tipos de habitación (al iniciar, cada día y con cada aviso de inventario del Módulo 1)**
 
 4. El sistema pide al Módulo 1 las habitaciones vendibles de todas las categorías ("Consultar
    inventario de habitaciones").
@@ -52,20 +53,23 @@ precios** (eso es del Módulo 3).
    sistema **actualiza** el tipo. El sistema **no borra** tipos en Channex: si una categoría deja de
    tener habitaciones vendibles, lo registra para revisión.
 7. Cuando ya existen los tipos de habitación, el **Módulo 3** crea en Channex un plan de tarifa por
-   tipo y le envía los precios; después se conecta y se mapea el hotel de prueba de Booking (a mano,
+   tipo y le envía los precios; después se conecta y se mapea el hotel de Booking `10485037` (a mano,
    en Channex).
 
 **Disponibilidad (cada vez que cambia y cada día)**
 
 8. Cada vez que un cambio confirmado afecta la ocupación (una reserva creada, modificada o cancelada,
-   un No-Show, un Check-Out o una habitación que no llegó), el sistema anota las categorías y las
+   la asignación de habitación a una reserva en conflicto, un No-Show, un Check-Out, una habitación que
+   no llegó o un aviso de mantenimiento del Módulo 1), el sistema anota las categorías y las
    fechas afectadas.
-9. Cada 30 segundos, el sistema agrupa lo anotado y calcula, por categoría y fecha, cuántas
-   habitaciones quedan libres: las habitaciones vendibles de esa categoría (según el Módulo 1) menos
-   las que ocupan las reservas del Módulo 2 en esa fecha. Envía esas cantidades a Channex para el tipo
+9. Cada 30 segundos, después de leer las reservas de Channex ("Generar reservación por OTA"), el sistema
+   agrupa lo anotado y calcula, por categoría y fecha, cuántas habitaciones quedan libres: las
+   habitaciones vendibles de esa categoría (según el Módulo 1) menos las que ocupan las reservas del
+   Módulo 2 en esa fecha y menos las que están en mantenimiento (una habitación en los dos casos cuenta
+   una vez). Envía esas cantidades a Channex para el tipo
    de habitación relacionado.
-10. Cada día a las 03:00 (hora de Colombia), el sistema sincroniza los tipos de habitación (pasos 4 a 6)
-    y reenvía la disponibilidad completa de los próximos 90 días, para corregir cualquier diferencia.
+10. Cada día a las 03:00 (hora de Colombia), el sistema primero lee las reservas de Channex, luego
+    sincroniza los tipos de habitación (pasos 4 a 6) y reenvía la disponibilidad completa de los próximos 90 días, para corregir cualquier diferencia.
 
 **Fallos**
 
@@ -122,7 +126,7 @@ Channex: uno por categoría, con su cantidad de habitaciones y su capacidad, y l
 **Independent Test**: Con un Módulo 1 simulado que informa 3 habitaciones `DOBLE` de capacidad 2 y 1
 `SUITE` de capacidad 4, se arranca el sistema y se verifica que Channex reciba dos tipos de habitación
 con esas cantidades y capacidades, y que el Módulo 2 guarde su relación con las categorías. Se agrega
-una habitación `DOBLE` en el Módulo 1 y se verifica que la sincronización diaria actualice el tipo a 4.
+una habitación `DOBLE` en el Módulo 1 y se verifica que el aviso de inventario (o la sincronización diaria) actualice el tipo a 4.
 
 **Acceptance Scenarios**:
 
@@ -140,7 +144,7 @@ una habitación `DOBLE` en el Módulo 1 y se verifica que la sincronización dia
 3. **Scenario**: Categoría sin habitaciones vendibles
    - **Given** una categoría con su tipo en Channex
    - **When** el Módulo 1 ya no informa habitaciones vendibles de esa categoría
-   - **Then** el sistema no borra el tipo en Channex, envía disponibilidad `0` para esa categoría y lo
+   - **Then** el sistema no borra el tipo en Channex ni cambia su cantidad, envía disponibilidad `0` para esa categoría y lo
      registra para revisión
 
 4. **Scenario**: El Módulo 1 o Channex no responden (Error)
@@ -223,8 +227,8 @@ cancela la reserva y se verifica que reciba `3`.
 ### Functional Requirements
 
 - **FR-001**: El sistema debe tomar de la configuración (variables de entorno) la dirección de
-  Channex, la clave de acceso, el identificador de la propiedad y el porcentaje de comisión de Booking.
-  La clave de acceso nunca se guarda en la base de datos ni se escribe en los logs. Al iniciar debe
+  Channex, la clave de acceso, el identificador de la propiedad, el id del hotel de Booking y el porcentaje de
+  comisión de Booking. La clave de acceso nunca se guarda en la base de datos ni se escribe en los logs. Al iniciar debe
   verificar en Channex que la propiedad configurada existe; si no existe, no envía nada a Channex ni lee
   reservas, sin afectar el resto del Módulo 2.
 - **FR-002**: El sistema debe registrar al iniciar la `Ota` "Booking.com" con el porcentaje
@@ -270,8 +274,8 @@ cancela la reserva y se verifica que reciba `3`.
 
 ### Key Entities *(include if feature involves data)*
 
-- **Ota**: La agencia Booking.com. Atributos: `id`, `name`, `hotelAccountId` (el id del hotel de prueba
-  de Booking), `commissionPercentage`, `connectionStatus` y `linkedAt`.
+- **Ota**: La agencia Booking.com. Atributos: `id`, `name`, `hotelAccountId` (`10485037`, el id del hotel
+  en Booking), `commissionPercentage`, `connectionStatus` y `linkedAt`.
 - **OtaRoomTypeMapping**: Relación entre un tipo de habitación de Channex y una categoría del Módulo 2.
   Atributos: `channexRoomTypeId`, `categoryRoom`, `countOfRooms` y `occupancy` (los últimos valores
   enviados a Channex, para saber si hay que actualizarlos).

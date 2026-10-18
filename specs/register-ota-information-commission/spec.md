@@ -1,7 +1,7 @@
 # Feature Specification: Registrar Confirmación y Comisión de OTA
 
 **Created**: 2026-09-08
-**Updated**: 2026-09-29
+**Updated**: 2026-10-18
 
 ## Use Case (Caso de Uso)
 
@@ -27,8 +27,8 @@ fórmula contractual y deje el importe neto listo para la conciliación mensual 
    con el `externalConfirmationCode`, y marca el `commissionStatus` como `CALCULATED`.
 5. Durante el ciclo de vida de la reserva, el Módulo 3 (finanzas) concilia la comisión contra el
    cierre contable mensual, y el sistema cambia el `commissionStatus` a `RECONCILED` o `PAID`
-   según lo que el Módulo 3 le indica. Si la OTA cancela la reserva, el sistema solo registra la
-   reserva como `CANCELLED`: no toca la comisión, porque la agencia ya sabe que no la cobrará.
+   según lo que el Módulo 3 le indica. Si la OTA cancela la reserva o el huésped no llega (`NO_SHOW`),
+   el sistema solo cambia su `status`: no toca la comisión ni la concilia, porque Booking no la cobrará.
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -47,8 +47,8 @@ pactada ni el ingreso neto real de cada una.
 **Independent Test**: Se prueba invocando el caso de uso con un `grossAmount` de \$400 y un
 `commissionPercentage` del 15% configurado para la agencia. Se verifica que el sistema calcule un
 `commissionAmount` de \$60, lo persista junto al `externalConfirmationCode`, y marque el
-`commissionStatus` como `CALCULATED`. Se completa enviando un `commissionPercentage` inválido,
-confirmando el rechazo con **HTTP 400**.
+`commissionStatus` como `CALCULATED`. Se completa arrancando con un `commissionPercentage` fuera
+de 0 a 100 en la configuración y verificando que no se lean reservas de Booking.
 
 **Acceptance Scenarios**:
 
@@ -74,8 +74,8 @@ confirmando el rechazo con **HTTP 400**.
 El Módulo 3 (finanzas) revisa las comisiones de un periodo mensual, comparando las reservas con
 `commissionStatus` `CALCULATED` contra las que completaron su estadía (`COMPLETED`). El Módulo 2
 pone a su disposición esos datos y marca las comisiones como `RECONCILED` o `PAID` cuando el Módulo 3
-se lo indica. La Recepcionista no concilia comisiones. Las reservas canceladas por la OTA no cambian
-su comisión: quedan como `CANCELLED` sin ningún ajuste financiero.
+se lo indica. La Recepcionista no concilia comisiones. Las reservas canceladas por la OTA o en `NO_SHOW`
+no cambian su comisión ni se concilian.
 
 **Why this priority**: Es un flujo de auditoría contable importante para la liquidación mensual con
 los proveedores de distribución, pero no interviene en la ingesta síncrona diaria de reservas.
@@ -98,6 +98,12 @@ en `COMPLETED`. El Módulo 3 ejecuta la conciliación y se comprueba que las com
    - **When** el sistema registra la cancelación o procesa la conciliación de comisiones
    - **Then** el sistema no modifica el `commissionAmount` ni el `commissionStatus`: la agencia ya
      sabe que no cobrará comisión por esa reserva porque ella misma la canceló
+
+3. **Scenario**: Reserva en `NO_SHOW`
+   - **Given** una reserva de Booking en `NO_SHOW`, cuyo no-show se reportó a Booking por Channex
+   - **When** el Módulo 3 intenta conciliar su comisión
+   - **Then** el sistema la rechaza (`RESERVATION_NO_SHOW`) y no modifica el `commissionAmount` ni el
+     `commissionStatus`
 
 ---
 
@@ -188,7 +194,7 @@ se confirma que el cambio no afecta las reservas ya registradas.
   no cobra comisión por una cancelación, y el no-show se le reporta por Channex sin cobrar penalidad al
   huésped ("Generar reservación por OTA"), así que tampoco la cobra. Esas comisiones no se concilian.
 - **FR-008**: El sistema debe registrar la `Ota` "Booking.com" por configuración, con su `name`,
-  su `hotelAccountId` (el id del hotel de Booking en Channex) y su `commissionPercentage`, sin
+  su `hotelAccountId` (el id del hotel en Booking, `10485037`) y su `commissionPercentage`, sin
   duplicarla. La Recepcionista no crea ni edita agencias; solo las consulta.
 - **FR-008a**: El sistema debe cambiar el `connectionStatus` a `DISCONNECTED` cuando Channex rechace la
   lectura del feed por la clave de acceso o los permisos, y de nuevo a `CONNECTED` cuando una lectura
@@ -236,7 +242,7 @@ se confirma que el cambio no afecta las reservas ya registradas.
   calculadas con un porcentaje fuera de 0 a 100.
 - **SC-003**: Cero errores de servidor **HTTP 500** son provocados por fallos en el cálculo o
   conciliación de comisiones OTA; el 100% se responde con **HTTP 400**.
-- **SC-004**: El 100% de las reservas OTA canceladas por la agencia conservan su `commissionAmount` y
+- **SC-004**: El 100% de las reservas OTA canceladas por la agencia o en `NO_SHOW` conservan su `commissionAmount` y
   su `commissionStatus` sin cambios.
 - **SC-005**: El tiempo de respuesta para el registro y cálculo de comisión de una reserva OTA es
   inferior a 1 segundo.
