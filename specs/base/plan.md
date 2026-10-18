@@ -170,10 +170,11 @@ están en "Modelo de datos base".
 | `connectionStatus` | `CONNECTED` o `DISCONNECTED` | |
 | `linkedAt`, `lastSyncAt` | fecha y hora | `lastSyncAt`: última lectura del feed de Channex que terminó bien |
 
-**OtaRoomTypeMapping** (relación de tipos de habitación, `configure-ota`): `otaId`, `channexRoomTypeId`,
+**OtaRoomTypeMapping** (relación de tipos de habitación, `configure-ota`): `channexRoomTypeId`,
 `categoryRoom`, `countOfRooms` y `occupancy` (los últimos enviados a Channex). Un tipo de habitación de
 Channex por categoría, y viceversa; el Módulo 2 lo crea a partir de las habitaciones vendibles del
-Módulo 1.
+Módulo 1. Es de la propiedad, no de la agencia: una agencia nueva conectada por Channex usaría los
+mismos tipos.
 
 **OtaBookingRevision** (revisión de Channex ya procesada, `generate-ota-reservation`): `revisionId`,
 `otaId`, `bookingId`, `status` (`new`, `modified`, `cancelled`), la reserva afectada, el resultado y
@@ -638,6 +639,11 @@ erDiagram
         timestamptz created_at
         timestamptz published_at "nulo"
     }
+    daily_sequence {
+        date operational_date PK
+        integer last_sequence
+        boolean list_generated
+    }
     processed_message {
         uuid message_id PK
         varchar queue
@@ -646,10 +652,9 @@ erDiagram
     }
     ota_room_type_mapping {
         uuid id PK
-        uuid ota_id FK
         uuid channex_room_type_id UK
-        varchar category_room "UK con ota_id"
-        integer count_of_rooms "ultimo enviado"
+        varchar category_room UK
+        integer count_of_rooms "ultimo enviado; minimo 1"
         smallint occupancy "ultima enviada"
     }
     ota_booking_revision {
@@ -693,7 +698,6 @@ erDiagram
     reservation ||--o{ commission_audit : "reservation_id"
     ota ||--o{ commission_audit : "ota_id"
     reservation |o--o{ daily_list_message : "reservation_id"
-    ota ||--o{ ota_room_type_mapping : "ota_id"
     ota ||--o{ ota_booking_revision : "ota_id"
     reservation |o--o{ ota_booking_revision : "reservation_id"
     reservation ||--o| ota_no_show_report : "reservation_id"
@@ -701,13 +705,15 @@ erDiagram
 ```
 
 **Normalización.** El modelo está en tercera forma normal: cada dato se guarda en una sola tabla y las
-tablas se unen por sus claves. Hay tres excepciones a propósito:
+tablas se unen por sus claves. Hay cuatro excepciones a propósito:
 
 - `reservation_room.start_date`, `end_date` y `blocks_inventory` copian datos de la reserva para que
   la base de datos impida el solape (D3).
 - `reservation_room.room_number` y `category_room` copian datos del Módulo 1, que no está en esta base.
 - `commission_audit` guarda los importes de cada acción, porque es un historial y no debe cambiar si
   la reserva cambia después.
+- `ota_no_show_report.booking_id` copia el de `ota_booking_revision`, para que el envío a Channex no
+  tenga que unir tablas.
 
 **`guest`** — titular de una reserva (cada reserva tiene el suyo)
 
@@ -733,11 +739,11 @@ tablas se unen por sus claves. Hay tres excepciones a propósito:
 |---|---|---|---|
 | `id` | `uuid` | no | PK |
 | `name` | `varchar(100)` | no | Único; `Booking.com` |
-| `hotel_account_id` | `varchar(100)` | no | Único; id del hotel de Booking en Channex |
+| `hotel_account_id` | `varchar(100)` | no | Único; id del hotel en Booking (`10485037`) |
 | `commission_percentage` | `numeric(5,2)` | no | De 0 a 100 |
 | `connection_status` | `varchar(12)` | no | `CONNECTED`, `DISCONNECTED` |
 | `linked_at` | `timestamptz` | no | Fecha de la primera vinculación; no cambia al volver a vincular |
-| `last_sync_at` | `timestamptz` | no | Se actualiza con cada lectura del feed de Channex que termina bien |
+| `last_sync_at` | `timestamptz` | no | Al registrar la agencia, igual a `linked_at`; después se actualiza con cada lectura del feed de Channex que termina bien |
 | `created_at`, `updated_at` | `timestamptz` | no | |
 
 **`reservation`** — raíz del agregado
@@ -798,6 +804,8 @@ tablas se unen por sus claves. Hay tres excepciones a propósito:
   (una habitación sin asignar no ocupa inventario y no entra en la restricción anti-solape).
 - **Anti-solape (D3):** `EXCLUDE USING gist (room_id WITH =, daterange(start_date, end_date, '[)') WITH &&) WHERE (blocks_inventory)`.
 - Índice `(room_id)`.
+- Índice parcial `(category_room, start_date, end_date) WHERE blocks_inventory`, para las habitaciones
+  ocupadas por categoría y noche que consulta `configure-ota` cada 30 segundos.
 
 **`cancellation`** — registro inmutable de la anulación
 
@@ -928,13 +936,13 @@ Se inserta en la misma transacción que el cambio que produce el mensaje.
 | Columna | Tipo | Nulo | Regla |
 |---|---|---|---|
 | `id` | `uuid` | no | PK |
-| `ota_id` | `uuid` | no | FK → `ota` |
 | `channex_room_type_id` | `uuid` | no | Único; tipo de habitación en Channex |
-| `category_room` | `varchar(50)` | no | Categoría del Módulo 2; único `(ota_id, category_room)` |
-| `count_of_rooms` | `integer` | no | Habitaciones vendibles enviadas a Channex la última vez |
+| `category_room` | `varchar(50)` | no | Único; categoría del Módulo 2 |
+| `count_of_rooms` | `integer` | no | `CHECK (count_of_rooms >= 1)` (Channex no acepta 0); habitaciones vendibles enviadas a Channex la última vez |
 | `occupancy` | `smallint` | no | Capacidad máxima enviada a Channex la última vez |
 
-La llena `SyncRoomTypes` (`configure-ota`) al crear o actualizar los tipos en Channex.
+La llena `SyncRoomTypes` (`configure-ota`) al crear o actualizar los tipos en Channex. No tiene `ota_id`:
+los tipos son de la propiedad, igual que `ari_pending_change`.
 
 **`ota_booking_revision`** — revisiones de Channex ya procesadas (`generate-ota-reservation`)
 
