@@ -1,7 +1,7 @@
 # Feature Specification: Exportar Archivo SIRE
 
 **Created**: 2026-09-19
-**Updated**: 2026-09-29
+**Updated**: 2026-10-18
 
 ## Use Case (Caso de Uso)
 
@@ -129,6 +129,9 @@ controlado.
   nunca hubo Check-In, así que no aparecen en el archivo.
 - ¿Qué sucede si el mismo huésped ingresó y salió dentro del periodo? Aparece con dos líneas, una de
   entrada y una de salida, con sus fechas respectivas.
+- ¿Qué sucede con un huésped con varias estadías en el periodo? Aparece con las líneas de cada una,
+  porque cada movimiento es real.
+- ¿Las `SireExport` se borran? No: son un registro auditable, sin borrado automático.
 
 ## Requirements *(mandatory)*
 
@@ -138,10 +141,9 @@ controlado.
   generar y descargar el archivo. El sistema no debe enviar el archivo a Migración.
 - **FR-002**: El sistema debe filtrar por un periodo obligatorio (`startDate` y `endDate`, máximo un
   año), aplicado a la `movementDate` de cada movimiento migratorio.
-- **FR-003**: El sistema debe seleccionar e incluir los movimientos `ENTRY` y `DEPARTURE` de todos los
-  huéspedes extranjeros (nacionalidad distinta de Colombia) de las reservas del periodo, sin incluir a
-  los colombianos, no solo del titular, sin depender del estado actual de la
-  reserva.
+- **FR-003**: El sistema debe incluir los movimientos `ENTRY` y `DEPARTURE` de todos los huéspedes
+  extranjeros (nacionalidad distinta de Colombia) de las reservas del periodo, no solo del titular, sin
+  incluir a los colombianos y sin depender del estado actual de la reserva.
 - **FR-004**: El sistema debe obtener los `MigratoryMovement` mediante "Procesar datos de huéspedes".
   Todos están completos: el Módulo 1 los envía ya procesados.
 - **FR-005**: El sistema debe generar el archivo plano `.TXT` de cargue de hospedaje de SIRE, con
@@ -163,7 +165,8 @@ controlado.
 - **FR-006**: El sistema no debe llevar cuenta de los movimientos ya descargados: cualquier
   periodo o movimiento se puede descargar las veces que haga falta, sin restricciones.
 - **FR-007**: El sistema debe registrar cada exportación en `SireExport` con la fecha, el periodo, la
-  cantidad de movimientos incluidos y la Recepcionista que la ejecutó. No marca los movimientos.
+  cantidad de movimientos incluidos y la Recepcionista que la ejecutó (la que indica la cabecera
+  `X-User`). No marca los movimientos.
 - **FR-008**: El sistema debe entregar la respuesta 200 con únicamente el archivo `.TXT` y el
   `exportId` en la cabecera `Export-Id`, sin mezclar advertencias en esa respuesta.
 - **FR-009**: El sistema debe interceptar los errores de validación de entrada (periodo inválido,

@@ -1,7 +1,7 @@
 # Feature Specification: Procesar Datos de Huéspedes
 
 **Created**: 2026-09-23
-**Updated**: 2026-10-08
+**Updated**: 2026-10-18
 
 ## Use Case (Caso de Uso)
 
@@ -59,7 +59,7 @@ movimiento), los guarda y, al exportar, selecciona los extranjeros y los empaque
    o `Estados Unidos`, y así se guarda y se exporta al SIRE.
    Esta marca se deduce de la nacionalidad y no se guarda aparte.
 5. Solo un payload inutilizable (sin identificador de reserva o con caracteres maliciosos) se rechaza
-   con **HTTP 400 (Bad Request)** sin registrar nada.
+   sin registrar nada: el mensaje va a la cola de mensajes fallidos (por cola no hay respuesta HTTP).
 6. Cuando "Exportar archivo SIRE" (ejecutado por la Recepcionista) necesita los datos, invoca este caso de
    uso para obtener los movimientos del periodo. El caso de uso **selecciona únicamente los de
    huéspedes extranjeros** y deja fuera a los colombianos.
@@ -230,6 +230,8 @@ vista no permite modificar nada.
   todos; la Recepcionista ve en la pantalla la cantidad de huéspedes que informó el Módulo 1.
 - ¿Qué sucede si el mismo huésped viene repetido en la misma notificación? Se procesa una sola vez,
   por su `documentNumber`.
+- ¿Qué sucede si, aun así, llega un huésped al que le falta un dato obligatorio? Se omite solo a ese
+  huésped, se registra en el log sin datos personales y se procesa a los demás.
 - ¿Qué sucede si los datos contienen caracteres no soportados o patrones maliciosos? El sistema sanea
   la entrada, la rechaza con **HTTP 400** y el mensaje "Caracteres no válidos en los datos de los
   huéspedes."
@@ -267,13 +269,11 @@ vista no permite modificar nada.
 - **FR-004**: El sistema debe dar por hecho que los datos de cada huésped llegan completos y correctos,
   porque el Módulo 1 los valida antes de enviarlos. El lugar de procedencia y el de destino solo son
   obligatorios para los extranjeros; para los colombianos pueden venir vacíos. No debe validarlos, completarlos ni corregirlos, y
-  no debe devolverlos al Módulo 1.
+  no debe devolverlos al Módulo 1. Si aun así llega un huésped al que le falta un dato obligatorio, el
+  sistema lo omite, lo registra en el log sin datos personales y procesa a los demás.
 - **FR-005**: El sistema debe registrar un `MigratoryMovement` por cada combinación de reserva,
   huésped (`documentNumber`) y `movementType`, sin sobrescribir los de otras estadías ni los del otro
   tipo de movimiento del mismo huésped. Un movimiento repetido no se duplica.
-- **FR-017**: El sistema debe guardar los datos personales de cada huésped una sola vez por reserva y
-  `documentNumber` (`GuestData`), sin copiarlos en cada movimiento. En el Check-Out debe identificar al
-  huésped por su `documentNumber` y agregarle el `DEPARTURE`, sin modificar sus datos.
 - **FR-006**: El sistema debe conservar el Check-In o el Check-Out y responder 200 al registrar los
   movimientos de la notificación.
 - **FR-007**: El sistema debe procesar cada huésped de la lista de forma independiente.
@@ -284,8 +284,9 @@ vista no permite modificar nada.
   Módulo 2: la captura y el procesamiento presencial son responsabilidad del Módulo 1. La vista de
   huéspedes alojados (FR-011 a FR-016) es solo de consulta.
 - **FR-010**: El sistema debe interceptar los errores estructurales o de seguridad del payload (sin
-  identificador de reserva, formato de payload inválido, caracteres maliciosos) y responder con
-  **HTTP 400 (Bad Request)**, prohibiendo que escalen a **HTTP 500**.
+  identificador de reserva, formato de payload inválido, caracteres maliciosos) y rechazarlos sin
+  registrar nada (el mensaje va a la cola de mensajes fallidos; por cola no hay respuesta HTTP),
+  prohibiendo que escalen a **HTTP 500**.
 - **FR-011**: El sistema debe ofrecer a la Recepcionista una vista de huéspedes alojados con una fila
   por huésped y reserva (`GuestStay`), armada a partir de sus `MigratoryMovement`: nombre y apellido,
   tipo y número de documento, nacionalidad con la marca de extranjero (nacionalidad distinta de
@@ -304,6 +305,9 @@ vista no permite modificar nada.
 - **FR-015**: La vista debe ser de solo lectura y es de la Recepcionista. Con filtros inválidos debe responder **HTTP 400** con el mensaje correspondiente.
 - **FR-016**: La vista no debe mostrar a los huéspedes de reservas sin Check-In (`CANCELLED`, `NO_SHOW`,
   `PENDING` o `ACTIVE` sin ingreso), porque no tienen movimientos.
+- **FR-017**: El sistema debe guardar los datos personales de cada huésped una sola vez por reserva y
+  `documentNumber` (`GuestData`), sin copiarlos en cada movimiento. En el Check-Out debe identificar al
+  huésped por su `documentNumber` y agregarle el `DEPARTURE`, sin modificar sus datos.
 
 ### Non-Functional Requirements
 
