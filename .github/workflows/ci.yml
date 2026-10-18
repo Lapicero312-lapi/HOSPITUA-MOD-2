@@ -1,0 +1,70 @@
+# Integración continua: corre en cada PR hacia develop o main, y en cada push a esas ramas.
+# Si un paso falla, la PR queda en rojo y (con la protección de ramas) no se puede integrar.
+name: CI
+
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, main]
+
+# Si llega un commit nuevo a la misma rama, cancela la ejecución anterior.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      # corepack (viene con Node 22) instala la versión exacta de pnpm del campo "packageManager".
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+
+      - name: Lint (oxlint) y reglas de capas (dependency-cruiser)
+        run: pnpm --filter backend lint
+      - name: Tipos (TypeScript strict)
+        run: pnpm --filter backend typecheck
+      - name: Formato (Prettier)
+        run: pnpm --filter backend format:check
+      - name: Pruebas unitarias
+        run: pnpm --filter backend test
+      - name: Pruebas e2e
+        run: pnpm --filter backend test:e2e
+      - name: Compilación
+        run: pnpm --filter backend build
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+
+      - name: Lint (oxlint)
+        run: pnpm --filter frontend lint
+      - name: Tipos (TypeScript strict)
+        run: pnpm --filter frontend typecheck
+      - name: Formato (Prettier)
+        run: pnpm --filter frontend format:check
+      - name: Pruebas
+        run: pnpm --filter frontend test
+      - name: Compilación
+        run: pnpm --filter frontend build
