@@ -32,7 +32,8 @@ o modificar cualquier reserva.
 **Pantalla de referencia "Habitaciones" (solo lectura, fuera de "Verificar disponibilidades"):**
 además de ser insumo interno de "Verificar disponibilidades", el Módulo 2 ofrece a la Recepcionista
 una pantalla de solo lectura que lista **todas** las `Room` de **todas** las categorías con su
-`categoryRoom` y su capacidad máxima (`maxCapacity`) (reutilizando FR-002, una vez por categoría) y,
+`categoryRoom` y su capacidad máxima (`maxCapacity`) (con una sola consulta al Módulo 1 de todas las
+habitaciones vendibles) y,
 por cada una, si tiene un mantenimiento próximo, lo indica (dato que proviene de "Consultar
 calendario de mantenimientos"). La pantalla no muestra el estado de la habitación. Esta pantalla no
 modifica ningún dato ni sustituye la consulta síncrona que hace "Verificar disponibilidades" al

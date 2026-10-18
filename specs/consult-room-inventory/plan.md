@@ -70,11 +70,19 @@ la ruta exacta; este plan propone las siguientes y se confirman con ese equipo.
 ]
 ```
 
+**A3. Todas las habitaciones vendibles**: `GET {MODULE1_BASE_URL}/api/rooms` (sin filtro; ruta propuesta).
+Misma forma que A2, con las habitaciones de todas las categorías. La usan la pantalla "Habitaciones"
+y la sincronización de tipos de habitación con Channex (`configure-ota`). Una sola llamada: el Módulo 2
+no necesita conocer de antemano la lista de categorías.
+
 **Reglas del contrato** (acordadas):
 
 - Por cada habitación: `id`, `roomNumber`, `categoryRoom` y `maxCapacity`. **Sin estado**: todas son
   vendibles.
 - Una categoría sin habitaciones devuelve una lista vacía.
+- **Forma de `categoryRoom`**: mayúsculas, sin tildes ni `Ñ`, con letras, dígitos y `_`, de 1 a 50
+  caracteres (`^[A-Z0-9_]{1,50}; por ejemplo `DOBLE` o `SUITE_JUNIOR`). Es la clave que comparten el
+  Módulo 1, el Módulo 2, el Módulo 3 (`roomType`) y Channex (el `title` del tipo de habitación).
 - Errores del Módulo 1 (los mismos de la consulta de mantenimientos): **404** si la habitación no existe;
   **400** si el `roomId` o la `categoryRoom` tienen formato inválido. Nunca 500.
 - Sin autenticación de servicio a servicio: la seguridad es una capa aparte (regla transversal 10 del plan
@@ -92,7 +100,7 @@ interface Room { id: string; roomNumber: string; categoryRoom: string; maxCapaci
 interface ConsultRoomInventory {
   byRoomId(roomId: string): Promise<Room>;               // B1
   byCategory(categoryRoom: string): Promise<Room[]>;     // B2: [] si la categoría no tiene habitaciones
-  listAll(): Promise<Room[]>;                            // B3: todas las categorías (pantalla)
+  listAll(): Promise<Room[]>;                            // B3: todas las vendibles (A3; pantalla y Channex)
 }
 ```
 
@@ -212,9 +220,9 @@ sequenceDiagram
 
     R->>C: GET /api/rooms
     C->>U: execute()
-    U->>I: listAll() (una consulta por categoría, en paralelo)
-    I->>M1: GET /api/rooms?categoryRoom=... por cada categoría
-    alt falla de una categoría
+    U->>I: listAll()
+    I->>M1: GET /api/rooms (A3)
+    alt falla del Módulo 1
         I-->>U: BusinessError INVENTORY_UNAVAILABLE
         U-->>R: 400 (no se muestra una lista incompleta)
     end
@@ -254,7 +262,7 @@ Todo error sale con `{ "errorCode", "message", "timestamp", "path" }` y **siempr
 |---|---|---|---|---|
 | `roomId` vacío o con formato inválido (no es un UUID) | M2, antes de llamar al Módulo 1 | 400 | `INVALID_ROOM_ID` | "El identificador de la habitación es inválido." |
 | El Módulo 1 responde 404 (la habitación no existe) | Módulo 1 | 400 | `INVALID_ROOM_ID` | "El identificador de la habitación es inválido." |
-| `categoryRoom` vacía o con caracteres no permitidos | M2, antes de llamar | 400 | `INVALID_CATEGORY` | "La categoría indicada no es válida." |
+| `categoryRoom` vacía o que no cumple `^[A-Z0-9_]{1,50}$` | M2, antes de llamar | 400 | `INVALID_CATEGORY` | "La categoría indicada no es válida." |
 | El Módulo 1 responde 400 | Módulo 1 | 400 | `INVALID_ROOM_ID` o `INVALID_CATEGORY` (según la consulta) | Los de arriba |
 | Tiempo agotado, error de red o respuesta 5xx del Módulo 1 | Módulo 1 | 400 | `INVENTORY_UNAVAILABLE` | "No se pudo consultar el inventario de habitaciones en este momento. Intente de nuevo." |
 | Respuesta del Módulo 1 con campos faltantes o de tipo incorrecto (por ejemplo, `maxCapacity` no entero o menor que 1) | Módulo 1 | 400 | `INVENTORY_UNAVAILABLE` | El mismo; el detalle va al log |
@@ -334,7 +342,7 @@ fallos del Módulo 1.
 
 ## Phase 4: Pantalla "Habitaciones" (FR-006)
 
-- [ ] T010 `ConsultRoomInventory.listAll` (una consulta por categoría, en paralelo) y el origen de la lista de categorías (ver "Puntos abiertos")
+- [ ] T010 `ConsultRoomInventory.listAll` con una sola llamada a A3
 - [ ] T011 `ListRoomsWithMaintenance`: mantenimiento próximo por habitación con `ConsultMaintenanceCalendar`, tope de concurrencia y estado `UNAVAILABLE` por habitación
 - [ ] T012 `GET /api/rooms` (C1) con el orden por categoría y número
 - [ ] T013 [P] Pruebas de integración de C1: éxito, categoría con falla, calendario con falla y sin habitaciones
@@ -402,10 +410,8 @@ fallos del Módulo 1.
 
 | # | Pendiente | Con quién |
 |---|---|---|
-| 1 | **Origen de la lista de categorías** para la pantalla (FR-006 dice "una vez por categoría" pero no de dónde sale esa lista). Opciones: un endpoint del Módulo 1 que las liste, o una lista configurada en el Módulo 2 | Módulo 1 |
-| 2 | Forma canónica de `categoryRoom` (por ejemplo `DOBLE`, en mayúsculas y sin tildes) y su patrón de validación | Módulo 1 |
-| 3 | Rutas definitivas del inventario | Módulo 1 |
-| 4 | Costo de la pantalla: una consulta por categoría más una de mantenimientos por habitación. Si el hotel crece, conviene que el Módulo 1 acepte consultar mantenimientos por categoría (B6 de las decisiones anteriores) | Módulo 1 |
+| 1 | Rutas definitivas del inventario; pedirle al Módulo 1 A3 (`GET /api/rooms` sin filtro) y que envíe `categoryRoom` con la forma acordada | Módulo 1 |
+| 2 | Costo de la pantalla: una consulta por categoría más una de mantenimientos por habitación. Si el hotel crece, conviene que el Módulo 1 acepte consultar mantenimientos por categoría (B6 de las decisiones anteriores) | Módulo 1 |
 
 ## Notes
 

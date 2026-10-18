@@ -187,15 +187,28 @@ cancela la reserva y se verifica que reciba `3`.
    - **Then** el sistema conserva el envío pendiente y lo reintenta más tarde; las reservas no se
      afectan
 
+5. **Scenario**: Un mantenimiento baja la disponibilidad solo en sus fechas
+   - **Given** una categoría con 3 habitaciones vendibles y ninguna reserva del 10 al 20
+   - **When** el Módulo 1 avisa un mantenimiento de una habitación de esa categoría del 14 al 15
+   - **Then** el sistema envía a Channex disponibilidad `2` para el 14 y el 15, y deja `3` en las demás
+     fechas
+
+6. **Scenario**: Una habitación con reserva y con mantenimiento la misma noche
+   - **Given** una habitación con una reserva y con un mantenimiento la noche del 14
+   - **When** el sistema calcula la disponibilidad del 14
+   - **Then** la descuenta una sola vez
+
 ### Casos Borde
 
 - ¿Quién crea los planes de tarifa y envía los precios? El **Módulo 3**, directamente a Channex, con su
   propia clave de acceso. El Módulo 2 no cotiza para Channex ni convierte monedas. El Módulo 3 encuentra
   los tipos de habitación en Channex por su nombre, que es el de la categoría.
-- ¿Qué pasa con los mantenimientos? El Módulo 2 no se entera de cuándo el Módulo 1 registra un
-  mantenimiento, así que la disponibilidad enviada **no los descuenta**. Es una limitación conocida: si
-  Booking vende una habitación en mantenimiento, la reserva llega y se trata como un conflicto en
+- ¿Qué pasa con los mantenimientos? El Módulo 1 avisa por cola cada mantenimiento que registra, cambia o
+  cancela, y el Módulo 2 descuenta esa habitación **solo en las fechas del mantenimiento**. Si el aviso
+  llega tarde y Booking alcanza a vender esa habitación, la reserva llega y se trata como un conflicto en
   "Generar reservación por OTA".
+- ¿Qué pasa si el Módulo 1 agrega, da de baja o cambia una habitación? Lo avisa por cola; el sistema
+  sincroniza el tipo de habitación de esa categoría y reenvía su disponibilidad, sin esperar a las 03:00.
 - ¿Qué capacidad se usa si las habitaciones de una categoría tienen capacidades distintas? La mayor de
   la categoría. Si una reserva de Booking supera la capacidad de la habitación asignada, se trata como
   un conflicto en "Generar reservación por OTA".
@@ -227,16 +240,24 @@ cancela la reserva y se verifica que reciba `3`.
   categorías y las fechas afectadas, sin esperar a Channex ni depender de él para confirmar el cambio.
 - **FR-006**: El sistema debe calcular la disponibilidad de cada categoría y fecha como las
   habitaciones vendibles de esa categoría (Módulo 1) menos las habitaciones de esa categoría que ocupan
-  las reservas del Módulo 2 en esa fecha (las mismas que bloquean en "Verificar disponibilidades"). Si el
-  resultado es negativo, envía `0`.
+  las reservas del Módulo 2 en esa fecha (las mismas que bloquean en "Verificar disponibilidades") y menos
+  las que están en mantenimiento esa fecha; una habitación que está en los dos casos cuenta una sola vez.
+  Si el resultado es negativo, envía `0`.
 - **FR-007**: El sistema debe agrupar los envíos de disponibilidad cada 30 segundos, sin superar el
   límite de Channex (10 solicitudes por minuto por propiedad), y reintentar con espera creciente ante un
   `429` o una falla. Todos los días a las 03:00 debe reenviar la disponibilidad completa de los próximos
   90 días.
 - **FR-008**: El sistema no debe enviar fechas pasadas ni categorías sin tipo de habitación en Channex.
+  Channex admite como máximo 20 tipos de habitación por propiedad de hotel: una categoría que superaría
+  ese tope no se crea y se registra el error.
   No debe enviar precios ni crear planes de tarifa: eso es del Módulo 3.
 - **FR-009**: Un fallo de Channex o del Módulo 1 en estos procesos no debe bloquear ni revertir ninguna
   reserva: lo pendiente se conserva y se reintenta.
+- **FR-010**: El sistema debe recibir del Módulo 1, por cola, los avisos de mantenimiento (registrado,
+  cambiado o cancelado) y de inventario (habitación agregada, dada de baja o cambiada). Ante un
+  mantenimiento debe anotar la categoría y las fechas afectadas (FR-005); ante un cambio de inventario
+  debe sincronizar el tipo de habitación de la categoría (FR-004) y anotar sus 90 días. Los avisos
+  repetidos se ignoran.
 
 ### Non-Functional Requirements
 

@@ -835,8 +835,8 @@ publica por cola y responde consultas. No necesita `Module1Port` ni `Module3Port
 `ReservationLookup` (`findByRef`, `findByCode`, `findForUpdate`), que devuelve la reserva completa con
 `updatedAt` y comisión, y `findBlockingRooms(roomIds, startDate, endDate, excludeReservationRef?)`, que
 usa `check-room-availability` para saber qué habitaciones ya ocupan inventario (su contrato está en el
-plan de ese caso de uso). También expone `countBlockingByCategory(categoryRoom, dateFrom, dateTo)`, que
-devuelve, por cada noche del rango, cuántas habitaciones de la categoría bloquean inventario; lo usa
+plan de ese caso de uso). También expone `blockingRoomsByCategory(categoryRoom, dateFrom, dateTo)`, que
+devuelve, por cada noche del rango, los `roomId` de la categoría que bloquean inventario; lo usa
 `configure-ota` para la disponibilidad de Channex. No usan la ruta REST ni las clases internas de este caso de uso (regla 6 de la
 arquitectura).
 
@@ -923,7 +923,7 @@ devuelven exactamente lo esperado, con totales y páginas correctos.
 - [ ] T016 [US2] `GetReservationDetail` y `GET /api/reservations/{reservationRef}` para `RECEPTIONIST` (C3), con `Cancellation` y conflicto
 - [ ] T016a [US2] `ReservationLookup.findBlockingRooms` (lo usa `check-room-availability`), con su consulta sobre `reservation_room`
 - [ ] T016b [US1] Filtro `inConflict`, campo `conflict`, `actions.canAssignRoom` y habitaciones sin asignar en C1 y C3 (FR-002a)
-- [ ] T016c `ReservationLookup.countBlockingByCategory` (lo usa `configure-ota`), con su consulta sobre `reservation_room`
+- [ ] T016c `ReservationLookup.blockingRoomsByCategory` (lo usa `configure-ota`), con su consulta sobre `reservation_room`
 - [ ] T017 [US2] Errores `RESERVATION_NOT_FOUND` e `INVALID_RESERVATION_CODE` sin llegar a la base de datos cuando el formato es inválido
 - [ ] T018 [US2] Pruebas de integración de los escenarios 1 a 6
 - [ ] T019 [P] [US2] Frontend: pantalla de detalle

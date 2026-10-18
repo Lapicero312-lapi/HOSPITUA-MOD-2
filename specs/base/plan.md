@@ -276,6 +276,8 @@ Regla: **proactiva** (el módulo avisa un evento y no espera respuesta) → **co
 |---|---|---|---|---|
 | Check-In por habitación (con la lista de huéspedes) | M1 → M2 | Cola `m2.habitacion.checkin.queue` | Proactiva | `update-reservation` |
 | Check-Out por habitación (con la lista de huéspedes) | M1 → M2 | Cola `m2.habitacion.checkout.queue` | Proactiva | `update-reservation` |
+| Mantenimiento registrado, cambiado o cancelado | M1 → M2 | Cola `m2.habitacion.mantenimiento.queue` | Proactiva | `configure-ota` |
+| Habitación agregada, dada de baja o cambiada | M1 → M2 | Cola `m2.habitacion.inventario.queue` | Proactiva | `configure-ota` |
 | Lista de reservas del día y sus actualizaciones | M2 → M1 | Cola `m1.reservas.diarias.queue` | Proactiva | `check-view-reservation` |
 | Consultar inventario de habitaciones | M2 → M1 | REST GET | Reactiva | `consult-room-inventory` |
 | Consultar calendario de mantenimientos | M2 → M1 | REST GET | Reactiva | `consult-maintenance-calendar` |
@@ -302,6 +304,8 @@ interacciones M1 ↔ M3 (liquidación, tarifa base, registrar check-out) no invo
 |---|---|---|
 | `m2.habitacion.checkin.queue` | `habitacion.checkin` | Una por habitación que ingresa |
 | `m2.habitacion.checkout.queue` | `habitacion.checkout` | Una por habitación que sale |
+| `m2.habitacion.mantenimiento.queue` | `habitacion.mantenimiento` | Uno por mantenimiento registrado, cambiado o cancelado (`configure-ota`) |
+| `m2.habitacion.inventario.queue` | `habitacion.inventario` | Uno por habitación agregada, dada de baja o cambiada (`configure-ota`) |
 
 - Cola que **envía** el Módulo 2 (la consume el Módulo 1): `m1.reservas.diarias.queue`, con dos routing
   keys que se publican por el mismo canal y proceso, para conservar el orden:
@@ -336,6 +340,7 @@ por cola y no espera respuesta, el consumidor del Módulo 2 aplica estas reglas:
 El contenido exacto de cada mensaje está en el plan de su caso de uso:
 
 - Check-In y Check-Out: [`update-reservation/plan.md`](../update-reservation/plan.md).
+- Avisos de mantenimiento e inventario: [`configure-ota/plan.md`](../configure-ota/plan.md).
 - Lista del día y sus actualizaciones: [`check-view-reservation/plan.md`](../check-view-reservation/plan.md).
 
 ## Contratos REST
@@ -355,7 +360,7 @@ El contenido exacto de cada mensaje está en el plan de su caso de uso:
 | `GET /api/guests/lookup` (precarga del titular por tipo y número de documento: datos de su reserva más reciente; solo lectura) | Recepcionista | `generate-direct-reservation` |
 | `POST /api/sire/exports` (periodo o movimiento individual; devuelve `.TXT` y cabecera `Export-Id`; es `POST` porque registra un `SireExport`, decisión D9) | Recepcionista | `export-sire-file` |
 | `GET /api/otas` y `GET /api/otas/{otaId}` (solo lectura; devuelve `id`, `name`, `commissionPercentage`, estado de conexión) | Recepcionista, Módulo 3 | `register-ota-information-commission` |
-| `POST /api/ota-commissions/reconciliations` (conciliación de comisiones) | Módulo 3 (finanzas) | `register-ota-information-commission` |
+| `GET /api/ota-commissions` (comisiones de Booking) y `POST /api/ota-commissions/reconciliations` (conciliación de comisiones) | Módulo 3 (finanzas) | `register-ota-information-commission` |
 
 **Booking.com no llama al Módulo 2**: no hay rutas para la OTA. El Módulo 2 lee sus reservas del feed de
 Channex (`generate-ota-reservation`) y le envía los tipos de habitación y la disponibilidad
@@ -367,7 +372,7 @@ quedan fuera).
 
 | Servicio | Método | Caso de uso |
 |---|---|---|
-| Habitaciones vendibles por `categoryRoom` o por `roomId` (contrato en [`consult-room-inventory/plan.md`](../consult-room-inventory/plan.md)) | M1 GET | `consult-room-inventory` |
+| Habitaciones vendibles por `categoryRoom`, por `roomId` o todas (contrato en [`consult-room-inventory/plan.md`](../consult-room-inventory/plan.md)) | M1 GET | `consult-room-inventory` |
 | Calendario de mantenimientos por `roomId` y rango de fechas (contrato en [`consult-maintenance-calendar/plan.md`](../consult-maintenance-calendar/plan.md)) | M1 GET | `consult-maintenance-calendar` |
 | Tarifa dinámica por habitación (contrato en [`calculate-dynamic-rate/plan.md`](../calculate-dynamic-rate/plan.md)) | M3 POST | `calculate-dynamic-rate` |
 | Feed de revisiones de reserva y `ack` (`/api/v1/booking_revisions/feed`, `/api/v1/booking_revisions/{id}/ack`) | Channex GET y POST | `generate-ota-reservation` |
@@ -440,7 +445,7 @@ backend/
     ├── infrastructure/
     │   ├── in/
     │   │   ├── rest/             # controladores REST
-    │   │   ├── messaging/        # consumidores RabbitMQ (Check-In y Check-Out)
+    │   │   ├── messaging/        # consumidores RabbitMQ (Check-In, Check-Out, mantenimiento e inventario)
     │   │   └── jobs/             # lista del día (00:00), cierre del día (23:59), reintentos, feed de
     │   │                         #   Channex (60 s), disponibilidad (30 s), tipos y disponibilidad completa (03:00)
     │   ├── out/
@@ -999,7 +1004,7 @@ las envía y las borra.
 | D11 | **Migraciones escritas en SQL**, no generadas desde las clases de TypeORM, para controlar `EXCLUDE`, índices parciales y bloqueos. | Este plan |
 | D12 | **Booking.com por Channex, leyendo el feed.** Una tarea consulta `GET /api/v1/booking_revisions/feed` cada 60 s y confirma cada revisión con `POST /api/v1/booking_revisions/{id}/ack` después del commit. No se usan webhooks: no exigen una URL pública y el feed sirve igual en desarrollo. Cada revisión se procesa una sola vez (`ota_booking_revision`); las reservas de Booking nacen en `ACTIVE`. | `generate-ota-reservation` |
 | D13 | **Conflictos de Booking.** Booking ya aceptó la reserva, así que nunca se rechaza: si no hay habitación libre de la categoría, la habitación queda sin asignar (`room_id` vacío, sin bloquear inventario); si se supera la capacidad o un cambio no se puede aplicar, la reserva queda marcada (`conflict_reason`). La Recepcionista asigna la habitación. Una reserva con alguna habitación sin asignar **no viaja en la lista del día** hasta que se asigne: si ya estaba, sale con `REMOVED` y motivo `ROOM_UNASSIGNED`; al asignar la última, entra con `ADDED`. | `generate-ota-reservation`, `update-reservation`, `check-view-reservation` |
-| D14 | **Tipos de habitación y disponibilidad hacia Channex.** El Módulo 2 crea un tipo de habitación por categoría a partir de las habitaciones vendibles del Módulo 1 (cantidad y capacidad máxima) y lo sincroniza al iniciar y a las 03:00, sin borrar. La disponibilidad (vendibles menos las que ocupan las reservas) se envía al cambiar, agrupada cada 30 s, y completa (90 días) a las 03:00. Los mantenimientos no se descuentan. **Los planes de tarifa y los precios los envía el Módulo 3** directamente a Channex. | `configure-ota` |
+| D14 | **Tipos de habitación y disponibilidad hacia Channex.** El Módulo 2 crea un tipo de habitación por categoría a partir de las habitaciones vendibles del Módulo 1 (cantidad y capacidad máxima) y lo sincroniza al iniciar y a las 03:00, sin borrar. La disponibilidad (vendibles menos las que ocupan las reservas) se envía al cambiar, agrupada cada 30 s, y completa (90 días) a las 03:00. Las habitaciones en mantenimiento se descuentan solo en sus fechas; el Módulo 1 avisa por cola los mantenimientos y los cambios de inventario. **Los planes de tarifa y los precios los envía el Módulo 3** directamente a Channex. | `configure-ota` |
 
 ## Estrategia de testing base
 

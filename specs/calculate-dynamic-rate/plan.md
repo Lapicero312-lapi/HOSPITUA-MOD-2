@@ -523,7 +523,7 @@ seguro ante un Módulo 3 caído.
 | 3 | Escala de los importes (¿máximo dos decimales?) y tipo en el JSON (número o texto) | Módulo 3 |
 | 4 | **Vigencia del `quoteId`**: si una cotización caduca, el Módulo 3 cobraría contra una cotización vencida. Hoy se re-cotiza al confirmar (D1), pero falta saber si el `quoteId` guardado se puede usar días después en el Check-Out | Módulo 3 |
 | 5 | Autenticación de servicio hacia el Módulo 3 y límite de llamadas por segundo | Módulo 3 |
-| 6 | **Origen de las categorías y de las tarifas base** de la pantalla "Tarifas": hoy una configuración local. Es el mismo problema de `consult-room-inventory` (de dónde sale la lista de categorías); conviene resolverlos juntos | Equipo del Módulo 2 y Módulo 1 |
+| 6 | **Origen de las categorías y de las tarifas base** de la pantalla "Tarifas": hoy una configuración local. Las categorías pueden salir de la consulta de todas las habitaciones vendibles del Módulo 1 (`consult-room-inventory`, A3); las tarifas base siguen sin origen definido | Equipo del Módulo 2 y Módulo 3 |
 
 ## Notes
 
