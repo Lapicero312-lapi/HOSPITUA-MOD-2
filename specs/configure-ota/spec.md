@@ -26,7 +26,13 @@ reservación por OTA".
 **Configuración (una sola vez)**
 
 1. En Channex staging se crean, a mano, la propiedad, sus tipos de habitación y sus planes de tarifa
-   (en la moneda del hotel de prueba, GBP), y se conecta y activa el hotel de prueba de Booking.
+   (en la moneda del hotel de prueba, GBP), y se conecta y activa el hotel de prueba de Booking. La
+   propiedad es **una sola y fija**: el software no crea propiedades. Al crearla se configura con la zona
+   horaria `America/Bogota`, la moneda GBP y las actualizaciones automáticas de disponibilidad por
+   **modificación y por cancelación apagadas** (`allow_availability_autoupdate_on_modification` y
+   `allow_availability_autoupdate_on_cancellation` en `false`): la disponibilidad la recalcula y la envía
+   el Módulo 2, para no descontarla dos veces. Channex descuenta solo una reserva nueva, y eso no se
+   puede apagar.
 2. En la configuración del sistema se indican los datos de la conexión: la dirección de Channex, la
    clave de acceso (`user-api-key`), el identificador de la propiedad en Channex, el porcentaje de
    comisión de Booking y la tasa de conversión (`4000` COP por 1 GBP).
@@ -97,8 +103,8 @@ tenga su categoría y su plan de tarifa.
      tarifa de Channex
 
 4. **Scenario**: Configuración incompleta (Error)
-   - **Given** una configuración sin la clave de acceso, sin la propiedad o con una tasa de conversión
-     menor o igual a cero
+   - **Given** una configuración sin la clave de acceso, sin la propiedad, con una propiedad que no
+     existe en Channex o con una tasa de conversión menor o igual a cero
    - **When** el sistema inicia
    - **Then** el sistema registra el error en el log y no envía nada a Channex, sin afectar el resto
      del Módulo 2
@@ -193,7 +199,8 @@ categoría y se verifica que Channex reciba `100.00` GBP para cada noche de los 
 - **FR-001**: El sistema debe tomar de la configuración (variables de entorno) la dirección de
   Channex, la clave de acceso, el identificador de la propiedad, el porcentaje de comisión de Booking y
   la tasa de conversión de COP a GBP. La clave de acceso nunca se guarda en la base de datos ni se
-  escribe en los logs.
+  escribe en los logs. Al iniciar debe verificar en Channex que la propiedad configurada existe; si no
+  existe, no envía nada a Channex ni lee reservas, sin afectar el resto del Módulo 2.
 - **FR-002**: El sistema debe registrar al iniciar la `Ota` "Booking.com" con el porcentaje
   configurado, sin duplicarla, y actualizar el porcentaje si cambió, solo para las reservas futuras.
 - **FR-003**: El sistema debe guardar la relación entre cada tipo de habitación de Channex

@@ -55,9 +55,26 @@ propio de este caso de uso:
 
 ## Contratos
 
-### A. Channex (Módulo 2 → Channex, REST POST)
+### A. Channex (Módulo 2 → Channex, REST)
 
 Cabecera `user-api-key: {CHANNEX_API_KEY}`. La clave nunca se escribe en los logs.
+
+**A0. Verificar la propiedad**: `GET {CHANNEX_BASE_URL}/api/v1/properties/options`. Devuelve las
+propiedades de la cuenta, sin paginar, con su id y su nombre. Al iniciar, el sistema comprueba que
+`CHANNEX_PROPERTY_ID` esté en la lista.
+
+**Configuración manual de la propiedad** (una sola vez, en el panel de Channex staging; el software no
+crea propiedades):
+
+| Ajuste | Valor | Por qué |
+|---|---|---|
+| `timezone` | `America/Bogota` | El mismo día operativo que el Módulo 2 |
+| `currency` | `GBP` | La moneda del hotel de prueba de Booking y de los planes de tarifa |
+| `allow_availability_autoupdate_on_modification` | `false` | La disponibilidad la recalcula y la envía el Módulo 2 |
+| `allow_availability_autoupdate_on_cancellation` | `false` | Ídem; evita descontar o sumar dos veces |
+
+Channex descuenta solo la disponibilidad cuando llega una reserva nueva (no se puede apagar). No hay doble
+descuento porque el Módulo 2 envía la disponibilidad **recalculada** (un número absoluto), no una resta.
 
 **A1. Disponibilidad por tipo de habitación**: `POST {CHANNEX_BASE_URL}/api/v1/availability`
 
@@ -124,8 +141,9 @@ interface OtaRoomTypeMappingRepository {
 
 **B1. Configuración al iniciar** (`EnsureChannexSetup`):
 
-1. Valida la configuración: clave, propiedad, id del hotel, porcentaje de 0 a 100 y tasa mayor que cero. Si
-   algo falta o es inválido, registra el error y **deja apagadas** las tareas de Channex
+1. Valida la configuración: clave, propiedad, id del hotel, porcentaje de 0 a 100 y tasa mayor que cero, y
+   verifica con A0 que la propiedad existe en Channex. Si algo falta, es inválido o la propiedad no existe,
+   registra el error y **deja apagadas** las tareas de Channex
    (`generate-ota-reservation` y las de este caso de uso); el resto del Módulo 2 funciona normal.
 2. Crea la `Ota` "Booking.com" si no existe (`hotel_account_id = BOOKING_HOTEL_ID`, `CONNECTED`,
    `linked_at` = ahora); si existe y el porcentaje cambió, lo actualiza (solo afecta reservas futuras).
@@ -148,7 +166,7 @@ Check-Out y habitaciones `NOT_ARRIVED`) y `cancel-reservation`.
 
 | Puerto | De | Para qué |
 |---|---|---|
-| `ChannexPort.pushAvailability` y `pushRates` | Plan base | A1 y A2 |
+| `ChannexPort.listProperties`, `pushAvailability` y `pushRates` | Plan base | A0, A1 y A2 |
 | `ConsultRoomInventory.byCategory` | `consult-room-inventory` | Habitaciones vendibles de cada categoría |
 | `ReservationLookup.countBlockingByCategory` | `check-view-reservation` (método nuevo) | Habitaciones ocupadas por categoría y fecha |
 | `CalculateDynamicRate.quoteRooms` | `calculate-dynamic-rate` | Tarifa de cada noche (contexto nuevo `CHANNEX_RATES`) |
@@ -265,7 +283,7 @@ reserva.
 
 ## Phase 1: Setup
 
-- [ ] T001 Validación de las variables de Channex y del archivo `channex-room-types.json`
+- [ ] T001 Validación de las variables de Channex y del archivo `channex-room-types.json`, y verificación de la propiedad con A0
 
 ## Phase 2: Foundational
 
@@ -302,7 +320,7 @@ reserva.
 | US1 | 1 registro de la agencia | Una `Ota` "Booking.com" con el 15 % y `CONNECTED` |
 | US1 | 2 reinicio | Sin duplicados; porcentaje nuevo solo para reservas futuras |
 | US1 | 3 relación de tipos | Cada tipo de Channex con una categoría y un plan de tarifa |
-| US1 | 4 configuración incompleta | Tareas apagadas y el resto del Módulo 2 funcionando |
+| US1 | 4 configuración incompleta | Tareas apagadas y el resto del Módulo 2 funcionando; lo mismo si la propiedad no existe en Channex |
 | US2 | 1 reserva nueva | Disponibilidad `2` para el 10 y el 11 |
 | US2 | 2 cancelación | Disponibilidad `3` |
 | US2 | 3 agrupación | Cinco reservas en el mismo ciclo: una sola solicitud A1 |
