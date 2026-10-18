@@ -244,8 +244,10 @@ cancela la reserva y se verifica que reciba `3`.
   las que están en mantenimiento esa fecha; una habitación que está en los dos casos cuenta una sola vez.
   Si el resultado es negativo, envía `0`.
 - **FR-007**: El sistema debe agrupar los envíos de disponibilidad cada 30 segundos, sin superar el
-  límite de Channex (10 solicitudes por minuto por propiedad), y reintentar con espera creciente ante un
-  `429` o una falla. Todos los días a las 03:00 debe reenviar la disponibilidad completa de los próximos
+  límite de Channex (10 solicitudes por minuto por propiedad), y ante un `429` o una falla pausar los
+  envíos un minuto y reintentar con espera creciente. Antes de cada envío debe leer y procesar las
+  reservas pendientes de Channex, para no devolverle a Booking un cupo que Channex ya descontó por una
+  reserva nueva. Todos los días a las 03:00 debe reenviar la disponibilidad completa de los próximos
   90 días.
 - **FR-008**: El sistema no debe enviar fechas pasadas ni categorías sin tipo de habitación en Channex.
   Channex admite como máximo 20 tipos de habitación por propiedad de hotel: una categoría que superaría

@@ -15,8 +15,8 @@ tres capacidades:
 2. **Tipos de habitación**: traduce las habitaciones vendibles que informa el Módulo 1 a un tipo de
    habitación de Channex por categoría (cantidad y capacidad), los crea o los actualiza al iniciar y a
    las 03:00, y guarda la relación en `ota_room_type_mapping`.
-3. **Disponibilidad**: cada cambio de ocupación deja una marca (`ari_pending_change`); cada 30 segundos una
-   tarea agrupa las marcas, calcula las habitaciones libres por categoría y fecha y las envía a Channex. A
+3. **Disponibilidad**: cada cambio de ocupación deja una marca (`ari_pending_change`); cada 30 segundos, justo
+   después de leer el feed de Channex (`generate-ota-reservation`), la tarea `ChannexSyncJob` agrupa las marcas, calcula las habitaciones libres por categoría y fecha y las envía a Channex. A
    las 03:00 reenvía la disponibilidad completa de 90 días. Descuenta las habitaciones en mantenimiento en
    sus fechas.
 4. **Avisos del Módulo 1** (cola): un mantenimiento registrado, cambiado o cancelado deja una marca de
@@ -39,9 +39,9 @@ propia clave. No recibe reservas (eso es `generate-ota-reservation`) y **nunca b
 | # | Capacidad | Disparador | Contrato |
 |---|---|---|---|
 | 1 | Configuración al iniciar | Arranque de la aplicación | B1 |
-| 2 | Sincronizar tipos de habitación | Arranque y tarea `AriDailyJob` (03:00) | A1, A2, A3 |
+| 2 | Sincronizar tipos de habitación | Arranque, tarea `AriDailyJob` (03:00) y aviso E2 | A1, A2, A3 |
 | 3 | Anotar un cambio de ocupación | Llamada interna `AriChangeRecorder.record` | B2 |
-| 4 | Enviar disponibilidad pendiente | Tarea `AriAvailabilityJob`, cada 30 s | A4 |
+| 4 | Enviar disponibilidad pendiente | Tarea `ChannexSyncJob`, cada 30 s, después de leer el feed | A4 |
 | 5 | Reenviar la disponibilidad completa | Tarea `AriDailyJob` (03:00) | A4 |
 | 6 | Aviso de mantenimiento | Cola `m2.habitacion.mantenimiento.queue` | E1 |
 | 7 | Aviso de inventario | Cola `m2.habitacion.inventario.queue` | E2 |
@@ -55,10 +55,13 @@ propio de este caso de uso:
 - **Almacenamiento**: `ota`, `ota_room_type_mapping`, `ari_pending_change` y `processed_message` (plan
   base).
 - **Configuración** (plan base): `CHANNEX_BASE_URL`, `CHANNEX_API_KEY`, `CHANNEX_PROPERTY_ID`,
-  `BOOKING_HOTEL_ID` (`10485037`, el hotel de Booking que se usa), `BOOKING_COMMISSION_PERCENTAGE`, `CHANNEX_ARI_INTERVAL_SECONDS` (`30`) y
+  `BOOKING_HOTEL_ID` (`10485037`, el hotel de Booking que se usa), `BOOKING_COMMISSION_PERCENTAGE`, `CHANNEX_SYNC_INTERVAL_SECONDS` (`30`) y
   `CHANNEX_ARI_DAYS` (`90`).
-- **Límites de Channex**: 10 solicitudes por minuto por propiedad para disponibilidad. Con una cada 30 s
-  quedan 2 por minuto; Channex recomienda agrupar cada 30 a 60 s.
+- **Límites de Channex** (página *Rate limits*): 10 solicitudes por minuto por propiedad a `/availability`
+  y otras 10 a `/restrictions` (esas son del Módulo 3). Con una cada 30 s quedan 2 por minuto, más el envío
+  de las 03:00. Channex recomienda agrupar cada 30 a 60 s (guía de integración para PMS) y, ante un
+  error, **pausar los envíos de la propiedad un minuto** y reintentar con espera creciente.
+- **Tamaño**: cada solicitud debe pesar menos de 10 MB.
 - **Performance** (NFR-001): un cambio de disponibilidad llega a Channex en menos de 1 minuto.
 
 ## Contratos
@@ -83,10 +86,20 @@ crea propiedades):
 
 Channex descuenta solo la disponibilidad cuando llega una reserva nueva (no se puede apagar). No hay doble
 descuento porque el Módulo 2 envía la disponibilidad **recalculada** (un número absoluto), no una resta.
+Por la misma razón, **antes de cada envío se lee el feed**: si el Módulo 2 enviara una disponibilidad
+calculada sin una reserva de Booking que Channex ya descontó, le devolvería ese cupo a Booking. Por eso
+`ChannexSyncJob` lee y procesa el feed y después envía la disponibilidad, en el mismo ciclo, y el envío
+de las 03:00 también lee el feed primero. Una reserva que entra a Channex en el instante entre la lectura
+y el envío se corrige en el ciclo siguiente (30 s); si en ese lapso Booking vende de más, la reserva llega
+como conflicto.
 
 **A1. Tipos de habitación existentes**:
 `GET {CHANNEX_BASE_URL}/api/v1/room_types/options?filter[property_id]={CHANNEX_PROPERTY_ID}`, sin paginar.
-Se usa para no crear duplicados: si ya existe un tipo con el nombre de la categoría, se toma su id.
+Devuelve `id`, `property_id`, `title` y `default_occupancy` de cada tipo. La página de la ruta no documenta
+filtros (devuelve los tipos de la cuenta), así que el filtro se envía con la convención general de
+Channex (`filter[campo]`) y **además** el sistema se queda solo con los que tienen el `property_id`
+configurado. Se usa para no crear duplicados: si ya existe un tipo con el nombre de la categoría, se toma
+su id (Channex no exige nombres únicos; esa regla es del Módulo 2).
 
 **A2. Crear un tipo de habitación**: `POST {CHANNEX_BASE_URL}/api/v1/room_types`
 
@@ -106,13 +119,19 @@ Se usa para no crear duplicados: si ya existe un tipo con el nombre de la catego
 ```
 
 - `title`: el nombre de la categoría (`categoryRoom`). El Módulo 3 encuentra el tipo por ese nombre.
-- `count_of_rooms`: las habitaciones vendibles de la categoría según el Módulo 1.
-- `occ_adults` y `default_occupancy`: la mayor `maxCapacity` de las habitaciones de la categoría.
+- `count_of_rooms`: las habitaciones vendibles de la categoría según el Módulo 1. Channex exige un entero
+  positivo: nunca se envía `0` (ver C1, paso 4).
+- `occ_adults` y `default_occupancy`: la mayor `maxCapacity` de las habitaciones de la categoría (Channex
+  exige `default_occupancy` menor o igual que `occ_adults`; aquí son iguales).
 - `occ_children` y `occ_infants`: `0` (el Módulo 2 no distingue niños ni bebés en la capacidad).
 - Un tipo nuevo nace con disponibilidad `0`; el sistema envía la disponibilidad completa justo después.
 
 **A3. Actualizar un tipo de habitación**: `PUT {CHANNEX_BASE_URL}/api/v1/room_types/{id}`, con los mismos
-campos, cuando cambian la cantidad de habitaciones o la capacidad.
+campos, cuando cambian la cantidad de habitaciones o la capacidad. Si la capacidad baja y Channex rechaza
+el cambio porque esa ocupación está mapeada a Booking, el sistema **no usa `?force=true`** (borraría el
+mapeo): lo registra en el log para que un administrador ajuste el mapeo y lo reintenta en la siguiente
+sincronización. Mientras tanto, una reserva con más personas que la capacidad llega como conflicto
+(`CAPACITY_EXCEEDED`).
 
 **A4. Disponibilidad por tipo de habitación**: `POST {CHANNEX_BASE_URL}/api/v1/availability`
 
@@ -142,7 +161,7 @@ campos, cuando cambian la cantidad de habitaciones o la capacidad.
 |---|---|
 | `200` | Guarda el resultado (A2, A3) o borra las marcas enviadas (A4) |
 | `401` o `403` | Conserva lo pendiente y registra el error; la `Ota` pasa a `DISCONNECTED` |
-| `429` | Conserva lo pendiente y espera, con espera creciente, antes del siguiente envío |
+| `429` | Conserva lo pendiente, pausa los envíos de la propiedad **un minuto** y después reintenta con espera creciente |
 | `422` (datos inválidos) | Registra el detalle y descarta ese envío, para no repetir un error permanente |
 | `5xx`, tiempo agotado o error de red | Conserva lo pendiente y lo intenta en el siguiente ciclo |
 
@@ -188,8 +207,9 @@ de habitación, No-Show, Check-Out y habitaciones `NOT_ARRIVED`) y `cancel-reser
    - Sin relación pero con un tipo con ese nombre en Channex: guarda la relación con ese tipo.
    - Con relación y con cantidad o capacidad distintas a las guardadas: actualiza el tipo (A3) y la
      relación.
-4. Una categoría con relación que ya no tiene habitaciones vendibles **no se borra**: queda con
-   disponibilidad `0` y se registra en el log para revisión.
+4. Una categoría con relación que ya no tiene habitaciones vendibles **no se borra ni se actualiza** (Channex
+   no acepta `count_of_rooms` en `0`): conserva la última cantidad, queda con disponibilidad `0` y se
+   registra en el log para revisión.
 5. **Tope de Channex: 20 tipos de habitación por propiedad de hotel**, contando los que quedan sin
    habitaciones. Si una categoría nueva superaría el tope, no se crea: se registra el error en el log y
    la categoría no se vende en Booking hasta que se libere un cupo.
@@ -252,7 +272,7 @@ Mensajes planos del exchange `hospitua.events`, con las reglas de mensajería de
 - `action`: `ADDED` (nueva vendible), `REMOVED` (dada de baja) o `UPDATED` (cambió de categoría o de
   capacidad).
 - `previousCategoryRoom` solo si cambió de categoría.
-- El sistema ejecuta la sincronización de tipos (C1) y anota los 90 días de `categoryRoom` y, si viene,
+- El sistema ejecuta la sincronización de tipos (C1), con el mismo bloqueo asesor de las tareas de Channex, y anota los 90 días de `categoryRoom` y, si viene,
   de `previousCategoryRoom`.
 
 Un mensaje sin `messageId`, `roomId` o `categoryRoom`, con fechas inválidas o con una `action` desconocida
@@ -270,12 +290,16 @@ va a la dead-letter queue sin procesar. Un `messageId` repetido se confirma sin 
    calcula (A1 de `consult-maintenance-calendar`). Si el Módulo 1 no responde, esa categoría no se envía
    y sus marcas se conservan. El aviso E1 es lo que dispara el cálculo; el envío diario de las 03:00
    corrige un aviso perdido.
-4. **Agrupación**: cada 30 s se toman todas las marcas pendientes, se unen los rangos por categoría y se
+4. **Agrupación**: cada 30 s, después de leer el feed, se toman todas las marcas pendientes, se unen los rangos por categoría y se
    calcula una sola vez cada categoría y fecha; todo va en una sola solicitud A4.
-5. **Envío diario** a las 03:00: primero la sincronización de tipos (C1), luego la disponibilidad completa
-   de 90 días (A4).
+5. **Envío diario** a las 03:00: primero la lectura del feed, luego la sincronización de tipos (C1) y al
+   final la disponibilidad completa de 90 días (A4).
 6. **Precios y planes de tarifa: Módulo 3.** El Módulo 2 no cotiza para Channex ni convierte monedas.
-7. **Tareas con bloqueo asesor** (plan base), para que dos instancias no envíen lo mismo.
+7. **Tareas con bloqueo asesor** (plan base), para que dos instancias no envíen lo mismo. `ChannexSyncJob`
+   y `AriDailyJob` comparten el bloqueo: nunca corren a la vez.
+8. **Tope por cantidad**: la disponibilidad enviada nunca supera el `count_of_rooms` que tiene el tipo en
+   Channex (`ota_room_type_mapping.count_of_rooms`); si el Módulo 1 informa más habitaciones de las
+   registradas, primero se sincroniza el tipo (C1).
 
 ## Orden de puesta en marcha
 
@@ -325,7 +349,7 @@ sequenceDiagram
     participant X as Caso de uso que cambia la ocupación o aviso E1/E2
     participant R as AriChangeRecorder
     participant DB as PostgreSQL
-    participant J as AriAvailabilityJob
+    participant J as ChannexSyncJob
     participant I as ConsultRoomInventory
     participant K as ConsultMaintenanceCalendar
     participant P as ChannexPort
@@ -334,6 +358,7 @@ sequenceDiagram
     X->>R: record(tx, categoría, fechas)
     R->>DB: INSERT ari_pending_change (misma transacción)
     loop cada 30 s
+        J->>J: leer y procesar el feed (generate-ota-reservation)
         J->>DB: leer marcas pendientes
         J->>I: byCategory(categoría)
         J->>K: check(roomId, fechas) por cada habitación
@@ -383,7 +408,7 @@ reserva.
 | `domain/ota/` | `OtaRoomTypeMapping`; funciones puras `groupRoomsByCategory` y `toChannexRanges` |
 | `application/use-cases/configure-ota/` | **Entrada**: `EnsureChannexSetup`, `SyncRoomTypes`, `AriChangeRecorder`, `PublishPendingAvailability`, `PublishDailyAvailability`, `HandleMaintenanceNotice`, `HandleInventoryNotice` |
 | `application/ports/out/` | `ChannexPort`, `OtaRepository`, `OtaRoomTypeMappingRepository`, `AriPendingChangeRepository` |
-| `infrastructure/in/jobs/` | `AriAvailabilityJob` (30 s) y `AriDailyJob` (03:00) |
+| `infrastructure/in/jobs/` | `ChannexSyncJob` (30 s: feed y luego disponibilidad pendiente) y `AriDailyJob` (03:00: feed, tipos y disponibilidad completa), con el mismo bloqueo asesor |
 | `infrastructure/in/messaging/` | Consumidores de `m2.habitacion.mantenimiento.queue` y `m2.habitacion.inventario.queue` |
 | `infrastructure/config/` | Validación de las variables de Channex |
 | `infrastructure/out/persistence/` | Repositorios de `ota_room_type_mapping` y `ari_pending_change` |
@@ -411,8 +436,8 @@ reserva.
 ## Phase 5: User Story 3 - Disponibilidad (P1)
 
 - [ ] T009 [US3] `AriChangeRecorder` y su uso en los casos de uso que cambian la ocupación
-- [ ] T010 [US3] `PublishPendingAvailability` y `AriAvailabilityJob` (agrupación cada 30 s, mantenimientos sin contar dos veces, mínimo 0, rangos, manejo de 429)
-- [ ] T011 [US3] `PublishDailyAvailability` y `AriDailyJob` (03:00): sincronización de tipos y disponibilidad completa de 90 días
+- [ ] T010 [US3] `PublishPendingAvailability` y `ChannexSyncJob` (feed primero, agrupación cada 30 s, tope por `count_of_rooms`, mantenimientos sin contar dos veces, mínimo 0, rangos, pausa de un minuto ante 429)
+- [ ] T011 [US3] `PublishDailyAvailability` y `AriDailyJob` (03:00): feed, sincronización de tipos y disponibilidad completa de 90 días
 - [ ] T012 [US3] Pruebas de los escenarios 1 a 6
 - [ ] T012b [US3] Consumidores E1 y E2 (`HandleMaintenanceNotice`, `HandleInventoryNotice`), idempotencia y dead-letter queue
 
@@ -457,7 +482,7 @@ reserva.
 | FR-004 | `SyncRoomTypes` al iniciar y a las 03:00 | T007, T011 |
 | FR-005 | `AriChangeRecorder` | T009 |
 | FR-006 | `PublishPendingAvailability`, `blockingRoomsByCategory` y `ConsultMaintenanceCalendar` | T004, T010 |
-| FR-007 | Agrupación cada 30 s, espera ante 429 y envío diario | T010, T011 |
+| FR-007 | Feed antes de cada envío, agrupación cada 30 s, pausa ante 429 y envío diario | T010, T011 |
 | FR-008 | Sin fechas pasadas, sin precios ni planes de tarifa | T010, T011 |
 | FR-009 | Fallos sin efecto en las reservas | T010, T011 |
 | FR-010 | Consumidores E1 y E2 | T012b |

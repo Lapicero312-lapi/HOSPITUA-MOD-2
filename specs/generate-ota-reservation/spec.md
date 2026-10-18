@@ -24,7 +24,7 @@ habitaciones: el Módulo 1 decide qué hace con la lista del día.
 
 ### Flujo de Usuario de Alto Nivel
 
-1. Cada 60 segundos, el sistema consulta a Channex las **revisiones de reserva** pendientes de la
+1. Cada 30 segundos, el sistema consulta a Channex las **revisiones de reserva** pendientes de la
    propiedad (el *feed*), de la más antigua a la más reciente. Cada revisión es una reserva nueva
    (`new`), un cambio (`modified`) o una cancelación (`cancelled`).
 2. El sistema procesa cada revisión **una sola vez**: si ya procesó esa revisión, solo la confirma.
@@ -187,7 +187,7 @@ pase a `CANCELLED` con una `Cancellation` del canal `OTA_API`.
 
 ### Functional Requirements
 
-- **FR-001**: El sistema debe consultar cada 60 segundos el feed de revisiones de reserva de Channex
+- **FR-001**: El sistema debe consultar cada 30 segundos el feed de revisiones de reserva de Channex
   para la propiedad configurada y procesarlas de la más antigua a la más reciente.
 - **FR-002**: El sistema debe procesar cada revisión una sola vez (por su identificador) y confirmarla
   a Channex después de guardar el resultado. Si el guardado falla por un problema temporal, o si el

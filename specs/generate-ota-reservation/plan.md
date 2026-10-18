@@ -7,7 +7,7 @@
 ## Summary
 
 La única agencia es **Booking.com**, conectada por **Channex** (`staging.channex.io`). Booking no llama al
-Módulo 2: este caso de uso es una **tarea programada** que cada 60 segundos lee de Channex las revisiones de
+Módulo 2: este caso de uso es una **tarea programada** que cada 30 segundos lee de Channex las revisiones de
 reserva pendientes (el *feed*), las procesa y las confirma (`ack`). Cada revisión es:
 
 1. **`new`**: crea la reserva en **`ACTIVE`** (Booking ya la confirmó), con su comisión, asignando
@@ -29,12 +29,12 @@ con `DailyListChangeRecorder`, y anota cada cambio de ocupación para el envío 
 | Caso de uso | Generar reservación por OTA (`generate-ota-reservation`) |
 | Spec | [spec.md](./spec.md), historias 1 y 2, FR-001 a FR-010 |
 | Actor principal | Sistema (tarea programada); Channex como fuente de las reservas de Booking |
-| Disparador | Tarea `ChannexFeedJob`, cada `CHANNEX_FEED_INTERVAL_SECONDS` (60) |
+| Disparador | Tarea `ChannexSyncJob`, cada `CHANNEX_SYNC_INTERVAL_SECONDS` (30); después del feed, la misma tarea envía la disponibilidad (`configure-ota`) |
 | Naturaleza | Lee de Channex; escribe `reservation`, `reservation_room`, `guest`, `commission_audit` y `ota_booking_revision` |
 
 | # | Capacidad | Disparador | Contrato |
 |---|---|---|---|
-| 1 | Leer el feed | `ChannexFeedJob` | A1 |
+| 1 | Leer el feed | `ChannexSyncJob` | A1 |
 | 2 | Procesar una revisión `new` | Interno | B1 |
 | 3 | Procesar una revisión `modified` | Interno | B2 |
 | 4 | Procesar una revisión `cancelled` | Interno | B3 |
@@ -49,7 +49,7 @@ propio de este caso de uso:
 - **Almacenamiento**: `reservation`, `reservation_room`, `guest`, `commission_audit` y
   `ota_booking_revision` (plan base).
 - **Configuración**: `CHANNEX_BASE_URL`, `CHANNEX_API_KEY`, `CHANNEX_PROPERTY_ID` y
-  `CHANNEX_FEED_INTERVAL_SECONDS` (plan base).
+  `CHANNEX_SYNC_INTERVAL_SECONDS` (plan base).
 - **Performance** (NFR-001): una reserva creada en Booking queda registrada en menos de 2 minutos.
 
 ## Contratos
@@ -59,7 +59,12 @@ propio de este caso de uso:
 Cabecera `user-api-key: {CHANNEX_API_KEY}` en todas las llamadas. La clave nunca se escribe en los logs.
 
 **A1. Feed de revisiones**:
-`GET {CHANNEX_BASE_URL}/api/v1/booking_revisions/feed?filter[property_id]={CHANNEX_PROPERTY_ID}&order[inserted_at]=asc`
+`GET {CHANNEX_BASE_URL}/api/v1/booking_revisions/feed?filter[property_id]={CHANNEX_PROPERTY_ID}&order[inserted_at]=asc&pagination[page]={n}&pagination[limit]=100`
+
+**Paginación**: Channex devuelve 10 por defecto y como máximo 100 por página (`meta.total`, `page`,
+`limit`). En cada lectura el sistema pide **todas las páginas primero** (de la 1 hasta cubrir
+`meta.total`) y después procesa y confirma; así un `ack` no corre las páginas y no se salta ninguna
+revisión.
 
 Devuelve las revisiones **no confirmadas**, de la más antigua a la más reciente. Ejemplo de una revisión
 (se muestran solo los campos que se usan; los valores son ilustrativos):
@@ -108,7 +113,7 @@ Devuelve las revisiones **no confirmadas**, de la más antigua a la más recient
 |---|---|
 | `200` | Procesa las revisiones |
 | `401` o `403` | Pasa la `Ota` a `DISCONNECTED` (`register-ota-information-commission`) y no procesa nada |
-| `429` | Espera y reintenta con espera creciente; no procesa nada en esa lectura |
+| `429` | No procesa nada en esa lectura; pausa las llamadas de la propiedad un minuto y reintenta con espera creciente |
 | `5xx`, tiempo agotado o error de red | No procesa nada y lo intenta en la siguiente lectura |
 
 ### B. Procesamiento de una revisión
@@ -133,8 +138,11 @@ Devuelve las revisiones **no confirmadas**, de la más antigua a la más recient
 
 1. Si la revisión ya está en `ota_booking_revision`, no hace nada (solo repite el `ack` si faltaba).
 2. Si el `ota_reservation_code` ya existe para la agencia, la trata como `modified` (B2).
-3. Relaciona cada habitación con su categoría. Si un tipo no tiene relación, **no guarda nada ni confirma**
-   la revisión: queda en el feed hasta que se complete la relación en `configure-ota`.
+3. Relaciona cada habitación con su categoría. Si un tipo no tiene relación, o si Channex envía
+   `room_type_id` vacío (la habitación de Booking no está mapeada en Channex), **no guarda nada ni
+   confirma** la revisión: queda en el feed hasta que se complete la relación en `configure-ota` o el mapeo
+   en Channex, y se registra en el log. Channex avisa por correo si una revisión lleva 30 minutos sin
+   confirmar.
 4. Consulta la disponibilidad de cada categoría (`VerifyAvailability.check`) y asigna con `assignRooms` la
    de menor `roomNumber`, sin repetir. Las que no tengan habitación libre quedan **sin asignar**
    (`room_id` vacío, `blocks_inventory = false`).
@@ -205,7 +213,7 @@ Después del commit envía el `ack` (A2) y guarda `acked_at`.
 
 ```mermaid
 sequenceDiagram
-    participant J as ChannexFeedJob
+    participant J as ChannexSyncJob
     participant P as ChannexPort
     participant CX as Channex
     participant U as ProcessBookingRevision
@@ -213,7 +221,7 @@ sequenceDiagram
     participant DB as PostgreSQL
 
     J->>P: fetchBookingFeed()
-    P->>CX: GET /booking_revisions/feed (user-api-key)
+    P->>CX: GET /booking_revisions/feed, página por página (user-api-key)
     CX-->>P: revisiones (más antigua primero)
     J->>J: markSynced (lastSyncAt)
     loop cada revisión
@@ -302,7 +310,7 @@ revisión se confirma.
 | `domain/shared/` | `CountryNames` (código de dos letras → nombre del país) |
 | `application/use-cases/generate-ota-reservation/` | **Entrada**: `ReadBookingFeed`, `ProcessBookingRevision`; mapeador de la revisión |
 | `application/ports/out/` | `ChannexPort`, `OtaBookingRevisionRepository`, `ReservationRepository` y los puertos de C |
-| `infrastructure/in/jobs/` | `ChannexFeedJob` (cada 60 s, con bloqueo asesor) |
+| `infrastructure/in/jobs/` | `ChannexSyncJob` (cada 30 s, con bloqueo asesor: feed y luego disponibilidad de `configure-ota`) |
 | `infrastructure/out/channex/` | Adaptador HTTP de `ChannexPort` (plan base) |
 | `infrastructure/out/persistence/` | `OtaBookingRevisionRepository` |
 
@@ -318,7 +326,7 @@ revisión se confirma.
 
 ## Phase 3: User Story 1 - Reservas nuevas (P1)
 
-- [ ] T005 [US1] `ReadBookingFeed` y `ChannexFeedJob`: lectura, `lastSyncAt`, `DISCONNECTED` ante 401/403 y espera ante 429
+- [ ] T005 [US1] `ReadBookingFeed` y `ChannexSyncJob`: lectura de todas las páginas, `lastSyncAt`, `DISCONNECTED` ante 401/403 y pausa de un minuto ante 429
 - [ ] T006 [US1] `ProcessBookingRevision` para `new` (B1), en una transacción
 - [ ] T007 [US1] `ack` después del commit y repetición de los `ack` pendientes
 - [ ] T008 [US1] Pruebas de integración de los escenarios 1 a 7 con Channex simulado
@@ -362,7 +370,7 @@ revisión se confirma.
 
 | Requisito | Componente | Tarea |
 |---|---|---|
-| FR-001 | `ChannexFeedJob` y `ReadBookingFeed` | T005 |
+| FR-001 | `ChannexSyncJob` y `ReadBookingFeed` | T005 |
 | FR-002 | `ota_booking_revision` y `ack` después del commit | T002, T007 |
 | FR-003 | `ProcessBookingRevision` (B1) y `Reservation.createOta` | T004, T006 |
 | FR-004 | `RegisterOtaConfirmationAndCommission` | T006 |
