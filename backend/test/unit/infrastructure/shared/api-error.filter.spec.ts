@@ -37,7 +37,7 @@ class ProbeController {
 
   @Get('api-error-5xx')
   apiError5xx() {
-    throw new ApiError('MAL_USADO', 'Estado fuera de 4xx', 503);
+    throw new ApiError('NO_AVAILABILITY', 'Estado fuera de 4xx', 503);
   }
 
   @Get('nest-400')
@@ -134,7 +134,7 @@ describe('ApiErrorFilter', () => {
     it('con un estado fuera de 4xx responde 400', async () => {
       const res = await get('/probe/api-error-5xx').expect(400);
 
-      expect(res.body.errorCode).toBe('MAL_USADO');
+      expect(res.body.errorCode).toBe('NO_AVAILABILITY');
     });
   });
 
