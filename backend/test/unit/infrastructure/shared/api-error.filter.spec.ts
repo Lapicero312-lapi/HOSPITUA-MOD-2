@@ -21,14 +21,11 @@ import { App } from 'supertest/types.js';
 import { vi } from 'vitest';
 import {
   BusinessError,
+  ConcurrentUpdateError,
   NotFoundError,
-  TooManyRequestsError,
 } from '../../../../src/domain/shared/business-error.js';
 import { ApiError } from '../../../../src/infrastructure/shared/api-error.js';
-import {
-  ApiErrorFilter,
-  UNEXPECTED_ERROR_MESSAGE,
-} from '../../../../src/infrastructure/shared/api-error.filter.js';
+import { ApiErrorFilter } from '../../../../src/infrastructure/shared/api-error.filter.js';
 import { validationExceptionFactory } from '../../../../src/infrastructure/shared/validation-exception.factory.js';
 
 class ProbeDto {
@@ -46,6 +43,11 @@ class ProbeController {
     throw new BusinessError('NO_AVAILABILITY', 'No hay disponibilidad');
   }
 
+  @Get('concurrent')
+  concurrent() {
+    throw new ConcurrentUpdateError();
+  }
+
   @Get('not-found')
   notFound() {
     throw new NotFoundError('RESERVATION_NOT_FOUND', 'La reserva no existe');
@@ -53,9 +55,11 @@ class ProbeController {
 
   @Get('limit')
   limit() {
-    throw new TooManyRequestsError(
-      'SIRE_RATE_LIMIT',
-      'Demasiadas exportaciones',
+    throw new ApiError(
+      'TOO_MANY_REQUESTS',
+      'Se superó el límite de solicitudes de exportación. Intente de nuevo en unos segundos.',
+      429,
+      30,
     );
   }
 
@@ -171,12 +175,29 @@ describe('ApiErrorFilter', () => {
       expect(Date.parse(body.timestamp)).toBeLessThanOrEqual(Date.now() + 1000);
     });
 
-    it('NotFoundError responde 404 y TooManyRequestsError 429', async () => {
-      const notFound = await get('/probe/not-found').expect(404);
-      const limit = await get('/probe/limit').expect(429);
+    it('NotFoundError responde 404', async () => {
+      const res = await get('/probe/not-found').expect(404);
 
-      expect(notFound.body.errorCode).toBe('RESERVATION_NOT_FOUND');
-      expect(limit.body.errorCode).toBe('SIRE_RATE_LIMIT');
+      expect(res.body.errorCode).toBe('RESERVATION_NOT_FOUND');
+    });
+
+    it('el conflicto de concurrencia responde 400 CONCURRENT_UPDATE', async () => {
+      const res = await get('/probe/concurrent').expect(400);
+
+      expect(res.body.errorCode).toBe('CONCURRENT_UPDATE');
+    });
+
+    it('el 429 lleva la cabecera Retry-After', async () => {
+      const res = await get('/probe/limit').expect(429);
+
+      expect(res.headers['retry-after']).toBe('30');
+      expect(res.body.errorCode).toBe('TOO_MANY_REQUESTS');
+    });
+
+    it('sin retryAfterSeconds no se agrega Retry-After', async () => {
+      const res = await get('/probe/business');
+
+      expect(res.headers['retry-after']).toBeUndefined();
     });
 
     it('ApiError responde su código y su estado', async () => {
@@ -272,8 +293,8 @@ describe('ApiErrorFilter', () => {
         const res = await get(`/probe/${route}`);
 
         expect(res.status).toBe(400);
-        expect(res.body.errorCode).toBe('UNEXPECTED_ERROR');
-        expect(res.body.message).toBe(UNEXPECTED_ERROR_MESSAGE);
+        expect(res.body.errorCode).toBe('REQUEST_NOT_PROCESSED');
+        expect(res.body.message).toBe('No fue posible procesar la solicitud.');
       },
     );
 

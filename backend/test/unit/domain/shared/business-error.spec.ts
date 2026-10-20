@@ -1,7 +1,8 @@
 import {
   BusinessError,
+  CONCURRENT_UPDATE,
+  ConcurrentUpdateError,
   NotFoundError,
-  TooManyRequestsError,
 } from '../../../../src/domain/shared/business-error.js';
 
 describe('BusinessError', () => {
@@ -18,8 +19,16 @@ describe('BusinessError', () => {
     expect(error).toBeInstanceOf(Error);
     expect(error).toBeInstanceOf(BusinessError);
     expect(error.name).toBe('NotFoundError');
-    expect(new TooManyRequestsError('A', 'b').name).toBe(
-      'TooManyRequestsError',
+  });
+
+  it('el conflicto de concurrencia usa el código y el mensaje de los planes', () => {
+    const error = new ConcurrentUpdateError();
+
+    expect(error).toBeInstanceOf(BusinessError);
+    expect(error.errorCode).toBe(CONCURRENT_UPDATE);
+    expect(error.errorCode).toBe('CONCURRENT_UPDATE');
+    expect(error.message).toBe(
+      'Esta reserva ya fue actualizada o cancelada recientemente',
     );
   });
 

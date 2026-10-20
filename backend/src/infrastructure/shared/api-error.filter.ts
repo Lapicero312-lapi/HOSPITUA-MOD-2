@@ -9,17 +9,15 @@ import type { Request, Response } from 'express';
 import {
   BusinessError,
   NotFoundError,
-  TooManyRequestsError,
 } from '../../domain/shared/business-error.js';
 import {
   ApiError,
   ApiErrorBody,
   INVALID_REQUEST,
-  UNEXPECTED_ERROR,
+  INVALID_REQUEST_MESSAGE,
+  REQUEST_NOT_PROCESSED,
+  REQUEST_NOT_PROCESSED_MESSAGE,
 } from './api-error.js';
-
-export const UNEXPECTED_ERROR_MESSAGE =
-  'No fue posible procesar la solicitud. Intente de nuevo.';
 
 /** Mensajes de los errores de forma que genera el servidor (ruta inexistente, cuerpo muy grande...). */
 const REQUEST_ERROR_MESSAGES: Record<number, string> = {
@@ -27,17 +25,16 @@ const REQUEST_ERROR_MESSAGES: Record<number, string> = {
   413: 'La solicitud supera el tamaño permitido.',
   415: 'El tipo de contenido de la solicitud no es compatible.',
 };
-const INVALID_REQUEST_MESSAGE = 'La solicitud no es válida.';
 
 /**
  * Filtro global: toda excepción de una solicitud HTTP sale como un `ApiError` 4xx con el cuerpo
  * `{ errorCode, message, timestamp, path }`.
- * - `ApiError`: su código, mensaje y estado.
- * - `BusinessError` (casos de uso): 400; `NotFoundError` 404 y `TooManyRequestsError` 429.
+ * - `ApiError`: su código, mensaje y estado; con `retryAfterSeconds`, la cabecera `Retry-After`.
+ * - `BusinessError` (casos de uso): 400; `NotFoundError`, 404.
  * - Errores 4xx del servidor o de Nest (ruta inexistente, JSON mal formado, cuerpo muy grande): su
  *   estado, con `INVALID_REQUEST` y un mensaje en español. Una validación de Nest con varios mensajes
  *   responde el primero.
- * - Cualquier otro error, también los 5xx: 400 `UNEXPECTED_ERROR`; el detalle solo va al log.
+ * - Cualquier otro error, también los 5xx: 400 `REQUEST_NOT_PROCESSED`; el detalle solo va al log.
  *
  * Fuera de HTTP (consumidores de RabbitMQ) no responde nada: vuelve a lanzar la excepción para que
  * la mensajería aplique sus reintentos y su dead-letter.
@@ -73,6 +70,9 @@ export class ApiErrorFilter implements ExceptionFilter {
       // Solo la ruta: la consulta (`?search=...`) puede llevar documentos o nombres.
       path: request.path,
     };
+    if (error.retryAfterSeconds !== undefined) {
+      response.setHeader('Retry-After', String(error.retryAfterSeconds));
+    }
     response.status(error.status).json(body);
   }
 
@@ -86,11 +86,8 @@ export class ApiErrorFilter implements ExceptionFilter {
     }
 
     if (exception instanceof BusinessError) {
-      return new ApiError(
-        exception.errorCode,
-        exception.message,
-        statusOf(exception),
-      );
+      const status = exception instanceof NotFoundError ? 404 : 400;
+      return new ApiError(exception.errorCode, exception.message, status);
     }
 
     const requestError = this.requestErrorOf(exception);
@@ -100,7 +97,7 @@ export class ApiErrorFilter implements ExceptionFilter {
       exception instanceof Error ? exception.message : 'Error no controlado',
       this.stackOf(exception),
     );
-    return new ApiError(UNEXPECTED_ERROR, UNEXPECTED_ERROR_MESSAGE);
+    return new ApiError(REQUEST_NOT_PROCESSED, REQUEST_NOT_PROCESSED_MESSAGE);
   }
 
   /**
@@ -131,12 +128,6 @@ export class ApiErrorFilter implements ExceptionFilter {
   private stackOf(exception: unknown): string | undefined {
     return exception instanceof Error ? exception.stack : undefined;
   }
-}
-
-function statusOf(error: BusinessError): number {
-  if (error instanceof NotFoundError) return 404;
-  if (error instanceof TooManyRequestsError) return 429;
-  return 400;
 }
 
 function isClientError(status: number): boolean {

@@ -1,9 +1,8 @@
 /**
  * Una regla de negocio no se cumple. Cada caso de uso declara sus códigos y los mensajes literales de
- * su spec, por ejemplo `new BusinessError('NO_AVAILABILITY', '...')`.
+ * su plan, por ejemplo `new BusinessError('NO_AVAILABILITY', '...')`.
  *
- * El dominio no conoce HTTP: el filtro global de `infrastructure/shared` decide el código de estado
- * (400 por defecto).
+ * El dominio no conoce HTTP: el filtro global de `infrastructure/shared` responde 400.
  */
 export class BusinessError extends Error {
   constructor(
@@ -21,5 +20,18 @@ export class BusinessError extends Error {
  */
 export class NotFoundError extends BusinessError {}
 
-/** Se superó el límite de solicitudes permitido (HTTP 429), como en la exportación SIRE. */
-export class TooManyRequestsError extends BusinessError {}
+export const CONCURRENT_UPDATE = 'CONCURRENT_UPDATE';
+
+/**
+ * Otra edición o cancelación cambió la reserva antes (su `updatedAt` ya no coincide). Siempre es
+ * 400 `CONCURRENT_UPDATE` (plan base, regla transversal 5), con el mismo mensaje en
+ * `update-reservation` y `cancel-reservation`.
+ */
+export class ConcurrentUpdateError extends BusinessError {
+  constructor() {
+    super(
+      CONCURRENT_UPDATE,
+      'Esta reserva ya fue actualizada o cancelada recientemente',
+    );
+  }
+}

@@ -25,9 +25,19 @@ class RequestDto {
   })
   startDate!: string;
 
-  @IsInt({ message: 'La cantidad de habitaciones debe ser un entero' })
-  @Min(1, { message: 'Debe reservar al menos una habitación' })
+  @IsInt({
+    message:
+      'La cantidad de personas debe ser un número entero mayor que cero.',
+    context: { errorCode: 'INVALID_GUEST_COUNT' },
+  })
+  @Min(1, {
+    message: 'Cada habitación debe tener al menos una persona.',
+    context: { errorCode: 'GUEST_COUNT_TOO_LOW' },
+  })
   roomCount!: number;
+
+  @IsInt({ message: 'El número de página debe ser 1 o mayor.' })
+  page!: number;
 
   @ValidateNested()
   @Type(() => GuestDto)
@@ -42,6 +52,7 @@ const valid = {
   startDate: '2026-10-20',
   roomCount: 1,
   guest: { firstName: 'Ana' },
+  page: 1,
 };
 
 describe('validationExceptionFactory', () => {
@@ -64,13 +75,30 @@ describe('validationExceptionFactory', () => {
     expect(error.errorCode).toBe('INVALID_STAY_DATES');
   });
 
-  it('sin código en el contexto responde INVALID_REQUEST', () => {
+  it('dentro de una propiedad gana el decorador escrito más arriba', () => {
+    const error = validationExceptionFactory(
+      errorsOf({ ...valid, roomCount: 'abc' }),
+    );
+
+    expect(error.errorCode).toBe('INVALID_GUEST_COUNT');
+  });
+
+  it('si solo falla el decorador de abajo, responde ese', () => {
     const error = validationExceptionFactory(
       errorsOf({ ...valid, roomCount: 0 }),
     );
 
+    expect(error.errorCode).toBe('GUEST_COUNT_TOO_LOW');
+    expect(error.message).toBe(
+      'Cada habitación debe tener al menos una persona.',
+    );
+  });
+
+  it('sin código en el contexto responde INVALID_REQUEST', () => {
+    const error = validationExceptionFactory(errorsOf({ ...valid, page: 'x' }));
+
     expect(error.errorCode).toBe('INVALID_REQUEST');
-    expect(error.message).toBe('Debe reservar al menos una habitación');
+    expect(error.message).toBe('El número de página debe ser 1 o mayor.');
   });
 
   it('encuentra el error dentro de un objeto anidado', () => {
