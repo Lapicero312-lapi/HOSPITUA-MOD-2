@@ -12,9 +12,10 @@ export const REQUEST_NOT_PROCESSED_MESSAGE =
   'No fue posible procesar la solicitud.';
 
 /**
- * Error de la API con su código HTTP, siempre 4xx (400 por defecto): el diccionario prohíbe responder
- * 5xx, 2xx o 3xx para un error. Lo lanzan los adaptadores de entrada; los casos de uso lanzan
- * `BusinessError`, que el filtro global traduce a un `ApiError`.
+ * Error de la API con su código HTTP (400 por defecto). El diccionario prohíbe responder 5xx, 2xx o 3xx
+ * para un error: si llega con un estado que no es 4xx, el filtro global responde 400. Lo lanzan los
+ * adaptadores de entrada; los casos de uso lanzan `BusinessError`, que el filtro global traduce a un
+ * `ApiError`.
  */
 export class ApiError extends Error {
   constructor(
