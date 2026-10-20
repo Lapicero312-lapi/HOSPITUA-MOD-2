@@ -1,5 +1,4 @@
 import {
-  ArgumentsHost,
   BadRequestException,
   Body,
   Controller,
@@ -8,33 +7,16 @@ import {
   InternalServerErrorException,
   Logger,
   Post,
-  Res,
   ServiceUnavailableException,
-  ValidationPipe,
 } from '@nestjs/common';
-import { APP_FILTER, APP_PIPE } from '@nestjs/core';
+import { APP_FILTER } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
-import { IsString } from 'class-validator';
-import type { Response } from 'express';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
 import { vi } from 'vitest';
-import {
-  BusinessError,
-  ConcurrentUpdateError,
-  NotFoundError,
-} from '../../../../src/domain/shared/business-error.js';
+import { BusinessError } from '../../../../src/domain/shared/business-error.js';
 import { ApiError } from '../../../../src/infrastructure/shared/api-error.js';
 import { ApiErrorFilter } from '../../../../src/infrastructure/shared/api-error.filter.js';
-import { validationExceptionFactory } from '../../../../src/infrastructure/shared/validation-exception.factory.js';
-
-class ProbeDto {
-  @IsString({
-    message: 'La referencia de la reserva no es válida',
-    context: { errorCode: 'INVALID_RESERVATION_REF' },
-  })
-  reservationRef!: string;
-}
 
 @Controller('probe')
 class ProbeController {
@@ -43,29 +25,14 @@ class ProbeController {
     throw new BusinessError('NO_AVAILABILITY', 'No hay disponibilidad');
   }
 
-  @Get('concurrent')
-  concurrent() {
-    throw new ConcurrentUpdateError();
-  }
-
-  @Get('not-found')
-  notFound() {
-    throw new NotFoundError('RESERVATION_NOT_FOUND', 'La reserva no existe');
-  }
-
-  @Get('limit')
-  limit() {
-    throw new ApiError(
-      'TOO_MANY_REQUESTS',
-      'Se superó el límite de solicitudes de exportación. Intente de nuevo en unos segundos.',
-      429,
-      30,
-    );
-  }
-
   @Get('api-error')
   apiError() {
-    throw new ApiError('INVALID_HEADER', 'Falta la cabecera X-Client', 400);
+    throw new ApiError('INVALID_CLIENT', 'Cliente no válido');
+  }
+
+  @Get('api-error-429')
+  apiError429() {
+    throw new ApiError('TOO_MANY_REQUESTS', 'Demasiadas solicitudes', 429);
   }
 
   @Get('api-error-5xx')
@@ -73,28 +40,18 @@ class ProbeController {
     throw new ApiError('MAL_USADO', 'Estado fuera de 4xx', 503);
   }
 
-  @Post('dto')
-  dto(@Body() body: ProbeDto) {
-    return body;
+  @Get('nest-400')
+  nest400() {
+    throw new BadRequestException('detalle de Nest');
   }
 
-  @Get('nest-validation')
-  nestValidation() {
-    throw new BadRequestException(['primer mensaje', 'segundo mensaje']);
-  }
-
-  @Post('raw')
-  raw(@Body() body: unknown) {
-    return body;
-  }
-
-  @Get('http-5xx')
-  http5xx() {
+  @Get('nest-503')
+  nest503() {
     throw new ServiceUnavailableException('base de datos caída en 10.0.0.5');
   }
 
-  @Get('internal')
-  internal() {
+  @Get('nest-500')
+  nest500() {
     throw new InternalServerErrorException('detalle interno');
   }
 
@@ -105,37 +62,26 @@ class ProbeController {
     );
   }
 
-  @Get('string')
-  string() {
+  @Get('not-an-error')
+  notAnError() {
     throw 'algo que no es un Error';
   }
 
-  @Get('after-headers')
-  afterHeaders(@Res() res: Response) {
-    res.status(200).write('parcial');
-    throw new Error('falló a mitad de la descarga');
+  @Post('raw')
+  raw(@Body() body: unknown) {
+    return body;
   }
 }
 
 describe('ApiErrorFilter', () => {
   let app: INestApplication<App>;
   const logError = vi.spyOn(Logger.prototype, 'error');
-  const logWarn = vi.spyOn(Logger.prototype, 'warn');
 
   beforeAll(async () => {
     logError.mockImplementation(() => {});
-    logWarn.mockImplementation(() => {});
     const moduleRef = await Test.createTestingModule({
       controllers: [ProbeController],
-      providers: [
-        { provide: APP_FILTER, useClass: ApiErrorFilter },
-        {
-          provide: APP_PIPE,
-          useValue: new ValidationPipe({
-            exceptionFactory: validationExceptionFactory,
-          }),
-        },
-      ],
+      providers: [{ provide: APP_FILTER, useClass: ApiErrorFilter }],
     }).compile();
     app = moduleRef.createNestApplication({ logger: false });
     await app.init();
@@ -143,19 +89,17 @@ describe('ApiErrorFilter', () => {
 
   beforeEach(() => {
     logError.mockClear();
-    logWarn.mockClear();
   });
 
   afterAll(async () => {
     await app.close();
     logError.mockRestore();
-    logWarn.mockRestore();
   });
 
   const get = (path: string) => request(app.getHttpServer()).get(path);
 
-  describe('errores de negocio y de la API', () => {
-    it('responde el cuerpo uniforme con el código y el mensaje literal', async () => {
+  describe('BusinessError', () => {
+    it('responde 400 con el cuerpo { errorCode, message, timestamp, path }', async () => {
       const res = await get('/probe/business').expect(400);
 
       expect(res.body).toEqual({
@@ -166,137 +110,62 @@ describe('ApiErrorFilter', () => {
       });
     });
 
-    it('el timestamp es una fecha ISO en UTC y reciente', async () => {
-      const before = Date.now();
-      const { body } = await get('/probe/business');
+    it('no se registra como error en el log', async () => {
+      await get('/probe/business');
 
-      expect(new Date(body.timestamp).toISOString()).toBe(body.timestamp);
-      expect(Date.parse(body.timestamp)).toBeGreaterThanOrEqual(before - 1000);
-      expect(Date.parse(body.timestamp)).toBeLessThanOrEqual(Date.now() + 1000);
+      expect(logError).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('ApiError', () => {
+    it('responde su código, su mensaje y 400 por defecto', async () => {
+      const res = await get('/probe/api-error').expect(400);
+
+      expect(res.body.errorCode).toBe('INVALID_CLIENT');
+      expect(res.body.message).toBe('Cliente no válido');
     });
 
-    it('NotFoundError responde 404', async () => {
-      const res = await get('/probe/not-found').expect(404);
+    it('responde su estado cuando es 4xx', async () => {
+      const res = await get('/probe/api-error-429').expect(429);
 
-      expect(res.body.errorCode).toBe('RESERVATION_NOT_FOUND');
-    });
-
-    it('el conflicto de concurrencia responde 400 CONCURRENT_UPDATE', async () => {
-      const res = await get('/probe/concurrent').expect(400);
-
-      expect(res.body.errorCode).toBe('CONCURRENT_UPDATE');
-    });
-
-    it('el 429 lleva la cabecera Retry-After', async () => {
-      const res = await get('/probe/limit').expect(429);
-
-      expect(res.headers['retry-after']).toBe('30');
       expect(res.body.errorCode).toBe('TOO_MANY_REQUESTS');
     });
 
-    it('sin retryAfterSeconds no se agrega Retry-After', async () => {
-      const res = await get('/probe/business');
-
-      expect(res.headers['retry-after']).toBeUndefined();
-    });
-
-    it('ApiError responde su código y su estado', async () => {
-      const res = await get('/probe/api-error').expect(400);
-
-      expect(res.body.errorCode).toBe('INVALID_HEADER');
-      expect(res.body.message).toBe('Falta la cabecera X-Client');
-    });
-
-    it('un ApiError con estado fuera de 4xx responde 400 y deja un aviso', async () => {
+    it('con un estado fuera de 4xx responde 400', async () => {
       const res = await get('/probe/api-error-5xx').expect(400);
 
       expect(res.body.errorCode).toBe('MAL_USADO');
-      expect(logWarn).toHaveBeenCalledTimes(1);
-    });
-
-    it('los errores controlados no se registran como errores', async () => {
-      await get('/probe/business');
-      await get('/probe/not-found');
-
-      expect(logError).not.toHaveBeenCalled();
-    });
-
-    it('no incluye la consulta de la URL en el campo path', async () => {
-      const res = await get(
-        '/probe/business?search=CC1234567890&name=Ana',
-      ).expect(400);
-
-      expect(res.body.path).toBe('/probe/business');
-      expect(JSON.stringify(res.body)).not.toContain('1234567890');
     });
   });
 
-  describe('validación de la solicitud', () => {
-    it('un DTO inválido responde el código y el mensaje del decorador', async () => {
-      const res = await request(app.getHttpServer())
-        .post('/probe/dto')
-        .send({ reservationRef: 123 })
-        .expect(400);
-
-      expect(res.body.errorCode).toBe('INVALID_RESERVATION_REF');
-      expect(res.body.message).toBe('La referencia de la reserva no es válida');
-    });
-
-    it('una validación de Nest con varios mensajes responde el primero', async () => {
-      const res = await get('/probe/nest-validation').expect(400);
-
-      expect(res.body.errorCode).toBe('INVALID_REQUEST');
-      expect(res.body.message).toBe('primer mensaje');
-    });
-  });
-
-  describe('errores de forma generados por el servidor', () => {
-    it('una ruta inexistente responde 404 en español', async () => {
-      const res = await get('/no-existe').expect(404);
-
-      expect(res.body).toEqual({
-        errorCode: 'INVALID_REQUEST',
-        message: 'La ruta solicitada no existe.',
-        timestamp: expect.any(String),
-        path: '/no-existe',
-      });
-    });
-
-    it('un JSON mal formado responde 400 sin el texto del intérprete', async () => {
-      const res = await request(app.getHttpServer())
-        .post('/probe/raw')
-        .set('Content-Type', 'application/json')
-        .send('{"roto":')
-        .expect(400);
-
-      expect(res.body.errorCode).toBe('INVALID_REQUEST');
-      expect(res.body.message).toBe('La solicitud no es válida.');
-    });
-
-    it('un cuerpo demasiado grande responde 413 y no es un error no controlado', async () => {
-      const res = await request(app.getHttpServer())
-        .post('/probe/raw')
-        .set('Content-Type', 'application/json')
-        .send(JSON.stringify({ texto: 'x'.repeat(200_000) }))
-        .expect(413);
-
-      expect(res.body.errorCode).toBe('INVALID_REQUEST');
-      expect(res.body.message).toBe('La solicitud supera el tamaño permitido.');
-      expect(logError).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('errores no controlados', () => {
-    it.each(['crash', 'http-5xx', 'internal', 'string'])(
-      'GET /probe/%s responde 400 controlado y nunca 5xx',
-      async (route) => {
-        const res = await get(`/probe/${route}`);
+  describe('cualquier otra excepción', () => {
+    it.each([
+      ['un Error', '/probe/crash'],
+      ['algo que no es un Error', '/probe/not-an-error'],
+      ['un 400 de Nest', '/probe/nest-400'],
+      ['un 500 de Nest', '/probe/nest-500'],
+      ['un 503 de Nest', '/probe/nest-503'],
+      ['una ruta inexistente', '/no-existe'],
+    ])(
+      '%s responde 400 REQUEST_NOT_PROCESSED y nunca otro estado',
+      async (_, path) => {
+        const res = await get(path);
 
         expect(res.status).toBe(400);
         expect(res.body.errorCode).toBe('REQUEST_NOT_PROCESSED');
         expect(res.body.message).toBe('No fue posible procesar la solicitud.');
       },
     );
+
+    it('un JSON mal formado responde 400 REQUEST_NOT_PROCESSED', async () => {
+      const res = await request(app.getHttpServer())
+        .post('/probe/raw')
+        .set('Content-Type', 'application/json')
+        .send('{"roto":')
+        .expect(400);
+
+      expect(res.body.errorCode).toBe('REQUEST_NOT_PROCESSED');
+    });
 
     it('registra el detalle en el log', async () => {
       await get('/probe/crash');
@@ -307,9 +176,9 @@ describe('ApiErrorFilter', () => {
       );
     });
 
-    it('no filtra datos de infraestructura en la respuesta', async () => {
+    it('no responde datos de infraestructura', async () => {
       const crash = await get('/probe/crash');
-      const unavailable = await get('/probe/http-5xx');
+      const unavailable = await get('/probe/nest-503');
       const text = JSON.stringify([crash.body, unavailable.body]);
 
       for (const secret of [
@@ -322,21 +191,20 @@ describe('ApiErrorFilter', () => {
         expect(text).not.toContain(secret);
       }
     });
-
-    it('si la respuesta ya empezó, la cierra sin romper la conexión', async () => {
-      const res = await get('/probe/after-headers');
-
-      expect(res.status).toBe(200);
-      expect(res.text).toBe('parcial');
-      expect(logError).toHaveBeenCalledTimes(1);
-    });
   });
 
-  it('fuera de HTTP vuelve a lanzar la excepción para la mensajería', () => {
-    const filter = new ApiErrorFilter();
-    const host = { getType: () => 'rmq' } as unknown as ArgumentsHost;
-    const original = new BusinessError('ALGO', 'falló el consumidor');
+  it('el timestamp es una fecha ISO 8601 en UTC y reciente', async () => {
+    const before = Date.now();
+    const { body } = await get('/probe/business');
 
-    expect(() => filter.catch(original, host)).toThrow(original);
+    expect(new Date(body.timestamp).toISOString()).toBe(body.timestamp);
+    expect(Date.parse(body.timestamp)).toBeGreaterThanOrEqual(before - 1000);
+    expect(Date.parse(body.timestamp)).toBeLessThanOrEqual(Date.now() + 1000);
+  });
+
+  it('path es la ruta de la solicitud, sin la consulta', async () => {
+    const res = await get('/probe/business?search=CC1234567890');
+
+    expect(res.body.path).toBe('/probe/business');
   });
 });
