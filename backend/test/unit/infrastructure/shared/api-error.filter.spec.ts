@@ -22,22 +22,36 @@ import { ApiErrorFilter } from '../../../../src/infrastructure/shared/api-error.
 class ProbeController {
   @Get('business')
   business() {
-    throw new BusinessError('NO_AVAILABILITY', 'No hay disponibilidad');
+    throw new BusinessError(
+      'NO_AVAILABILITY',
+      'Ya no hay disponibilidad para las fechas solicitadas.',
+    );
   }
 
   @Get('api-error')
   apiError() {
-    throw new ApiError('INVALID_CLIENT', 'Cliente no válido');
+    throw new ApiError(
+      'IDEMPOTENCY_KEY_REQUIRED',
+      'Falta el identificador de la solicitud.',
+    );
   }
 
   @Get('api-error-429')
   apiError429() {
-    throw new ApiError('TOO_MANY_REQUESTS', 'Demasiadas solicitudes', 429);
+    throw new ApiError(
+      'TOO_MANY_REQUESTS',
+      'Se superó el límite de solicitudes de exportación. Intente de nuevo en unos segundos.',
+      429,
+    );
   }
 
   @Get('api-error-5xx')
   apiError5xx() {
-    throw new ApiError('NO_AVAILABILITY', 'Estado fuera de 4xx', 503);
+    throw new ApiError(
+      'NO_AVAILABILITY',
+      'Ya no hay disponibilidad para las fechas solicitadas.',
+      503,
+    );
   }
 
   @Get('nest-400')
@@ -104,7 +118,7 @@ describe('ApiErrorFilter', () => {
 
       expect(res.body).toEqual({
         errorCode: 'NO_AVAILABILITY',
-        message: 'No hay disponibilidad',
+        message: 'Ya no hay disponibilidad para las fechas solicitadas.',
         timestamp: expect.any(String),
         path: '/probe/business',
       });
@@ -121,8 +135,8 @@ describe('ApiErrorFilter', () => {
     it('responde su código, su mensaje y 400 por defecto', async () => {
       const res = await get('/probe/api-error').expect(400);
 
-      expect(res.body.errorCode).toBe('INVALID_CLIENT');
-      expect(res.body.message).toBe('Cliente no válido');
+      expect(res.body.errorCode).toBe('IDEMPOTENCY_KEY_REQUIRED');
+      expect(res.body.message).toBe('Falta el identificador de la solicitud.');
     });
 
     it('responde su estado cuando es 4xx', async () => {
