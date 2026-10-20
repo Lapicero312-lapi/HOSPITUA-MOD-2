@@ -13,14 +13,13 @@ describe('BusinessError', () => {
     );
   });
 
-  it('es un Error con el nombre de su clase', () => {
+  it('es un Error', () => {
     const error = new BusinessError(
       'NO_AVAILABILITY',
       'Ya no hay disponibilidad para las fechas solicitadas.',
     );
 
     expect(error).toBeInstanceOf(Error);
-    expect(error.name).toBe('BusinessError');
   });
 
   it('no conoce códigos HTTP', () => {

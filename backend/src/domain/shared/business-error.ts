@@ -10,6 +10,5 @@ export class BusinessError extends Error {
     message: string,
   ) {
     super(message);
-    this.name = new.target.name;
   }
 }

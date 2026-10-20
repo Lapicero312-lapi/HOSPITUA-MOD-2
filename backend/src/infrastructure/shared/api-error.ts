@@ -24,6 +24,5 @@ export class ApiError extends Error {
     readonly status: number = 400,
   ) {
     super(message);
-    this.name = new.target.name;
   }
 }
