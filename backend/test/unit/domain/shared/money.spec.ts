@@ -8,9 +8,7 @@ describe('Money', () => {
     expect(money.currency).toBe('COP');
   });
 
-  it('conserva el valor exacto aunque tenga más dígitos de los que soporta un number', () => {
-    expect(Money.of('1234567890123.456789', 'COP').amount).toBe(
-      '1234567890123.456789',
-    );
+  it('conserva exacto el mayor importe de una columna numeric(14,2)', () => {
+    expect(Money.of('999999999999.99', 'COP').amount).toBe('999999999999.99');
   });
 });

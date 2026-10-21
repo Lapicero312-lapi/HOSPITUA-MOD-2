@@ -63,14 +63,15 @@ describe('HotelClock', () => {
     });
 
     it('usa el día de Bogotá aunque en UTC ya sea el día siguiente', () => {
-      // 2026-10-10 02:00 en UTC son las 21:00 del 9 en Bogotá.
-      vi.setSystemTime(new Date('2026-10-10T02:00:00.000Z'));
+      // 2026-10-10 04:59 en UTC son las 23:59 del 9 en Bogotá.
+      vi.setSystemTime(new Date('2026-10-10T04:59:00.000Z'));
 
       expect(clock.today()).toBe('2026-10-09');
     });
 
     it('now() devuelve el instante que corresponde a la hora fijada', () => {
-      const instant = new Date('2026-10-09T15:30:00.000-05:00');
+      // 00:00:30 es la hora del cierre del día (plan base).
+      const instant = new Date('2026-10-09T00:00:30.000-05:00');
       vi.setSystemTime(instant);
 
       expect(clock.now().getTime()).toBe(instant.getTime());
