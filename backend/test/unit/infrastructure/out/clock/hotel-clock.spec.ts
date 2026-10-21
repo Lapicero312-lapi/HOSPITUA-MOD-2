@@ -1,7 +1,7 @@
 import { HotelClock } from '../../../../../src/infrastructure/out/clock/hotel-clock.js';
 
-/** Día en `America/Bogota` calculado sin `luxon`, para comparar con el reloj. */
-function bogotaDate(instant: Date): string {
+/** Día de Colombia (`America/Bogota`) calculado sin `luxon`, para comparar con el reloj. */
+function colombiaDate(instant: Date): string {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Bogota',
   }).format(instant);
@@ -11,10 +11,10 @@ describe('HotelClock', () => {
   const clock = new HotelClock();
 
   describe('con la hora real', () => {
-    it('today() es el día de Bogotá como AAAA-MM-DD', () => {
-      const before = bogotaDate(new Date());
+    it('today() es el día de Colombia como AAAA-MM-DD', () => {
+      const before = colombiaDate(new Date());
       const today = clock.today();
-      const after = bogotaDate(new Date());
+      const after = colombiaDate(new Date());
 
       expect(today).toMatch(/^\d{4}-\d{2}-\d{2}$/);
       expect([before, after]).toContain(today);
@@ -32,7 +32,7 @@ describe('HotelClock', () => {
   });
 
   // Se fija la hora que ve la prueba (no la del computador) para recorrer el cambio de día.
-  describe('el día operativo va de 00:00 a 23:59 en Bogotá', () => {
+  describe('el día operativo va de 00:00 a 23:59 en Colombia', () => {
     beforeEach(() => {
       vi.useFakeTimers();
     });
@@ -41,13 +41,13 @@ describe('HotelClock', () => {
       vi.useRealTimers();
     });
 
-    it('a las 00:00 en Bogotá ya es el día nuevo', () => {
+    it('a las 00:00 en Colombia ya es el día nuevo', () => {
       vi.setSystemTime(new Date('2026-10-09T00:00:00.000-05:00'));
 
       expect(clock.today()).toBe('2026-10-09');
     });
 
-    it('a las 23:59:59.999 en Bogotá todavía es el mismo día', () => {
+    it('a las 23:59:59.999 en Colombia todavía es el mismo día', () => {
       vi.setSystemTime(new Date('2026-10-09T23:59:59.999-05:00'));
 
       expect(clock.today()).toBe('2026-10-09');
@@ -62,8 +62,8 @@ describe('HotelClock', () => {
       expect(clock.today()).toBe('2026-10-10');
     });
 
-    it('usa el día de Bogotá aunque en UTC ya sea el día siguiente', () => {
-      // 2026-10-10 04:59 en UTC son las 23:59 del 9 en Bogotá.
+    it('usa el día de Colombia aunque en UTC ya sea el día siguiente', () => {
+      // 2026-10-10 04:59 en UTC son las 23:59 del 9 en Colombia.
       vi.setSystemTime(new Date('2026-10-10T04:59:00.000Z'));
 
       expect(clock.today()).toBe('2026-10-09');
