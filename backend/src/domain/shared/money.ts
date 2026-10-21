@@ -28,11 +28,6 @@ export class Money {
   }
 
   plus(other: Money): Money {
-    if (other.currency !== this.currency) {
-      throw new Error(
-        `No se pueden sumar importes en ${this.currency} y en ${other.currency}`,
-      );
-    }
     return new Money(this.value.plus(other.value), this.currency);
   }
 

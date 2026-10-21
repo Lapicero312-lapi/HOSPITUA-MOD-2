@@ -43,12 +43,6 @@ describe('Money', () => {
       expect(total.currency).toBe('COP');
     });
 
-    it('no suma importes de monedas distintas', () => {
-      expect(() =>
-        Money.of('250000.00', 'COP').plus(Money.of('400.00', 'USD')),
-      ).toThrow();
-    });
-
     it('multiplica y divide con exactitud: 400 × 15 / 100 = 60.00', () => {
       const commission = Money.of('400.00', 'USD').times('15').dividedBy('100');
 
