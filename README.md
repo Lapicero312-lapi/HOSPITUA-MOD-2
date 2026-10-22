@@ -37,10 +37,12 @@ Se ejecutan desde la raíz. Cambia `backend` por `frontend` para el otro paquete
 | `pnpm --filter backend format` | Da formato al código (Prettier) |
 | `pnpm --filter backend test` | Pruebas unitarias (Vitest) |
 | `pnpm --filter backend test:e2e` | Pruebas e2e del backend |
+| `pnpm --filter backend test:integration` | Pruebas de integración: arrancan PostgreSQL y RabbitMQ propios con Testcontainers (necesita Docker Desktop abierto, no `docker compose`) |
 | `pnpm --filter backend build` | Compila |
 | `pnpm lint` / `pnpm test` / `pnpm build` | Lo mismo, en los dos paquetes |
 
-Antes de abrir una PR, corre `lint`, `typecheck`, `format` y `test`: es lo mismo que revisa el CI.
+Antes de abrir una PR, corre `lint`, `typecheck`, `format`, `test`, `test:e2e` y `test:integration`: es lo
+mismo que revisa el CI.
 
 ## Base de datos
 
@@ -129,6 +131,9 @@ cambies sin preguntar.
   editor. `Ctrl + Shift + P` → **TypeScript: Restart TS Server**. Para usar el TypeScript del proyecto:
   `Ctrl + Shift + P` → **TypeScript: Select TypeScript Version** → *Use Workspace Version*.
 - **`pnpm` no se reconoce:** ejecuta `corepack enable` y abre una terminal nueva.
+- **Docker Desktop no arranca o `docker` dice que no encuentra el motor:** en Windows 11 Home necesita
+  WSL 2. En PowerShell como administrador: `wsl --install --no-distribution`, reinicia y abre Docker
+  Desktop hasta que diga "Engine running".
 - **`pnpm install` dice "Unsupported engine":** tienes otra versión de Node. Instala Node 22 (la del CI y
   de `.nvmrc`); pnpm no instala con otra para que todos probemos con la misma.
 

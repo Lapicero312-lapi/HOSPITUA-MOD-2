@@ -22,6 +22,7 @@
     "test:cov": "vitest run --coverage",
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
     "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
+    "test:integration": "vitest run --config ./vitest.config.integration.ts",
     "migration:run": "nest build && typeorm migration:run -d dist/infrastructure/config/data-source.js",
     "migration:revert": "nest build && typeorm migration:revert -d dist/infrastructure/config/data-source.js",
     "migration:show": "nest build && typeorm migration:show -d dist/infrastructure/config/data-source.js"
@@ -54,6 +55,8 @@
     "@nestjs/mau": "^0.2.6",
     "@nestjs/schematics": "^12.0.0",
     "@nestjs/testing": "^12.0.1",
+    "@testcontainers/postgresql": "^12.2.1",
+    "@testcontainers/rabbitmq": "^12.2.1",
     "@types/express": "^5.0.0",
     "@types/luxon": "^3.7.6",
     "@types/node": "^22.20.5",
@@ -66,6 +69,7 @@
     "prettier": "^3.4.2",
     "source-map-support": "^0.5.21",
     "supertest": "^7.0.0",
+    "testcontainers": "^12.2.1",
     "typescript": "6.0.3",
     "vite": "^8.0.0",
     "vitest": "^4.1.2"

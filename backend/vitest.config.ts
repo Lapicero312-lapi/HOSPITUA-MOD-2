@@ -7,6 +7,7 @@ export default defineConfig({
     // Sin globales: cada prueba importa describe, it, expect y vi desde 'vitest'.
     globals: false,
     root: './',
-    include: ['**/*.spec.ts'],
+    // Unitarias y de contrato: sin base de datos ni cola. Las de integración tienen su configuración.
+    include: ['test/unit/**/*.spec.ts', 'test/contract/**/*.spec.ts'],
   },
 });

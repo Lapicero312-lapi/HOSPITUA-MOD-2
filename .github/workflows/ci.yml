@@ -43,6 +43,9 @@ jobs:
         run: pnpm --filter backend test
       - name: Pruebas e2e
         run: pnpm --filter backend test:e2e
+      # Testcontainers arranca PostgreSQL y RabbitMQ con el Docker que trae el runner de GitHub.
+      - name: Pruebas de integración (Testcontainers)
+        run: pnpm --filter backend test:integration
       - name: Compilación
         run: pnpm --filter backend build
 
