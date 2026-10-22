@@ -198,6 +198,36 @@ describe('ApiErrorFilter', () => {
       );
     });
 
+    it.each([
+      ['una ruta inexistente', '/does-not-exist?search=1144093552'],
+      ['un 400 de Nest', '/probe/nest-400'],
+    ])(
+      '%s es un error de la solicitud: no se registra como error',
+      async (_, path) => {
+        await get(path);
+
+        expect(logError).not.toHaveBeenCalled();
+      },
+    );
+
+    it('un JSON mal formado es un error de la solicitud: no se registra como error', async () => {
+      await request(app.getHttpServer())
+        .post('/probe/raw')
+        .set('Content-Type', 'application/json')
+        .send('{"roto":');
+
+      expect(logError).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['un 500 de Nest', '/probe/nest-500'],
+      ['un 503 de Nest', '/probe/nest-503'],
+    ])('%s no es controlado: se registra como error', async (_, path) => {
+      await get(path);
+
+      expect(logError).toHaveBeenCalledTimes(1);
+    });
+
     it('si no es un Error, registra solo su tipo y no su contenido', async () => {
       await get('/probe/not-an-error');
 

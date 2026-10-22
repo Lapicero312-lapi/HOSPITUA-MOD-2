@@ -1,4 +1,10 @@
-import { ArgumentsHost, Catch, ExceptionFilter, Logger } from '@nestjs/common';
+import {
+  ArgumentsHost,
+  Catch,
+  ExceptionFilter,
+  HttpException,
+  Logger,
+} from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { BusinessError } from '../../domain/shared/business-error.js';
 import {
@@ -13,8 +19,14 @@ import {
  * cuerpo `{ errorCode, message, timestamp, path }`; nunca responde 500.
  * - `ApiError`: su código, su mensaje y su estado (si no es 4xx, 400).
  * - `BusinessError`: 400 con su código y su mensaje.
- * - Cualquier otra excepción: registra el detalle en el log (si no es un `Error`, solo su tipo) y
- *   responde 400 `REQUEST_NOT_PROCESSED`, sin datos de infraestructura.
+ * - Error de la solicitud (un 4xx de Nest: ruta inexistente, JSON mal formado...): 400
+ *   `REQUEST_NOT_PROCESSED`.
+ * - Cualquier otra excepción (no controlada): registra el detalle con nivel `error` (si no es un
+ *   `Error`, solo su tipo) y responde 400 `REQUEST_NOT_PROCESSED`, sin datos de infraestructura.
+ *
+ * Los errores controlados (los tres primeros) no se registran aquí: los registra el log de la solicitud
+ * con nivel `warn` y el `errorCode`, que el filtro deja en `response.locals` (plan base, "Logs y
+ * correlación").
  */
 @Catch()
 export class ApiErrorFilter implements ExceptionFilter {
@@ -32,6 +44,7 @@ export class ApiErrorFilter implements ExceptionFilter {
       timestamp: new Date().toISOString(),
       path: pathWithoutQuery(request),
     };
+    response.locals.errorCode = error.errorCode;
     response.status(error.status).json(body);
   }
 
@@ -44,6 +57,14 @@ export class ApiErrorFilter implements ExceptionFilter {
 
     if (exception instanceof BusinessError) {
       return new ApiError(exception.errorCode, exception.message);
+    }
+
+    // Su mensaje no se registra: el de una ruta inexistente trae la URL, con la consulta.
+    if (
+      exception instanceof HttpException &&
+      isClientError(exception.getStatus())
+    ) {
+      return new ApiError(REQUEST_NOT_PROCESSED, REQUEST_NOT_PROCESSED_MESSAGE);
     }
 
     if (exception instanceof Error) {
