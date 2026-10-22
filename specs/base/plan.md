@@ -68,7 +68,7 @@ describe lo propio.
 | Migraciones de esquema | Migraciones de TypeORM escritas en SQL, versionadas en `backend/src/migrations` | El esquema no se genera solo desde las clases: se revisa y se versiona |
 | Librería de RabbitMQ | `@golevelup/nestjs-rabbitmq` (aprobado) | Exchange topic, reintentos con espera creciente y dead-letter sin armarlos a mano |
 | Gestor de paquetes | pnpm (aprobado) | Instalación rápida, dependencias estrictas y filtros por paquete (`pnpm --filter backend test`) |
-| Control de concurrencia | Comparación de `updatedAt` (`@UpdateDateColumn` de TypeORM, con precisión de microsegundos) al guardar | Edición y cancelación simultáneas (`CONCURRENT_UPDATE`) |
+| Control de concurrencia | Comparación de `updatedAt` al guardar (`UPDATE … WHERE updated_at = :leído`), con precisión de microsegundos. No se usa `@UpdateDateColumn`: TypeORM convierte la columna a `Date` y JavaScript solo guarda milisegundos, así que la comparación nunca coincidiría. El repositorio lee `updated_at` como texto y lo actualiza con `now()` en cada cambio | Edición y cancelación simultáneas (`CONCURRENT_UPDATE`) |
 | Dinero | `decimal.js`, columnas `numeric(14,2)`, redondeo `ROUND_HALF_UP`; **nunca `number`** | Comisión exacta |
 | Fechas | Fechas puras `AAAA-MM-DD` (texto `date` en la base) y `luxon` para el día operativo en `America/Bogota` | Evita corrimientos por zona horaria. Se guardan e intercambian como `AAAA-MM-DD`; las pantallas las muestran como `dd/mm/aaaa` |
 | Seguridad | **No se implementa en el Módulo 2**: es una capa aparte del sistema de microservicios. El frontend simula el login. Quién llama se indica con la cabecera `X-Client` (`RECEPTIONIST`, `MODULE1`, `MODULE3`) y quién hizo la acción con `X-User`; ninguna se valida | Ver la regla transversal 10 |
@@ -777,7 +777,7 @@ tablas se unen por sus claves. Hay cuatro excepciones a propósito:
 | `created_at` | `timestamptz` | no | |
 | `conflict_reason` | `varchar(25)` | sí | Solo reservas de Booking en conflicto: `NO_ROOM_AVAILABLE`, `CAPACITY_EXCEEDED`, `CHANGE_NOT_APPLICABLE` (D13) |
 | `conflict_detected_at` | `timestamptz` | sí | Cuándo se detectó el conflicto |
-| `updated_at` | `timestamptz(6)` | no | Control de concurrencia (`@UpdateDateColumn`) |
+| `updated_at` | `timestamptz(6)` | no | Control de concurrencia: lo actualiza el repositorio con `now()` en cada cambio y se lee como texto, para no perder los microsegundos |
 
 - Único `(ota_id, external_confirmation_code)`.
 - `CHECK`: `conflict_reason` y `conflict_detected_at` van los dos o ninguno, y solo en `source = 'OTA'`.
