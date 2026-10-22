@@ -110,6 +110,10 @@ Reglas:
    ni de `infrastructure/`.
 6. Los casos de uso no se llaman entre sí por sus clases internas: si uno necesita a otro (por ejemplo,
    cancelar y modificar usan "Consultar y buscar reservas"), lo usa por su puerto de entrada.
+7. **Transacciones.** Un caso de uso abre la transacción con el puerto de salida `TransactionRunner`
+   (`TRANSACTION_RUNNER`) y pasa la `Transaction` que recibe a los repositorios y a los puertos que
+   escriben en ella (`record(tx, …)`). Para `domain/` y `application/` la `Transaction` es opaca: solo
+   la infraestructura de persistencia sabe qué contiene.
 
 ## Modelo de dominio
 
@@ -266,6 +270,14 @@ El diagrama con las tablas, sus columnas y sus relaciones está en "Modelo de da
   de la propiedad y no de la agencia.
 - **`Cancellation`**, **`GuestData`**, **`MigratoryMovement`**, **`SireExport`**: registros propios que referencian a la reserva por `reservationRef`. Son inmutables una
   vez creados.
+
+Cada agregado se arma con `restore(props)`, que comprueba sus invariantes; los adaptadores de
+persistencia lo usan al leerlo. Las fábricas de cada canal (`createDirect`, `createOta`) son de los planes
+que crean reservas. Si no se cumple una regla del usuario, se lanza `BusinessError` con el código del
+plan. Si se rompe una regla que solo un error del programa puede romper (por ejemplo, una reserva directa
+con agencia), se lanza `Error`, que el filtro responde como 400 `REQUEST_NOT_PROCESSED` y registra con
+nivel `error`. Para el dominio, `updatedAt` es una versión opaca: la entrega el repositorio y se le
+devuelve igual al guardar.
 
 ### Datos externos (no son entidades del dominio)
 
@@ -462,7 +474,9 @@ backend/
     │   │   └── jobs/             # lista del día (00:00), cierre del día (00:00:30), reintentos, feed de
     │   │                         #   Channex, disponibilidad y no-shows pendientes (30 s), tipos y disponibilidad completa (03:00)
     │   ├── out/
-    │   │   ├── persistence/      # clases de tabla TypeORM, mapeadores y repositorios
+    │   │   ├── persistence/      # clases de tabla TypeORM, mapeadores, repositorios y PersistenceModule
+    │   │   │                     #   (AppModule lo importa cuando el primer caso de uso usa la base; desde
+    │   │   │                     #   entonces, las e2e arrancan PostgreSQL con Testcontainers)
     │   │   ├── module1/          # cliente HTTP del Módulo 1
     │   │   ├── module3/          # cliente HTTP del Módulo 3
     │   │   ├── channex/          # cliente HTTP de Channex (user-api-key, manejo de 429)
@@ -475,7 +489,8 @@ backend/test/
     ├── unit/                     # dominio, casos de uso e infraestructura sin base de datos ni cola (espejo de src/)
     ├── integration/              # Testcontainers (PostgreSQL, RabbitMQ)
     ├── contract/                 # contratos REST y de mensajes
-    └── e2e/                      # API con supertest (*.e2e-spec.ts)
+    ├── e2e/                      # API con supertest (*.e2e-spec.ts)
+    └── support/                  # datos de prueba que comparten las unitarias y las de integración
 
 frontend/
 ├── package.json
