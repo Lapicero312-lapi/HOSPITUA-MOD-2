@@ -7,6 +7,12 @@ packages:
 engineStrict: true
 
 # pnpm bloquea por seguridad los scripts de instalación de las dependencias.
-# @scarf/scarf es solo telemetría (la trae swagger-ui): se ignora a propósito.
+# Se ignoran a propósito:
+# - @scarf/scarf: solo telemetría (la trae swagger-ui).
+# - cpu-features y ssh2: opcionales de testcontainers para conectarse a Docker por SSH; no se usan.
+# - protobufjs: su script solo muestra un aviso.
 allowBuilds:
   '@scarf/scarf': false
+  cpu-features: false
+  protobufjs: false
+  ssh2: false
