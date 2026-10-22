@@ -37,8 +37,11 @@ const SUBIDA: string[] = [
   `CREATE EXTENSION IF NOT EXISTS pg_trgm`,
   `CREATE EXTENSION IF NOT EXISTS unaccent`,
 
-  // unaccent() no es IMMUTABLE y PostgreSQL solo acepta funciones IMMUTABLE en un índice.
-  // Este envoltorio es el que define check-view-reservation ("Índices y extensiones").
+  // ÚNICA diferencia con el plan base: el plan pide los índices de nombre de `guest` y `guest_data`
+  // sobre unaccent(first_name || ' ' || last_name), pero PostgreSQL lo rechaza porque unaccent() no
+  // es IMMUTABLE y en un índice solo se aceptan funciones IMMUTABLE. Se usa este envoltorio y la
+  // expresión immutable_unaccent(lower(...)), que es la que define check-view-reservation
+  // ("Índices y extensiones"), para que la búsqueda de ese caso de uso use el índice.
   `CREATE OR REPLACE FUNCTION immutable_unaccent(text)
      RETURNS text
      LANGUAGE sql IMMUTABLE PARALLEL SAFE STRICT
@@ -149,7 +152,6 @@ const SUBIDA: string[] = [
      start_date        date           NOT NULL,
      end_date          date           NOT NULL,
      blocks_inventory  boolean        NOT NULL,
-     CONSTRAINT ck_reservation_room_dates CHECK (end_date > start_date),
      CONSTRAINT uq_reservation_room_room UNIQUE (reservation_id, room_id),
      -- La tarifa (solo reservas directas) va completa o no va.
      CONSTRAINT ck_reservation_room_rate CHECK (
@@ -245,8 +247,7 @@ const SUBIDA: string[] = [
      previous_status       varchar(10)    CONSTRAINT ck_commission_audit_previous_status
        CHECK (previous_status IN ('CALCULATED', 'RECONCILED', 'PAID')),
      gross_amount          numeric(14,2)  NOT NULL,
-     commission_percentage numeric(5,2)   NOT NULL
-       CONSTRAINT ck_commission_audit_percentage CHECK (commission_percentage BETWEEN 0 AND 100),
+     commission_percentage numeric(5,2)   NOT NULL,
      commission_amount     numeric(14,2)  NOT NULL,
      channel               varchar(10)    NOT NULL
        CONSTRAINT ck_commission_audit_channel CHECK (channel IN ('OTA_API', 'MODULE3')),
