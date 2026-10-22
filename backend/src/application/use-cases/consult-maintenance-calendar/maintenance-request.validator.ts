@@ -1,22 +1,30 @@
-import { isUUID } from 'class-validator';
-import { DateTime } from 'luxon';
+/** UUID en su forma estándar `8-4-4-4-12` (hexadecimal), de cualquier versión: el plan no fija una. */
+const UUID_FORMAT =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** El `roomId` es un UUID, de cualquier versión: el plan no fija una. */
+const DATE_FORMAT = /^\d{4}-\d{2}-\d{2}$/;
+
+/** El `roomId` es un UUID. */
 export function isValidRoomId(roomId: string): boolean {
-  return isUUID(roomId);
+  return UUID_FORMAT.test(roomId);
 }
 
 /**
  * Las dos fechas son `AAAA-MM-DD` reales y la salida (`endDate`) es posterior a la llegada
- * (`startDate`).
+ * (`startDate`). En `AAAA-MM-DD`, el orden del texto es el de las fechas.
  */
 export function isValidStayDates(startDate: string, endDate: string): boolean {
-  const start = toDate(startDate);
-  const end = toDate(endDate);
-  return start.isValid && end.isValid && end > start;
+  return isRealDate(startDate) && isRealDate(endDate) && endDate > startDate;
 }
 
-/** Fecha pura, sin hora: se lee en UTC para que no dependa de la zona horaria del computador. */
-function toDate(value: string): DateTime {
-  return DateTime.fromFormat(value, 'yyyy-MM-dd', { zone: 'utc' });
+/**
+ * La fecha existe en el calendario: si no existe (por ejemplo `2026-02-30`), `Date` la corre al mes
+ * siguiente y deja de coincidir. Se lee en UTC para que no dependa de la zona horaria del computador.
+ */
+function isRealDate(value: string): boolean {
+  if (!DATE_FORMAT.test(value)) {
+    return false;
+  }
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().startsWith(value);
 }
