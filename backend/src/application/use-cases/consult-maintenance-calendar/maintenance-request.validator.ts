@@ -18,7 +18,8 @@ export function isValidStayDates(startDate: string, endDate: string): boolean {
 }
 
 /**
- * La fecha existe en el calendario: si no existe (por ejemplo `2026-02-30`), `Date` la corre al mes
+ * La fecha existe en el calendario: con un día o un mes fuera de rango (por ejemplo `2026-13-01`),
+ * `Date` no la puede crear; con un día que ese mes no tiene (por ejemplo `2026-02-30`), la corre al mes
  * siguiente y deja de coincidir. Se lee en UTC para que no dependa de la zona horaria del computador.
  */
 function isRealDate(value: string): boolean {
