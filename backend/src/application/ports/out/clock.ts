@@ -1,4 +1,7 @@
-/** Reloj del hotel: el día operativo (00:00–23:59 en `America/Bogota`) y el instante actual. */
+/**
+ * Reloj del hotel: el día operativo en Colombia (de 00:00 a 23:59; la zona horaria de Colombia es
+ * `America/Bogota`) y el instante actual.
+ */
 export interface Clock {
   /** Día operativo en curso, como `AAAA-MM-DD`. */
   today(): string;
