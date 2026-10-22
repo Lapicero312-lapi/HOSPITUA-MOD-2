@@ -13,7 +13,15 @@ import { APP_FILTER } from '@nestjs/core';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
-import { vi } from 'vitest';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import { BusinessError } from '../../../../src/domain/shared/business-error.js';
 import { ApiError } from '../../../../src/infrastructure/shared/api-error.js';
 import { ApiErrorFilter } from '../../../../src/infrastructure/shared/api-error.filter.js';
@@ -78,7 +86,7 @@ class ProbeController {
 
   @Get('not-an-error')
   notAnError() {
-    throw 'algo que no es un Error';
+    throw 'documento CC 1234567890';
   }
 
   @Post('raw')
@@ -159,7 +167,7 @@ describe('ApiErrorFilter', () => {
       ['un 400 de Nest', '/probe/nest-400'],
       ['un 500 de Nest', '/probe/nest-500'],
       ['un 503 de Nest', '/probe/nest-503'],
-      ['una ruta inexistente', '/no-existe'],
+      ['una ruta inexistente', '/does-not-exist'],
     ])(
       '%s responde 400 REQUEST_NOT_PROCESSED y nunca otro estado',
       async (_, path) => {
@@ -188,6 +196,15 @@ describe('ApiErrorFilter', () => {
         expect.stringContaining('connection refused'),
         expect.any(String),
       );
+    });
+
+    it('si no es un Error, registra solo su tipo y no su contenido', async () => {
+      await get('/probe/not-an-error');
+
+      expect(logError).toHaveBeenCalledWith(
+        'Se lanzó un valor que no es un Error (tipo: string)',
+      );
+      expect(JSON.stringify(logError.mock.calls)).not.toContain('1234567890');
     });
 
     it('no responde datos de infraestructura', async () => {

@@ -89,7 +89,8 @@ backend/
 └── test/
     ├── unit/                Sin base de datos ni cola: dominio, casos de uso e infraestructura (espejo de src/)
     ├── integration/         Con PostgreSQL y RabbitMQ reales (Testcontainers)
-    └── contract/            Contratos REST y de mensajes
+    ├── contract/            Contratos REST y de mensajes
+    └── e2e/                 API con supertest (archivos *.e2e-spec.ts)
 
 frontend/src/
 ├── pages/                   Pantallas de la Recepcionista
@@ -128,6 +129,8 @@ cambies sin preguntar.
   editor. `Ctrl + Shift + P` → **TypeScript: Restart TS Server**. Para usar el TypeScript del proyecto:
   `Ctrl + Shift + P` → **TypeScript: Select TypeScript Version** → *Use Workspace Version*.
 - **`pnpm` no se reconoce:** ejecuta `corepack enable` y abre una terminal nueva.
+- **`pnpm install` dice "Unsupported engine":** tienes otra versión de Node. Instala Node 22 (la del CI y
+  de `.nvmrc`); pnpm no instala con otra para que todos probemos con la misma.
 
 ## Reglas del equipo
 

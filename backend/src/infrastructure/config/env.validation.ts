@@ -12,10 +12,10 @@ import {
   validateSync,
 } from 'class-validator';
 
-export const ENTORNOS = ['development', 'test', 'production'] as const;
-export type Entorno = (typeof ENTORNOS)[number];
+export const ENVIRONMENTS = ['development', 'test', 'production'] as const;
+export type Environment = (typeof ENVIRONMENTS)[number];
 
-const NIVELES_DE_LOG = [
+const LOG_LEVELS = [
   'fatal',
   'error',
   'warn',
@@ -25,7 +25,7 @@ const NIVELES_DE_LOG = [
   'silent',
 ] as const;
 
-const OPCIONES_URL_HTTP = {
+const HTTP_URL_OPTIONS = {
   protocols: ['http', 'https'],
   require_protocol: true,
   require_tld: false,
@@ -39,8 +39,8 @@ const OPCIONES_URL_HTTP = {
  * Esas las valida ese caso de uso.
  */
 export class EnvironmentVariables {
-  @IsIn(ENTORNOS)
-  NODE_ENV!: Entorno;
+  @IsIn(ENVIRONMENTS)
+  NODE_ENV!: Environment;
 
   @Type(() => Number)
   @IsInt()
@@ -48,8 +48,8 @@ export class EnvironmentVariables {
   @Max(65535)
   PORT!: number;
 
-  @IsIn(NIVELES_DE_LOG)
-  LOG_LEVEL!: (typeof NIVELES_DE_LOG)[number];
+  @IsIn(LOG_LEVELS)
+  LOG_LEVEL!: (typeof LOG_LEVELS)[number];
 
   // PostgreSQL
   @IsString()
@@ -81,7 +81,7 @@ export class EnvironmentVariables {
   RABBITMQ_URL!: string;
 
   // Módulo 1: tiempo máximo de espera de 1 s (si no responde, nunca se asume disponibilidad)
-  @IsUrl(OPCIONES_URL_HTTP)
+  @IsUrl(HTTP_URL_OPTIONS)
   MODULE1_BASE_URL!: string;
 
   @Type(() => Number)
@@ -91,7 +91,7 @@ export class EnvironmentVariables {
   MODULE1_TIMEOUT_MS!: number;
 
   // Módulo 3: tiempo máximo de espera de 3 s (si no responde, nunca se asume una tarifa)
-  @IsUrl(OPCIONES_URL_HTTP)
+  @IsUrl(HTTP_URL_OPTIONS)
   MODULE3_BASE_URL!: string;
 
   @Type(() => Number)
@@ -102,7 +102,7 @@ export class EnvironmentVariables {
 }
 
 /** Valores que se usan si la variable no está definida, en cualquier entorno. */
-const VALORES_POR_DEFECTO = {
+const DEFAULTS = {
   NODE_ENV: 'development',
   PORT: 3000,
   LOG_LEVEL: 'info',
@@ -118,7 +118,7 @@ const VALORES_POR_DEFECTO = {
  * Valores solo para desarrollo y pruebas (coinciden con docker-compose.yml).
  * En producción no existen: las claves y las direcciones deben venir siempre del entorno.
  */
-const VALORES_SOLO_FUERA_DE_PRODUCCION = {
+const NON_PRODUCTION_DEFAULTS = {
   DB_PASSWORD: 'hospitua',
   RABBITMQ_URL: 'amqp://hospitua:hospitua@localhost:5672',
   MODULE1_BASE_URL: 'http://localhost:4001',
@@ -132,30 +132,30 @@ const VALORES_SOLO_FUERA_DE_PRODUCCION = {
 export function validateEnv(
   config: Record<string, unknown>,
 ): EnvironmentVariables {
-  const entorno = config.NODE_ENV ?? VALORES_POR_DEFECTO.NODE_ENV;
-  const porDefecto =
-    entorno === 'production'
-      ? VALORES_POR_DEFECTO
-      : { ...VALORES_POR_DEFECTO, ...VALORES_SOLO_FUERA_DE_PRODUCCION };
+  const environment = config.NODE_ENV ?? DEFAULTS.NODE_ENV;
+  const defaults =
+    environment === 'production'
+      ? DEFAULTS
+      : { ...DEFAULTS, ...NON_PRODUCTION_DEFAULTS };
 
-  const validadas = plainToInstance(EnvironmentVariables, {
-    ...porDefecto,
+  const validated = plainToInstance(EnvironmentVariables, {
+    ...defaults,
     ...config,
   });
 
-  const errores = validateSync(validadas, {
+  const errors = validateSync(validated, {
     validationError: { target: false, value: false },
   });
 
-  if (errores.length > 0) {
-    const detalle = errores
+  if (errors.length > 0) {
+    const details = errors
       .map(
         (error) =>
           ` - ${error.property}: ${Object.values(error.constraints ?? {}).join('; ')}`,
       )
       .join('\n');
-    throw new Error(`Variables de entorno inválidas:\n${detalle}`);
+    throw new Error(`Variables de entorno inválidas:\n${details}`);
   }
 
-  return validadas;
+  return validated;
 }

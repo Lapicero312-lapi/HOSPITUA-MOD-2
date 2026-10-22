@@ -2,6 +2,10 @@ packages:
   - backend
   - frontend
 
+# Todos usan la versión de Node del CI (.nvmrc y "engines" del package.json raíz): con otra versión,
+# pnpm se niega a instalar en vez de solo avisar.
+engineStrict: true
+
 # pnpm bloquea por seguridad los scripts de instalación de las dependencias.
 # @scarf/scarf es solo telemetría (la trae swagger-ui): se ignora a propósito.
 allowBuilds:

@@ -1,3 +1,4 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HotelClock } from '../../../../../src/infrastructure/out/clock/hotel-clock.js';
 
 /** Día de Colombia (`America/Bogota`) calculado sin `luxon`, para comparar con el reloj. */

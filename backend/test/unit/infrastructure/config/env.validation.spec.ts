@@ -1,3 +1,4 @@
+import { describe, expect, it } from 'vitest';
 import { validateEnv } from '../../../../src/infrastructure/config/env.validation.js';
 
 describe('validateEnv', () => {
