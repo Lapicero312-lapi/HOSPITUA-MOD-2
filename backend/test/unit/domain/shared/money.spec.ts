@@ -1,7 +1,7 @@
 import { Money } from '../../../../src/domain/shared/money.js';
 
 describe('Money', () => {
-  it('se crea desde texto y conserva la moneda', () => {
+  it('se crea desde texto, conserva la moneda y lee el importe exacto sin ceros finales', () => {
     const money = Money.of('250000.00', 'COP');
 
     expect(money.amount).toBe('250000');
