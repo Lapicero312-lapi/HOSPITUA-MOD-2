@@ -76,7 +76,7 @@ describe lo propio.
 | Tareas programadas | `@nestjs/schedule` con `timeZone: 'America/Bogota'` | Envío de la lista del día (00:00), cierre del día (al terminar las 23:59: se ejecuta a las 00:00:30) y reintento de avisos pendientes |
 | Exclusión mutua de tareas con varias instancias | Bloqueo asesor de PostgreSQL (C10) | Evitar que dos instancias ejecuten el mismo cierre del día |
 | Timeouts y reintentos REST | `@nestjs/axios` con timeout; `cockatiel` si se necesitan reintentos o corte de circuito | No asumir disponibilidad ante caídas |
-| Logs y correlación | `nestjs-pino` + `AsyncLocalStorage` (identificador de correlación por solicitud) | Seguir un mensaje o una solicitud de punta a punta |
+| Logs y correlación | `nestjs-pino` + `AsyncLocalStorage`. Cada solicitud lleva un `correlationId`: se reutiliza la cabecera `X-Correlation-Id` si cumple `^[\w-]{1,100}$`; si no, se genera un UUID, y se devuelve en la respuesta. De la solicitud solo se registran el método, el patrón de la ruta y `X-Client`; nunca cabeceras, cuerpo ni consulta. Los 4xx van con nivel `warn` y los 5xx con `error` | Seguir un mensaje o una solicitud de punta a punta |
 
 ## Arquitectura hexagonal
 
@@ -354,6 +354,9 @@ El contenido exacto de cada mensaje está en el plan de su caso de uso:
 
 ## Contratos REST
 
+Todas las rutas del Módulo 2 cuelgan del prefijo global `/api` (`app.setGlobalPrefix('api')`); los
+controladores declaran su ruta sin él. La documentación OpenAPI está en `/api/docs`.
+
 **El Módulo 2 expone** (rutas propuestas, se fijan en cada plan de caso de uso):
 
 | Recurso | Quién lo consume | Caso de uso |
@@ -431,7 +434,7 @@ backend/
     │   ├── ota/                  #   Ota, OtaRoomTypeMapping, regla de comisión
     │   ├── cancellation/         #   Cancellation
     │   ├── migration/            #   GuestData, MigratoryMovement, SireExport, MigrationStatus (derivado)
-    │   ├── shared/               #   enumerados, Money (decimal.js), día operativo, errores de negocio
+    │   ├── shared/               #   enumerados, Money (decimal.js), errores de negocio
     │   └── index.ts              #   API pública del dominio
     ├── application/
     │   ├── ports/out/            # ReservationRepository, GuestRepository, ..., Module1Port, Module3Port, ChannexPort,
@@ -463,12 +466,12 @@ backend/
     │   │   ├── module3/          # cliente HTTP del Módulo 3
     │   │   ├── channex/          # cliente HTTP de Channex (user-api-key, manejo de 429)
     │   │   ├── messaging/        # publicadores RabbitMQ, idempotencia (processed_message)
-    │   │   └── clock/            # reloj del hotel (America/Bogota)
+    │   │   └── clock/            # reloj del hotel y día operativo, con luxon (America/Bogota)
     │   ├── config/               # configuración por entorno (@nestjs/config), RabbitMQ, TypeORM
     │   └── shared/               # ApiError, filtro global de excepciones, correlación de logs
     └── migrations/               # migraciones SQL de TypeORM
 test/
-    ├── unit/                     # dominio y casos de uso, sin base de datos ni cola
+    ├── unit/                     # dominio, casos de uso e infraestructura sin base de datos ni cola (espejo de src/)
     ├── integration/              # Testcontainers (PostgreSQL, RabbitMQ)
     └── contract/                 # contratos REST y de mensajes
 
@@ -1033,6 +1036,8 @@ Se inserta en la misma transacción que la reserva.
 8. **Nomenclatura del diccionario**: `Reservation.status`, `roomNumber`, `startDate`/`endDate`,
    `externalConfirmationCode`, `grossAmount`, `categoryRoom`, `reservationRef`; estados del Módulo 1
    en PascalCase (`Available`, `Reserved`, `Occupied`, ...).
+   El código (clases, funciones y constantes) va en inglés; los comentarios, los mensajes de error y los
+   títulos de las pruebas, en español.
 9. **OTA solo lectura.** Las reservas de canal OTA solo las cambian o cancelan los cambios que envía
    Booking por el feed de Channex (canal `OTA_API`); la Recepcionista solo puede asignar la habitación de
    una reserva OTA en conflicto. Cancelar una reserva OTA no toca la comisión.
@@ -1068,7 +1073,8 @@ Se inserta en la misma transacción que la reserva.
 
 ## Estrategia de testing base
 
-- **Unitarios** (Vitest): dominio y casos de uso sin base de datos ni cola; reglas de negocio, tabla de
+- **Unitarios** (Vitest): dominio, casos de uso y piezas de infraestructura que no usan base de datos ni
+  cola, en `test/unit/` y en espejo de `src/`; reglas de negocio, tabla de
   transiciones, cálculo de comisión (`decimal.js`), reglas del día operativo.
 - **Integración** (Vitest + Testcontainers): PostgreSQL y RabbitMQ reales; concurrencia optimista
   (`updatedAt`), unicidad de `(operational_date, sequence_number)` en los avisos al Módulo 1,

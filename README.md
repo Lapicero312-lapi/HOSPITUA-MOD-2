@@ -87,7 +87,7 @@ backend/
 │   │   └── shared/          Errores de API, filtro de excepciones, logs
 │   └── migrations/          Cambios de la base de datos (SQL)
 └── test/
-    ├── unit/                Dominio y casos de uso, sin base de datos ni cola
+    ├── unit/                Sin base de datos ni cola: dominio, casos de uso e infraestructura (espejo de src/)
     ├── integration/         Con PostgreSQL y RabbitMQ reales (Testcontainers)
     └── contract/            Contratos REST y de mensajes
 
@@ -131,6 +131,9 @@ cambies sin preguntar.
 
 ## Reglas del equipo
 
+- **Código en inglés** (clases, funciones y constantes); **comentarios, mensajes y títulos de las
+  pruebas en español**.
+- **Pruebas:** se importan siempre `describe`, `it`, `expect` y `vi` desde `vitest`.
 - **Los specs mandan.** Si el código obliga a cambiar un contrato, una regla o un nombre, primero se
   cambia el `spec.md` o el `plan.md` en una PR aparte, y después el código.
 - **Arquitectura hexagonal** (plan base): las dependencias apuntan hacia adentro,
