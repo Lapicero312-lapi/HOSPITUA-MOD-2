@@ -24,7 +24,11 @@ describe('isValidRoomId', () => {
   });
 });
 
-/** Fechas del ejemplo del plan: estadía del 2026-10-11 al 2026-10-14. */
+/**
+ * Fechas del ejemplo del plan: estadía del 2026-10-11 al 2026-10-14. La fecha inexistente
+ * (`2026-02-30`) es el ejemplo del plan de `check-view-reservation`, y la mal formada (`14/10/2026`) es
+ * la salida del ejemplo en el formato de pantalla del plan base (`dd/mm/aaaa`).
+ */
 describe('isValidStayDates', () => {
   it('acepta fechas AAAA-MM-DD reales con la salida posterior a la llegada', () => {
     expect(isValidStayDates('2026-10-11', '2026-10-14')).toBe(true);
