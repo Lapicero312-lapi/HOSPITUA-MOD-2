@@ -23,9 +23,6 @@
         <mxCell id="lsaymILH9A-lfnMMY0ns-91" parent="1" style="swimlane;whiteSpace=wrap;html=1;startSize=40;fontStyle=1;fontSize=12;rounded=0;fillColor=#ffffff;" value="Módulo 3" vertex="1">
           <mxGeometry height="480" width="200" x="1360" y="490" as="geometry" />
         </mxCell>
-        <mxCell id="lsaymILH9A-lfnMMY0ns-141" parent="1" style="swimlane;whiteSpace=wrap;html=1;startSize=40;fontStyle=1;fontSize=12;rounded=0;fillColor=#ffffff;" value="Channex (OTA)" vertex="1">
-          <mxGeometry height="480" width="200" x="1860" y="490" as="geometry" />
-        </mxCell>
         <mxCell id="lsaymILH9A-lfnMMY0ns-92" edge="1" parent="1" source="lsaymILH9A-lfnMMY0ns-88" style="endArrow=classic;html=1;strokeWidth=2;strokeColor=#B85450;exitX=1;exitY=0.0625;exitDx=0;exitDy=0;entryX=0;entryY=0.0625;entryDx=0;entryDy=0;" target="lsaymILH9A-lfnMMY0ns-90" value="">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
@@ -121,10 +118,10 @@
           <mxGeometry height="70" width="1200" x="360" y="1132" as="geometry" />
         </mxCell>
         <mxCell id="lsaymILH9A-lfnMMY0ns-120" parent="1" style="text;whiteSpace=wrap;html=1;" value="&lt;h3&gt;Módulo 1 ↔ Módulo 2&lt;/h3&gt;&lt;ul&gt;&lt;li&gt;&lt;b&gt;M1 → M2 · Cola:&lt;/b&gt; Check-In y Check-Out por habitación; avisos de mantenimiento e inventario.&lt;/li&gt;&lt;li&gt;&lt;b&gt;M2 → M1 · Cola:&lt;/b&gt; lista diaria de reservas y actualizaciones. El Módulo 1 decide el estado de sus habitaciones; Módulo 2 no envía órdenes para apartarlas o liberarlas.&lt;/li&gt;&lt;li&gt;&lt;b&gt;M2 → M1 · REST GET:&lt;/b&gt; consultar inventario y calendario de mantenimientos.&lt;/li&gt;&lt;li&gt;&lt;b&gt;M1 → M2 · REST GET:&lt;/b&gt; consultar reservas por rango de fechas para validar mantenimientos o bajas.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;Las consultas M1 ↔ M3 son directas y no pasan por Módulo 2.&lt;/p&gt;" vertex="1">
-          <mxGeometry height="1010" width="560" x="2299.9966829427085" y="450" as="geometry" />
+          <mxGeometry height="1010" width="560" x="1629.9966829427085" y="450" as="geometry" />
         </mxCell>
-        <mxCell id="lsaymILH9A-lfnMMY0ns-121" parent="1" style="text;whiteSpace=wrap;html=1;" value="&lt;h3&gt;Integraciones Módulo 2, Módulo 3 y Channex&lt;/h3&gt;&lt;ul&gt;&lt;li&gt;&lt;b&gt;M2 → M3 · REST POST:&lt;/b&gt; consultar tarifa dinámica.&lt;/li&gt;&lt;li&gt;&lt;b&gt;M3 → M2 · REST GET:&lt;/b&gt; consultar el porcentaje de comisión OTA y datos de reserva para liquidar en el Check-Out.&lt;/li&gt;&lt;li&gt;&lt;b&gt;M2 → Channex · REST GET/POST (cada 30 s):&lt;/b&gt; leer revisiones de Booking y enviar ack.&lt;/li&gt;&lt;li&gt;&lt;b&gt;M2 → Channex · REST GET/POST/PUT:&lt;/b&gt; sincronizar tipos de habitación y disponibilidad.&lt;/li&gt;&lt;li&gt;&lt;b&gt;M2 → Channex · REST POST:&lt;/b&gt; reportar no-shows de Booking después del cierre del día.&lt;/li&gt;&lt;li&gt;&lt;b&gt;M3 → Channex · REST:&lt;/b&gt; crear planes de tarifa y enviar precios.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;Las integraciones M1 ↔ M3 son directas; no pasan por Módulo 2.&lt;/p&gt;" vertex="1">
-          <mxGeometry height="1010" width="560" x="2899.9966829427085" y="450" as="geometry" />
+        <mxCell id="lsaymILH9A-lfnMMY0ns-121" parent="1" style="text;whiteSpace=wrap;html=1;" value="&lt;h3&gt;Módulo 2 ↔ Módulo 3&lt;/h3&gt;&lt;ul&gt;&lt;li&gt;&lt;b&gt;M2 → M3 · REST POST:&lt;/b&gt; consultar tarifa dinámica.&lt;/li&gt;&lt;li&gt;&lt;b&gt;M3 → M2 · REST GET:&lt;/b&gt; consultar el porcentaje de comisión OTA y datos de reserva para liquidar en el Check-Out.&lt;/li&gt;&lt;/ul&gt;&lt;p&gt;Las integraciones M1 ↔ M3 son directas; no pasan por Módulo 2.&lt;/p&gt;" vertex="1">
+          <mxGeometry height="320" width="560" x="2299.9966829427085" y="450" as="geometry" />
         </mxCell>
         <mxCell id="lsaymILH9A-lfnMMY0ns-122" parent="1" style="text;html=1;align=center;verticalAlign=middle;fontSize=12;fontStyle=1;" value="Consultar tarifa dinámica" vertex="1">
           <mxGeometry height="18" width="360" x="1039.9966829427085" y="674" as="geometry" />
@@ -156,26 +153,6 @@
         <mxCell id="lsaymILH9A-lfnMMY0ns-138" edge="1" parent="1" source="lsaymILH9A-lfnMMY0ns-91" style="endArrow=classic;html=1;strokeWidth=2;strokeColor=#3A6EA5;exitX=0;exitY=0.6875;exitDx=0;exitDy=0;entryX=1;entryY=0.6875;entryDx=0;entryDy=0;" target="lsaymILH9A-lfnMMY0ns-90" value=""><mxGeometry relative="1" as="geometry" /></mxCell>
         <mxCell id="lsaymILH9A-lfnMMY0ns-139" parent="1" style="text;html=1;align=center;verticalAlign=middle;fontSize=12;fontStyle=1;" value="Consultar reserva para liquidación (M3 → M2)" vertex="1"><mxGeometry height="18" width="360" x="1039.9966829427085" y="790" as="geometry" /></mxCell>
         <mxCell id="lsaymILH9A-lfnMMY0ns-140" parent="1" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=#3A6EA5;" value="REST · GET · Reactivo" vertex="1"><mxGeometry height="16" width="360" x="1039.9966829427085" y="828" as="geometry" /></mxCell>
-        <mxCell id="lsaymILH9A-lfnMMY0ns-142" edge="1" parent="1" source="lsaymILH9A-lfnMMY0ns-90" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeWidth=2;strokeColor=#3A6EA5;exitX=0.2;exitY=0;exitDx=0;exitDy=0;entryX=0.2;entryY=0;entryDx=0;entryDy=0;" target="lsaymILH9A-lfnMMY0ns-141" value="">
-          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="900" y="340" /><mxPoint x="1900" y="340" /></Array></mxGeometry>
-        </mxCell>
-        <mxCell id="lsaymILH9A-lfnMMY0ns-143" edge="1" parent="1" source="lsaymILH9A-lfnMMY0ns-90" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeWidth=2;strokeColor=#B85450;exitX=0.5;exitY=0;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" target="lsaymILH9A-lfnMMY0ns-141" value="">
-          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="960" y="390" /><mxPoint x="1960" y="390" /></Array></mxGeometry>
-        </mxCell>
-        <mxCell id="lsaymILH9A-lfnMMY0ns-144" edge="1" parent="1" source="lsaymILH9A-lfnMMY0ns-90" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=classic;strokeWidth=2;strokeColor=#B85450;exitX=0.8;exitY=0;exitDx=0;exitDy=0;entryX=0.8;entryY=0;entryDx=0;entryDy=0;" target="lsaymILH9A-lfnMMY0ns-141" value="">
-          <mxGeometry relative="1" as="geometry"><Array as="points"><mxPoint x="1020" y="440" /><mxPoint x="2020" y="440" /></Array></mxGeometry>
-        </mxCell>
-        <mxCell id="lsaymILH9A-lfnMMY0ns-145" edge="1" parent="1" source="lsaymILH9A-lfnMMY0ns-91" style="endArrow=classic;html=1;strokeWidth=2;strokeColor=#B85450;exitX=1;exitY=0.8125;exitDx=0;exitDy=0;entryX=0;entryY=0.8125;entryDx=0;entryDy=0;" target="lsaymILH9A-lfnMMY0ns-141" value="">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="lsaymILH9A-lfnMMY0ns-146" parent="1" style="text;html=1;align=center;verticalAlign=middle;fontSize=12;fontStyle=1;" value="Feed de Booking y ack (cada 30 s)" vertex="1"><mxGeometry height="18" width="720" x="1100" y="300" as="geometry" /></mxCell>
-        <mxCell id="lsaymILH9A-lfnMMY0ns-147" parent="1" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=#3A6EA5;" value="REST · GET/POST · El Módulo 2 pregunta" vertex="1"><mxGeometry height="16" width="720" x="1100" y="320" as="geometry" /></mxCell>
-        <mxCell id="lsaymILH9A-lfnMMY0ns-148" parent="1" style="text;html=1;align=center;verticalAlign=middle;fontSize=12;fontStyle=1;" value="Sincronizar tipos de habitación y disponibilidad" vertex="1"><mxGeometry height="18" width="720" x="1100" y="350" as="geometry" /></mxCell>
-        <mxCell id="lsaymILH9A-lfnMMY0ns-149" parent="1" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=#B85450;" value="REST · GET/POST/PUT · Proactivo" vertex="1"><mxGeometry height="16" width="720" x="1100" y="370" as="geometry" /></mxCell>
-        <mxCell id="lsaymILH9A-lfnMMY0ns-150" parent="1" style="text;html=1;align=center;verticalAlign=middle;fontSize=12;fontStyle=1;" value="Reportar no-shows de Booking" vertex="1"><mxGeometry height="18" width="720" x="1100" y="400" as="geometry" /></mxCell>
-        <mxCell id="lsaymILH9A-lfnMMY0ns-151" parent="1" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=#B85450;" value="REST · POST · Proactivo (después del cierre del día)" vertex="1"><mxGeometry height="16" width="720" x="1100" y="420" as="geometry" /></mxCell>
-        <mxCell id="lsaymILH9A-lfnMMY0ns-152" parent="1" style="text;html=1;align=center;verticalAlign=middle;fontSize=12;fontStyle=1;" value="Crear planes de tarifa y enviar precios (M3 → Channex)" vertex="1"><mxGeometry height="18" width="280" x="1570" y="870" as="geometry" /></mxCell>
-        <mxCell id="lsaymILH9A-lfnMMY0ns-153" parent="1" style="text;html=1;align=center;verticalAlign=middle;fontSize=10;fontStyle=1;fontColor=#B85450;" value="REST · Proactivo" vertex="1"><mxGeometry height="16" width="280" x="1570" y="898" as="geometry" /></mxCell>
       </root>
     </mxGraphModel>
   </diagram>
