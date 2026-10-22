@@ -19,6 +19,7 @@ corepack enable                              # activa pnpm (una sola vez)
 pnpm install                                 # instala backend y frontend
 cp backend/.env.example backend/.env         # configuración local (no se sube al repositorio)
 docker compose up -d                         # PostgreSQL y RabbitMQ
+pnpm --filter backend migration:run          # crea las tablas en PostgreSQL
 pnpm --filter backend start:dev              # backend en http://localhost:3000
 pnpm --filter frontend dev                   # frontend en http://localhost:5173
 ```
@@ -40,6 +41,24 @@ Se ejecutan desde la raíz. Cambia `backend` por `frontend` para el otro paquete
 | `pnpm lint` / `pnpm test` / `pnpm build` | Lo mismo, en los dos paquetes |
 
 Antes de abrir una PR, corre `lint`, `typecheck`, `format` y `test`: es lo mismo que revisa el CI.
+
+## Base de datos
+
+El esquema se crea con **migraciones escritas a mano en SQL** (decisión D11 del plan base), en
+`backend/src/migrations/`. TypeORM nunca genera tablas desde las clases.
+
+| Comando | Qué hace |
+|---|---|
+| `pnpm --filter backend migration:run` | Aplica las migraciones pendientes |
+| `pnpm --filter backend migration:show` | Muestra cuáles están aplicadas (`[X]`) y cuáles no (`[ ]`) |
+| `pnpm --filter backend migration:revert` | Deshace la última migración aplicada |
+
+Usan la conexión de `backend/.env` (PostgreSQL de `docker compose`). La primera migración,
+`EsquemaBase`, crea las 17 tablas del modelo con sus relaciones, restricciones e índices.
+
+**Para agregar una migración:** crea `backend/src/migrations/<marca-de-tiempo>-<Nombre>.ts` (la marca es
+`Date.now()`), con `up` y `down` en SQL, y agrégala al final de la lista de `src/migrations/index.ts`.
+**Nunca modifiques una migración que ya está en `develop`:** si hay que cambiar algo, crea una nueva.
 
 ## Dónde va cada cosa
 

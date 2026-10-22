@@ -21,7 +21,10 @@
     "test:watch": "vitest",
     "test:cov": "vitest run --coverage",
     "test:debug": "vitest --inspect-brk --no-file-parallelism",
-    "test:e2e": "vitest run --config ./vitest.config.e2e.ts"
+    "test:e2e": "vitest run --config ./vitest.config.e2e.ts",
+    "migration:run": "nest build && typeorm migration:run -d dist/infrastructure/config/data-source.js",
+    "migration:revert": "nest build && typeorm migration:revert -d dist/infrastructure/config/data-source.js",
+    "migration:show": "nest build && typeorm migration:show -d dist/infrastructure/config/data-source.js"
   },
   "dependencies": {
     "@golevelup/nestjs-rabbitmq": "^9.1.0",
