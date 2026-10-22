@@ -159,9 +159,13 @@ Un único cuadro de búsqueda (`search`) cubre código de reserva, código de la
 | `INVALID_SORT_ORDER` | `order` distinto de `asc`/`desc` | "El orden indicado no es válido." |
 | `INVALID_PAGE` | `page` < 1 o no entero | "El número de página debe ser 1 o mayor." |
 | `NAME_SEARCH_TOO_SHORT` | Texto sin dígitos de menos de 3 caracteres | "La búsqueda por nombre requiere al menos 3 caracteres." |
+| `INVALID_OTA_ID` | `otaId` que no es un UUID | "La agencia indicada no es válida." |
+| `AGENCY_REQUIRES_OTA_CHANNEL` | `otaId` sin `source=OTA` | "La agencia solo aplica a reservas del canal OTA." |
+| `INVALID_CONFLICT_FILTER` | `inConflict` con un valor distinto de `true` | "El filtro de conflicto no es válido." |
 
 **Orden de validación** (el primero que falle responde): formato de `search` → `status` → `source` →
-fechas (formato, completitud, orden, 366 días) → `order` → `page` → longitud del nombre.
+`otaId` (formato y canal) → `inConflict` → fechas (formato, completitud, orden, 366 días) → `order` →
+`page` → longitud del nombre.
 
 ### C2. `GET /api/reservations/day-summary` (Recepcionista): resumen del día
 
@@ -194,6 +198,7 @@ fechas (formato, completitud, orden, 366 días) → `order` → `page` → longi
   "conflict": null,
   "rooms": [
     {
+      "roomId": "a4c2…",
       "roomNumber": "204",
       "categoryRoom": "DOBLE",
       "guestCount": 3,
@@ -211,7 +216,8 @@ fechas (formato, completitud, orden, 366 días) → `order` → `page` → longi
 
 - `roomGrossAmount` es `null` en reservas `OTA`. El dinero va como **texto decimal** (`decimal.js`),
   nunca como número.
-- `conflict` tiene la misma forma que en C1; una habitación sin asignar trae `roomNumber: null`.
+- `conflict` tiene la misma forma que en C1; una habitación sin asignar trae `roomId` y `roomNumber` en
+  `null`. Cada habitación trae su `roomId` (historia 2, escenario 1).
 - En reservas de Booking el titular puede venir sin `documentType` ni `documentNumber` (`null`).
 - `cancellation` solo viene en reservas `CANCELLED` por solicitud explícita:
   `{ "cancellationDate", "channel", "reason", "processedBy" }`. El No-Show no tiene `Cancellation`.
@@ -237,7 +243,7 @@ de uso `GetReservationForBilling` y entrega solo esto:
   "reservationRef": "RSV-8D02E5A4",
   "channel": "OTA",
   "quoteIds": [],
-  "otaId": "ota-booking",
+  "otaId": "5b0e7c1a-2f4d-4e8b-9c3a-1d6f8e2b7a90",
   "otaConfirmationCode": "4417829013",
   "otaCommissionPercentage": 15.00
 }
@@ -305,9 +311,9 @@ respuesta para ese llamador.
 Una sola función de aplicación, `ResolveSearchCriteria`, convierte `search` en un criterio (así el
 resultado es el mismo para la pantalla y para los demás casos de uso, FR-007):
 
-1. **Normalizar**: quitar espacios de los extremos y colapsar los repetidos.
-2. **Validar**: no vacío, máximo 40 caracteres y solo letras (con tildes y `ñ`), dígitos, espacios
-   internos y guion. Si no, `INVALID_RESERVATION_CODE`.
+1. **Normalizar**: quitar los espacios de los extremos.
+2. **Validar** (FR-009): no vacío, máximo 40 caracteres y solo letras (con tildes y `ñ`), dígitos y guion,
+   sin espacios internos. Si no, `INVALID_RESERVATION_CODE`.
 3. **Código** (prioridad): buscar **en paralelo** coincidencia exacta, sin distinguir mayúsculas, con
    `reservationRef` **y** con `externalConfirmationCode`. Si hay una o más coincidencias, el listado se
    acota a ellas e **ignora** `status`, `source`, `otaId`, `dateFrom` y `dateTo`. Pueden ser varias filas
@@ -444,14 +450,15 @@ Misma routing key. No lleva `reservation`; `removalReason` es `CANCELLED`, `DATE
   "sequenceNumber": 3,
   "operationalDate": "2026-10-09",
   "updateType": "REMOVED",
-  "occurredAt": "2026-10-09T23:59:00-05:00",
+  "occurredAt": "2026-10-10T00:00:30-05:00",
   "reservationRef": "RSV-8D02E5A4",
   "removalReason": "NO_SHOW"
 }
 ```
 
 Una actualización pendiente de un día anterior se envía con la `operationalDate` a la que pertenece, no
-con la del momento del envío.
+con la del momento del envío. El `REMOVED` por `NO_SHOW` lleva la `operationalDate` del día cerrado, aunque
+el cierre corra a las 00:00:30 del día siguiente (ejemplo de arriba).
 
 ### Contrato con el Módulo 1 (lo que debe garantizar quien consume)
 
@@ -499,10 +506,12 @@ publicarlo, con `message_kind` (`LIST` o `UPDATE`), `update_type`, `reservation_
 `publish_status` (`PENDING`, `PUBLISHED`, `FAILED`) y `attempts`. Este caso de uso la usa tal cual: el
 único parcial `(operational_date) WHERE message_kind = 'LIST'` es el respaldo de que la lista sale una
 sola vez por día, y el índice `(publish_status, operational_date, sequence_number)` sirve para reintentar
-en orden. La causa de cada fallo no tiene columna: se escribe en el log, sin datos personales.
+en orden. La causa de cada fallo no tiene columna: se escribe en el log, sin datos personales. Este plan
+agrega a `daily_list_message` la columna `next_attempt_at` (cuándo toca el siguiente intento), con una
+migración nueva; el plan base ya la lista.
 
-Lo único que este plan agrega al modelo de datos es **`daily_sequence`** (se documenta también en el
-plan base): una fila por día operativo que serializa la numeración.
+**`daily_sequence`** también viene del plan base (la creó la migración base, T007): una fila por día
+operativo que serializa la numeración.
 
 | Columna | Notas |
 |---|---|
@@ -532,7 +541,8 @@ Como ambos pasan por el mismo bloqueo, ningún cambio queda "entre medio": o ent
 2. Una tarea cada 10 s (`@nestjs/schedule`, con bloqueo asesor) reintenta los pendientes.
 3. Siempre se publica **por `operational_date` y `sequence_number` ascendente** y **se detiene en el
    primer fallo**: un mensaje nunca se publica antes que uno anterior.
-4. Reintentos con espera creciente (por ejemplo 5 s, 15 s, 45 s, 2 min, 5 min). Tras 10 intentos el
+4. Reintentos con espera creciente (5 s, 15 s, 45 s, 2 min y después 5 min), guardando en
+   `next_attempt_at` cuándo toca el siguiente; la tarea solo toma los que ya llegaron a esa hora. Tras 10 intentos el
    mensaje pasa a `FAILED`, se registra una alerta (log de nivel `error` con el `messageId`, sin datos
    personales) para revisión humana, y los siguientes **esperan detrás**: no se salta la secuencia.
 5. Un mensaje `FAILED` se reencola a mano (comando de administración) una vez resuelta la causa; no hay
@@ -725,20 +735,16 @@ PENDING --10 intentos fallidos--> FAILED --reencolado a mano--> PENDING
 
 | Qué | Para qué |
 |---|---|
-| `CREATE EXTENSION unaccent; CREATE EXTENSION pg_trgm;` | Búsqueda por nombre |
-| Índice único `reservation(lower(reservation_ref))` | Búsqueda por código sin distinguir mayúsculas |
-| Índice `reservation(lower(external_confirmation_code))` | Idem; no es único (dos agencias pueden repetirlo) |
-| Índice `reservation(status, start_date)` | Filtro por estado y lista del día |
-| Índice `reservation(start_date, end_date)` | Cruce de fechas |
-| Índice `reservation_room(room_id)` | Consulta del Módulo 1 por `roomId` |
-| Índice `guest(document_number_normalized)` | Documento exacto |
-| Índice GIN `gin_trgm_ops` sobre `immutable_unaccent(lower(first_name \|\| ' ' \|\| last_name))` | Nombre parcial |
+| Ya en la migración base (T007): extensiones `unaccent` y `pg_trgm` y la función `immutable_unaccent` | Búsqueda por nombre |
+| Ya en la migración base: único de `reservation_ref`, `reservation(status, start_date)`, `reservation(end_date)`, `reservation_room(room_id)`, `guest(document_number)` y el GIN `gin_trgm_ops` sobre `immutable_unaccent(lower(first_name \|\| ' ' \|\| last_name))` | Código, estado y lista del día, cruce de fechas, `roomId`, documento exacto y nombre parcial |
+| **Nuevo** (T001): índice `reservation(lower(external_confirmation_code))` | Código de la OTA sin distinguir mayúsculas; no es único (dos agencias pueden repetirlo) |
+| **Nuevo** (T001): columna `daily_list_message.next_attempt_at` | Espera creciente de los reintentos |
 
-- `immutable_unaccent` es un envoltorio `IMMUTABLE` de `unaccent` (PostgreSQL exige que la función de un
-  índice lo sea).
-- `document_number_normalized` es una columna generada (mayúsculas, sin puntos ni espacios) para que
-  `1.144.093.552` y `1144093552` coincidan. Cuando el texto buscado se normaliza igual, la comparación es
-  exacta.
+- La búsqueda por `reservationRef` pasa el texto a mayúsculas (la referencia se guarda así, con su
+  `CHECK`), así que usa el índice único sin `lower()`.
+- La búsqueda por nombre usa la misma expresión del índice, `immutable_unaccent(lower(...))`; con otra,
+  PostgreSQL no lo usa.
+- El documento se compara tal cual, con coincidencia exacta (FR-004).
 
 ### Consulta del listado
 
@@ -780,6 +786,7 @@ en el log, sin datos personales ni de infraestructura. **Este caso de uso nunca 
 | Parámetro ajeno con `X-Client: MODULE1` | 400 | `UNSUPPORTED_PARAMETER` | DTO del Módulo 1 |
 | `roomId` con formato inválido | 400 | `INVALID_ROOM_ID` | DTO del Módulo 1 |
 | Agencia sin canal `OTA` | 400 | `AGENCY_REQUIRES_OTA_CHANNEL` | DTO |
+| `otaId` o `inConflict` con formato inválido | 400 | `INVALID_OTA_ID` o `INVALID_CONFLICT_FILTER` | DTO |
 | Texto con caracteres de inyección en cualquier filtro | 400 | `INVALID_RESERVATION_CODE` | Validación de formato; nunca llega a la base |
 
 **Sin resultados no es un error**: responde 200 con la lista vacía y el mensaje (FR-010).
@@ -874,10 +881,10 @@ backend/src/
 ├── infrastructure/out/persistence/reservation-query.repository.ts
 ├── infrastructure/out/persistence/daily-message.repository.ts
 ├── infrastructure/out/messaging/rabbit-daily-list.publisher.ts
-└── migrations/                      # extensiones, índices, daily_sequence
+└── migrations/                      # índice del código de la OTA y next_attempt_at
 
 backend/test/
-├── unit/                            # membresía, migrationStatus, criterios de búsqueda
+├── unit/                            # espejo de src/: membresía, migrationStatus, criterios de búsqueda
 ├── integration/                     # listado, búsqueda, lista del día, publicación en orden
 └── contract/                        # C1–C5 y forma de los mensajes de cola
 
@@ -890,8 +897,8 @@ frontend/src/pages/reservations/     # listado con filtros, detalle, resumen del
 
 ## Phase 1: Setup
 
-- [ ] T001 Migración SQL: extensiones `unaccent` y `pg_trgm`, `immutable_unaccent`, columna generada `document_number_normalized` y los índices de "Datos y consultas"
-- [ ] T002 [P] Migración SQL: tabla `daily_sequence` (la de `daily_list_message` ya viene del plan base)
+- [ ] T001 Migración SQL nueva: índice `reservation(lower(external_confirmation_code))` y columna `daily_list_message.next_attempt_at` (lo demás ya lo creó la migración base)
+- [ ] T002 [P] Prueba de integración de que el listado, la búsqueda por código y la búsqueda por nombre usan los índices de "Datos y consultas" (`EXPLAIN`)
 
 ## Phase 2: Foundational
 
@@ -922,7 +929,7 @@ devuelven exactamente lo esperado, con totales y páginas correctos.
 - [ ] T015 [US2] Búsqueda por código en paralelo (referencia y código de la OTA) que ignora los demás filtros
 - [ ] T016 [US2] `GetReservationDetail` y `GET /api/reservations/{reservationRef}` para `RECEPTIONIST` (C3), con `Cancellation` y conflicto
 - [ ] T016a [US2] `ReservationLookup.findBlockingRooms` (lo usa `check-room-availability`), con su consulta sobre `reservation_room`
-- [ ] T016b [US1] Filtro `inConflict`, campo `conflict`, `actions.canAssignRoom` y habitaciones sin asignar en C1 y C3 (FR-002a)
+- [ ] T016b [US1] [US2] Filtro `inConflict`, campo `conflict`, `actions.canAssignRoom` y habitaciones sin asignar en C1 y C3 (FR-002a)
 - [ ] T016c `ReservationLookup.blockingRoomsByCategory` (lo usa `configure-ota`), con su consulta sobre `reservation_room`
 - [ ] T017 [US2] Errores `RESERVATION_NOT_FOUND` e `INVALID_RESERVATION_CODE` sin llegar a la base de datos cuando el formato es inválido
 - [ ] T018 [US2] Pruebas de integración de los escenarios 1 a 6
@@ -930,7 +937,7 @@ devuelven exactamente lo esperado, con totales y páginas correctos.
 
 ## Phase 5: User Story 3 - Búsqueda por titular (P2)
 
-- [ ] T020 [US3] Documento exacto normalizado y nombre parcial sin tildes (`pg_trgm`), combinables con estado, canal y fecha
+- [ ] T020 [US3] Documento exacto y nombre parcial sin tildes (`immutable_unaccent` y `pg_trgm`), combinables con estado, canal y fecha
 - [ ] T021 [US3] Error `NAME_SEARCH_TOO_SHORT`
 - [ ] T022 [US3] Pruebas de integración de los escenarios 1 a 4
 
@@ -1005,10 +1012,11 @@ Cada escenario Gherkin tiene al menos una prueba de integración (regla del plan
 Cada uno se puede cambiar sin romper el resto; se anotan para que no pasen desapercibidos.
 
 1. **`otaId` sin `source=OTA`** responde `400` `AGENCY_REQUIRES_OTA_CHANNEL`, "La agencia solo aplica a
-   reservas del canal OTA." El spec solo dice que la agencia aplica "cuando el canal es OTA".
-2. **Caracteres permitidos en `search`**: el spec dice "letras, dígitos y guion", pero un nombre como
-   "María José" lleva espacio y tilde. Este plan permite letras Unicode, dígitos, espacios internos y
-   guion. Conviene ajustar la redacción de FR-009.
+   reservas del canal OTA." El spec solo dice que la agencia aplica "cuando el canal es OTA". También
+   `INVALID_OTA_ID` e `INVALID_CONFLICT_FILTER`, que el spec no define.
+2. **Caracteres permitidos en `search`**: los de FR-009 (letras, dígitos y guion). "Letras" incluye las
+   tildes y la `ñ`; como no se admiten espacios internos, el nombre se busca por una sola palabra (por
+   ejemplo "gomez", historia 3, escenario 2).
 3. **Consulta del Módulo 1 (C5)**: sin paginación, máximo 366 días y `400` `UNSUPPORTED_PARAMETER` ante
    parámetros ajenos. El Módulo 1 confirmó `dateFrom`, `dateTo` y `roomId`; los campos devueltos y el
    límite son propuesta.
@@ -1017,7 +1025,8 @@ Cada uno se puede cambiar sin romper el resto; se anotan para que no pasen desap
    La alternativa, rutas separadas por módulo, se descartó para no renegociar lo ya confirmado.
 5. **Mensajes `FAILED` bloquean a los siguientes** del mismo día hasta que alguien los reencole, para no
    dejar huecos en la secuencia. La alternativa (saltar el fallido) rompería la regla de orden de FR-018.
-6. **`daily_sequence`** es una tabla nueva que el plan base no listaba; se agrega allí.
+6. **`next_attempt_at`** en `daily_list_message`, para la espera creciente de los reintentos; el plan base
+   ya la lista.
 
 ## Puntos abiertos
 
@@ -1043,11 +1052,11 @@ Cada uno se puede cambiar sin romper el resto; se anotan para que no pasen desap
 | FR-012, FR-013 | `GenerateDailyList`, `DailyListJob` | T023, T024 |
 | FR-014, FR-015 | `ReservationProjection` | T004 |
 | FR-016, FR-017 | `DailyListMembership`, `DailyListChangeRecorder` | T003, T028 |
-| FR-018, FR-019, FR-020 | `daily_sequence`, publicador y reintentos | T002, T025, T026, T029 |
+| FR-018, FR-019, FR-020 | `daily_sequence`, publicador y reintentos (`next_attempt_at`) | T001, T025, T026, T029 |
 | FR-021 | El caso de uso no cambia ningún estado | T030 |
 | FR-022 | `GetReservationForBilling` (C4) | T032 |
 | FR-023 | `FindReservationsByStayRange` (C5) | T033 |
-| NFR-001, NFR-002 | Índices y prueba de carga | T001, T036 |
+| NFR-001, NFR-002 | Índices y prueba de carga | T001, T002, T036 |
 | NFR-003 | Logs sin datos personales | T035 |
 | NFR-004, NFR-005 | Generación de la lista y publicación inmediata | T023, T029, T036 |
 | SC-001 a SC-008 | Las pruebas por escenario | T013, T018, T022, T027, T030 |
@@ -1056,5 +1065,4 @@ Cada uno se puede cambiar sin romper el resto; se anotan para que no pasen desap
 
 - `[P]` marca tareas paralelizables; `[US#]` las liga a su historia de usuario.
 - Commit por tarea o grupo lógico, con Gitflow.
-- Este plan no cambia el spec ni el plan base, salvo los dos ajustes indicados en el plan base (filtros
-  del listado y la tabla `daily_sequence`).
+- Este plan no cambia el spec. Lo que agrega al modelo (`next_attempt_at`) está también en el plan base.

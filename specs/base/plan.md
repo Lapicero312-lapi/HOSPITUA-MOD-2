@@ -73,10 +73,10 @@ describe lo propio.
 | Fechas | Fechas puras `AAAA-MM-DD` (texto `date` en la base) y `luxon` para el día operativo en `America/Bogota` | Evita corrimientos por zona horaria. Se guardan e intercambian como `AAAA-MM-DD`; las pantallas las muestran como `dd/mm/aaaa` |
 | Seguridad | **No se implementa en el Módulo 2**: es una capa aparte del sistema de microservicios. El frontend simula el login. Quién llama se indica con la cabecera `X-Client` (`RECEPTIONIST`, `MODULE1`, `MODULE3`) y quién hizo la acción con `X-User`; ninguna se valida | Ver la regla transversal 10 |
 | Integración con Booking.com | **Channex** (entorno de pruebas `staging.channex.io`), por REST con la cabecera `user-api-key`. Las reservas se leen del *feed* (`GET /api/v1/booking_revisions/feed`) y se confirman con `ack`; el Módulo 2 crea los tipos de habitación (`POST`/`PUT /api/v1/room_types`) y envía la disponibilidad (`POST /api/v1/availability`). Los planes de tarifa y los precios los envía el **Módulo 3** directamente a Channex. La propiedad es fija y la crea un administrador en Channex | Booking no llama al Módulo 2: el Módulo 2 consulta a Channex, así que no necesita una URL pública (D12) |
-| Tareas programadas | `@nestjs/schedule` con `timeZone: 'America/Bogota'` | Envío de la lista del día (00:00), cierre del día (al terminar las 23:59: se ejecuta a las 00:00:30) y reintento de avisos pendientes |
+| Tareas programadas | `@nestjs/schedule` con `timeZone: 'America/Bogota'` | Envío de la lista del día (00:00), cierre del día (al terminar las 23:59: se ejecuta a las 00:00:30), reintento de avisos pendientes (cada 10 s), lectura del feed de Channex y envío de la disponibilidad (cada 30 s) y sincronización con Channex (03:00) |
 | Exclusión mutua de tareas con varias instancias | Bloqueo asesor de PostgreSQL (C10) | Evitar que dos instancias ejecuten el mismo cierre del día |
 | Timeouts y reintentos REST | `@nestjs/axios` con timeout; `cockatiel` si se necesitan reintentos o corte de circuito | No asumir disponibilidad ante caídas |
-| Logs y correlación | `nestjs-pino` + `AsyncLocalStorage`. Cada solicitud lleva un `correlationId`: se reutiliza la cabecera `X-Correlation-Id` si cumple `^[\w-]{1,100}$`; si no, se genera un UUID, y se devuelve en la respuesta. De la solicitud solo se registran el método, el patrón de la ruta y `X-Client`; nunca cabeceras, cuerpo ni consulta. Los 4xx van con nivel `warn` y los 5xx con `error` | Seguir un mensaje o una solicitud de punta a punta |
+| Logs y correlación | `nestjs-pino` + `AsyncLocalStorage`. Cada solicitud lleva un `correlationId`: se reutiliza la cabecera `X-Correlation-Id` si cumple `^[\w-]{1,100}$`; si no, se genera un UUID, y se devuelve en la respuesta. De la solicitud solo se registran el método, el patrón de la ruta y `X-Client`; nunca cabeceras, cuerpo ni consulta. Los errores controlados (de negocio o de la solicitud) van con nivel `warn`; los no controlados, que el filtro también responde como 4xx, van con `error` y su detalle, sin datos de la solicitud | Seguir un mensaje o una solicitud de punta a punta |
 
 ## Arquitectura hexagonal
 
@@ -104,7 +104,7 @@ Reglas:
    cambia el adaptador. Sus datos (`Room`, `MaintenanceCalendar`, `RateQuote`) son
    objetos de integración en `application/`, no entidades del dominio.
 4. La inyección de dependencias de Nest une los puertos con sus adaptadores (símbolos como
-   `RESERVATION_REPOSITORY`); el dominio nunca usa `@Injectable`.
+   `RESERVATION_REPOSITORY` o `CLOCK`); el dominio nunca usa `@Injectable`.
 5. Las dependencias entre capas se verifican en CI con `dependency-cruiser`
    (`backend/.dependency-cruiser.cjs`, dentro de `pnpm lint`): `domain/` no importa nada de `application/`
    ni de `infrastructure/`.
@@ -166,7 +166,7 @@ están en "Modelo de datos base".
 
 | Atributo | Tipo | Regla |
 |---|---|---|
-| `id`, `name`, `hotelAccountId` | texto | De la configuración: `Booking.com` y el id del hotel de Booking en Channex |
+| `id`, `name`, `hotelAccountId` | texto | De la configuración: `Booking.com` y el id del hotel en Booking (`BOOKING_HOTEL_ID`) |
 | `commissionPercentage` | decimal de 0 a 100 | Porcentaje pactado por defecto |
 | `connectionStatus` | `CONNECTED` o `DISCONNECTED` | |
 | `linkedAt`, `lastSyncAt` | fecha y hora | `lastSyncAt`: última lectura del feed de Channex que terminó bien |
@@ -232,7 +232,6 @@ movimientos.
 | `Reservation` → `Guest` | 1 a 1 | Cada reserva guarda su propio titular. Si la misma persona tiene varias reservas, tiene un `Guest` en cada una; corregir sus datos en una reserva no cambia las demás |
 | `Reservation` → `ReservationRoom` | 1 a 1..10 | Composición: las habitaciones se crean, cambian y borran solo a través de su reserva |
 | `Ota` → `Reservation` | 1 a N | Solo reservas `OTA`; `(otaId, externalConfirmationCode)` es único |
-| `Ota` → `OtaRoomTypeMapping` | 1 a N | Un tipo de habitación de Channex por categoría |
 | `Ota` → `OtaBookingRevision` | 1 a N | Una fila por revisión procesada; evita procesarla dos veces |
 | `Reservation` → `Cancellation` | 1 a 0..1 | Solo cancelaciones explícitas (Recepcionista o Booking); el No-Show no crea `Cancellation` |
 | `Reservation` → `GuestData` | 1 a N | Un `GuestData` por huésped de la reserva, único por `documentNumber` |
@@ -263,7 +262,8 @@ El diagrama con las tablas, sus columnas y sus relaciones está en "Modelo de da
   - `PENDING` se conserva sin uso: las reservas directas y las de Booking nacen en `ACTIVE`.
   - Las reservas `DIRECT` no guardan un total (se calcula al mostrarlo) y no tienen comisión; las `OTA` no tienen tarifa ni cotización por habitación.
 - **`Guest`**: parte del agregado `Reservation` (su titular); se crea y se corrige solo a través de su reserva.
-- **`Ota`**: agregado propio, con sus `OtaRoomTypeMapping`; la reserva la referencia por id.
+- **`Ota`**: agregado propio; la reserva la referencia por id. `OtaRoomTypeMapping` es un registro aparte,
+  de la propiedad y no de la agencia.
 - **`Cancellation`**, **`GuestData`**, **`MigratoryMovement`**, **`SireExport`**: registros propios que referencian a la reserva por `reservationRef`. Son inmutables una
   vez creados.
 
@@ -355,7 +355,9 @@ El contenido exacto de cada mensaje está en el plan de su caso de uso:
 ## Contratos REST
 
 Todas las rutas del Módulo 2 cuelgan del prefijo global `/api` (`app.setGlobalPrefix('api')`); los
-controladores declaran su ruta sin él. La documentación OpenAPI está en `/api/docs`.
+controladores declaran su ruta sin él. La documentación OpenAPI está en `/api/docs` y también queda visible
+en producción. El cuerpo de error se documenta en OpenAPI como clase, y cada ruta declara los errores que
+puede responder.
 
 **El Módulo 2 expone** (rutas propuestas, se fijan en cada plan de caso de uso):
 
@@ -424,7 +426,6 @@ backend/
 ├── package.json
 ├── nest-cli.json
 ├── tsconfig.json                 # strict
-├── Dockerfile
 └── src/
     ├── main.ts
     ├── app.module.ts
@@ -470,10 +471,11 @@ backend/
     │   ├── config/               # configuración por entorno (@nestjs/config), RabbitMQ, TypeORM
     │   └── shared/               # ApiError, filtro global de excepciones, correlación de logs
     └── migrations/               # migraciones SQL de TypeORM
-test/
+backend/test/
     ├── unit/                     # dominio, casos de uso e infraestructura sin base de datos ni cola (espejo de src/)
     ├── integration/              # Testcontainers (PostgreSQL, RabbitMQ)
-    └── contract/                 # contratos REST y de mensajes
+    ├── contract/                 # contratos REST y de mensajes
+    └── e2e/                      # API con supertest (*.e2e-spec.ts)
 
 frontend/
 ├── package.json
@@ -510,7 +512,9 @@ interfaz.
   el huésped es extranjero si no es exactamente `Colombia`. Al SIRE se exportan tal cual la nacionalidad
   (nombre del país) y el tipo de documento (`CC`, `PAS`, ...), sin tablas de códigos.
 - Extensiones creadas en la migración base: `btree_gist` (anti-solape, D3), `pg_trgm` y `unaccent`
-  (búsqueda por nombre sin distinguir mayúsculas ni tildes).
+  (búsqueda por nombre sin distinguir mayúsculas ni tildes). Como PostgreSQL no acepta `unaccent` en un
+  índice, la migración crea también `immutable_unaccent(text)`, un envoltorio `IMMUTABLE` que usan los
+  índices de nombre y las búsquedas.
 - Datos que **no** se guardan en tablas: `Room` y `MaintenanceCalendar` (Módulo 1) y `RateQuote`
   (Módulo 3) viajan solo en objetos de integración; el código del hotel en SIRE (`hotelSireCode`) y el
   código de la ciudad (`hotelCityCode`) van en la configuración del sistema (variables de entorno).
@@ -640,6 +644,7 @@ erDiagram
         jsonb payload
         varchar publish_status "PENDING PUBLISHED FAILED"
         smallint attempts
+        timestamptz next_attempt_at "nulo"
         timestamptz created_at
         timestamptz published_at "nulo"
     }
@@ -735,7 +740,7 @@ tablas se unen por sus claves. Hay cuatro excepciones a propósito:
 
 - `CHECK`: `document_type` y `document_number` van los dos o ninguno. Que sean obligatorios en las
   reservas directas lo valida la aplicación, porque el canal está en `reservation`.
-- Índices: `(document_number)` para la búsqueda por documento y trigram sobre `unaccent(first_name || ' ' || last_name)`. No es único por documento: la misma persona puede ser titular de varias reservas, con sus datos en cada una (corregirlos en una reserva no cambia las demás).
+- Índices: `(document_number)` para la búsqueda por documento y trigram (`gin_trgm_ops`) sobre `immutable_unaccent(lower(first_name || ' ' || last_name))`. No es único por documento: la misma persona puede ser titular de varias reservas, con sus datos en cada una (corregirlos en una reserva no cambia las demás).
 
 **`ota`** — agencia; se registra por configuración (`configure-ota`)
 
@@ -839,7 +844,7 @@ tablas se unen por sus claves. Hay cuatro excepciones a propósito:
 
 Único `(reservation_id, document_number)`, **sin** el tipo de documento a propósito: en el Check-Out
 el huésped se identifica solo por su número (`process-guest-data`). Índices: `(document_number)` y trigram sobre
-`unaccent(first_name || ' ' || last_name)`. No hay `CHECK` de procedencia y destino: el Módulo 2 da
+`immutable_unaccent(lower(first_name || ' ' || last_name))`. No hay `CHECK` de procedencia y destino: el Módulo 2 da
 por hecho que el Módulo 1 los envía completos para los extranjeros (D5).
 
 **`migratory_movement`** — entrada o salida de un huésped
@@ -903,6 +908,7 @@ Inmutable. Índice `(reservation_id)`.
 | `payload` | `jsonb` | no | El JSON exacto que se publica |
 | `publish_status` | `varchar(9)` | no | `PENDING`, `PUBLISHED`, `FAILED` |
 | `attempts` | `smallint` | no | `0` por defecto |
+| `next_attempt_at` | `timestamptz` | sí | Cuándo toca el siguiente intento (espera creciente); vacío hasta el primer fallo. La agrega una migración de `check-view-reservation` |
 | `created_at` | `timestamptz` | no | |
 | `published_at` | `timestamptz` | sí | |
 
@@ -1027,9 +1033,14 @@ Se inserta en la misma transacción que la reserva.
    conflicto de `updatedAt` (ediciones o cancelaciones simultáneas) es siempre 400 `CONCURRENT_UPDATE`.
    Ningún error no controlado sale como 500; el filtro genérico registra el detalle en el log y responde
    un error controlado sin datos de infraestructura.
+   Cada `errorCode` tiene un solo mensaje en todo el Módulo 2 (puede llevar datos, como `{roomNumber}`): si
+   los specs piden dos textos distintos, son dos códigos.
 6. **Clientes de otros módulos** detrás de puertos (`Module1Port`, `Module3Port`, `ChannexPort`) con
-   timeout.
+   timeout (1 s al Módulo 1 y 3 s al Módulo 3).
    Ante fallo, cada caso de uso decide, pero nunca se asume disponibilidad ni tarifa por defecto o a cero.
+   Las llamadas a otros módulos se hacen **antes de abrir la transacción**; dentro solo hay operaciones de
+   base de datos. Lo que impide la sobreventa o guardar sobre datos viejos es la restricción anti-solape
+   (D3) y la comparación de `updatedAt` dentro de la transacción, no la verificación previa.
 7. **Mensajería.** Mensajes planos con `messageId` y `sequenceNumber`. El consumidor registra el
    `messageId` en `processed_message` dentro de la misma transacción que el cambio. Reintentos con
    backoff y dead-letter queue.
@@ -1047,7 +1058,9 @@ Se inserta en la misma transacción que la reserva.
       distinto según el llamador. Sin esa cabecera, o con otro valor, se responde 400.
     - `X-User` trae el nombre de quien hizo la acción y se guarda tal cual en `processed_by` o
       `performed_by`.
-    - Ninguna de las dos se valida.
+    - Ninguna de las dos se valida: no se comprueba quién llama ni quién es el usuario. Pero si una ruta de
+      la Recepcionista guarda quién hizo la acción (`processed_by`) y falta `X-User`, responde 400
+      `USER_REQUIRED`, "Falta el usuario que hace la acción."
     - Booking no llama al Módulo 2: el Módulo 2 lee el feed de Channex con la clave `user-api-key` de
       la configuración, que nunca se guarda en la base de datos ni se escribe en los logs.
 
@@ -1057,7 +1070,7 @@ Se inserta en la misma transacción que la reserva.
 |---|---|---|
 | D1 | **La confirmación de una cotización no confía en el importe de la pantalla.** Al confirmar, el servidor vuelve a cotizar con el Módulo 3 y lo compara con las tarifas por habitación que vio el solicitante; si difiere, responde 400 "La tarifa cambió, vuelva a cotizar". Nunca se guarda un monto enviado por el cliente; de la `RateQuote` solo se guardan `lodgingAmount` y `quoteId` en la habitación. Lo aplican `generate-direct-reservation` y `update-reservation`. | `calculate-dynamic-rate` |
 | D2 | **La tarifa se guarda por habitación, sin total guardado:** `reservation_room` guarda `room_gross_amount` (el `lodgingAmount`), `quote_id` y `currency` tal como las entrega el Módulo 3 (FR-002); el `quote_id` permite al Módulo 3 cobrar en el Check-Out exactamente el valor cotizado. Su única operación con ellas es sumarlas para mostrar el total de la reserva, que no se guarda. | `calculate-dynamic-rate` |
-| D3 | **Anti-solape con una restricción de exclusión en PostgreSQL** sobre `reservation_room`. Cada habitación guarda una copia de las fechas de su reserva (`start_date`, `end_date`) y `blocks_inventory`, que vale `true` mientras la reserva está en `PENDING`, `ACTIVE` o `IN_PROGRESS` y la habitación en `EXPECTED` o `CHECKED_IN`. Restricción: `EXCLUDE USING gist (room_id WITH =, daterange(start_date, end_date, '[)') WITH &&) WHERE (blocks_inventory)`, con la extensión `btree_gist`. El rango `'[)'` deja que una salida y una llegada el mismo día no choquen. El agregado `Reservation` actualiza esas copias en la misma transacción cada vez que cambian las fechas, el `status` o el `stayStatus`. Impide dos reservas solapadas en la misma habitación aunque se guarden al mismo tiempo; una violación se traduce en 400 `NO_AVAILABILITY` (o en probar la siguiente habitación candidata; en una reserva de Booking, si no hay otra, la habitación queda sin asignar). | `check-room-availability` |
+| D3 | **Anti-solape con una restricción de exclusión en PostgreSQL** sobre `reservation_room`. Cada habitación guarda una copia de las fechas de su reserva (`start_date`, `end_date`) y `blocks_inventory`, que vale `true` mientras la reserva está en `PENDING`, `ACTIVE` o `IN_PROGRESS` y la habitación en `EXPECTED` o `CHECKED_IN`. Restricción: `EXCLUDE USING gist (room_id WITH =, daterange(start_date, end_date, '[)') WITH &&) WHERE (blocks_inventory)`, con la extensión `btree_gist`. El rango `'[)'` deja que una salida y una llegada el mismo día no choquen. El agregado `Reservation` actualiza esas copias en la misma transacción cada vez que cambian las fechas, el `status` o el `stayStatus`. Impide dos reservas solapadas en la misma habitación aunque se guarden al mismo tiempo; una violación se traduce en el error de disponibilidad de cada flujo, siempre 400 (`AVAILABILITY_TAKEN` en la reserva directa, después de probar otra habitación candidata; `ROOM_NOT_AVAILABLE` en la modificación); en una reserva de Booking la revisión se procesa de nuevo en la siguiente lectura y, si no hay otra habitación, queda sin asignar. | `check-room-availability` |
 | D5 | **Datos migratorios completos:** el Módulo 2 da por hecho que el Módulo 1 los envía completos y correctos; no los valida ni los devuelve. | `process-guest-data` |
 | D6 | **Motivo de las transiciones:** columna `status_reason` en `reservation`. | `update-reservation` |
 | D7 | **Periodo de la exportación SIRE:** se filtra por la `movementDate` del movimiento migratorio. | `process-guest-data`, `export-sire-file` |
@@ -1079,10 +1092,14 @@ Se inserta en la misma transacción que la reserva.
 - **Integración** (Vitest + Testcontainers): PostgreSQL y RabbitMQ reales; concurrencia optimista
   (`updatedAt`), unicidad de `(operational_date, sequence_number)` en los avisos al Módulo 1,
   restricción anti-solape, idempotencia de consumidores (`messageId`), dead-letter.
-- **Contrato**: adaptadores de `Module1Port` y `Module3Port` contra respuestas simuladas (por ejemplo
+- **Contrato**: adaptadores de `Module1Port`, `Module3Port` y `ChannexPort` contra respuestas simuladas (por ejemplo
   `nock` o `msw`): éxito, rechazo, timeout y respuesta ambigua; y forma de los mensajes de cola.
-- **API** (supertest): controladores con los casos de uso reales y el filtro global de errores.
-- **Arquitectura**: la verificación de dependencias entre capas corre como parte de las pruebas.
+- **API** (supertest): controladores con los casos de uso reales y el filtro global de errores, en
+  `test/e2e/` (`pnpm --filter backend test:e2e`).
+- **Arquitectura**: la verificación de dependencias entre capas corre dentro de `pnpm lint` en el CI.
+- **Estilo**: las pruebas importan `describe`, `it`, `expect` y `vi` desde `vitest`; no se usan globales.
+  Los archivos terminan en `.spec.ts` (unitarias, de integración y de contrato) o en `.e2e-spec.ts` (API):
+  Vitest solo ejecuta esos.
 - **Cada escenario Gherkin** de un `spec.md` debe tener al menos una prueba de integración en el plan
   de su caso de uso.
 - **Frontend**: Vitest + Testing Library en pantallas críticas (listado con filtros, paginación,
@@ -1114,7 +1131,7 @@ Se inserta en la misma transacción que la reserva.
 - [ ] T015 Configurar la infraestructura de pruebas (Vitest, supertest y Testcontainers de PostgreSQL y RabbitMQ)
 - [ ] T016 [P] Esqueleto del frontend: enrutamiento, cliente HTTP, TanStack Query y manejo de errores de API
 - [ ] T017 Lectura de las cabeceras `X-Client` y `X-User` (sin validar quién llama) y login simulado en el frontend
-- [ ] T018 Configurar logs (`nestjs-pino`) y correlación de solicitudes
+- [ ] T018 Configurar logs (`nestjs-pino`) y correlación de solicitudes, y ajustar lo que registra el filtro global de T009 (nivel según el tipo de error y sin la URL real)
 - [ ] T019 Configurar el bloqueo asesor de PostgreSQL y el planificador (`@nestjs/schedule`, `America/Bogota`) para las tareas programadas
 - [ ] T020 Configurar OpenAPI (`@nestjs/swagger`) y la verificación de dependencias entre capas en CI
 - [ ] T021 [P] Implementar `ChannexPort` con su adaptador HTTP (`user-api-key`, propiedades, feed, `ack`, reporte de no-show, tipos de habitación y disponibilidad) y el manejo de `429` (pausa de un minuto por propiedad y después espera creciente)

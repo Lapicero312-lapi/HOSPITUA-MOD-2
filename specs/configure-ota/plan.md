@@ -8,7 +8,7 @@
 
 Deja configurada la única agencia, **Booking.com**, conectada por **Channex** (`staging.channex.io`), y
 mantiene en Channex lo que es del Módulo 2: los **tipos de habitación** y su **disponibilidad**. Tiene
-tres capacidades:
+cuatro capacidades:
 
 1. **Configuración al iniciar**: valida la configuración, verifica que la propiedad exista en Channex y
    registra la `Ota` "Booking.com" con su porcentaje de comisión.
@@ -165,7 +165,10 @@ sincronización. Mientras tanto, una reserva con más personas que la capacidad 
 | `422` (datos inválidos) | Registra el detalle y descarta ese envío, para no repetir un error permanente |
 | `5xx`, tiempo agotado o error de red | Conserva lo pendiente y lo intenta en el siguiente ciclo |
 
-### B. Puertos de entrada internos
+### B. Puertos internos
+
+`AriChangeRecorder` es un puerto de entrada; `OtaRoomTypeMappingRepository` es un puerto de salida
+(`application/ports/out/`) que también usa `generate-ota-reservation`.
 
 ```typescript
 interface AriChangeRecorder {

@@ -139,8 +139,9 @@ interface VerifyAvailability {
 ```
 
 **B2. `requireAvailable(result, quantity)`** (función pura del dominio): exige `quantity` habitaciones
-disponibles; si hay menos, lanza `NO_AVAILABILITY` con el motivo de las que no lo están. El código HTTP
-lo decide cada flujo según su spec: **400** en la reserva directa y en la modificación. La reserva de
+disponibles; si hay menos, lanza un error de dominio con las habitaciones que no lo están y su motivo.
+Cada flujo lo traduce a su código y su mensaje (siempre **400**): `NO_AVAILABILITY` si faltan habitaciones
+de la categoría y `ROOM_NOT_AVAILABLE` si es una habitación concreta. La reserva de
 Booking **no usa `requireAvailable`**: nunca se rechaza, y las habitaciones que no tienen lugar quedan sin
 asignar (decisión D13 del plan base).
 
@@ -253,15 +254,15 @@ sequenceDiagram
     B->>V: check(habitación X, fechas)
     V-->>B: disponible (la verificación no bloquea)
     A->>F: confirmar
-    F->>V: check de nuevo, dentro de la transacción de creación
+    F->>V: check de nuevo, antes de abrir la transacción de creación
     V-->>F: disponible
     F->>DB: INSERT reserva y habitación (blocks_inventory = true)
     DB-->>F: guardado
     B->>F: confirmar
-    F->>V: check de nuevo, dentro de la transacción
+    F->>V: check de nuevo, antes de abrir la transacción
     V-->>F: ya no disponible (RESERVED)
-    F-->>B: BusinessError NO_AVAILABILITY (400; en Booking, habitación sin asignar)
-    Note over F,DB: Si ambos llegaran a insertar a la vez, la restricción EXCLUDE de D3 rechaza uno y se traduce en NO_AVAILABILITY (400; en Booking, se prueba otra habitación o queda sin asignar)
+    F-->>B: error de disponibilidad del flujo (400; en Booking, habitación sin asignar)
+    Note over F,DB: Si ambos llegaran a insertar a la vez, la restricción EXCLUDE de D3 rechaza uno y cada flujo lo traduce a su error de disponibilidad (400; en Booking, se reintenta en la siguiente lectura)
 ```
 
 ## Modelo de datos y entidades involucradas
@@ -302,8 +303,9 @@ Todo error sale con `{ "errorCode", "message", "timestamp", "path" }` y **siempr
 
 | Situación | HTTP | `errorCode` | `message` |
 |---|---|---|---|
-| Hay menos habitaciones disponibles que las pedidas, o la habitación pedida no está disponible | **400** en `generate-direct-reservation` y `update-reservation`; en `generate-ota-reservation` no es un error: la habitación queda sin asignar | `NO_AVAILABILITY` | El motivo de la no disponibilidad (tabla de motivos de B) |
-| La restricción anti-solape rechaza el guardado (verificaciones simultáneas) | Igual que la fila anterior | `NO_AVAILABILITY` | "La habitación ya está reservada en esas fechas." |
+| Hay menos habitaciones disponibles que las pedidas | **400** en `generate-direct-reservation`; en `generate-ota-reservation` no es un error: la habitación queda sin asignar | `NO_AVAILABILITY` | El del plan de ese flujo |
+| La habitación pedida (por `roomId`) no está disponible | **400** en `generate-direct-reservation` y `update-reservation` | `ROOM_NOT_AVAILABLE` | "La habitación {roomNumber} no está disponible para el rango de fechas solicitado." |
+| La restricción anti-solape rechaza el guardado (verificaciones simultáneas) | Lo traduce cada flujo | `AVAILABILITY_TAKEN` (reserva directa) o `ROOM_NOT_AVAILABLE` (modificación) | El del plan de ese flujo |
 
 - **Una habitación no disponible no es un error de esta verificación**: se devuelve con su motivo. El
   error aparece cuando el flujo invocador exige una cantidad que no se cumple.
@@ -348,7 +350,7 @@ backend/src/
 │   └── availability-query.validator.ts
 └── infrastructure/out/persistence/blocking-rooms.query.ts
 backend/test/
-├── unit/check-room-availability/          # B2, B3, validadores
+├── unit/                                  # espejo de src/: B2, B3, validadores
 ├── integration/check-room-availability/   # servicio con Testcontainers (PostgreSQL) y puertos del Módulo 1 simulados
 └── contract/                              # reutiliza los contratos de inventario y mantenimientos
 ```
@@ -362,7 +364,7 @@ backend/test/
 - [ ] T002 [P] Validador de la consulta (fechas reales, `endDate > startDate`, exactamente categoría o `roomId`, formato de `excludeReservationRef`)
 - [ ] T003 [P] Funciones de dominio `requireAvailable` y `assignRooms` (orden numérico de `roomNumber`), con pruebas unitarias
 - [ ] T004 `ReservationLookup.findBlockingRooms` y su consulta SQL sobre `reservation_room` (A1), con pruebas de integración contra PostgreSQL
-- [ ] T005 Códigos de error `INVALID_AVAILABILITY_QUERY` y `NO_AVAILABILITY` con sus mensajes
+- [ ] T005 Código de error `INVALID_AVAILABILITY_QUERY` con su mensaje (los de disponibilidad los define cada flujo)
 
 ## Phase 3: User Story 1 - Consulta y validación de disponibilidad (P1)
 
@@ -381,8 +383,8 @@ ocupadas hoy y liberadas dentro de una reserva en curso.
 
 ## Phase 4: Integración con los flujos de reserva
 
-- [ ] T014 Coordinar con los planes de `generate-direct-reservation`, `generate-ota-reservation` y `update-reservation` la llamada a `check`, la segunda comprobación dentro de la transacción y la traducción de la violación de la restricción de exclusión a `NO_AVAILABILITY`
-- [ ] T015 Prueba de la restricción anti-solape: dos inserciones simultáneas de la misma habitación, una falla con `NO_AVAILABILITY`
+- [ ] T014 Coordinar con los planes de `generate-direct-reservation`, `generate-ota-reservation` y `update-reservation` la llamada a `check` antes de abrir la transacción y la traducción de la violación de la restricción de exclusión a su error de disponibilidad
+- [ ] T015 Prueba de la restricción anti-solape: dos inserciones simultáneas de la misma habitación, una falla con la violación de exclusión (`23P01`)
 
 ## Phase N: Polish
 
@@ -403,7 +405,7 @@ ocupadas hoy y liberadas dentro de una reserva en curso.
 | Casos borde | Módulo 1 sin responder | Tiempo agotado en el calendario: `400` `MAINTENANCE_CHECK_UNAVAILABLE` con el mensaje literal; no se asume disponibilidad |
 | Casos borde | Fechas inválidas | `400` `INVALID_STAY_DATES`, sin llamar a ningún módulo |
 | Casos borde | `roomId` inválido | `400` `INVALID_ROOM_ID` |
-| Casos borde | Verificaciones simultáneas | Ambas responden disponible; al crear, la segunda falla con `NO_AVAILABILITY` (D3) |
+| Casos borde | Verificaciones simultáneas | Ambas responden disponible; al crear, la segunda falla con el error de disponibilidad del flujo (D3) |
 | FR-004 | Sin estado físico | El inventario simulado no trae estado y una habitación "ocupada hoy" en el Módulo 1 se sigue evaluando solo con las reservas |
 | FR-002a | Por habitación | Una categoría con tres habitaciones devuelve cada una con su motivo |
 | Contrato | Intervalo semiabierto | Salida y llegada el mismo día no chocan; un día de solape sí |
@@ -447,7 +449,7 @@ ocupadas hoy y liberadas dentro de una reserva en curso.
 6. **`assignRooms`**: la habitación de menor `roomNumber` (orden numérico), como pide el spec de OTA, y
    la misma regla para la reserva directa, que el spec no define.
 7. **`excludeReservationRef` inexistente** responde `400` `RESERVATION_NOT_FOUND`.
-8. **Motivos y mensajes** `RESERVED` y `MAINTENANCE`, y códigos `INVALID_AVAILABILITY_QUERY` y `NO_AVAILABILITY`.
+8. **Motivos y mensajes** `RESERVED` y `MAINTENANCE`, y el código `INVALID_AVAILABILITY_QUERY`.
 
 ## Puntos abiertos
 

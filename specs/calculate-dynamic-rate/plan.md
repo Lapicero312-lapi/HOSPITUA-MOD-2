@@ -197,7 +197,11 @@ enviado por el cliente**: lo que se persiste es el de la cotización nueva, con 
 ```
 
 - **Local**: se construye con una configuración del Módulo 2 (`RATE_REFERENCE`: tarifa base por
-  categoría y **un solo** porcentaje de ajuste para todas), sin llamar al Módulo 3.
+  categoría y **un solo** porcentaje de ajuste para todas), sin llamar al Módulo 3 (FR-009) ni al Módulo 1:
+  las categorías son las de esa configuración.
+- `RATE_REFERENCE` es una variable de entorno con un JSON, validada al arrancar. Importes y porcentaje como
+  texto decimal; categorías con la forma de `categoryRoom` (`^[A-Z0-9_]{1,50}$`):
+  `{"seasonAdjustmentPercentage": "15.00", "currency": "COP", "baseRates": {"DOBLE": "220000.00", "SUITE": "480000.00"}}`.
 - `effectiveRate = baseRate × (1 + seasonAdjustmentPercentage / 100)`, con `decimal.js`.
 - **No muestra la capacidad** de las habitaciones (está en "Habitaciones") ni se persiste.
 - Sus valores **nunca** se usan como `roomGrossAmount`: el tipo `ReferenceRate` es distinto de
@@ -226,7 +230,9 @@ sequenceDiagram
         M3-->>P: RateQuote
         P-->>C: RoomQuote validada
     end
-    alt alguna falla (tiempo agotado, red, 5xx, 4xx o respuesta inválida)
+    alt el Módulo 3 rechaza la categoría o las fechas (4xx)
+        C-->>G: BusinessError INVALID_CATEGORY o INVALID_STAY_DATES (400), no se guarda ninguna tarifa
+    else alguna falla (tiempo agotado, red, 5xx o respuesta inválida)
         C-->>G: BusinessError PRICING_UNAVAILABLE (400), no se guarda ninguna tarifa
     else todas correctas
         C-->>G: RoomQuote[] (quoteId, nightlyRates, lodgingAmount por habitación)
@@ -344,7 +350,7 @@ Todo error sale con `{ "errorCode", "message", "timestamp", "path" }` y **siempr
 | `categoryRoom` vacía o con caracteres no permitidos | M2, antes de llamar | 400 | `INVALID_CATEGORY` | "La categoría indicada no es válida." |
 | El Módulo 3 rechaza la categoría (no existe en su catálogo) | Módulo 3 | 400 | `INVALID_CATEGORY` | "La categoría indicada no es válida." |
 | Fechas mal formadas o `endDate` no posterior a `startDate` | M2, antes de llamar | 400 | `INVALID_STAY_DATES` | "Rango de fechas inválido. Verifique las fechas seleccionadas." |
-| Otro 4xx del Módulo 3 (parámetros ausentes, rango incoherente) | Módulo 3 | 400 | `INVALID_STAY_DATES` o el de indisponibilidad (ver "Puntos abiertos") | El correspondiente |
+| Otro 4xx del Módulo 3 (parámetros ausentes, rango incoherente) | Módulo 3 | 400 | `INVALID_STAY_DATES` | "Rango de fechas inválido. Verifique las fechas seleccionadas." |
 | La tarifa cambió entre la vista previa y la confirmación | M2 (`verifyQuotes`) | 400 | `RATE_CHANGED` | "La tarifa cambió, vuelva a cotizar." |
 | Habitaciones de una reserva con monedas distintas al sumar el total | M2 | 400 | `CURRENCY_MISMATCH` | "Las tarifas de la reserva no tienen la misma moneda." |
 
@@ -401,9 +407,9 @@ backend/src/
 │   ├── out/module3/module3-http.adapter.ts
 │   └── config/rate-reference.config.ts
 backend/test/
-├── unit/calculate-dynamic-rate/                 # B2, B3, validadores, precisión del dinero
+├── unit/                                        # espejo de src/: B2, B3, validadores, precisión del dinero
 ├── integration/calculate-dynamic-rate/          # servicio con Module3Port simulado, C1
-└── contract/module3-quotes.contract.test.ts    # adaptador contra respuestas simuladas (msw)
+└── contract/module3-quotes.contract.spec.ts    # adaptador contra respuestas simuladas (msw)
 frontend/src/pages/rates/                        # pantalla "Tarifas"
 ```
 
@@ -518,10 +524,10 @@ seguro ante un Módulo 3 caído.
 
 | # | Pendiente | Con quién |
 |---|---|---|
-| 1 | Formato del cuerpo de error del Módulo 3 (4xx): cómo distingue categoría inexistente, rango inválido y parámetros ausentes. Mientras tanto, todo 4xx se trata como `INVALID_CATEGORY` o `INVALID_STAY_DATES` según la validación local | Módulo 3 |
+| 1 | Formato del cuerpo de error del Módulo 3 (4xx): cómo distingue categoría inexistente, rango inválido y parámetros ausentes. Mientras tanto, la categoría rechazada es `INVALID_CATEGORY` y cualquier otro 4xx, `INVALID_STAY_DATES` (FR-008) | Módulo 3 |
 | 2 | Escala de los importes (¿máximo dos decimales?) y tipo en el JSON (número o texto) | Módulo 3 |
 | 3 | **Vigencia del `quoteId`**: si una cotización caduca, el Módulo 3 cobraría contra una cotización vencida. Hoy se re-cotiza al confirmar (D1), pero falta saber si el `quoteId` guardado se puede usar días después en el Check-Out | Módulo 3 |
-| 4 | **Origen de las tarifas base** de la pantalla "Tarifas": hoy una configuración local. Las categorías salen de la consulta de todas las habitaciones vendibles del Módulo 1 (`consult-room-inventory`, A3) | Equipo del Módulo 2 y Módulo 3 |
+| 4 | **Tarifas base** de la pantalla "Tarifas": una configuración local (`RATE_REFERENCE`), con sus propias categorías, porque el spec no permite pedirlas al Módulo 3. Mantenerla igual al catálogo del Módulo 1 es tarea de quien despliega | Equipo del Módulo 2 |
 
 ## Notes
 

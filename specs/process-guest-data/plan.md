@@ -188,7 +188,7 @@ Pantalla de la Recepcionista. Sin seguridad (regla transversal 10 del plan base)
 | `INVALID_DATE` | Fecha mal formada o inexistente | "La fecha indicada no es válida." |
 | `INCOMPLETE_DATE_RANGE` | Solo una de las dos fechas | "Debe completar ambas fechas del rango." |
 | `INVALID_DATE_RANGE` | `dateFrom` posterior a `dateTo` | "La fecha inicial no puede ser posterior a la fecha final." |
-| `DATE_RANGE_TOO_LARGE` | Más de un año | "El rango de fechas no puede superar un año." |
+| `DATE_RANGE_TOO_LARGE` | Más de un año (366 días) | "El rango de fechas no puede superar 366 días." |
 | `NAME_SEARCH_TOO_SHORT` | Nombre de menos de 3 caracteres | "La búsqueda por nombre requiere al menos 3 caracteres." |
 | `INVALID_SEARCH` | Búsqueda vacía o con caracteres no permitidos | "La búsqueda no es válida." |
 | `INVALID_PAGE` | `page` menor que 1 | "El número de página debe ser 1 o mayor." |
@@ -217,8 +217,9 @@ reserva.
 - `movements` va ordenado por fecha; puede traer solo la entrada o solo la salida.
 - Huésped o reserva inexistente (o sin movimientos): `400` `GUEST_NOT_FOUND`, "El huésped no existe en esa
   reserva." (regla del plan base: los recursos inexistentes son 400).
-- `reservationRef` o `documentNumber` con formato inválido: `400` `INVALID_RESERVATION_CODE`, "Debe
-  proveer un código de reserva válido para la consulta." (el mismo de `check-view-reservation`).
+- `reservationRef` con formato inválido: `400` `INVALID_RESERVATION_CODE`, "Debe proveer un código de
+  reserva válido para la consulta." (el mismo de `check-view-reservation`). `documentNumber` vacío o con
+  caracteres no permitidos: `400` `INVALID_DOCUMENT_NUMBER`, "El número de documento no es válido."
 
 ## Reglas de registro (B1)
 
@@ -339,12 +340,10 @@ sequenceDiagram
 - **Los datos personales no se copian** en los movimientos: se obtienen del `guest_data`.
 - **Los registros son inmutables**: este caso de uso no hace `UPDATE` ni `DELETE`.
 
-**Migraciones que este plan necesita** (SQL, decisión D11):
-
-| Qué | Para qué |
-|---|---|
-| Columna generada `document_number_normalized` en `guest_data` (mayúsculas, sin puntos ni espacios) e índice sobre ella | Documento exacto en la vista, igual que en `check-view-reservation` |
-| Índice `migratory_movement(guest_data_id)` | Unir la entrada y la salida de cada huésped (ya cubierto por el único `(guest_data_id, movement_type)`) |
+**Migraciones que este plan necesita**: ninguna. La migración base ya creó `guest_data` y
+`migratory_movement` con sus únicos (el de `(guest_data_id, movement_type)` sirve también para unir la
+entrada y la salida de cada huésped) y los índices `(document_number)`, `(movement_date)` y trigram del
+nombre.
 
 **Estados y transiciones**: este caso de uso no cambia `Reservation.status` ni `stayStatus`; los cambia
 `update-reservation` en la misma transacción. El único ciclo es el del movimiento:
@@ -370,8 +369,9 @@ LIMIT 10 OFFSET :offset;
 
 - **Periodo**: la estadía del huésped va de su `entryDate` a su `exitDate` (sin salida, queda abierta
   hasta hoy); se muestra si ese intervalo se cruza con el rango (ver "Puntos que este plan propone").
-- **Búsqueda por nombre** con `unaccent(lower(first_name || ' ' || last_name))` y el índice trigram del
-  plan base.
+- **Búsqueda por nombre** con `immutable_unaccent(lower(first_name || ' ' || last_name))`, la misma
+  expresión del índice trigram de la migración base (con otra expresión, PostgreSQL no usa el índice).
+- **Documento**: coincidencia exacta, tal cual (FR-011).
 
 ## Reglas de validación y manejo de errores
 
@@ -447,7 +447,7 @@ backend/src/
     ├── migratory-movement.repository.ts
     └── guest-stay.query.ts
 backend/test/
-├── unit/process-guest-data/                 # isForeign, deduplicación, saneador, filtros
+├── unit/                                    # espejo de src/: isForeign, deduplicación, saneador, filtros
 ├── integration/process-guest-data/          # Testcontainers: registro, SIRE, vista
 └── contract/                                # forma de los mensajes (con update-reservation)
 frontend/src/pages/guest-stays/              # vista de huéspedes alojados y su detalle
@@ -455,14 +455,14 @@ frontend/src/pages/guest-stays/              # vista de huéspedes alojados y su
 
 ## Phase 1: Setup
 
-- [ ] T001 Migración SQL: columna generada `document_number_normalized` de `guest_data` e índice
+- [ ] T001 Verificar que la migración base tiene los únicos y los índices de `guest_data` y `migratory_movement` que usa este caso de uso (sin migración nueva)
 
 ## Phase 2: Foundational
 
 - [ ] T002 [P] Entidades de dominio `GuestData` y `MigratoryMovement`, y funciones `isForeign` y `deriveGuestStay`, con pruebas unitarias
 - [ ] T003 [P] Validador de estructura y saneador del payload (caracteres no permitidos, formatos), con pruebas unitarias
 - [ ] T004 `GuestDataRepository` y `MigratoryMovementRepository` con `INSERT … ON CONFLICT DO NOTHING`
-- [ ] T005 Códigos de error de la vista (`INVALID_NATIONALITY_FILTER`, `INVALID_PRESENCE_FILTER`, `INVALID_SEARCH`, `GUEST_NOT_FOUND` y los compartidos) con sus mensajes
+- [ ] T005 Códigos de error de la vista (`INVALID_NATIONALITY_FILTER`, `INVALID_PRESENCE_FILTER`, `INVALID_SEARCH`, `INVALID_DOCUMENT_NUMBER`, `GUEST_NOT_FOUND` y los compartidos) con sus mensajes
 
 ## Phase 3: User Story 1 - Recepción de los datos de los huéspedes (P1)
 
@@ -558,7 +558,7 @@ frontend/src/pages/guest-stays/              # vista de huéspedes alojados y su
 5. **Periodo de la vista**: el intervalo de la estadía es de `entryDate` a `exitDate` (abierto si no hay
    salida); el spec dice solo "la estadía se cruza con el rango".
 6. **Mensajes y códigos** de los filtros inválidos de la vista (el spec pide "el mensaje del filtro
-   inválido" sin literales) y `GUEST_NOT_FOUND`.
+   inválido" sin literales), `GUEST_NOT_FOUND` e `INVALID_DOCUMENT_NUMBER`.
 7. **`GET /api/guest-stays` ordena las filas sin entrada por su fecha de salida.**
 8. **Extranjero = nacionalidad distinta de `Colombia`, comparación exacta**; una vacía no es extranjera.
 
