@@ -1,3 +1,4 @@
+import { describe, expect, it } from 'vitest';
 import { Money } from '../../../../src/domain/shared/money.js';
 
 describe('Money', () => {

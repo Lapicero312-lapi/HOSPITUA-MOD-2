@@ -3,7 +3,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   resolve: { tsconfigPaths: true },
   test: {
-    globals: true,
+    globals: false,
     root: './',
     include: ['**/*.e2e-spec.ts'],
   },

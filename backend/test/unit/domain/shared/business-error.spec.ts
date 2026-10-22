@@ -1,3 +1,4 @@
+import { describe, expect, it } from 'vitest';
 import { BusinessError } from '../../../../src/domain/shared/business-error.js';
 
 describe('BusinessError', () => {

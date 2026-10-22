@@ -1,9 +1,10 @@
+import { describe, expect, it } from 'vitest';
 import { validateEnv } from '../../../../src/infrastructure/config/env.validation.js';
-import { opcionesTypeOrm } from '../../../../src/infrastructure/config/typeorm.options.js';
+import { typeOrmOptions } from '../../../../src/infrastructure/config/typeorm.options.js';
 import { EsquemaBase1792461934191 } from '../../../../src/migrations/1792461934191-EsquemaBase.js';
 
-describe('opcionesTypeOrm', () => {
-  const opciones = opcionesTypeOrm(
+describe('typeOrmOptions', () => {
+  const options = typeOrmOptions(
     validateEnv({
       DB_HOST: 'db',
       DB_PORT: '6543',
@@ -14,7 +15,7 @@ describe('opcionesTypeOrm', () => {
   );
 
   it('usa PostgreSQL con los datos de conexión de la configuración', () => {
-    expect(opciones).toMatchObject({
+    expect(options).toMatchObject({
       type: 'postgres',
       host: 'db',
       port: 6543,
@@ -25,11 +26,11 @@ describe('opcionesTypeOrm', () => {
   });
 
   it('nunca genera el esquema desde las clases: lo definen las migraciones (D11)', () => {
-    expect(opciones.synchronize).toBe(false);
-    expect(opciones.migrationsRun).toBe(false);
+    expect(options.synchronize).toBe(false);
+    expect(options.migrationsRun).toBe(false);
   });
 
   it('incluye la migración del esquema base', () => {
-    expect(opciones.migrations).toContain(EsquemaBase1792461934191);
+    expect(options.migrations).toContain(EsquemaBase1792461934191);
   });
 });

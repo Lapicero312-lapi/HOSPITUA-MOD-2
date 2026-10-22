@@ -13,8 +13,8 @@ import {
  * cuerpo `{ errorCode, message, timestamp, path }`; nunca responde 500.
  * - `ApiError`: su código, su mensaje y su estado (si no es 4xx, 400).
  * - `BusinessError`: 400 con su código y su mensaje.
- * - Cualquier otra excepción: registra el detalle en el log y responde 400 `REQUEST_NOT_PROCESSED`,
- *   sin datos de infraestructura.
+ * - Cualquier otra excepción: registra el detalle en el log (si no es un `Error`, solo su tipo) y
+ *   responde 400 `REQUEST_NOT_PROCESSED`, sin datos de infraestructura.
  */
 @Catch()
 export class ApiErrorFilter implements ExceptionFilter {
@@ -30,7 +30,7 @@ export class ApiErrorFilter implements ExceptionFilter {
       errorCode: error.errorCode,
       message: error.message,
       timestamp: new Date().toISOString(),
-      path: request.path,
+      path: pathWithoutQuery(request),
     };
     response.status(error.status).json(body);
   }
@@ -46,12 +46,27 @@ export class ApiErrorFilter implements ExceptionFilter {
       return new ApiError(exception.errorCode, exception.message);
     }
 
-    this.logger.error(
-      exception instanceof Error ? exception.message : String(exception),
-      exception instanceof Error ? exception.stack : undefined,
-    );
+    if (exception instanceof Error) {
+      this.logger.error(exception.message, exception.stack);
+    } else {
+      // Solo el tipo: el valor puede traer datos personales, que nunca van al log (plan base).
+      this.logger.error(nonErrorDescription(exception));
+    }
     return new ApiError(REQUEST_NOT_PROCESSED, REQUEST_NOT_PROCESSED_MESSAGE);
   }
+}
+
+/**
+ * La ruta completa, con el prefijo `/api` y sin la consulta. No se usa `request.path`: en una ruta que no
+ * existe, Express la entrega sin el prefijo.
+ */
+function pathWithoutQuery(request: Request): string {
+  return request.originalUrl.split('?')[0];
+}
+
+function nonErrorDescription(exception: unknown): string {
+  const type = exception === null ? 'null' : typeof exception;
+  return `Se lanzó un valor que no es un Error (tipo: ${type})`;
 }
 
 function isClientError(status: number): boolean {
