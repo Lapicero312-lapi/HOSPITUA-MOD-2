@@ -43,7 +43,7 @@ Lo propio de este caso de uso:
 - **Dependencias nuevas**: ninguna.
 - **Almacenamiento**: ninguno. El calendario no se guarda ni se cachea: cada reserva se valida contra la
   programación vigente (SC-001 y SC-002).
-- **Configuración**: `MODULE1_BASE_URL` y `MODULE1_TIMEOUT_MS` (por defecto `2000`), compartidas con
+- **Configuración**: `MODULE1_BASE_URL` y `MODULE1_TIMEOUT_MS` (por defecto `1000`), compartidas con
   `consult-room-inventory`.
 - **Performance** (NFR-001): cada consulta se completa en menos de 1 s en condiciones normales.
 
@@ -168,7 +168,11 @@ sequenceDiagram
         M1-->>P: 404
         P-->>U: RoomNotFound
         U-->>V: BusinessError INVALID_ROOM_ID (400)
-    else tiempo agotado, error de red, 5xx, 400 o respuesta mal formada
+    else 400 (el Módulo 2 ya validó las fechas: lo que rechaza es el roomId)
+        M1-->>P: 400
+        P-->>U: InvalidRoom
+        U-->>V: BusinessError INVALID_ROOM_ID (400)
+    else tiempo agotado, error de red, 5xx o respuesta mal formada
         P-->>U: Module1Unavailable
         U-->>V: BusinessError MAINTENANCE_CHECK_UNAVAILABLE (400), sin asumir que está libre
     else respuesta válida
@@ -225,7 +229,7 @@ Todo error sale con `{ "errorCode", "message", "timestamp", "path" }` y **siempr
 | Fecha mal formada o inexistente, o `endDate` no posterior a `startDate` | M2, antes de llamar al Módulo 1 | 400 | `INVALID_STAY_DATES` | "Rango de fechas inválido. Verifique las fechas seleccionadas." |
 | Tiempo agotado o error de red | Módulo 1 | 400 | `MAINTENANCE_CHECK_UNAVAILABLE` | "No es posible validar mantenimientos en este momento. Intente de nuevo." |
 | El Módulo 1 responde 5xx | Módulo 1 | 400 | `MAINTENANCE_CHECK_UNAVAILABLE` | El mismo |
-| El Módulo 1 responde 400 (cuando el Módulo 2 ya validó, es una incoherencia) | Módulo 1 | 400 | `MAINTENANCE_CHECK_UNAVAILABLE` | El mismo; el detalle va al log |
+| El Módulo 1 responde 400 (el Módulo 2 ya validó las fechas, así que lo que rechaza es el `roomId`) | Módulo 1 | 400 | `INVALID_ROOM_ID` | "El identificador de la habitación es inválido." |
 | Respuesta con campos faltantes, fechas inválidas o `available` incoherente con `conflicts` | Módulo 1 | 400 | `MAINTENANCE_CHECK_UNAVAILABLE` | El mismo; el detalle va al log |
 
 - **Nunca se asume disponibilidad** (FR-005): cualquier fallo o duda bloquea la validación. Si el Módulo 1
@@ -268,9 +272,9 @@ backend/src/
 │       └── maintenance-request.validator.ts
 └── infrastructure/out/module1/module1-http.adapter.ts
 backend/test/
-├── unit/consult-maintenance-calendar/                # cruce, contiguo, validadores
+├── unit/                                             # espejo de src/: cruce, contiguo, validadores
 ├── integration/consult-maintenance-calendar/         # servicio con Module1Port simulado
-└── contract/module1-maintenance.contract.test.ts    # adaptador contra respuestas simuladas (msw)
+└── contract/module1-maintenance.contract.spec.ts    # adaptador contra respuestas simuladas (msw)
 ```
 
 ## Phase 1: Setup
@@ -353,9 +357,11 @@ contiguo, más los fallos del Módulo 1.
 3. **El periodo del cruce lo calcula el Módulo 2** (`overlapStart` y `overlapEnd`), porque el spec lo pide
    (FR-003) y el contrato del Módulo 1 devuelve el mantenimiento completo.
 4. **Respuesta incoherente del Módulo 1 = bloqueo**, igual que un fallo.
-5. **Un 400 del Módulo 1 tras haber validado en el Módulo 2** se trata como indisponibilidad y no como
-   dato inválido del usuario.
-6. **Tiempo máximo de espera de 2 s** y **sin reintentos**, igual que `consult-room-inventory`.
+5. **Un 400 del Módulo 1 tras haber validado las fechas en el Módulo 2** se trata como `roomId` inválido
+   ("El identificador de la habitación es inválido.", como pide el spec), igual que en
+   `consult-room-inventory`: es lo único que el Módulo 1 puede rechazar.
+6. **Tiempo máximo de espera de 1 s** (el del plan base) y **sin reintentos**, igual que
+   `consult-room-inventory`.
 7. **Mantenimiento próximo = el más cercano dentro de la ventana** que define `consult-room-inventory`
    (30 días).
 

@@ -43,10 +43,10 @@ Lo propio de este caso de uso:
 - **Dependencias nuevas**: ninguna (cliente HTTP `@nestjs/axios` del plan base).
 - **Almacenamiento**: ninguno. El inventario no se guarda ni se cachea para "Verificar disponibilidades"
   (SC-001: las habitaciones se obtienen en el momento de la consulta).
-- **Configuración**: `MODULE1_BASE_URL` y `MODULE1_TIMEOUT_MS` (por defecto `2000`), validadas al
+- **Configuración**: `MODULE1_BASE_URL` y `MODULE1_TIMEOUT_MS` (por defecto `1000`), validadas al
   arrancar con `@nestjs/config`. Se comparten con `consult-maintenance-calendar`.
 - **Performance** (NFR-001, SC-002): una consulta al Módulo 1 se completa en menos de 1 s en condiciones
-  normales; el tiempo máximo de espera es mayor (ver "Puntos que este plan propone").
+  normales, y a 1 s se corta (`MODULE1_TIMEOUT_MS`, el tiempo máximo del plan base).
 
 ## Contratos
 
@@ -81,7 +81,7 @@ no necesita conocer de antemano la lista de categorías.
   vendibles.
 - Una categoría sin habitaciones devuelve una lista vacía.
 - **Forma de `categoryRoom`**: mayúsculas, sin tildes ni `Ñ`, con letras, dígitos y `_`, de 1 a 50
-  caracteres (`^[A-Z0-9_]{1,50}; por ejemplo `DOBLE` o `SUITE_JUNIOR`). Es la clave que comparten el
+  caracteres (`^[A-Z0-9_]{1,50}$`; por ejemplo `DOBLE` o `SUITE_JUNIOR`). Es la clave que comparten el
   Módulo 1, el Módulo 2, el Módulo 3 (`roomType`) y Channex (el `title` del tipo de habitación).
 - Errores del Módulo 1 (los mismos de la consulta de mantenimientos): **404** si la habitación no existe;
   **400** si el `roomId` o la `categoryRoom` tienen formato inválido. Nunca 500.
@@ -279,7 +279,7 @@ Todo error sale con `{ "errorCode", "message", "timestamp", "path" }` y **siempr
 
 | Módulo | Dirección | Mecanismo | Contrato | Fallo o tiempo agotado |
 |---|---|---|---|---|
-| Módulo 1 | M2 → M1 | REST GET (inventario por `roomId` y por `categoryRoom`) | A1 y A2 | `INVENTORY_UNAVAILABLE` (400); no se asume ninguna habitación |
+| Módulo 1 | M2 → M1 | REST GET (inventario por `roomId`, por `categoryRoom` y completo) | A1, A2 y A3 | `INVENTORY_UNAVAILABLE` (400); no se asume ninguna habitación |
 | Módulo 1 (indirecto) | M2 → M1 | REST GET de mantenimientos, vía `consult-maintenance-calendar` | Plan de ese caso de uso | La habitación sale con `maintenance.status = UNAVAILABLE`; no rompe la pantalla |
 
 - Se accede **solo por `Module1Port`** (plan base): si cambia la API del Módulo 1, solo cambia el
@@ -292,7 +292,7 @@ Todo error sale con `{ "errorCode", "message", "timestamp", "path" }` y **siempr
 | Capa | Piezas de este caso de uso |
 |---|---|
 | `application/integration/` | `Room` |
-| `application/ports/out/` | `Module1Port.getRoom(roomId)` y `Module1Port.listRoomsByCategory(categoryRoom)` (el puerto lo comparten los demás casos de uso del Módulo 1) |
+| `application/ports/out/` | `Module1Port.getRoom(roomId)`, `Module1Port.listRoomsByCategory(categoryRoom)` y `Module1Port.listRooms()` (A3) (el puerto lo comparten los demás casos de uso del Módulo 1) |
 | `application/use-cases/consult-room-inventory/` | **Entrada**: `ConsultRoomInventory` (`byRoomId`, `byCategory`, `listAll`) y `ListRoomsWithMaintenance`; validadores de `roomId` y `categoryRoom` |
 | `infrastructure/in/rest/` | `RoomsController` (C1) |
 | `infrastructure/out/module1/` | `Module1HttpAdapter`: cliente HTTP con timeout, mapeo de 404, 400 y 5xx a errores de negocio, y validación de la forma de la respuesta |
@@ -301,7 +301,7 @@ Todo error sale con `{ "errorCode", "message", "timestamp", "path" }` y **siempr
 backend/src/
 ├── application/
 │   ├── integration/room.ts
-│   ├── ports/out/module1.port.ts                    # getRoom, listRoomsByCategory (compartido)
+│   ├── ports/out/module1.port.ts                    # getRoom, listRoomsByCategory, listRooms (compartido)
 │   └── use-cases/consult-room-inventory/
 │       ├── ports/in/consult-room-inventory.port.ts
 │       ├── consult-room-inventory.service.ts
@@ -311,9 +311,9 @@ backend/src/
 │   ├── in/rest/rooms.controller.ts
 │   └── out/module1/module1-http.adapter.ts
 backend/test/
-├── unit/consult-room-inventory/                      # validadores y servicio con Module1Port simulado
+├── unit/                                             # espejo de src/: validadores y servicio con Module1Port simulado
 ├── integration/consult-room-inventory/               # controlador + filtro global de errores
-└── contract/module1-inventory.contract.test.ts       # adaptador contra respuestas simuladas (msw)
+└── contract/module1-inventory.contract.spec.ts       # adaptador contra respuestas simuladas (msw)
 frontend/src/pages/rooms/                             # pantalla "Habitaciones"
 ```
 
@@ -324,7 +324,7 @@ frontend/src/pages/rooms/                             # pantalla "Habitaciones"
 ## Phase 2: Foundational
 
 - [ ] T002 [P] Objeto de integración `Room` y validadores de `roomId` (UUID) y `categoryRoom`
-- [ ] T003 [P] Puerto `Module1Port` (`getRoom`, `listRoomsByCategory`) y su adaptador HTTP con timeout, mapeo de errores y validación de la forma de la respuesta
+- [ ] T003 [P] Puerto `Module1Port` (`getRoom`, `listRoomsByCategory`, `listRooms`) y su adaptador HTTP con timeout, mapeo de errores y validación de la forma de la respuesta
 - [ ] T004 Códigos de error `INVALID_ROOM_ID`, `INVALID_CATEGORY` e `INVENTORY_UNAVAILABLE` con sus mensajes literales
 
 ## Phase 3: User Story 1 - Consulta del inventario en tiempo real (P1)
@@ -394,8 +394,8 @@ fallos del Módulo 1.
 
 1. **Rutas del Módulo 1**: `GET /api/rooms/{roomId}` y `GET /api/rooms?categoryRoom=…`. El borrador deja
    la ruta "por acordar".
-2. **Tiempo máximo de espera de 2 s** (`MODULE1_TIMEOUT_MS`). El spec pide responder en menos de 1 s
-   "en condiciones normales", pero no dice cuándo se considera agotado el tiempo.
+2. **Tiempo máximo de espera de 1 s** (`MODULE1_TIMEOUT_MS`, el del plan base). El spec pide responder
+   en menos de 1 s "en condiciones normales" y no dice cuándo se considera agotado el tiempo.
 3. **Sin reintentos** hacia el Módulo 1 en esta consulta.
 4. **Mantenimiento próximo = el más cercano dentro de los siguientes 30 días.** El spec dice "si tiene un
    mantenimiento próximo" sin definir la ventana.
@@ -411,7 +411,7 @@ fallos del Módulo 1.
 | # | Pendiente | Con quién |
 |---|---|---|
 | 1 | Rutas definitivas del inventario; pedirle al Módulo 1 A3 (`GET /api/rooms` sin filtro) y que envíe `categoryRoom` con la forma acordada | Módulo 1 |
-| 2 | Costo de la pantalla: una consulta por categoría más una de mantenimientos por habitación. Si el hotel crece, conviene que el Módulo 1 acepte consultar mantenimientos por categoría (B6 de las decisiones anteriores) | Módulo 1 |
+| 2 | Costo de la pantalla: una consulta de todo el inventario (A3) más una de mantenimientos por habitación. Si el hotel crece, conviene que el Módulo 1 acepte consultar mantenimientos por categoría o por varias habitaciones | Módulo 1 |
 
 ## Notes
 

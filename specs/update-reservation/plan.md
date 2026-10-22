@@ -8,7 +8,7 @@
 
 Este caso de uso es **el único punto donde cambia el estado de una reserva** (`Reservation.status`) y el
 de cada una de sus habitaciones (`ReservationRoom.stayStatus`), y donde se modifica una reserva directa.
-Tiene cuatro capacidades:
+Tiene cinco capacidades:
 
 1. **Modificar una reserva directa** (Recepcionista): fechas, habitaciones (agregar, quitar, cambiar),
    personas por habitación, datos del titular y observaciones. Es una API en **dos pasos**: una vista
@@ -267,14 +267,14 @@ tarifas que el solicitante vio:
 | `OTA_RESERVATION_READ_ONLY` | La Recepcionista modifica una reserva `OTA` | "Las reservas de OTA solo las modifica Booking. Si está en conflicto, solo se le puede asignar la habitación." |
 | `STATUS_NOT_EDITABLE` | La reserva está en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` o `NO_SHOW` | "El estado actual de la reserva no admite modificaciones." |
 | `CONCURRENT_UPDATE` | `updatedAt` no coincide (otra persona la modificó o la canceló) | "Esta reserva ya fue actualizada o cancelada recientemente" (el mismo de `cancel-reservation`) |
-| `INVALID_STAY_DATES` | Fechas vacías o salida no posterior a la entrada | "La fecha de salida debe ser posterior a la de entrada." |
+| `INVALID_RESERVATION_DATES` | Fechas vacías, inexistentes o salida no posterior a la entrada | "La fecha de salida debe ser posterior a la de entrada." |
 | `START_DATE_IN_PAST` | Entrada anterior al día operativo en curso | "La fecha de entrada no puede ser anterior a hoy." |
 | `ROOM_ALREADY_IN_RESERVATION` | Una habitación repetida en `rooms` | "La habitación ya forma parte de la reserva." |
 | `INVALID_ROOM_COUNT` | Menos de 1 o más de 10 habitaciones | "Una reserva debe tener entre 1 y 10 habitaciones." |
 | `LAST_ROOM_CANNOT_BE_REMOVED` | `rooms` dejaría la reserva sin habitaciones | "La reserva debe conservar al menos una habitación." |
 | `GUEST_COUNT_EXCEEDS_CAPACITY` | `guestCount` mayor que el `maxCapacity` | "La cantidad de personas supera la capacidad de la habitación." |
 | `GUEST_COUNT_TOO_LOW` | `guestCount` menor que 1 | "Cada habitación debe tener al menos una persona." |
-| `NO_AVAILABILITY` | Una habitación no está disponible | "La habitación {roomNumber} no está disponible en las fechas solicitadas: {motivo}." |
+| `ROOM_NOT_AVAILABLE` | Una habitación no está disponible (también si la restricción anti-solape rechaza el guardado) | "La habitación {roomNumber} no está disponible para el rango de fechas solicitado." |
 | `NATIONALITY_NOT_EDITABLE` | El cuerpo trae `guest.nationality` | "La nacionalidad no se puede modificar." |
 | `NOTES_TOO_LONG` | `notes` de más de 500 caracteres | "Las observaciones no pueden superar 500 caracteres." |
 | `INVALID_CHARACTERS` | Caracteres no válidos en datos del titular o `notes` | "El formato de los datos contiene caracteres no válidos." |
@@ -296,6 +296,10 @@ habitaciones sin asignar de una reserva de Booking en conflicto. Cabecera `X-Use
 
 - Verifica la disponibilidad de cada habitación con `VerifyAvailability.check` (excluyendo la propia
   reserva) y que sea de la **misma categoría** que la habitación sin asignar.
+- La habitación elegida debe tener capacidad para las personas de esa habitación (`maxCapacity`); si no,
+  `GUEST_COUNT_EXCEEDS_CAPACITY`, para no dejar un conflicto que la Recepcionista ya no podría resolver
+  (FR-025 solo le permite asignar habitaciones).
+- Las llamadas al Módulo 1 van antes de abrir la transacción; dentro se vuelve a comparar `updatedAt`.
 - Guarda `room_id`, `room_number` y `blocks_inventory = true`. Si ya no queda ninguna habitación sin
   asignar ni capacidad superada, **quita la marca de conflicto**.
 - Avisa a la lista del día con `DailyListChangeRecorder` si corresponde: `ADDED` cuando la reserva, con llegada hoy,
@@ -308,7 +312,8 @@ habitaciones sin asignar de una reserva de Booking en conflicto. Cabecera `X-Use
 | `RESERVATION_NOT_IN_CONFLICT` | La reserva no es de Booking o no está en conflicto | "Solo se puede asignar habitación a una reserva de Booking en conflicto." |
 | `ROOM_ALREADY_ASSIGNED` | La habitación de la reserva ya tiene número | "Esa habitación de la reserva ya está asignada." |
 | `CATEGORY_MISMATCH` | La habitación elegida es de otra categoría | "La habitación debe ser de la misma categoría." |
-| `NO_AVAILABILITY` | La habitación elegida no está libre en esas fechas | "La habitación no está disponible para el rango de fechas solicitado." |
+| `GUEST_COUNT_EXCEEDS_CAPACITY` | La habitación elegida tiene menos capacidad que las personas | "La cantidad de personas supera la capacidad de la habitación." |
+| `ROOM_NOT_AVAILABLE` | La habitación elegida no está libre en esas fechas | El mismo de B1 y B2 |
 | `CONCURRENT_UPDATE` | `updatedAt` no coincide | El mismo de B1 y B2 |
 
 ### C. Puertos de entrada internos
@@ -362,14 +367,21 @@ en el Check-In y en el Check-Out.
 **C4. `ApplyOtaChange`** (FR-024; lo llama `generate-ota-reservation` con una revisión `modified`):
 
 ```typescript
+interface OtaChange {
+  startDate: string; endDate: string;
+  rooms: { categoryRoom: string; guestCount: number }[];
+  grossAmount: Money; notes: string | null;
+  guest: { firstName: string; lastName: string; contactEmail: string | null;
+           contactPhone: string | null; nationality: string | null };
+}
+
 interface ApplyOtaChange {
-  apply(tx: Transaction, reservation: Reservation, change: {
-    startDate: string; endDate: string;
-    rooms: { categoryRoom: string; guestCount: number }[];
-    grossAmount: Money; notes: string | null;
-    guest: { firstName: string; lastName: string; contactEmail: string | null;
-             contactPhone: string | null; nationality: string | null };
-  }): Promise<Reservation>;   // aplicada o marcada en conflicto; nunca lanza NO_AVAILABILITY
+  // Antes de la transacción: consulta la disponibilidad (Módulo 1) y decide qué habitaciones conserva,
+  // reasigna o deja sin asignar. No escribe nada.
+  prepare(reservation: Reservation, change: OtaChange): Promise<OtaChangePlan>;
+  // Dentro de la transacción de generate-ota-reservation: solo escribe. Aplicada o marcada en conflicto;
+  // nunca lanza un error de disponibilidad.
+  apply(tx: Transaction, plan: OtaChangePlan): Promise<Reservation>;
 }
 ```
 
@@ -378,8 +390,9 @@ interface ApplyOtaChange {
   supera su `maxCapacity`, marca `CAPACITY_EXCEEDED`.
 - **No invoca al Módulo 3**: recalcula la comisión con el porcentaje congelado
   (`RegisterOtaConfirmationAndCommission`).
-- No usa `updatedAt` del cliente: el orden lo da el feed. Usa el `updated_at` leído en la misma
-  transacción para el control de concurrencia.
+- No usa `updatedAt` del cliente: el orden lo da el feed. `apply` compara el `updated_at` que leyó
+  `prepare`; si la reserva cambió entre medio, o la restricción anti-solape rechaza una habitación, se
+  revierte todo y la revisión se procesa de nuevo en la siguiente lectura (sin `ack`).
 - Llama a `DailyListChangeRecorder` y a `AriChangeRecorder` como cualquier modificación.
 
 **C5. Disponibilidad para Channex**: este caso de uso llama a `AriChangeRecorder.record` (de
@@ -396,8 +409,8 @@ de negocio".
 
 ### Modificación
 
-1. **Quién y cuándo**: solo reservas `DIRECT` en `ACTIVE` (las `PENDING` son siempre de OTA). Otro estado,
-   `STATUS_NOT_EDITABLE`; una `OTA`, `OTA_RESERVATION_READ_ONLY`.
+1. **Quién y cuándo**: solo reservas `DIRECT` en `ACTIVE` o `PENDING` (FR-001; hoy ninguna reserva nace en
+   `PENDING`). Otro estado, `STATUS_NOT_EDITABLE`; una `OTA`, `OTA_RESERVATION_READ_ONLY`.
 2. **Qué cambia** (`diffRooms`, función pura del dominio) comparando `rooms` con las actuales:
 
 | Resultado | Cuándo |
@@ -409,7 +422,7 @@ de negocio".
 | **Cambiada de categoría** | Una quitada y una agregada de distinta categoría: la nueva se cotiza |
 
 3. **Qué se valida y en qué orden** (la primera falla responde):
-   1. Reserva existente, `DIRECT` y `ACTIVE`.
+   1. Reserva existente, `DIRECT` y en `ACTIVE` o `PENDING`.
    2. `updatedAt` coincide.
    3. Fechas: entrada no anterior al día operativo en curso (Clock, no una fecha fija) y salida posterior.
    4. Habitaciones: entre 1 y 10, sin repetidas, al menos una conservada o agregada; cada `roomId` existe en
@@ -424,10 +437,11 @@ de negocio".
       `roomsNeedingQuote`, todo o nada.
 4. **Sin recotizar ni verificar disponibilidad** cuando solo cambian `guestCount`, datos del titular o
    `notes` (FR-004).
-5. **Persistencia** (en una sola transacción, con `SELECT … FOR UPDATE` de la reserva y el control de
-   `updatedAt`): actualiza fechas, `guest_count` (la suma), `notes`; inserta, borra y actualiza
+5. **Persistencia**: después de las llamadas a los Módulos 1 y 3 (regla 6 del plan base), en una sola
+   transacción, con `SELECT … FOR UPDATE` de la reserva y el control de `updatedAt`, que se vuelve a comparar
+   dentro: actualiza fechas, `guest_count` (la suma), `notes`; inserta, borra y actualiza
    habitaciones con sus tarifas y copias de fechas (D3); actualiza el titular; y llama a
-   `DailyListChangeRecorder`. Una violación de la restricción anti-solape se traduce en `NO_AVAILABILITY`.
+   `DailyListChangeRecorder`. Una violación de la restricción anti-solape se traduce en `ROOM_NOT_AVAILABLE`.
 6. **Titular**: corrige el `guest` de **esta** reserva (cada reserva tiene su propio titular, plan base),
    con todos sus datos salvo `nationality`. No afecta a otras reservas ni a `guest_data`: la modificación
    solo se permite antes del Check-In.
@@ -521,7 +535,7 @@ sequenceDiagram
     alt cambian las fechas o hay habitaciones agregadas o cambiadas
         U->>V: check(cada habitación afectada, excludeReservationRef)
         alt alguna no disponible
-            U-->>R: 400 NO_AVAILABILITY (indica la habitación)
+            U-->>R: 400 ROOM_NOT_AVAILABLE (indica la habitación)
         end
     end
     alt roomsNeedingQuote no está vacía
@@ -547,18 +561,22 @@ sequenceDiagram
     participant L as DailyListChangeRecorder
 
     R->>U: PATCH /api/reservations/{ref} (cambio y expectedRates)
-    U->>DB: BEGIN y SELECT reserva FOR UPDATE
     U->>U: Mismas validaciones de la vista previa (updatedAt incluido)
-    U->>V: check de nuevo, dentro de la transacción
+    U->>V: check de nuevo, antes de abrir la transacción
     U->>Q: verifyQuotes(expectedRates, solicitudes)
     alt la tarifa cambió
-        U->>DB: ROLLBACK
         U-->>R: 400 RATE_CHANGED
+    end
+    Note over U: Las llamadas a los Módulos 1 y 3 van antes de abrir la transacción (regla 6 del plan base)
+    U->>DB: BEGIN y SELECT reserva FOR UPDATE
+    alt updatedAt cambió mientras tanto
+        U->>DB: ROLLBACK
+        U-->>R: 400 CONCURRENT_UPDATE
     end
     U->>DB: UPDATE reservation, rooms (con tarifas, quoteId y copias de fechas) y guest
     alt la restricción anti-solape rechaza
         U->>DB: ROLLBACK
-        U-->>R: 400 NO_AVAILABILITY
+        U-->>R: 400 ROOM_NOT_AVAILABLE
     end
     U->>L: record(tx, antes, después)
     U->>DB: COMMIT (cambio y aviso, juntos)
@@ -779,7 +797,7 @@ backend/src/
 │   ├── messaging/check-out.consumer.ts
 │   └── jobs/close-day.job.ts
 backend/test/
-├── unit/update-reservation/            # transiciones, diffRooms, reglas, validadores
+├── unit/                               # espejo de src/: transiciones, diffRooms, reglas, validadores
 ├── integration/update-reservation/     # Testcontainers: modificación, Check-In y Check-Out, cierre del día
 └── contract/                           # forma de los mensajes y de los DTO REST
 frontend/src/pages/reservations/modify/ # pantalla Modificar (vista previa y confirmación)
@@ -806,9 +824,9 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
 
 - [ ] T008 [US1] Validador del cuerpo de cambio (formatos, `notes`, sin `nationality`, caracteres válidos)
 - [ ] T009 [US1] `PreviewModification` y `POST …/modification-preview` (B1), con disponibilidad y cotización de lo que corresponda
-- [ ] T010 [US1] `ConfirmModification` y `PATCH …/{reservationRef}` (B2) en una transacción con `SELECT … FOR UPDATE`, `verifyQuotes` y comparación de `updatedAt`
+- [ ] T010 [US1] `ConfirmModification` y `PATCH …/{reservationRef}` (B2): disponibilidad y `verifyQuotes` antes de abrir la transacción, y dentro `SELECT … FOR UPDATE` y comparación de `updatedAt`
 - [ ] T011 [US1] Herencia de la tarifa en un cambio de habitación de la misma categoría, y recotización solo de lo afectado
-- [ ] T012 [US1] Llamada a `DailyListChangeRecorder` dentro de la transacción y traducción de la violación anti-solape a `NO_AVAILABILITY`
+- [ ] T012 [US1] Llamada a `DailyListChangeRecorder` dentro de la transacción y traducción de la violación anti-solape a `ROOM_NOT_AVAILABLE`
 - [ ] T013 [US1] Pruebas de integración de los escenarios 1 a 12 y de todos los casos borde de modificación
 - [ ] T014 [P] [US1] Frontend: pantalla "Modificar" con vista previa de tarifas y disponibilidad
 
@@ -837,16 +855,16 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
 
 ## Phase 7: Reservas de Booking (FR-024 y FR-025)
 
-- [ ] T029 `ApplyOtaChange` (C4): conservar, reasignar o dejar sin asignar habitaciones, conflicto y comisión con el porcentaje congelado
-- [ ] T030 `AssignRoom` y `PATCH /api/reservations/{reservationRef}/room-assignment` (B3), con la limpieza del conflicto
-- [ ] T031 Llamadas a `AriChangeRecorder` (C5) en la modificación, la asignación, el No-Show, el Check-Out y `NOT_ARRIVED`
-- [ ] T032 Pruebas de los escenarios 13 y 14 de la historia 1
+- [ ] T026 [US1] `ApplyOtaChange` (C4): `prepare` antes de la transacción y `apply` dentro; conservar, reasignar o dejar sin asignar habitaciones, conflicto y comisión con el porcentaje congelado
+- [ ] T027 [US1] `AssignRoom` y `PATCH /api/reservations/{reservationRef}/room-assignment` (B3), con la validación de capacidad y la limpieza del conflicto
+- [ ] T028 [US1] Llamadas a `AriChangeRecorder` (C5) en la modificación, la asignación, el No-Show, el Check-Out y `NOT_ARRIVED`
+- [ ] T029 [US1] Pruebas de los escenarios 13 y 14 de la historia 1
 
 ## Phase N: Polish
 
-- [ ] T026 Pruebas de tiempo: recotización de 10 habitaciones en menos de 3 s, Check-In con 10 huéspedes en menos de 500 ms y cierre del día de 1000 reservas en menos de 1 minuto
-- [ ] T027 Verificar que ningún log escribe datos personales de los huéspedes
-- [ ] T028 Documentar B1 y B2 en OpenAPI (`@nestjs/swagger`)
+- [ ] T030 Pruebas de tiempo: recotización de 10 habitaciones en menos de 3 s, Check-In con 10 huéspedes en menos de 500 ms y cierre del día de 1000 reservas en menos de 1 minuto
+- [ ] T031 Verificar que ningún log escribe datos personales de los huéspedes
+- [ ] T032 Documentar B1, B2 y B3 en OpenAPI (`@nestjs/swagger`)
 
 ## Pruebas por escenario
 
@@ -855,7 +873,7 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
 | US1 | 1 recotización exitosa | Cambio de fechas o categoría: se muestran las tarifas de las habitaciones afectadas y, tras confirmar, se guarda |
 | US1 | 2 datos personales | Sin llamar al Módulo 3 ni verificar disponibilidad |
 | US1 | 3 cambio de estado interno | Las transiciones permitidas se aplican y las demás se rechazan |
-| US1 | 4 sin disponibilidad | `400` `NO_AVAILABILITY` indicando la habitación; no se aplica ningún cambio parcial |
+| US1 | 4 sin disponibilidad | `400` `ROOM_NOT_AVAILABLE` indicando la habitación; no se aplica ningún cambio parcial |
 | US1 | 5 estado no editable | `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`: `400` `STATUS_NOT_EDITABLE` |
 | US1 | 6 y 7 cambio de habitación | Con llegada hoy: aviso `UPDATED`; con llegada futura: sin aviso |
 | US1 | 8 y 9 agregar y quitar | Habitación nueva en `EXPECTED` con su tarifa y total recalculado; quitada con su tarifa y personas |
@@ -886,7 +904,7 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
   `calculate-dynamic-rate`, `consult-room-inventory` y `process-guest-data`.
 - **Necesitan de este caso de uso** (`ReservationStatusService`): `generate-direct-reservation`,
   `generate-ota-reservation` y `cancel-reservation`.
-- **Orden**: T001–T007 → US1 (T008–T014) → US2 (T015–T020) → US3 (T021–T024) → T025 → Polish. Va antes
+- **Orden**: T001–T007 → US1 (T008–T014) → US2 (T015–T020) → US3 (T021–T024) → T025 → reservas de Booking (T026–T029) → Polish (T030–T032). Va antes
   de las reservas y de la cancelación porque ellas usan sus transiciones.
 
 ## Trazabilidad: requisito → componente → tarea
@@ -907,10 +925,10 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
 | FR-016 | `RegisterGuestMovements` | T018 |
 | FR-018 a FR-022 | `CloseDay` y `CloseDayJob` | T021, T022 |
 | FR-023 | `processed_message` y control de secuencia | T017 |
-| FR-024 | `ApplyOtaChange` | T029 |
-| FR-025 | `AssignRoom` y B3 | T030 |
-| FR-026 | `AriChangeRecorder.record` en la misma transacción (C5) | T030 |
-| NFR-001 a NFR-003 | Pruebas de tiempo | T026 |
+| FR-024 | `ApplyOtaChange` | T026 |
+| FR-025 | `AssignRoom` y B3 | T027 |
+| FR-026 | `AriChangeRecorder.record` en la misma transacción (C5) | T028 |
+| NFR-001 a NFR-003 | Pruebas de tiempo | T030 |
 | SC-001 a SC-008 | Pruebas por escenario | T013, T019, T024 |
 
 ## Puntos que este plan propone (el spec no los dice)
@@ -922,7 +940,8 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
    misma categoría (la nueva toma la tarifa de la quitada).
 3. **Códigos y mensajes** de los errores que el spec no da literales (`OTA_RESERVATION_READ_ONLY`,
    `STATUS_NOT_EDITABLE`, `CONCURRENT_UPDATE`, `NATIONALITY_NOT_EDITABLE`, `INVALID_STATUS_TRANSITION`,
-   `NO_AVAILABILITY` con el número de habitación).
+   `ROOM_NOT_AVAILABLE` con el número de habitación) y el código `INVALID_RESERVATION_DATES` para el
+   mensaje de fechas del spec.
 4. **La vista previa devuelve 400** si no hay disponibilidad, igual que la confirmación, porque el spec
    dice que intentar modificar sin disponibilidad responde 400.
 5. **El total** de la reserva se muestra en la vista previa (la suma de lo que quedaría) sin tarifa
@@ -932,6 +951,11 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
 7. **`status_reason` con códigos** (`CHECK_IN`, `CHECK_OUT`, `DAY_CLOSE_NO_SHOW`, …); el plan base lo deja
    como texto libre.
 8. **Recuperación del cierre al arrancar** sin una tabla de control: se vuelve a ejecutar (es idempotente).
+9. **Al asignar habitación (B3), una sin capacidad suficiente se rechaza** con
+   `GUEST_COUNT_EXCEEDS_CAPACITY`: el spec solo pide verificar la disponibilidad, pero asignarla dejaría un
+   conflicto que ya no se podría resolver.
+10. **`ApplyOtaChange` se divide en `prepare` y `apply`**, porque las llamadas a otros módulos van antes de
+    la transacción (regla 6 del plan base).
 
 ## Puntos abiertos
 

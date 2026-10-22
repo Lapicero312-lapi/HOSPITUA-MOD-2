@@ -122,6 +122,7 @@ interface CancelReservation {
 | `CONCURRENT_UPDATE` | `updatedAt` no coincide: otra cancelación o cambio simultáneo | "Esta reserva ya fue actualizada o cancelada recientemente" |
 | `REASON_TOO_LONG` | `reason` de más de 500 caracteres | "El motivo no puede superar 500 caracteres." |
 | `INVALID_CHARACTERS` | Caracteres no válidos en `reason` | "El formato de los datos contiene caracteres no válidos." |
+| `USER_REQUIRED` | Falta la cabecera `X-User` (solo A) | "Falta el usuario que hace la acción." |
 | `REQUEST_NOT_PROCESSED` | Excepción inesperada | "No fue posible procesar la solicitud." |
 
 El cuerpo es siempre `{ "errorCode", "message", "timestamp", "path" }`. **Nunca 500.**
@@ -169,11 +170,11 @@ El cuerpo es siempre `{ "errorCode", "message", "timestamp", "path" }`. **Nunca 
 
 ## Diagramas de secuencia
 
-### D1. Cancelación (escenarios 1, 2, 3, 5 y 6)
+### D1. Cancelación por la Recepcionista (escenarios 1, 3, 5 y 6; la de Booking, escenario 2, entra por `CancelReservation` sin pasar por el controlador)
 
 ```mermaid
 sequenceDiagram
-    actor S as Recepcionista u OTA
+    actor S as Recepcionista
     participant C as Controller
     participant U as CancelReservation
     participant L as ReservationLookup
@@ -189,7 +190,7 @@ sequenceDiagram
     C->>U: execute(canal, actor, referencia, updatedAt, acknowledged, reason)
     U->>DB: BEGIN
     U->>L: findForUpdate(referencia)
-    alt no existe, o es de otro canal u otra agencia
+    alt no existe
         U-->>S: 400 RESERVATION_NOT_FOUND
     else la Recepcionista cancela una reserva de OTA
         U-->>S: 400 OTA_RESERVATION_CANCEL_VIA_API, sin registrar Cancellation
@@ -283,7 +284,7 @@ ACTIVE | PENDING --cancelar (Recepcionista o OTA)--> CANCELLED      (estado fina
 | `domain/cancellation/` | `Cancellation` (inmutable) y las reglas de quién cancela qué canal |
 | `application/use-cases/cancel-reservation/` | **Entrada**: `CancelReservation` (un servicio para los dos canales) y el validador de la solicitud |
 | `application/ports/out/` | `CancellationRepository`, `Clock` y los puertos de otros casos de uso (D) |
-| `infrastructure/in/rest/` | Rutas de la Recepcionista (en `ReservationsController`) y de la OTA (en `OtaReservationsController`) |
+| `infrastructure/in/rest/` | Ruta de la Recepcionista (A), en `ReservationsController`. La cancelación de Booking (B) no tiene ruta: es una llamada interna |
 | `infrastructure/out/persistence/` | `CancellationRepository` |
 
 ```text
@@ -296,10 +297,10 @@ backend/src/
 │   ├── cancel-reservation.service.ts
 │   └── cancel-request.validator.ts
 └── infrastructure/
-    ├── in/rest/ (rutas A y B dentro de los controladores existentes)
+    ├── in/rest/ (ruta A dentro de ReservationsController)
     └── out/persistence/cancellation.repository.ts
 backend/test/
-├── unit/cancel-reservation/               # reglas de canal y estado, validador
+├── unit/                                  # espejo de src/: reglas de canal y estado, validador
 ├── integration/cancel-reservation/        # Testcontainers: ambos canales, concurrencia, aviso a la lista
 └── contract/                              # forma de A y B y de los errores
 frontend/src/pages/reservations/cancel/    # pantalla "Cancelar reserva" con la casilla de confirmación
@@ -353,7 +354,6 @@ canal y `REMOVED`); una con llegada futura (sin aviso); y los intentos sobre `IN
 | Casos borde | Varias habitaciones con un Check-In | La reserva está `IN_PROGRESS`: `400` |
 | FR-002b | Confirmación | Sin `acknowledged: true`, la Recepcionista recibe `400` `CANCELLATION_NOT_CONFIRMED` |
 | FR-006 | Sin efectos financieros | Una reserva de OTA cancelada conserva `commission_amount` y `commission_status`; el Módulo 3 simulado no recibe ninguna llamada |
-| Seguridad | Agencia ajena | Una OTA que cancela la reserva de otra agencia o una directa: `400` `RESERVATION_NOT_FOUND` |
 | NFR-001 | Tiempo | El procesamiento local en menos de 200 ms |
 
 ## Dependencies & Execution Order

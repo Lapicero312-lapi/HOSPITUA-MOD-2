@@ -217,7 +217,7 @@ interface CommissionResult {
 interface RegisterOtaConfirmationAndCommission {
   calculate(input: CommissionInput): Promise<CommissionResult>;
   // Booking cambió el valor: mismo porcentaje congelado de la reserva, importe nuevo
-  recalculate(reservation: Reservation, newTotalAmount: Money): CommissionResult;
+  recalculate(reservation: Reservation, grossAmount: Money): CommissionResult;
   recordAudit(tx: Transaction, reservationId: string, result: CommissionResult, performedBy: string): Promise<void>;
 }
 ```
@@ -227,7 +227,8 @@ interface RegisterOtaConfirmationAndCommission {
 - **Validaciones** (en este orden): la `Ota` existe; su `commissionPercentage` está entre 0 y 100; el
   `externalConfirmationCode` no está ya registrado para esa `Ota` (FR-005; `generate-ota-reservation` ya
   trata un código repetido como un cambio, así que este error solo protege contra un uso indebido).
-- `recalculate` escribe también una fila de auditoría `CALCULATED` con los importes nuevos.
+- `recalculate` tampoco persiste: quien llama (`ApplyOtaChange`) guarda los importes nuevos y llama a
+  `recordAudit`, que deja la fila `CALCULATED` con ellos.
 - La reserva guarda **su propia copia** del porcentaje y del importe: un cambio posterior del porcentaje de
   la agencia **no afecta** a las reservas ya registradas.
 
@@ -244,11 +245,11 @@ interface ManageOta {
 
 - **Validaciones** (`400`, indicando los campos inválidos): `name` o `hotelAccountId` vacíos,
   `commissionPercentage` fuera de 0 a 100, o `name` ya usado por otra `Ota`.
-- Una `Ota` **nace en `CONNECTED`**, con `lastSyncAt` igual a la hora del mensaje. Volver a vincular **no
-  crea** una `Ota` nueva ni cambia `linkedAt`.
+- Una `Ota` **nace en `CONNECTED`**, con `linkedAt` y `lastSyncAt` iguales a la hora del registro (`at`).
+  Registrarla de nuevo al reiniciar **no crea** una `Ota` nueva ni cambia `linkedAt`.
 - Un nuevo `commissionPercentage` **aplica solo a las reservas futuras**.
-- Desvincular **no borra** la `Ota` ni modifica sus reservas (`status`, `commissionAmount` y
-  `commissionStatus` se conservan).
+- La `Ota` **nunca se borra**: si Channex rechaza la conexión pasa a `DISCONNECTED`, y sus reservas no
+  cambian (`status`, `commissionAmount` y `commissionStatus` se conservan).
 
 **B3. Estado de la conexión** (`OtaConnectionTracker`):
 
@@ -260,7 +261,7 @@ interface OtaConnectionTracker {
 ```
 
 - Lo llaman `generate-ota-reservation` (cada lectura del feed) y `configure-ota` (si Channex rechaza un
-  envío de disponibilidad o tarifas). Volver a `CONNECTED` no cambia `linkedAt`.
+  envío de tipos de habitación o de disponibilidad). Volver a `CONNECTED` no cambia `linkedAt`.
 
 **Errores de B2** (los registra `configure-ota` en el log al iniciar, con los campos inválidos):
 
@@ -295,7 +296,8 @@ interface OtaConnectionTracker {
    external_confirmation_code)` es el respaldo ante solicitudes simultáneas.
 6. **Auditoría** (FR-010): cada comisión calculada o conciliada deja una fila **inmutable** en
    `commission_audit` con la acción, el estado anterior, los importes, el canal (`OTA_API` para el cálculo
-   y `MODULE3` para la conciliación), quién la hizo y cuándo.
+   y `MODULE3` para la conciliación), quién la hizo (`performed_by`: `Booking.com` en el cálculo y
+   `MODULE3` en la conciliación) y cuándo.
 7. **Concurrencia**: dos actualizaciones de la misma reserva se procesan en secuencia con
    `SELECT … FOR UPDATE` de la reserva, de modo que el `commissionStatus` final refleje la versión más
    reciente.
@@ -401,9 +403,9 @@ sequenceDiagram
         M-->>X: BusinessError con los campos inválidos (400)
     end
     M->>DB: INSERT o UPDATE ota (nace CONNECTED; linkedAt no cambia al reconectar)
-    M->>DB: last_sync_at = hora del mensaje
+    M->>DB: linked_at y last_sync_at = hora del registro (solo al crearla)
     M-->>X: Ota
-    Note over M,DB: Desvincular no borra la Ota ni toca sus reservas
+    Note over M,DB: La Ota nunca se borra; reiniciar no la duplica
 ```
 
 ## Modelo de datos y entidades involucradas
@@ -432,7 +434,7 @@ CALCULATED --pago----------> PAID
 (CANCELLED o NO_SHOW: la comisión no cambia ni se concilia)
 ```
 
-**`connectionStatus` de la `Ota`**: `CONNECTED` (nace así) ⇄ `DISCONNECTED`, solo por mensajes de la OTA.
+**`connectionStatus` de la `Ota`**: `CONNECTED` (nace así) ⇄ `DISCONNECTED`, solo por las respuestas de Channex (`OtaConnectionTracker`).
 
 ## Reglas de validación y manejo de errores
 
@@ -483,8 +485,9 @@ backend/src/
 │   ├── reconcile-commissions.service.ts
 │   ├── list-ota-commissions.service.ts
 │   ├── list-otas.service.ts
+│   ├── get-ota.service.ts
 │   ├── manage-ota.service.ts
-│   └── touch-ota-sync.service.ts
+│   └── ota-connection-tracker.service.ts
 ├── infrastructure/in/rest/
 │   ├── ota-commissions.controller.ts
 │   └── otas.controller.ts
@@ -492,7 +495,7 @@ backend/src/
     ├── ota.repository.ts
     └── commission-audit.repository.ts
 backend/test/
-├── unit/register-ota-information-commission/    # fórmula, redondeo, transiciones, validaciones
+├── unit/                                        # espejo de src/: fórmula, redondeo, transiciones, validaciones
 ├── integration/register-ota-information-commission/ # Testcontainers: cálculo, conciliación, consulta
 └── contract/                                       # forma de A1, A2 y A3
 frontend/src/pages/otas/                            # pantalla "Agencias OTA" (solo lectura)

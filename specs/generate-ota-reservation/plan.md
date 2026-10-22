@@ -153,7 +153,8 @@ Devuelve las revisiones **no confirmadas**, de la más antigua a la más recient
 | `rooms[].room_type_id` | `category_room`, según `ota_room_type_mapping` (`configure-ota`) |
 | `rooms[].occupancy.adults + children` | `reservation_room.guest_count` (los bebés no se cuentan) |
 
-**B1. `new`**: dentro de **una transacción**:
+**B1. `new`**: los pasos 1 a 5 son lecturas y van **antes** de abrir la transacción (el 5 llama al
+Módulo 1; regla 6 del plan base); los pasos 6 a 10 van en **una transacción**:
 
 1. Si la revisión ya está en `ota_booking_revision`, no hace nada (solo repite el `ack` si faltaba).
 2. Si el `ota_reservation_code` ya existe para la agencia, la trata como `modified` (B2).
@@ -177,13 +178,16 @@ Devuelve las revisiones **no confirmadas**, de la más antigua a la más recient
    `AriChangeRecorder.record` (categorías y fechas).
 10. Inserta la fila de `ota_booking_revision` (`APPLIED` o `CONFLICT`).
 
-Después del commit envía el `ack` (A2) y guarda `acked_at`.
+Después del commit envía el `ack` (A2) y guarda `acked_at`. Si al guardar la restricción anti-solape
+rechaza una habitación (otra reserva la tomó entre la consulta y el guardado), se revierte todo y la
+revisión se procesa de nuevo en la siguiente lectura, sin `ack`.
 
 **B2. `modified`**: busca la reserva por `ota_reservation_code`.
 
 - Si no existe, la procesa como `new` (B1).
-- Si está en `ACTIVE` o `PENDING`, llama a `ApplyOtaChange` de `update-reservation` con las fechas, las
-  habitaciones y las personas, el valor, las observaciones y el titular nuevos. Ese caso de uso conserva o
+- Si está en `ACTIVE` o `PENDING`, llama a `ApplyOtaChange.prepare` (antes de abrir la
+  transacción) y a `apply` (dentro) de `update-reservation`, con las fechas, las habitaciones y las personas,
+  el valor, las observaciones y el titular nuevos. Ese caso de uso conserva o
   reasigna habitaciones, deja sin asignar las que no tengan lugar, marca el conflicto si hace falta y
   recalcula la comisión con el porcentaje congelado.
 - Si está en `IN_PROGRESS`, `COMPLETED`, `NO_SHOW` o `CANCELLED`, no la cambia y la marca
@@ -192,7 +196,7 @@ Después del commit envía el `ack` (A2) y guarda `acked_at`.
 **B3. `cancelled`**: busca la reserva por `ota_reservation_code`.
 
 - Si no existe, solo registra la revisión como `IGNORED` y confirma.
-- Si está en `CANCELLED`, no hace nada más y confirma.
+- Si está en `CANCELLED`, la registra como `IGNORED` y confirma.
 - Si está en `ACTIVE` o `PENDING`, llama a `CancelReservation` con canal `OTA_API` y `processedBy`
   `Booking.com`.
 - Si está en `IN_PROGRESS`, `COMPLETED` o `NO_SHOW`, la marca `CHANGE_NOT_APPLICABLE`.
@@ -206,7 +210,7 @@ Después del commit envía el `ack` (A2) y guarda `acked_at`.
 | `VerifyAvailability.check` y `assignRooms` | `check-room-availability` | Disponibilidad y asignación (sin `requireAvailable`: nunca se rechaza) |
 | `RegisterOtaConfirmationAndCommission.calculate` y `recordAudit` | `register-ota-information-commission` | Comisión y auditoría |
 | `OtaConnectionTracker.markSynced` y `markDisconnected` | `register-ota-information-commission` | `lastSyncAt` y `connectionStatus` |
-| `ApplyOtaChange` | `update-reservation` | Revisiones `modified` |
+| `ApplyOtaChange.prepare` y `apply` | `update-reservation` | Revisiones `modified` |
 | `CancelReservation` | `cancel-reservation` | Revisiones `cancelled` |
 | `DailyListChangeRecorder.record` | `check-view-reservation` | Avisos a la lista del día |
 | `AriChangeRecorder.record` | `configure-ota` | Disponibilidad pendiente para Channex |
@@ -355,15 +359,15 @@ revisión se confirma.
 - [ ] T005 [US1] `ReadBookingFeed` y `ChannexSyncJob`: lectura de todas las páginas, `lastSyncAt`, `DISCONNECTED` ante 401/403 y pausa de un minuto ante 429
 - [ ] T006 [US1] `ProcessBookingRevision` para `new` (B1), en una transacción
 - [ ] T007 [US1] `ack` después del commit y repetición de los `ack` pendientes
-- [ ] T008 [US1] Pruebas de integración de los escenarios 1 a 7 con Channex simulado
+- [ ] T008 [US1] Pruebas de integración de los escenarios 1 a 7 con Channex simulado (el 8 va en T011c)
 
 ## Phase 4: User Story 2 - Cambios y cancelaciones (P1)
 
 - [ ] T009 [US2] `modified` (B2) con `ApplyOtaChange`
 - [ ] T010 [US2] `cancelled` (B3) con `CancelReservation`
 - [ ] T011 [US2] Pruebas de integración de los escenarios 1 a 5
-- [ ] T011b `OtaNoShowReporter` y `PublishPendingNoShows` (A3): pendiente en la transacción del cierre, envío en `ChannexSyncJob`, `REJECTED` ante 404/422
-- [ ] T011c Fechas distintas por habitación (FR-012): fechas de la reserva y `CHANGE_NOT_APPLICABLE`
+- [ ] T011b [US2] `OtaNoShowReporter` y `PublishPendingNoShows` (A3): pendiente en la transacción del cierre, envío en `ChannexSyncJob`, `REJECTED` ante 404/422; prueba del escenario 6
+- [ ] T011c [US1] Fechas distintas por habitación (FR-012): fechas de la reserva y `CHANGE_NOT_APPLICABLE`; prueba del escenario 8
 
 ## Phase N: Polish
 

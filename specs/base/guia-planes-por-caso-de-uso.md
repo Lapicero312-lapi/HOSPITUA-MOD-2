@@ -24,7 +24,9 @@ cambia; si algo no le sirve, se discute y se cambia primero en el plan base.
   pnpm; frontend React + Vite + TanStack Query.
 - **Arquitectura hexagonal:** un solo `src/domain/` para todo el Módulo 2, un caso de uso por cada spec
   en `application/use-cases/` y adaptadores en `infrastructure/in` y `infrastructure/out`.
-- **Errores:** siempre 4xx con el cuerpo `{ errorCode, message, timestamp, path }`; nunca 500.
+- **Errores:** siempre 4xx con el cuerpo `{ errorCode, message, timestamp, path }`; nunca 500. Cada
+  `errorCode` tiene un solo mensaje en todo el Módulo 2.
+- **Transacciones:** las llamadas a otros módulos van antes de abrir la transacción (regla 6 del plan base).
 - **Mensajería:** mensajes JSON planos, `messageId` como única clave de duplicados, `sequenceNumber`
   para el orden, reintentos y dead-letter.
 - **Concurrencia:** control por `updatedAt`; un conflicto es 400 `CONCURRENT_UPDATE`.
@@ -55,6 +57,8 @@ cambia; si algo no le sirve, se discute y se cambia primero en el plan base.
 - Cada escenario de la spec (`Given / When / Then`) lleva al menos una prueba de integración.
 - Las llamadas a otros módulos se prueban contra respuestas simuladas: éxito, error, tiempo agotado.
 - Los mensajes de cola se prueban con su forma exacta y con un mensaje repetido (mismo `messageId`).
+- Las pruebas van en `backend/test/` (`unit/` en espejo de `src/`, `integration/`, `contract/` y `e2e/`) y
+  terminan en `.spec.ts` (o `.e2e-spec.ts` las de API).
 
 ## 5. Antes de programar
 

@@ -174,7 +174,7 @@ de la reserva con la forma de `check-view-reservation` (C3):
   "createdAt": "2026-10-09T09:14:00-05:00",
   "rooms": [
     {
-      "roomNumber": "201", "categoryRoom": "DOBLE", "guestCount": 2,
+      "roomId": "uuid", "roomNumber": "201", "categoryRoom": "DOBLE", "guestCount": 2,
       "roomGrossAmount": { "amount": "750000.00", "currency": "COP" },
       "stayStatus": "EXPECTED"
     }
@@ -198,15 +198,15 @@ esperar al Módulo 1** (FR-007).
 | `errorCode` | Cuándo | `message` |
 |---|---|---|
 | `START_DATE_IN_PAST` | `startDate` anterior al día operativo en curso | "La fecha de entrada no puede ser anterior a hoy." |
-| `INVALID_STAY_DATES` | Fechas vacías, inexistentes o salida no posterior a la entrada | "La fecha de salida debe ser posterior a la de entrada." |
+| `INVALID_RESERVATION_DATES` | Fechas vacías, inexistentes o salida no posterior a la entrada | "La fecha de salida debe ser posterior a la de entrada." |
 | `INVALID_ROOM_COUNT` | Cero o más de 10 habitaciones | "Una reserva debe tener entre 1 y 10 habitaciones." |
 | `ROOM_ALREADY_IN_RESERVATION` | La misma habitación dos veces | "La habitación ya forma parte de la reserva." |
 | `INVALID_GUEST_COUNT` | `guestCount` no es un entero positivo | "La cantidad de personas debe ser un número entero mayor que cero." |
 | `GUEST_COUNT_TOO_LOW` | `guestCount` igual a 0 | "Cada habitación debe tener al menos una persona." |
 | `GUEST_COUNT_EXCEEDS_CAPACITY` | `guestCount` mayor que el `maxCapacity` | "La cantidad de personas supera la capacidad de la habitación." |
 | `NO_AVAILABILITY` | No hay habitaciones disponibles suficientes | "Error 400: La habitación no está disponible para el rango de fechas solicitado" |
-| `NO_AVAILABILITY` | Una habitación pedida por `roomId` no está disponible | "Error 400: La habitación {roomNumber} no está disponible para el rango de fechas solicitado" |
-| `NO_AVAILABILITY` | Otra solicitud tomó la última habitación | "Ya no hay disponibilidad para las fechas solicitadas." |
+| `ROOM_NOT_AVAILABLE` | Una habitación pedida por `roomId` no está disponible | "La habitación {roomNumber} no está disponible para el rango de fechas solicitado." |
+| `AVAILABILITY_TAKEN` | Otra solicitud tomó la última habitación | "Ya no hay disponibilidad para las fechas solicitadas." |
 | `PRICING_UNAVAILABLE` | El Módulo 3 no responde al cotizar | "Error 400: El servicio de cotización de tarifas no se encuentra disponible. Por favor intente más tarde" |
 | `RATE_CHANGED` | La tarifa cambió entre la vista previa y la creación | "La tarifa cambió, vuelva a cotizar." |
 | `IDEMPOTENCY_KEY_REQUIRED` | Falta la cabecera `Idempotency-Key` o no es un UUID (solo B) | "Falta el identificador de la solicitud." |
@@ -324,7 +324,7 @@ sequenceDiagram
     V-->>U: habitaciones con disponibilidad y motivo
     U->>U: assignRooms(menor roomNumber) y validar capacidad
     alt faltan habitaciones o una excede su capacidad
-        U-->>R: 400 NO_AVAILABILITY o GUEST_COUNT_EXCEEDS_CAPACITY, sin llamar al Módulo 3
+        U-->>R: 400 NO_AVAILABILITY, ROOM_NOT_AVAILABLE o GUEST_COUNT_EXCEEDS_CAPACITY, sin llamar al Módulo 3
     end
     U->>Q: quoteRooms(una cotización por habitación, NEW_RESERVATION)
     alt el Módulo 3 falla en cualquiera
@@ -386,7 +386,7 @@ sequenceDiagram
         U->>U: B: asignar la siguiente candidata (ASSIGNMENT_MAX_RETRIES)
         U->>DB: B: nueva transacción con otra habitación
     else no queda ninguna
-        U-->>B: 400 NO_AVAILABILITY, "Ya no hay disponibilidad para las fechas solicitadas."
+        U-->>B: 400 AVAILABILITY_TAKEN, "Ya no hay disponibilidad para las fechas solicitadas."
     end
     Note over U,DB: Solo una de las dos solicitudes ocupa la habitación: no hay sobreventa
 ```
@@ -425,7 +425,7 @@ Todo error sale con `{ "errorCode", "message", "timestamp", "path" }` y **siempr
   crea ninguna reserva** ni se persiste ningún registro (la transacción se revierte).
 - **No se asume ninguna tarifa** por defecto, estimada ni a cero.
 - **Concurrencia**: la violación de la restricción de exclusión (código `23P01` de PostgreSQL) se traduce
-  en reintento con otra habitación o en `NO_AVAILABILITY`; nunca en 500.
+  en reintento con otra habitación o en `AVAILABILITY_TAKEN`; nunca en 500.
 - La referencia duplicada (violación de unicidad de `reservation_ref`) se resuelve generando otra.
 - Los fallos del Módulo 1 o 3 se informan sin detalles de infraestructura.
 
@@ -465,7 +465,7 @@ backend/src/
 ├── infrastructure/in/rest/direct-reservations.controller.ts
 └── infrastructure/out/persistence/reservation.repository.ts
 backend/test/
-├── unit/generate-direct-reservation/       # invariantes, validador, referencia
+├── unit/                                  # espejo de src/: invariantes, validador, referencia
 ├── integration/generate-direct-reservation/ # Testcontainers: creación, concurrencia, aviso a la lista
 └── contract/                                # forma de los DTO REST
 frontend/src/pages/reservations/new/         # pantalla "Nueva reserva directa"
@@ -492,14 +492,14 @@ y por caída del Módulo 3.
 
 - [ ] T007 [US1] `PreviewDirectReservation` y `POST /api/reservations/direct/preview` (A): validaciones, disponibilidad, asignación, capacidad y cotización
 - [ ] T008 [US1] `CreateDirectReservation` y `POST /api/reservations/direct` (B): `verifyQuotes`, transacción, `201` y `Location`
-- [ ] T009 [US1] Reintento de asignación ante el rechazo por solape y `NO_AVAILABILITY` cuando no hay otra habitación
+- [ ] T009 [US1] Reintento de asignación ante el rechazo por solape y `AVAILABILITY_TAKEN` cuando no hay otra habitación
 - [ ] T010 [US1] Llamadas a `DailyListChangeRecorder` (`ADDED` solo con llegada hoy y lista ya enviada) y a `AriChangeRecorder` (categorías y fechas) dentro de la transacción
 - [ ] T011 [US1] Pruebas de integración de los escenarios 1 a 7 y 9
 - [ ] T012 [US1] Pruebas de todos los casos borde (fechas, habitaciones, personas, `notes`, Módulo 3 parcial, concurrencia)
 - [ ] T013 [US1] Prueba de concurrencia: dos solicitudes simultáneas por la última habitación; solo una se crea
 - [ ] T014 [P] [US1] Frontend: pantalla "Nueva reserva directa" (disponibilidad y tarifa al cambiar categoría, habitaciones y fechas; confirmar)
-- [ ] T019 [US1] `Idempotency-Key` en B: tabla `idempotency_key`, misma reserva con el mismo cuerpo, `IDEMPOTENCY_KEY_REUSED` con otro, y borrado de las vencidas en el cierre del día
 - [ ] T018 [US1] `LookupGuest` y `GET /api/guests/lookup` (E): búsqueda por documento y precarga en la pantalla "Nueva reserva directa"; pruebas de los escenarios 10 y 11
+- [ ] T019 [US1] `Idempotency-Key` en B: tabla `idempotency_key`, misma reserva con el mismo cuerpo, `IDEMPOTENCY_KEY_REUSED` con otro, y borrado de las vencidas en el cierre del día; prueba del escenario 8
 
 ## Phase N: Polish
 
@@ -518,11 +518,12 @@ y por caída del Módulo 3.
 | US1 | 5 grupo con varias habitaciones | Una `Reservation` con dos `ReservationRoom` en `EXPECTED`, cada una con su tarifa y sin total |
 | US1 | 6 una habitación no disponible | Habitación pedida por `roomId` con mantenimiento: `400` que nombra la habitación 102 y no se crea nada |
 | US1 | 7 personas fuera de capacidad | 3 personas: "La cantidad de personas supera la capacidad de la habitación."; 0: "Cada habitación debe tener al menos una persona." |
+| US1 | 8 doble envío | La misma solicitud con la misma `Idempotency-Key` dos veces: la misma reserva y una sola fila; con otro cuerpo, `400` `IDEMPOTENCY_KEY_REUSED` |
 | US1 | 10 precarga del titular | Con dos reservas anteriores del mismo documento, `GET /api/guests/lookup` devuelve los datos de la más reciente; la reserva nueva guarda su propio `guest` y la anterior no cambia |
 | US1 | 11 documento sin reservas | `{ "found": false, "guest": null }` y ningún error |
 | US1 | 9 fecha anterior a hoy | Con el reloj simulado: el día anterior se rechaza, el mismo día se acepta, y al día siguiente el mínimo avanza |
 | Casos borde | Fechas | Salida anterior, vacía o inexistente: `400` sin consultar disponibilidad ni cotizar |
-| Casos borde | Concurrencia | Dos creaciones por la última habitación: una `201`, la otra `NO_AVAILABILITY` (o toma otra habitación libre) |
+| Casos borde | Concurrencia | Dos creaciones por la última habitación: una `201`, la otra `AVAILABILITY_TAKEN` (o toma otra habitación libre) |
 | Casos borde | Habitaciones | Repetida: "La habitación ya forma parte de la reserva."; cero o más de 10: "Una reserva debe tener entre 1 y 10 habitaciones." |
 | Casos borde | Personas | No entero o negativo: "La cantidad de personas debe ser un número entero mayor que cero." |
 | Casos borde | Módulo 3 parcial | Cotiza unas y falla otra: no se crea la reserva |
@@ -537,7 +538,7 @@ y por caída del Módulo 3.
   `consult-maintenance-calendar`, `check-view-reservation` (`DailyListChangeRecorder`) y
   `update-reservation` (`ReservationStatusService`), y la restricción anti-solape (D3).
 - **Necesitan de este caso de uso**: ninguno.
-- **Orden**: T001–T006 → US1 (T007–T014) → Polish. Va después de `check-room-availability` y de
+- **Orden**: T001–T006 → US1 (T007–T014, T018 y T019) → Polish. Va después de `check-room-availability` y de
   `update-reservation`, que son las que usa.
 
 ## Trazabilidad: requisito → componente → tarea
@@ -567,12 +568,14 @@ y por caída del Módulo 3.
    concretas (101 y 102).
 3. **Asignación por menor `roomNumber`**, la misma regla que el spec de OTA.
 4. **Reintento de asignación** (hasta 3) cuando la base rechaza una habitación por solape, antes de
-   responder `NO_AVAILABILITY`.
+   responder `AVAILABILITY_TAKEN`.
 5. **Las llamadas a los Módulos 1 y 3 van antes de abrir la transacción**; dentro solo está la inserción.
 6. **Titular nuevo por reserva** y códigos y mensajes para los datos del titular que el spec no define
    (`GUEST_DATA_REQUIRED`, `INVALID_DOCUMENT_TYPE`, `INVALID_EMAIL`).
-7. **Mensajes de disponibilidad**: el literal del spec cuando es general y el mismo con el número de
-   habitación cuando se pidió una habitación concreta.
+7. **Códigos de disponibilidad** (un código, un mensaje): `NO_AVAILABILITY` con el literal del spec cuando
+   faltan habitaciones, `ROOM_NOT_AVAILABLE` con el número cuando se pidió una habitación concreta, y
+   `AVAILABILITY_TAKEN` cuando otra solicitud tomó la última; e `INVALID_RESERVATION_DATES` para el mensaje
+   de fechas del spec.
 
 ## Puntos abiertos
 

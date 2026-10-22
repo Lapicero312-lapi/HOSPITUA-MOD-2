@@ -179,13 +179,14 @@ Access-Control-Expose-Headers: Export-Id, Content-Disposition
 |---|---|---|---|
 | 400 | `PERIOD_TOO_LARGE` | Periodo de más de un año, o más de `SIRE_MAX_RECORDS` líneas | "El periodo solicitado excede el límite permitido. Por favor exporte periodos más cortos." |
 | 400 | `INVALID_DATE` | Fecha mal formada o inexistente | "La fecha indicada no es válida." |
-| 400 | `INCOMPLETE_DATE_RANGE` | Falta `startDate` o `endDate` | "Debe completar ambas fechas del periodo." |
+| 400 | `INCOMPLETE_DATE_RANGE` | Falta `startDate` o `endDate` | "Debe completar ambas fechas del rango." |
 | 400 | `INVALID_DATE_RANGE` | `startDate` posterior a `endDate` | "La fecha inicial no puede ser posterior a la fecha final." |
 | 400 | `NO_MIGRATORY_MOVEMENTS` | El periodo no tiene movimientos de extranjeros (**no se genera archivo ni `SireExport`**) | "No hay movimientos migratorios que reportar en ese periodo." |
 | 400 | `INVALID_GUEST_CHARACTERS` | Un dato del huésped no se puede codificar en el archivo | "Caracteres no válidos en el registro del huésped." |
 | 400 | `INVALID_EXPORT_KIND` | `exportKind` distinto de `PERIOD` o `SINGLE_MOVEMENT` | "El tipo de exportación no es válido." |
 | 400 | `MOVEMENT_NOT_FOUND` | El `movementId` no existe, es de un colombiano o tiene formato inválido | "El movimiento no existe." |
 | 400 | `INVALID_PAGE` | `page` menor que 1 | "El número de página debe ser 1 o mayor." |
+| 400 | `USER_REQUIRED` | Falta la cabecera `X-User` en `POST /api/sire/exports` | "Falta el usuario que hace la acción." |
 | **429** | `TOO_MANY_REQUESTS` | Se superó el límite de solicitudes de exportación | "Se superó el límite de solicitudes de exportación. Intente de nuevo en unos segundos." |
 
 El cuerpo es siempre `{ "errorCode", "message", "timestamp", "path" }`; en 429 se agrega la cabecera
@@ -384,7 +385,7 @@ opera sobre datos locales. Solo usa el puerto interno `SelectForeignMovements` d
 |---|---|
 | `domain/migration/` | `SireExport` (inmutable) y `formatSireLine` (función pura) |
 | `application/use-cases/export-sire-file/` | **Entrada**: `ExportSireFile`, `ListSireMovements`, `PreviewSireMovement`; validador del periodo |
-| `application/ports/out/` | `SireExportRepository`, `SelectForeignMovements` (de `process-guest-data`), `SireConfig` y `Clock` |
+| `application/ports/out/` | `SireExportRepository`, `SireConfig` y `Clock`; usa además el puerto de entrada `SelectForeignMovements` de `process-guest-data` |
 | `infrastructure/in/rest/` | `SireController` |
 | `infrastructure/in/rest/` (limitador) | `SireRateLimiter` (por `X-User` y de concurrencia) |
 | `infrastructure/out/persistence/` | `SireExportRepository` |
@@ -407,7 +408,7 @@ backend/src/
 │   ├── out/persistence/sire-export.repository.ts
 │   └── config/sire.config.ts
 backend/test/
-├── unit/export-sire-file/               # formatSireLine, validador del periodo, codificación
+├── unit/                                # espejo de src/: formatSireLine, validador del periodo, codificación
 ├── integration/export-sire-file/        # Testcontainers: exportación, registro, límites
 └── contract/                            # formato exacto de la línea y del archivo
 frontend/src/pages/sire/                 # pantalla "Exportar SIRE"
