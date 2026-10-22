@@ -50,8 +50,9 @@ export type ReservationProps = {
   /** Vacío hasta que la reserva se guarda. */
   createdAt: Date | null;
   /**
-   * Control de concurrencia optimista: el `updated_at` de la base como texto, con sus microsegundos. Se
-   * compara tal cual al guardar. Vacío hasta que la reserva se guarda.
+   * Versión de la reserva para el control de concurrencia optimista. El dominio no la interpreta: la
+   * entrega el repositorio al leerla y se le devuelve igual al guardar. Vacía hasta que la reserva se
+   * guarda.
    */
   updatedAt: string | null;
 };

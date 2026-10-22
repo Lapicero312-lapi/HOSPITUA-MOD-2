@@ -32,8 +32,8 @@ export interface ReservationRepository {
   insert(reservation: Reservation, tx?: Transaction): Promise<Reservation>;
 
   /**
-   * Guarda los cambios de una reserva si nadie la cambió desde que se leyó: compara su `updatedAt` con el
-   * de la base y, si no coincide, lanza `CONCURRENT_UPDATE`. Agrega, cambia y quita habitaciones según
+   * Guarda los cambios de una reserva si nadie la cambió desde que se leyó: si su `updatedAt` ya no es
+   * el vigente, lanza `CONCURRENT_UPDATE`. Agrega, cambia y quita habitaciones según
    * la lista nueva. Devuelve la reserva con su `updatedAt` nuevo.
    * @throws BusinessError `CONCURRENT_UPDATE` o RoomOverlapError.
    */

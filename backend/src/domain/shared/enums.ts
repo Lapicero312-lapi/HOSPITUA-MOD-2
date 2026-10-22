@@ -1,4 +1,4 @@
-/** Enumerados del Módulo 2 (plan base, "Enumerados"). Se guardan como texto, con un `CHECK` en la base. */
+/** Enumerados del Módulo 2 (plan base, "Enumerados"). */
 
 export const RESERVATION_STATUSES = [
   'PENDING',
