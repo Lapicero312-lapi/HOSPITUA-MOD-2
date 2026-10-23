@@ -283,10 +283,10 @@ backend/test/
 
 ## Phase 2: Foundational
 
-- [ ] T002 [P] Objetos de integración `MaintenanceCalendar`, `MaintenanceCheck` y `MaintenanceConflict`
+- [ ] T002 [P] Objetos de integración `MaintenanceCalendar`, `MaintenanceCheck` y `MaintenanceConflict` (`MaintenanceCalendar` lo hace la base: T012; quedan `MaintenanceCheck` y `MaintenanceConflict`)
 - [ ] T003 [P] Validadores de `roomId` (UUID) y de las fechas (`AAAA-MM-DD` real y `endDate > startDate`)
 - [ ] T004 [P] Función `overlap` del periodo del cruce, con pruebas unitarias de cruce parcial, total, contiguo y de un solo día
-- [ ] T005 `Module1Port.getMaintenances` y su método en `Module1HttpAdapter` con timeout, mapeo de errores y validación de la forma de la respuesta
+- [ ] T005 `Module1Port.getMaintenances` y su método en `Module1HttpAdapter` con timeout, mapeo de errores y validación de la forma de la respuesta (la hace la base: T012)
 - [ ] T006 Códigos de error `INVALID_ROOM_ID` (compartido), `INVALID_STAY_DATES` y `MAINTENANCE_CHECK_UNAVAILABLE` con sus mensajes literales
 
 ## Phase 3: User Story 1 - Detección de mantenimientos que cruzan una estadía (P1)
