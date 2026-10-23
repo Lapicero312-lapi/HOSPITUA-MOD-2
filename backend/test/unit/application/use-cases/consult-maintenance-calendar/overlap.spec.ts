@@ -36,6 +36,26 @@ describe('overlap', () => {
     ).toBeNull();
   });
 
+  it('contiguo: un mantenimiento que empieza el día de la salida no cruza', () => {
+    // Fecha del mismo ejemplo: un mantenimiento solo el 2026-10-14, el día de la salida.
+    expect(
+      overlap(
+        { maintenanceStart: '2026-10-14', maintenanceEnd: '2026-10-14' },
+        STAY,
+      ),
+    ).toBeNull();
+  });
+
+  it('un solo día: un mantenimiento que termina el día de la llegada cruza solo ese día', () => {
+    // Fechas del mismo ejemplo: el mantenimiento va del 2026-10-10 al 2026-10-11, el día de la llegada.
+    expect(
+      overlap(
+        { maintenanceStart: '2026-10-10', maintenanceEnd: '2026-10-11' },
+        STAY,
+      ),
+    ).toEqual({ overlapStart: '2026-10-11', overlapEnd: '2026-10-11' });
+  });
+
   it('un solo día: un mantenimiento de un solo día dentro de la estadía cruza solo ese día', () => {
     // Fecha del mismo ejemplo: un mantenimiento solo el 2026-10-12, en medio de la estadía.
     expect(
