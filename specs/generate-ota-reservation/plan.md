@@ -214,7 +214,7 @@ revisión se procesa de nuevo en la siguiente lectura, sin `ack`.
 | `CancelReservation` | `cancel-reservation` | Revisiones `cancelled` |
 | `DailyListChangeRecorder.record` | `check-view-reservation` | Avisos a la lista del día |
 | `AriChangeRecorder.record` | `configure-ota` | Disponibilidad pendiente para Channex |
-| `ReservationStatusService` | `update-reservation` | Estado inicial `ACTIVE` y `stayStatus` `EXPECTED` |
+| Reglas de transición del dominio | Plan base (T011) | Estado inicial `ACTIVE` y `stayStatus` `EXPECTED` (la fábrica `createOta`) |
 | `Clock` | Plan base | Día operativo en curso |
 
 ## Reglas de negocio
