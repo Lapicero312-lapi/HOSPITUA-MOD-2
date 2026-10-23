@@ -1,7 +1,10 @@
 /**
  * El periodo del cruce entre un mantenimiento y una estadía, o `null` si no se cruzan (plan, "Cómo se
- * determina el cruce"). El mantenimiento incluye sus dos días; la estadía ocupa las noches de `startDate`
- * hasta el día anterior a `endDate` (la salida). En `AAAA-MM-DD`, el orden del texto es el de las fechas.
+ * determina el cruce"). El mantenimiento bloquea los días de `maintenanceStart` a `maintenanceEnd`,
+ * ambos incluidos; la estadía ocupa las noches de `startDate` hasta el día anterior a `endDate`
+ * (`endDate` es la salida). En `AAAA-MM-DD`, el orden del texto es el de las fechas.
+ *
+ * Recibe las fechas ya validadas: no las revisa.
  */
 export function overlap(
   maintenance: { maintenanceStart: string; maintenanceEnd: string },

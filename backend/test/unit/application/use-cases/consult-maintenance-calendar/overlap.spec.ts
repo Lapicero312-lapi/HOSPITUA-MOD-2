@@ -16,6 +16,7 @@ describe('overlap', () => {
   });
 
   it('cruce total: si el mantenimiento cubre toda la estadía, el cruce termina el día anterior a la salida', () => {
+    // Fechas del mismo ejemplo: el mantenimiento va del 2026-10-10 hasta el día de la salida.
     expect(
       overlap(
         { maintenanceStart: '2026-10-10', maintenanceEnd: '2026-10-14' },
@@ -25,7 +26,8 @@ describe('overlap', () => {
   });
 
   it('contiguo: un mantenimiento que termina justo antes de la llegada no cruza', () => {
-    // Ejemplo del plan (escenario 3): el mantenimiento termina el 2026-10-10.
+    // Ejemplo del plan (escenario 3): el mantenimiento termina el 2026-10-10. El plan no da el inicio:
+    // se usa el mismo día, como en el ejemplo del cruce parcial.
     expect(
       overlap(
         { maintenanceStart: '2026-10-10', maintenanceEnd: '2026-10-10' },
@@ -35,6 +37,7 @@ describe('overlap', () => {
   });
 
   it('un solo día: un mantenimiento de un solo día dentro de la estadía cruza solo ese día', () => {
+    // Fecha del mismo ejemplo: un mantenimiento solo el 2026-10-12, en medio de la estadía.
     expect(
       overlap(
         { maintenanceStart: '2026-10-12', maintenanceEnd: '2026-10-12' },
