@@ -51,5 +51,17 @@ export const CONFLICT_REASONS = [
 ] as const;
 export type ConflictReason = (typeof CONFLICT_REASONS)[number];
 
+/** Motivo de la última transición de una reserva (D6, columna `status_reason`). */
+export const STATUS_REASONS = [
+  'CHECK_IN',
+  'CHECK_OUT',
+  'DAY_CLOSE_NO_SHOW',
+  'DAY_CLOSE_PARTIAL',
+  'OTA_CONFIRMED',
+  'CANCELLED_BY_RECEPTION',
+  'CANCELLED_BY_OTA',
+] as const;
+export type StatusReason = (typeof STATUS_REASONS)[number];
+
 export const CONNECTION_STATUSES = ['CONNECTED', 'DISCONNECTED'] as const;
 export type ConnectionStatus = (typeof CONNECTION_STATUSES)[number];
