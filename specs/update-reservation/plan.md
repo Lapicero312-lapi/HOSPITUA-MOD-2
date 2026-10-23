@@ -323,10 +323,11 @@ habitaciones sin asignar de una reserva de Booking en conflicto. Cabecera `X-Use
 
 ```typescript
 interface ReservationStatusService {
-  // Cambia el status de la reserva. Lanza INVALID_STATUS_TRANSITION si no está permitido.
-  transition(tx: Transaction, reservation: Reservation, target: ReservationStatus, reason: StatusReason): Reservation;
-  // Cambia el stayStatus de una habitación y recalcula blocks_inventory.
-  transitionStay(tx: Transaction, reservation: Reservation, roomId: string, target: StayStatus): Reservation;
+  // Cambia el status de la reserva y la guarda. Lanza INVALID_STATUS_TRANSITION si no está permitido.
+  // Con NO_SHOW pasa también a NOT_ARRIVED todas sus habitaciones en EXPECTED, en el mismo cambio (FR-019).
+  transition(tx: Transaction, reservation: Reservation, target: ReservationStatus, reason: StatusReason): Promise<Reservation>;
+  // Cambia el stayStatus de una habitación, recalcula blocks_inventory y la guarda.
+  transitionStay(tx: Transaction, reservation: Reservation, roomId: string, target: StayStatus): Promise<Reservation>;
 }
 ```
 
@@ -334,8 +335,6 @@ interface ReservationStatusService {
 
 | De | A | Lo pide |
 |---|---|---|
-| (nueva) | `ACTIVE` | `generate-direct-reservation` |
-| (nueva) | `ACTIVE` | `generate-ota-reservation` (Booking envía las reservas ya confirmadas) |
 | `PENDING` | `ACTIVE` | Sin uso hoy: se conserva por si una agencia futura lo necesita |
 | `ACTIVE` | `IN_PROGRESS` | Check-In de la primera habitación |
 | `IN_PROGRESS` | `COMPLETED` | Check-Out o cierre del día, cuando no queda habitación en `EXPECTED` ni `CHECKED_IN` |
@@ -348,6 +347,10 @@ interface ReservationStatusService {
 | `CHECKED_IN` | `CHECKED_OUT` | Check-Out de la habitación |
 | `EXPECTED` | `NOT_ARRIVED` | Cierre del día |
 
+- **El estado inicial no es una transición** (FR-006 no lo incluye): una reserva nueva nace en `ACTIVE`, con
+  sus habitaciones en `EXPECTED`, como dicen los specs de creación. Lo definen las reglas de transición del
+  dominio y lo usan las fábricas `createDirect` y `createOta`; el servicio solo cambia reservas que ya
+  existen.
 - `StatusReason` (columna `status_reason`, D6): `CHECK_IN`, `CHECK_OUT`, `DAY_CLOSE_NO_SHOW`,
   `DAY_CLOSE_PARTIAL`, `OTA_CONFIRMED` (sin uso hoy), `CANCELLED_BY_RECEPTION` y `CANCELLED_BY_OTA`.
 - Cada transición **recalcula `reservation_room.blocks_inventory`**: `true` mientras la reserva está en
@@ -809,11 +812,11 @@ frontend/src/pages/reservations/modify/ # pantalla Modificar (vista previa y con
 
 ## Phase 2: Foundational
 
-- [ ] T002 [P] Tablas de transición de `status` y `stayStatus` en el dominio, con una prueba por fila permitida y por cada rechazo
-- [ ] T003 [P] `blocks_inventory` recalculado en cada transición (D3)
+- [ ] T002 [P] Tablas de transición de `status` y `stayStatus` en el dominio, con una prueba por fila permitida y por cada rechazo (la hace la base: T011)
+- [ ] T003 [P] `blocks_inventory` recalculado en cada transición (D3) (lo hace la base: T008 lo calcula en cada guardado)
 - [ ] T004 [P] `diffRooms` (conservadas, agregadas, quitadas y cambiadas) con pruebas
 - [ ] T005 [P] Reglas de reserva: 1 a 10 habitaciones sin repetidas, capacidad, fechas (día operativo), `notes`
-- [ ] T006 `ReservationStatusService` con control de concurrencia por `updated_at` y `status_reason`
+- [ ] T006 `ReservationStatusService` con control de concurrencia por `updated_at` y `status_reason` (la hace la base: T011)
 - [ ] T007 Códigos de error y mensajes literales de B y de C (incluidos `INVALID_STATUS_TRANSITION` y `CONCURRENT_UPDATE`)
 
 ## Phase 3: User Story 1 - Modificación de datos de la reserva (P1)
