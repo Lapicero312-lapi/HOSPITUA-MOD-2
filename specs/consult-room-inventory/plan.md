@@ -323,8 +323,8 @@ frontend/src/pages/rooms/                             # pantalla "Habitaciones"
 
 ## Phase 2: Foundational
 
-- [ ] T002 [P] Objeto de integración `Room` y validadores de `roomId` (UUID) y `categoryRoom`
-- [ ] T003 [P] Puerto `Module1Port` (`getRoom`, `listRoomsByCategory`, `listRooms`) y su adaptador HTTP con timeout, mapeo de errores y validación de la forma de la respuesta
+- [ ] T002 [P] Objeto de integración `Room` y validadores de `roomId` (UUID) y `categoryRoom` (`Room` lo hace la base: T012; quedan los validadores)
+- [ ] T003 [P] Puerto `Module1Port` (`getRoom`, `listRoomsByCategory`, `listRooms`) y su adaptador HTTP con timeout, mapeo de errores y validación de la forma de la respuesta (la hace la base: T012)
 - [ ] T004 Códigos de error `INVALID_ROOM_ID`, `INVALID_CATEGORY` e `INVENTORY_UNAVAILABLE` con sus mensajes literales
 
 ## Phase 3: User Story 1 - Consulta del inventario en tiempo real (P1)
