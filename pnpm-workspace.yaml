@@ -11,8 +11,10 @@ engineStrict: true
 # - @scarf/scarf: solo telemetría (la trae swagger-ui).
 # - cpu-features y ssh2: opcionales de testcontainers para conectarse a Docker por SSH; no se usan.
 # - protobufjs: su script solo muestra un aviso.
+# - msw: su script copia el worker para el navegador; las pruebas lo usan en Node.
 allowBuilds:
   '@scarf/scarf': false
   cpu-features: false
+  msw: false
   protobufjs: false
   ssh2: false
