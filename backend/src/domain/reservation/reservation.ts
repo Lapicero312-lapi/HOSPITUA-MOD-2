@@ -6,9 +6,15 @@ import type {
   ConflictReason,
   ReservationSource,
   ReservationStatus,
+  StatusReason,
+  StayStatus,
 } from '../shared/enums.js';
 import type { Money } from '../shared/money.js';
 import type { ReservationRoom } from './reservation-room.js';
+import {
+  canChangeStatus,
+  invalidStatusTransition,
+} from './reservation-transitions.js';
 
 /** Datos de una reserva de canal `OTA`: la agencia, su código y la comisión. */
 export type OtaTerms = {
@@ -183,6 +189,65 @@ export class Reservation {
   /** Una copia de sus datos, para crear la reserva cambiada con `Reservation.restore`. */
   snapshot(): ReservationProps {
     return { ...this.props, rooms: [...this.props.rooms] };
+  }
+
+  /**
+   * La reserva con otro `status`, según la tabla de transiciones (FR-006) y las condiciones del plan base:
+   * - `IN_PROGRESS`: con al menos una habitación en `CHECKED_IN` (el Check-In de la primera).
+   * - `COMPLETED`: sin habitaciones en `EXPECTED` ni en `CHECKED_IN`, y con alguna en `CHECKED_OUT`.
+   * - `NO_SHOW`: sus habitaciones en `EXPECTED` pasan a `NOT_ARRIVED` en el mismo cambio (FR-019).
+   * @throws BusinessError `INVALID_STATUS_TRANSITION` si no está permitido.
+   */
+  withStatus(target: ReservationStatus, reason: StatusReason): Reservation {
+    if (!canChangeStatus(this.props.status, target) || !this.allows(target)) {
+      throw invalidStatusTransition();
+    }
+    const rooms =
+      target === 'NO_SHOW'
+        ? this.props.rooms.map((room) =>
+            room.stayStatus === 'EXPECTED'
+              ? room.withStayStatus('NOT_ARRIVED')
+              : room,
+          )
+        : this.props.rooms;
+    return Reservation.restore({
+      ...this.props,
+      rooms,
+      status: target,
+      statusReason: reason,
+    });
+  }
+
+  /**
+   * La reserva con otro `stayStatus` en la habitación `roomId`, según la tabla de transiciones
+   * (FR-007).
+   * @throws BusinessError `INVALID_STATUS_TRANSITION` si no está permitido.
+   */
+  withStayStatus(roomId: string, target: StayStatus): Reservation {
+    const index = this.props.rooms.findIndex((room) => room.roomId === roomId);
+    if (index === -1) {
+      throw new Error(
+        `La habitación ${roomId} no pertenece a la reserva ${this.props.reservationRef}.`,
+      );
+    }
+    const rooms = [...this.props.rooms];
+    rooms[index] = rooms[index].withStayStatus(target);
+    return Reservation.restore({ ...this.props, rooms });
+  }
+
+  private allows(target: ReservationStatus): boolean {
+    const stays = this.props.rooms.map((room) => room.stayStatus);
+    if (target === 'IN_PROGRESS') {
+      return stays.includes('CHECKED_IN');
+    }
+    if (target === 'COMPLETED') {
+      return (
+        !stays.includes('EXPECTED') &&
+        !stays.includes('CHECKED_IN') &&
+        stays.includes('CHECKED_OUT')
+      );
+    }
+    return true;
   }
 }
 
