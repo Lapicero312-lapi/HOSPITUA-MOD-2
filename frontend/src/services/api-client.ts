@@ -1,3 +1,5 @@
+import { currentUser } from './session.ts';
+
 /** Cuerpo de todo error de la API del Módulo 2 (plan base, "Errores"). */
 export type ApiErrorBody = {
   errorCode: string;
@@ -40,13 +42,15 @@ export type ApiRequest = {
 
 /**
  * Llama a la API del Módulo 2 y devuelve el JSON de la respuesta. El frontend es la pantalla de la
- * Recepcionista, así que toda llamada lleva `X-Client: RECEPTIONIST` (plan base, regla 10).
+ * Recepcionista, así que toda llamada lleva `X-Client: RECEPTIONIST` y, si ya escribió su nombre en el
+ * login simulado, `X-User` con ese nombre (plan base, regla 10).
  * @throws ApiError con el error que respondió el backend, o `CONNECTION_ERROR` si no hubo respuesta.
  */
 export async function apiRequest<T>(
   path: string,
   request: ApiRequest = {},
 ): Promise<T> {
+  const user = currentUser();
   let response: Response;
   try {
     response = await fetch(`${API_PREFIX}${path}`, {
@@ -54,6 +58,7 @@ export async function apiRequest<T>(
       headers: {
         Accept: 'application/json',
         'X-Client': 'RECEPTIONIST',
+        ...(user === null ? {} : { 'X-User': user }),
         ...(request.body === undefined
           ? {}
           : { 'Content-Type': 'application/json' }),

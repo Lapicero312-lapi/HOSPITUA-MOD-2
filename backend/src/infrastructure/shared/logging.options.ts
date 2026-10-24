@@ -1,13 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Options } from 'pino-http';
+import { isClient } from './clients.js';
 
 /** Cabecera con la que llega y sale el identificador de correlación (plan base, "Logs y correlación"). */
 export const CORRELATION_HEADER = 'x-correlation-id';
 const CORRELATION_ID_FORMAT = /^[\w-]{1,100}$/;
-
-/** Los valores de `X-Client` que se registran tal cual; cualquier otro se registra como `INVALID`. */
-const KNOWN_CLIENTS = ['RECEPTIONIST', 'MODULE1', 'MODULE3'];
 
 /** Lo que dejan en `response.locals` el interceptor del patrón de la ruta y el filtro global. */
 type LogLocals = { routePattern?: string; errorCode?: string };
@@ -25,9 +23,7 @@ export function clientForLog(received: unknown): string | null {
   if (received === undefined) {
     return null;
   }
-  return typeof received === 'string' && KNOWN_CLIENTS.includes(received)
-    ? received
-    : 'INVALID';
+  return isClient(received) ? received : 'INVALID';
 }
 
 /**

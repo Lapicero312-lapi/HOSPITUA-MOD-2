@@ -5,6 +5,7 @@ import {
   CONNECTION_ERROR,
   CONNECTION_ERROR_MESSAGE,
 } from './api-client.ts';
+import { signIn } from './session.ts';
 
 const fetchMock = vi.fn<typeof fetch>();
 
@@ -36,6 +37,25 @@ describe('apiRequest', () => {
     expect(url).toBe('/api/reservations?page=1');
     expect(init?.method).toBe('GET');
     expect(init?.headers).toMatchObject({ 'X-Client': 'RECEPTIONIST' });
+  });
+
+  it('sin Recepcionista no envía X-User', async () => {
+    fetchMock.mockResolvedValue(jsonResponse({}));
+
+    await apiRequest('/reservations');
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init?.headers).not.toHaveProperty('X-User');
+  });
+
+  it('con Recepcionista envía su nombre en X-User', async () => {
+    signIn('Ana Pérez');
+    fetchMock.mockResolvedValue(jsonResponse({}));
+
+    await apiRequest('/reservations');
+
+    const [, init] = fetchMock.mock.calls[0];
+    expect(init?.headers).toMatchObject({ 'X-User': 'Ana Pérez' });
   });
 
   it('envía el cuerpo como JSON y suma las cabeceras de quien llama', async () => {
