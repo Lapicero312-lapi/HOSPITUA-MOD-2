@@ -1,9 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { HttpService } from '@nestjs/axios';
 import axios from 'axios';
-import { http, HttpResponse, type JsonBodyType } from 'msw';
+import { delay, http, HttpResponse, type JsonBodyType } from 'msw';
 import { setupServer } from 'msw/node';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import {
+  Module1RejectedError,
+  Module1RoomNotFoundError,
+  Module1UnavailableError,
+} from '../../src/application/ports/out/module1.port.js';
 import { validateEnv } from '../../src/infrastructure/config/env.validation.js';
 import { Module1HttpAdapter } from '../../src/infrastructure/out/module1/module1-http.adapter.js';
 
@@ -99,6 +104,103 @@ describe('Module1HttpAdapter.getMaintenances contra el Módulo 1 simulado (contr
         startDate: START_DATE,
         endDate: END_DATE,
       });
+    });
+  });
+
+  describe('errores del Módulo 1', () => {
+    it('404 (la habitación no existe) es Module1RoomNotFoundError', async () => {
+      module1Responds({}, 404);
+
+      await expect(getMaintenances()).rejects.toBeInstanceOf(
+        Module1RoomNotFoundError,
+      );
+    });
+
+    it('400 (rechaza la consulta) es Module1RejectedError', async () => {
+      module1Responds({}, 400);
+
+      await expect(getMaintenances()).rejects.toBeInstanceOf(
+        Module1RejectedError,
+      );
+    });
+
+    it('503 es Module1UnavailableError: no se asume la respuesta', async () => {
+      module1Responds({}, 503);
+
+      await expect(getMaintenances()).rejects.toThrow(
+        new Module1UnavailableError('respondió 503'),
+      );
+    });
+
+    it('si no responde dentro del tiempo máximo (1 s) es Module1UnavailableError', async () => {
+      server.use(
+        http.get(MAINTENANCES_URL, async () => {
+          await delay(MODULE1_TIMEOUT_MS * 2);
+          return HttpResponse.json({
+            roomId: ROOM_ID,
+            available: true,
+            conflicts: [],
+          });
+        }),
+      );
+
+      await expect(getMaintenances()).rejects.toThrow(
+        new Module1UnavailableError('tiempo de espera agotado'),
+      );
+    });
+  });
+
+  describe('respuestas mal formadas: Module1UnavailableError', () => {
+    it.each<[string, JsonBodyType]>([
+      ['sin available', { roomId: ROOM_ID, conflicts: [] }],
+      [
+        'con conflicts que no es una lista',
+        { roomId: ROOM_ID, available: false, conflicts: 'ninguno' },
+      ],
+      [
+        'con una fecha inexistente',
+        {
+          roomId: ROOM_ID,
+          available: false,
+          conflicts: [
+            { maintenanceStart: '2026-02-30', maintenanceEnd: '2026-10-12' },
+          ],
+        },
+      ],
+      [
+        'con una fecha mal formada',
+        {
+          roomId: ROOM_ID,
+          available: false,
+          conflicts: [
+            { maintenanceStart: '2026-10-10', maintenanceEnd: '14/10/2026' },
+          ],
+        },
+      ],
+      [
+        'con un mantenimiento que termina antes de empezar',
+        {
+          roomId: ROOM_ID,
+          available: false,
+          conflicts: [
+            { maintenanceStart: '2026-10-12', maintenanceEnd: '2026-10-10' },
+          ],
+        },
+      ],
+    ])('una respuesta %s', async (_, body) => {
+      module1Responds(body);
+
+      await expect(getMaintenances()).rejects.toThrow(
+        new Module1UnavailableError('respuesta distinta del contrato'),
+      );
+    });
+
+    it('un cuerpo que no es JSON', async () => {
+      server.use(http.get(MAINTENANCES_URL, () => HttpResponse.text('<html>')));
+
+      await expect(getMaintenances()).rejects.toThrow(
+        new Module1UnavailableError('la respuesta no es JSON'),
+      );
     });
   });
 });
