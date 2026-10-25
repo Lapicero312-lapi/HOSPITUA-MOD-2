@@ -31,7 +31,7 @@ class ProbeController {
   @Get('business')
   business() {
     throw new BusinessError(
-      'NO_AVAILABILITY',
+      'AVAILABILITY_TAKEN',
       'Ya no hay disponibilidad para las fechas solicitadas.',
     );
   }
@@ -56,7 +56,7 @@ class ProbeController {
   @Get('api-error-5xx')
   apiError5xx() {
     throw new ApiError(
-      'NO_AVAILABILITY',
+      'AVAILABILITY_TAKEN',
       'Ya no hay disponibilidad para las fechas solicitadas.',
       503,
     );
@@ -125,7 +125,7 @@ describe('ApiErrorFilter', () => {
       const res = await get('/probe/business').expect(400);
 
       expect(res.body).toEqual({
-        errorCode: 'NO_AVAILABILITY',
+        errorCode: 'AVAILABILITY_TAKEN',
         message: 'Ya no hay disponibilidad para las fechas solicitadas.',
         timestamp: expect.any(String),
         path: '/probe/business',
@@ -156,7 +156,7 @@ describe('ApiErrorFilter', () => {
     it('con un estado fuera de 4xx responde 400', async () => {
       const res = await get('/probe/api-error-5xx').expect(400);
 
-      expect(res.body.errorCode).toBe('NO_AVAILABILITY');
+      expect(res.body.errorCode).toBe('AVAILABILITY_TAKEN');
     });
   });
 
