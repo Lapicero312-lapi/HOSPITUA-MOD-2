@@ -1,6 +1,6 @@
 import { Injectable, Inject, Module } from '@nestjs/common';
-import { Test } from '@nestjs/testing';
-import { describe, expect, it } from 'vitest';
+import { Test, type TestingModule } from '@nestjs/testing';
+import { beforeAll, describe, expect, it } from 'vitest';
 import {
   CLOCK,
   type Clock,
@@ -18,19 +18,20 @@ class NeedsClock {
 class OtherModule {}
 
 describe('ClockModule', () => {
-  it('entrega el reloj del hotel con el símbolo CLOCK', async () => {
-    const moduleRef = await Test.createTestingModule({
-      imports: [ClockModule],
-    }).compile();
+  let moduleRef: TestingModule;
 
+  // Arrancar Nest por primera vez puede tardar más que el tiempo de una prueba: se hace una sola vez.
+  beforeAll(async () => {
+    moduleRef = await Test.createTestingModule({
+      imports: [ClockModule, OtherModule],
+    }).compile();
+  }, 30_000);
+
+  it('entrega el reloj del hotel con el símbolo CLOCK', () => {
     expect(moduleRef.get(CLOCK)).toBeInstanceOf(HotelClock);
   });
 
-  it('es global: otro módulo recibe el reloj sin importarlo', async () => {
-    const moduleRef = await Test.createTestingModule({
-      imports: [ClockModule, OtherModule],
-    }).compile();
-
+  it('es global: otro módulo recibe el reloj sin importarlo', () => {
     expect(moduleRef.get(NeedsClock).clock).toBeInstanceOf(HotelClock);
   });
 });

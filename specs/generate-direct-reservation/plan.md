@@ -225,7 +225,7 @@ esperar al Módulo 1** (FR-007).
 | `VerifyAvailability.check` y `assignRooms` | `check-room-availability` | Disponibilidad y asignación de habitaciones |
 | `CalculateDynamicRate.quoteRooms` y `verifyQuotes`, y `reservationTotal` | `calculate-dynamic-rate` | Tarifas por habitación, confirmación y total |
 | `ConsultRoomInventory` | `consult-room-inventory` | `maxCapacity` de cada habitación asignada (viene en `Room`) |
-| `ReservationStatusService` | `update-reservation` | Estado inicial `ACTIVE` y `stayStatus` `EXPECTED` |
+| Reglas de transición del dominio | Plan base (T011) | Estado inicial `ACTIVE` y `stayStatus` `EXPECTED` (la fábrica `createDirect`) |
 | `DailyListChangeRecorder.record` | `check-view-reservation` | Aviso `ADDED` de la lista del día |
 | `AriChangeRecorder.record` | `configure-ota` | Disponibilidad ocupada para Channex |
 | `Clock` | Plan base | Día operativo en curso |
@@ -409,8 +409,8 @@ sequenceDiagram
 - La restricción `EXCLUDE` de D3 sobre `reservation_room` impide el solape aun con solicitudes
   simultáneas.
 
-**Estado**: la reserva nace en `ACTIVE` y la habitación en `EXPECTED`; el estado inicial lo establece el
-dominio con `ReservationStatusService`.
+**Estado**: la reserva nace en `ACTIVE` y la habitación en `EXPECTED`; el estado inicial lo definen las
+reglas de transición del dominio y lo usa la fábrica `createDirect` (crear no es una transición).
 
 ## Reglas de validación y manejo de errores
 
@@ -536,7 +536,7 @@ y por caída del Módulo 3.
 
 - **Depende de**: `check-room-availability`, `calculate-dynamic-rate`, `consult-room-inventory`,
   `consult-maintenance-calendar`, `check-view-reservation` (`DailyListChangeRecorder`) y
-  `update-reservation` (`ReservationStatusService`), y la restricción anti-solape (D3).
+  las reglas de transición del dominio (plan base, T011), y la restricción anti-solape (D3).
 - **Necesitan de este caso de uso**: ninguno.
 - **Orden**: T001–T006 → US1 (T007–T014, T018 y T019) → Polish. Va después de `check-room-availability` y de
   `update-reservation`, que son las que usa.

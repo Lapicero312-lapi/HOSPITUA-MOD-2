@@ -907,7 +907,7 @@ frontend/src/pages/reservations/     # listado con filtros, detalle, resumen del
 - [ ] T005 `ReservationQueryPort` y su implementación TypeORM: filtros, orden, paginación y cruce de fechas
 - [ ] T006 `ResolveSearchCriteria` (algoritmo de búsqueda) con pruebas unitarias de cada caso
 - [ ] T007 DTO de entrada con validación y el orden de validación; mensajes literales de FR-009 en un solo archivo de constantes
-- [ ] T008 Lectura de `X-Client` (`RECEPTIONIST`, `MODULE1`, `MODULE3`) en cada ruta y `400` `INVALID_CLIENT` con otro valor
+- [ ] T008 Lectura de `X-Client` (`RECEPTIONIST`, `MODULE1`, `MODULE3`) en cada ruta y `400` `INVALID_CLIENT` con otro valor (la lectura la hace la base: T017; cada ruta solo declara qué llamadores admite)
 
 ## Phase 3: User Story 1 - Listado con filtros, orden y paginación (P1)
 

@@ -1070,12 +1070,15 @@ Se inserta en la misma transacción que la reserva.
 10. **Sin seguridad.** El Módulo 2 no implementa autenticación ni autorización: es una capa aparte del
     sistema de microservicios. El frontend **simula** el login y guarda el nombre de la Recepcionista.
     - `X-Client` dice quién llama (`RECEPTIONIST`, `MODULE1` o `MODULE3`) cuando una misma ruta responde
-      distinto según el llamador. Sin esa cabecera, o con otro valor, se responde 400.
+      distinto según el llamador. Sin esa cabecera, o con un valor que la ruta no admite, se responde 400
+      `INVALID_CLIENT`, "La ruta no admite el cliente indicado en X-Client."
     - `X-User` trae el nombre de quien hizo la acción y se guarda tal cual en `processed_by` o
       `performed_by`.
     - Ninguna de las dos se valida: no se comprueba quién llama ni quién es el usuario. Pero si una ruta de
-      la Recepcionista guarda quién hizo la acción (`processed_by`) y falta `X-User`, responde 400
-      `USER_REQUIRED`, "Falta el usuario que hace la acción."
+      la Recepcionista guarda quién hizo la acción (`processed_by`) y falta `X-User` o está vacío, responde
+      400 `USER_REQUIRED`, "Falta el usuario que hace la acción." Si `X-User` tiene más de 100 caracteres
+      (lo que cabe en `processed_by`), responde 400 `INVALID_USER`, "El usuario que hace la acción no es
+      válido."
     - Booking no llama al Módulo 2: el Módulo 2 lee el feed de Channex con la clave `user-api-key` de
       la configuración, que nunca se guarda en la base de datos ni se escribe en los logs.
 

@@ -415,15 +415,15 @@ frontend/src/pages/rates/                        # pantalla "Tarifas"
 
 ## Phase 1: Setup
 
-- [ ] T001 Variables `MODULE3_BASE_URL`, `MODULE3_TIMEOUT_MS` y `QUOTE_CONCURRENCY` en la configuración validada, y la dependencia `lossless-json`
+- [ ] T001 Variables `MODULE3_BASE_URL`, `MODULE3_TIMEOUT_MS` y `QUOTE_CONCURRENCY` en la configuración validada, y la dependencia `lossless-json` (`lossless-json` lo instala la base: T012)
 
 ## Phase 2: Foundational
 
-- [ ] T002 [P] Objetos de integración `RoomQuote`, `NightlyRate` y `RoomQuoteRequest`
+- [ ] T002 [P] Objetos de integración `RoomQuote`, `NightlyRate` y `RoomQuoteRequest` (`NightlyRate` lo hace la base: T012, junto con `RateQuote`; quedan `RoomQuote` y `RoomQuoteRequest`)
 - [ ] T003 [P] Función `reservationTotal` (suma con `Money`, moneda única) con pruebas unitarias
 - [ ] T004 [P] Función `roomsNeedingQuote` con una prueba por fila de la tabla de B2
 - [ ] T005 [P] Validadores de `categoryRoom` y de las fechas (`AAAA-MM-DD` real y `endDate > startDate`)
-- [ ] T006 `Module3Port.createQuote` y `Module3HttpAdapter`: lectura de importes sin `number`, máximo dos decimales, `lodgingAmount > 0`, validación de la forma de la respuesta, timeout y mapeo de errores
+- [ ] T006 `Module3Port.createQuote` y `Module3HttpAdapter`: lectura de importes sin `number`, máximo dos decimales, `lodgingAmount > 0`, validación de la forma de la respuesta, timeout y mapeo de errores (la hace la base: T012)
 - [ ] T007 Códigos de error `PRICING_UNAVAILABLE`, `RECALCULATION_UNAVAILABLE`, `INVALID_CATEGORY` (compartido), `INVALID_STAY_DATES` (compartido), `RATE_CHANGED` y `CURRENCY_MISMATCH` con sus mensajes literales
 
 ## Phase 3: User Story 1 - Cotización de reservas nuevas (P1)

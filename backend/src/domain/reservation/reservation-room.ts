@@ -1,6 +1,10 @@
 import { BusinessError } from '../shared/business-error.js';
 import type { ReservationStatus, StayStatus } from '../shared/enums.js';
 import type { Money } from '../shared/money.js';
+import {
+  canChangeStayStatus,
+  invalidStatusTransition,
+} from './reservation-transitions.js';
 
 /** Tarifa de una habitación directa, tal como la cotizó el Módulo 3 (D2). */
 export type RoomRate = {
@@ -97,6 +101,17 @@ export class ReservationRoom {
       STATUSES_THAT_BLOCK.includes(reservationStatus) &&
       STAY_STATUSES_THAT_BLOCK.includes(this.props.stayStatus)
     );
+  }
+
+  /**
+   * La habitación con otro `stayStatus`, según la tabla de transiciones (FR-007).
+   * @throws BusinessError `INVALID_STATUS_TRANSITION` si no está permitido.
+   */
+  withStayStatus(target: StayStatus): ReservationRoom {
+    if (!canChangeStayStatus(this.props.stayStatus, target)) {
+      throw invalidStatusTransition();
+    }
+    return ReservationRoom.restore({ ...this.props, stayStatus: target });
   }
 
   /** Una copia de sus datos, para crear la habitación cambiada. */
