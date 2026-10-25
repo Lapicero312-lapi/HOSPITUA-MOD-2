@@ -81,19 +81,6 @@ Se consulta **una vez por cada habitación candidata** de la categoría pedida.
 }
 ```
 
-**Respuesta con varios cruces:**
-
-```json
-{
-  "roomId": "uuid",
-  "available": false,
-  "conflicts": [
-    { "maintenanceStart": "2026-10-10", "maintenanceEnd": "2026-10-12" },
-    { "maintenanceStart": "2026-10-13", "maintenanceEnd": "2026-10-13" }
-  ]
-}
-```
-
 **Reglas del contrato** (acordadas):
 
 - Hay cruce si el mantenimiento se solapa total o parcialmente con el rango consultado. **Todos los
