@@ -3,26 +3,15 @@ import {
   FewerAvailableRoomsThanRequestedError,
   requireAvailable,
 } from '../../../../src/domain/reservation/require-available.js';
+import {
+  aRoom,
+  aRoomAvailability,
+} from '../../../support/room-availability.js';
 
-/**
- * Habitaciones del ejemplo del plan (DTO `availability`, categoría DOBLE). Los planes no traen su `id`:
- * son UUID de otros campos de los planes (el `room_type_id` de Channex, un `quoteId` y un `otaId`).
- */
-const ROOM_201 = {
-  id: '994d1375-dbbd-4072-8724-b2ab32ce781b',
-  roomNumber: '201',
-  categoryRoom: 'DOBLE',
-};
-const ROOM_202 = {
-  id: '8b1f6c0e-7d1a-4c0b-9d5e-2f4f3b6a1c11',
-  roomNumber: '202',
-  categoryRoom: 'DOBLE',
-};
-const ROOM_203 = {
-  id: '5b0e7c1a-2f4d-4e8b-9c3a-1d6f8e2b7a90',
-  roomNumber: '203',
-  categoryRoom: 'DOBLE',
-};
+/** Habitaciones del ejemplo del plan (DTO `availability`, categoría DOBLE). */
+const room201 = aRoom({ roomNumber: '201' });
+const room202 = aRoom({ roomNumber: '202' });
+const room203 = aRoom({ roomNumber: '203' });
 
 /**
  * El resultado del ejemplo del plan, del 2026-10-10 al 2026-10-12: la 201 disponible, la 202 reservada
@@ -32,16 +21,11 @@ const RESULT = {
   startDate: '2026-10-10',
   endDate: '2026-10-12',
   rooms: [
-    { room: ROOM_201, available: true, reason: null },
-    { room: ROOM_202, available: false, reason: 'RESERVED' },
-    {
-      room: ROOM_203,
-      available: false,
-      reason: 'MAINTENANCE',
-      maintenance: [{ overlapStart: '2026-10-11', overlapEnd: '2026-10-12' }],
-    },
+    aRoomAvailability(room201),
+    aRoomAvailability(room202, 'RESERVED'),
+    aRoomAvailability(room203, 'MAINTENANCE'),
   ],
-} as const;
+};
 
 /** Lo que lanza `action`, para revisar el error. */
 function thrownBy(action: () => void): unknown {
@@ -73,27 +57,28 @@ describe('requireAvailable', () => {
     ) as FewerAvailableRoomsThanRequestedError;
 
     expect(error.unavailableRooms).toEqual([
-      { room: ROOM_202, reason: 'RESERVED' },
-      { room: ROOM_203, reason: 'MAINTENANCE' },
+      { room: room202, reason: 'RESERVED' },
+      { room: room203, reason: 'MAINTENANCE' },
     ]);
   });
 
   it('con una habitación concreta (por roomId) que no está disponible, lanza el error con su motivo', () => {
     // La 202 del mismo ejemplo, consultada sola.
     const error = thrownBy(() =>
-      requireAvailable({ rooms: [RESULT.rooms[1]] }, 1),
+      requireAvailable({ rooms: [aRoomAvailability(room202, 'RESERVED')] }, 1),
     ) as FewerAvailableRoomsThanRequestedError;
 
     expect(error.unavailableRooms).toEqual([
-      { room: ROOM_202, reason: 'RESERVED' },
+      { room: room202, reason: 'RESERVED' },
     ]);
   });
 
   it('una habitación no disponible sin motivo es un error del programa: lanza Error', () => {
-    // La 202 del mismo ejemplo, sin su motivo.
+    // La 202 del mismo ejemplo, sin su motivo. Se arma a mano: aRoomAvailability no puede armarla,
+    // porque es un caso que no debería existir.
     const error = thrownBy(() =>
       requireAvailable(
-        { rooms: [{ room: ROOM_202, available: false, reason: null }] },
+        { rooms: [{ room: room202, available: false, reason: null }] },
         1,
       ),
     );
