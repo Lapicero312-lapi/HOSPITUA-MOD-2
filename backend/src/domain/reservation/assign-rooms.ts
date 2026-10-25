@@ -9,11 +9,11 @@ const ROOM_NUMBER_ORDER = new Intl.Collator('en', { numeric: true });
  * Recibe solo los campos que usa del `AvailabilityResult`: el dominio no conoce los tipos de
  * `application/`. Devuelve las mismas habitaciones que recibe, con todos sus campos.
  */
-export function assignRooms<R extends { id: string; roomNumber: string }>(
-  result: { rooms: readonly { room: R; available: boolean }[] },
+export function assignRooms<TRoom extends { id: string; roomNumber: string }>(
+  result: { rooms: readonly { room: TRoom; available: boolean }[] },
   quantity: number,
   alreadyAssigned: readonly string[],
-): R[] {
+): TRoom[] {
   return result.rooms
     .filter(
       ({ room, available }) => available && !alreadyAssigned.includes(room.id),
