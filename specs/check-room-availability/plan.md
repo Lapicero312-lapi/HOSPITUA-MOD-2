@@ -139,9 +139,11 @@ interface VerifyAvailability {
 ```
 
 **B2. `requireAvailable(result, quantity)`** (función pura del dominio): exige `quantity` habitaciones
-disponibles; si hay menos, lanza un error de dominio con las habitaciones que no lo están y su motivo.
-Cada flujo lo traduce a su código y su mensaje (siempre **400**): `NO_AVAILABILITY` si faltan habitaciones
-de la categoría y `ROOM_NOT_AVAILABLE` si es una habitación concreta. La reserva de
+disponibles; si hay menos, lanza `FewerAvailableRoomsThanRequestedError`, un error de dominio con las
+habitaciones que no lo están y su motivo. No es un `BusinessError`, porque no tiene un código propio: cada
+flujo lo atrapa y lo traduce a su código y su mensaje (siempre **400**): `NO_AVAILABILITY` si faltan
+habitaciones de la categoría y `ROOM_NOT_AVAILABLE` si es una habitación concreta. Si un flujo no lo
+traduce, el filtro global lo trata como un error del programa (400 `REQUEST_NOT_PROCESSED`). La reserva de
 Booking **no usa `requireAvailable`**: nunca se rechaza, y las habitaciones que no tienen lugar quedan sin
 asignar (decisión D13 del plan base).
 
