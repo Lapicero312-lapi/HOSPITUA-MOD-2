@@ -88,4 +88,19 @@ describe('requireAvailable', () => {
       { room: ROOM_202, reason: 'RESERVED' },
     ]);
   });
+
+  it('una habitación no disponible sin motivo es un error del programa: lanza Error', () => {
+    // La 202 del mismo ejemplo, sin su motivo.
+    const error = thrownBy(() =>
+      requireAvailable(
+        { rooms: [{ room: ROOM_202, available: false, reason: null }] },
+        1,
+      ),
+    );
+
+    expect(error).not.toBeInstanceOf(FewerAvailableRoomsThanRequestedError);
+    expect((error as Error).message).toBe(
+      'Habitación inconsistente: una habitación no disponible debe traer su motivo.',
+    );
+  });
 });

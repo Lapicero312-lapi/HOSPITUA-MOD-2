@@ -6,7 +6,7 @@ export class FewerAvailableRoomsThanRequestedError extends Error {
   constructor(
     readonly unavailableRooms: readonly {
       room: { id: string; roomNumber: string };
-      reason: 'RESERVED' | 'MAINTENANCE' | null;
+      reason: 'RESERVED' | 'MAINTENANCE';
     }[],
   ) {
     super('Hay menos habitaciones disponibles que las pedidas.');
@@ -16,7 +16,8 @@ export class FewerAvailableRoomsThanRequestedError extends Error {
 /**
  * Exige `quantity` habitaciones disponibles en el resultado de la verificación (plan de
  * `check-room-availability`, B2). Si las hay, no devuelve nada; si hay menos, lanza
- * `FewerAvailableRoomsThanRequestedError`.
+ * `FewerAvailableRoomsThanRequestedError`. Una habitación no disponible sin motivo rompe el contrato
+ * (`reason` es `null` solo si está disponible): es un error del programa y se lanza `Error` (plan base).
  *
  * Recibe solo los campos que usa del `AvailabilityResult`: el dominio no conoce los tipos de
  * `application/`.
@@ -38,7 +39,14 @@ export function requireAvailable(
     throw new FewerAvailableRoomsThanRequestedError(
       result.rooms
         .filter(({ available }) => !available)
-        .map(({ room, reason }) => ({ room, reason })),
+        .map(({ room, reason }) => {
+          if (reason === null) {
+            throw new Error(
+              'Habitación inconsistente: una habitación no disponible debe traer su motivo.',
+            );
+          }
+          return { room, reason };
+        }),
     );
   }
 }
