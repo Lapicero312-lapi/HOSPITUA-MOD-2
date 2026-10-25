@@ -149,6 +149,10 @@ asignar (decisión D13 del plan base).
 habitaciones disponibles de **menor `roomNumber`** (orden numérico), sin repetir una ya asignada a la misma
 reserva. Lo usan las dos reservas nuevas para asignar habitaciones cuando se pide solo la categoría.
 
+B2 y B3 reciben **solo los campos que usan** del `AvailabilityResult` (`room.id`, `room.roomNumber`,
+`available` y `reason`): son funciones del dominio, y el dominio no puede importar los tipos de
+`application/` (`AvailabilityResult` y `Room`). Así, el flujo les pasa el `AvailabilityResult` completo.
+
 **DTO compartido** que incluyen las respuestas de las vistas previas:
 
 ```json
