@@ -1,3 +1,5 @@
+import type { MaintenancePeriod } from '../../integration/maintenance-calendar.js';
+
 /**
  * El periodo del cruce entre un mantenimiento y una estadía, o `null` si no se cruzan (plan, "Cómo se
  * determina el cruce"). El mantenimiento bloquea los días de `maintenanceStart` a `maintenanceEnd`,
@@ -7,7 +9,7 @@
  * Recibe las fechas ya validadas: no las revisa.
  */
 export function overlap(
-  maintenance: { maintenanceStart: string; maintenanceEnd: string },
+  maintenance: MaintenancePeriod,
   stay: { startDate: string; endDate: string },
 ): { overlapStart: string; overlapEnd: string } | null {
   const { maintenanceStart, maintenanceEnd } = maintenance;
