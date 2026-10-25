@@ -212,7 +212,7 @@ sequenceDiagram
 
 | Elemento | Dónde vive | Notas |
 |---|---|---|
-| `MaintenanceCalendar` (`roomId`, `maintenanceStart`, `maintenanceEnd`) | Objeto de integración en `application/integration/` | Del Módulo 1; no se persiste (plan base, "Datos externos") |
+| `MaintenanceCalendar` (`roomId`, `available`, `conflicts`) | Objeto de integración en `application/integration/` | La respuesta del Módulo 1 (A1); cada mantenimiento de `conflicts` es un `MaintenancePeriod` (`maintenanceStart`, `maintenanceEnd`). No se persiste (plan base, "Datos externos") |
 | `MaintenanceCheck`, `MaintenanceConflict` | Objetos de integración | Resultado de la consulta, con el periodo del cruce |
 | `ReservationRoom.roomId` | `reservation_room.room_id` | Solo se usa como parámetro de la consulta; este caso de uso no lo lee ni lo escribe |
 
@@ -255,7 +255,7 @@ Todo error sale con `{ "errorCode", "message", "timestamp", "path" }` y **siempr
 
 | Capa | Piezas de este caso de uso |
 |---|---|
-| `application/integration/` | `MaintenanceCalendar`, `MaintenanceCheck`, `MaintenanceConflict` |
+| `application/integration/` | `MaintenanceCalendar`, `MaintenancePeriod`, `MaintenanceCheck`, `MaintenanceConflict` |
 | `application/ports/out/` | `Module1Port.getMaintenances(roomId, startDate, endDate)` (el puerto lo comparten los demás casos de uso del Módulo 1) |
 | `application/use-cases/consult-maintenance-calendar/` | **Entrada**: `ConsultMaintenanceCalendar` (`check`, `nextMaintenance`); cálculo del periodo del cruce; validadores |
 | `infrastructure/out/module1/` | `Module1HttpAdapter`: cliente HTTP con timeout, mapeo de 404, 400 y 5xx, y validación de la forma de la respuesta |
