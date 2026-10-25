@@ -13,6 +13,11 @@ import { validateEnv } from '../../src/infrastructure/config/env.validation.js';
 import { Module1HttpAdapter } from '../../src/infrastructure/out/module1/module1-http.adapter.js';
 
 /**
+ * Pruebas de contrato de `getMaintenances` (T010). Las pruebas de contrato de `getRoom`, las listas y los
+ * fallos generales del mismo adaptador están en `module1.contract.spec.ts`.
+ */
+
+/**
  * Datos de las pruebas del adaptador del plan ("Pruebas por escenario", T010): la estadía del ejemplo del
  * plan y las respuestas del contrato A1. El `roomId` es un UUID cualquiera.
  */
