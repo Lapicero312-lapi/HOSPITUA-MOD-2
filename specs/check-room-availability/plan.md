@@ -139,15 +139,21 @@ interface VerifyAvailability {
 ```
 
 **B2. `requireAvailable(result, quantity)`** (función pura del dominio): exige `quantity` habitaciones
-disponibles; si hay menos, lanza un error de dominio con las habitaciones que no lo están y su motivo.
-Cada flujo lo traduce a su código y su mensaje (siempre **400**): `NO_AVAILABILITY` si faltan habitaciones
-de la categoría y `ROOM_NOT_AVAILABLE` si es una habitación concreta. La reserva de
+disponibles; si hay menos, lanza `FewerAvailableRoomsThanRequestedError`, un error de dominio con las
+habitaciones que no lo están y su motivo. No es un `BusinessError`, porque no tiene un código propio: cada
+flujo lo atrapa y lo traduce a su código y su mensaje (siempre **400**): `NO_AVAILABILITY` si faltan
+habitaciones de la categoría y `ROOM_NOT_AVAILABLE` si es una habitación concreta. Si un flujo no lo
+traduce, el filtro global lo trata como un error del programa (400 `REQUEST_NOT_PROCESSED`). La reserva de
 Booking **no usa `requireAvailable`**: nunca se rechaza, y las habitaciones que no tienen lugar quedan sin
 asignar (decisión D13 del plan base).
 
 **B3. `assignRooms(result, quantity, alreadyAssigned)`** (función pura del dominio): elige las `quantity`
 habitaciones disponibles de **menor `roomNumber`** (orden numérico), sin repetir una ya asignada a la misma
 reserva. Lo usan las dos reservas nuevas para asignar habitaciones cuando se pide solo la categoría.
+
+B2 y B3 reciben **solo los campos que usan** del `AvailabilityResult` (`room.id`, `room.roomNumber`,
+`available` y `reason`): son funciones del dominio, y el dominio no puede importar los tipos de
+`application/` (`AvailabilityResult` y `Room`). Así, el flujo les pasa el `AvailabilityResult` completo.
 
 **DTO compartido** que incluyen las respuestas de las vistas previas:
 
@@ -157,7 +163,7 @@ reserva. Lo usan las dos reservas nuevas para asignar habitaciones cuando se pid
     "startDate": "2026-10-10",
     "endDate": "2026-10-12",
     "categoryRoom": "DOBLE",
-    "availableCount": 2,
+    "availableCount": 1,
     "rooms": [
       { "roomId": "uuid", "roomNumber": "201", "available": true, "reason": null },
       { "roomId": "uuid", "roomNumber": "202", "available": false, "reason": "RESERVED" },
