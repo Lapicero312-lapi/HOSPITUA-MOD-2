@@ -100,7 +100,8 @@ describe('Module1HttpAdapter.getMaintenances contra el Módulo 1 simulado (contr
     });
 
     it('contiguo: con un mantenimiento que termina justo antes de la llegada, el Módulo 1 responde sin cruce y se devuelve igual', async () => {
-      // El mantenimiento termina el 2026-10-10 y la estadía empieza el 2026-10-11: el Módulo 1 decide que no cruza.
+      // El mantenimiento termina el 2026-10-10 y la estadía empieza el 2026-10-11: el Módulo 1 decide
+      // que no cruza.
       const response = { roomId: ROOM_ID, available: true, conflicts: [] };
       module1Responds(response);
 
