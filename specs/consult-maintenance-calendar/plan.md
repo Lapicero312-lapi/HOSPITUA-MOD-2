@@ -81,6 +81,19 @@ Se consulta **una vez por cada habitación candidata** de la categoría pedida.
 }
 ```
 
+**Respuesta con varios cruces:**
+
+```json
+{
+  "roomId": "uuid",
+  "available": false,
+  "conflicts": [
+    { "maintenanceStart": "2026-10-10", "maintenanceEnd": "2026-10-12" },
+    { "maintenanceStart": "2026-10-13", "maintenanceEnd": "2026-10-13" }
+  ]
+}
+```
+
 **Reglas del contrato** (acordadas):
 
 - Hay cruce si el mantenimiento se solapa total o parcialmente con el rango consultado. **Todos los
@@ -321,7 +334,8 @@ contiguo, más los fallos del Módulo 1.
 | Casos borde | Fechas inválidas | Salida anterior a la llegada, fecha inexistente o mal formada: `400` `INVALID_STAY_DATES`, sin llamar al Módulo 1 |
 | Casos borde | `roomId` inválido o inexistente | Formato inválido: `400` sin llamar al Módulo 1; 404 del Módulo 1: `400` `INVALID_ROOM_ID` |
 | Casos borde | Mantenimiento posterior a la reserva | Fuera de alcance: esta consulta solo valida en el momento de reservar; no hay prueba de reubicación |
-| Contrato | Módulo 1 | Respuestas con campos faltantes, `available` incoherente, fechas mal formadas, 400, 404, 503 y lenta (más del tiempo máximo) |
+| Contrato | Módulo 1 | Respuestas con campos faltantes, fechas mal formadas, 400, 404, 503 y lenta (más del tiempo máximo). Una respuesta con `available` incoherente con `conflicts` la detecta el caso de uso (T008), no el adaptador |
+| Contrato | Datos de las pruebas del adaptador (T010) | Estadía del 2026-10-11 al 2026-10-14. **Sin cruce** y **contiguo** (un mantenimiento que termina el 2026-10-10): `available: true` y `conflicts: []`. **Un cruce:** del 2026-10-10 al 2026-10-12. **Varios cruces:** ese y uno el 2026-10-13. **Mal formadas:** sin `available`; `conflicts` que no es una lista; una fecha inexistente (`2026-02-30`); una fecha mal formada (`14/10/2026`); un mantenimiento que termina antes de empezar (del 2026-10-12 al 2026-10-10); un cuerpo que no es JSON. **Tiempo agotado:** el Módulo 1 responde después de `MODULE1_TIMEOUT_MS` (1 s) |
 | NFR-001 | Tiempo | Con el Módulo 1 simulado a 200 ms, la consulta responde en menos de 1 s |
 | SC-001, SC-002 | Cobertura | Se verifica en `check-room-availability`: toda reserva nueva o modificada pasa por esta consulta y ninguna se confirma con un cruce |
 
