@@ -163,7 +163,7 @@ B2 y B3 reciben **solo los campos que usan** del `AvailabilityResult` (`room.id`
     "startDate": "2026-10-10",
     "endDate": "2026-10-12",
     "categoryRoom": "DOBLE",
-    "availableCount": 2,
+    "availableCount": 1,
     "rooms": [
       { "roomId": "uuid", "roomNumber": "201", "available": true, "reason": null },
       { "roomId": "uuid", "roomNumber": "202", "available": false, "reason": "RESERVED" },
