@@ -166,14 +166,14 @@ sequenceDiagram
     P->>M1: GET /api/rooms/{roomId}/maintenances?startDate=...&endDate=... (timeout)
     alt 404 (la habitación no existe)
         M1-->>P: 404
-        P-->>U: RoomNotFound
+        P-->>U: Module1RoomNotFoundError
         U-->>V: BusinessError INVALID_ROOM_ID (400)
     else 400 (el Módulo 2 ya validó las fechas: lo que rechaza es el roomId)
         M1-->>P: 400
-        P-->>U: InvalidRoom
+        P-->>U: Module1RejectedError
         U-->>V: BusinessError INVALID_ROOM_ID (400)
     else tiempo agotado, error de red, 5xx o respuesta mal formada
-        P-->>U: Module1Unavailable
+        P-->>U: Module1UnavailableError
         U-->>V: BusinessError MAINTENANCE_CHECK_UNAVAILABLE (400), sin asumir que está libre
     else respuesta válida
         M1-->>P: { roomId, available, conflicts }
@@ -196,7 +196,7 @@ sequenceDiagram
     U->>P: getMaintenances(roomId, hoy, hoy + ventana)
     P->>M1: GET /api/rooms/{roomId}/maintenances?startDate=...&endDate=...
     alt falla
-        P-->>U: Module1Unavailable
+        P-->>U: Module1UnavailableError
         U-->>S: BusinessError MAINTENANCE_CHECK_UNAVAILABLE
         Note over S: La habitación sale con maintenance.status = UNAVAILABLE
     else sin cruces
