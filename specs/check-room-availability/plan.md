@@ -197,7 +197,7 @@ sequenceDiagram
     participant M1 as Módulo 1
 
     F->>V: check({ categoryRoom, startDate, endDate, excludeReservationRef })
-    V->>V: Validar fechas, categoría y que venga solo categoría o roomId
+    V->>V: Validar fechas, que venga solo categoría o roomId y el formato de excludeReservationRef
     alt dato inválido
         V-->>F: BusinessError (400), sin llamar a nadie
     end
