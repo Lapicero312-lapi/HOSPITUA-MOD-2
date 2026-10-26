@@ -7,8 +7,8 @@ import {
 } from '../../../../../src/application/use-cases/check-room-availability/availability-query.validator.js';
 
 /**
- * Datos de las pruebas del validador del plan ("Pruebas por escenario", T002): las fechas y la categoría
- * del ejemplo del DTO, y la referencia del ejemplo del plan base. El `roomId` es un UUID cualquiera.
+ * Datos de las pruebas del validador del plan ("Pruebas por escenario", T002), que dice de dónde sale
+ * cada uno. El `roomId` es un UUID cualquiera.
  */
 const ROOM_ID = randomUUID();
 
@@ -27,6 +27,10 @@ describe('isValidStayDates', () => {
 
   it('rechaza una fecha inexistente', () => {
     expect(isValidStayDates('2026-02-30', '2026-10-12')).toBe(false);
+  });
+
+  it('rechaza una salida que no existe', () => {
+    expect(isValidStayDates('2026-02-28', '2026-02-30')).toBe(false);
   });
 
   it('rechaza una fecha mal formada', () => {
