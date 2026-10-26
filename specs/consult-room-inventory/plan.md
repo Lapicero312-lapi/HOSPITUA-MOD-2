@@ -365,7 +365,8 @@ fallos del Módulo 1.
 | Casos borde | Habitación ocupada hoy | Se devuelve igual (el Módulo 1 simulado no envía estado) |
 | FR-006 | Pantalla | Todas las categorías, sin campo de estado, con `SCHEDULED`, `NONE` y `UNAVAILABLE`; falla de inventario: 400, no una lista parcial |
 | NFR-001 | Tiempo | Con el Módulo 1 simulado a 200 ms, la consulta puntual responde en menos de 1 s |
-| Contrato | Módulo 1 | Respuestas con `maxCapacity` inválido, campo faltante, lista vacía, 404, 400 y 503 |
+| Contrato | Módulo 1 | Respuestas con `maxCapacity` inválido, campo faltante, lista vacía, 404, 400 y 503; también tiempo agotado, sin conexión (error de red), otro estado que no es de éxito (302) y un cuerpo que no es JSON |
+| Contrato | Datos de las pruebas del adaptador (T008) | Habitaciones del ejemplo A2: la 201 (`DOBLE`, capacidad 2) y la 202 (`DOBLE`, capacidad 3). **Éxito:** A1 devuelve la 201 y descarta los campos que no son del contrato (por ejemplo un estado `Occupied`); A2 (`DOBLE`) y A3 devuelven las dos; A3 no envía filtro. **Lista vacía:** la categoría `SUITE_JUNIOR` no tiene habitaciones. **404** (la habitación no existe) solo en A1; **400** en A1 (`roomId` inválido: un número de habitación, `201`, en lugar de un UUID) y en A2 (categoría inválida: `doble`, en minúsculas). **En A1, A2 y A3:** 500, 502, 503, 302, tiempo agotado (el Módulo 1 responde después de `MODULE1_TIMEOUT_MS`, 1 s), sin conexión y un cuerpo que no es JSON. **Mal formadas:** en A1, `maxCapacity` no entero (`1.5`) o menor que 1 (`0`), sin `roomNumber`, `categoryRoom` vacía y una lista en lugar de una habitación; en A2 y A3, una habitación en lugar de una lista y una lista con una habitación con `maxCapacity` como texto (`"dos"`) |
 
 ## Dependencies & Execution Order
 

@@ -13,8 +13,8 @@ import { validateEnv } from '../../src/infrastructure/config/env.validation.js';
 import { Module1HttpAdapter } from '../../src/infrastructure/out/module1/module1-http.adapter.js';
 
 /**
- * Pruebas de contrato de `getMaintenances` (T010). Las pruebas de contrato de `getRoom`, las listas y los
- * fallos generales del mismo adaptador están en `module1.contract.spec.ts`.
+ * Pruebas de contrato de `getMaintenances` (T010). Las de `getRoom` y las listas del mismo adaptador
+ * están en `module1-inventory.contract.spec.ts`.
  */
 
 /**
