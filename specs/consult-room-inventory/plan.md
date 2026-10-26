@@ -306,7 +306,8 @@ backend/src/
 │       ├── ports/in/consult-room-inventory.port.ts
 │       ├── consult-room-inventory.service.ts
 │       ├── list-rooms-with-maintenance.service.ts
-│       └── room-id.validator.ts
+│       ├── room-id.validator.ts
+│       └── category-room.validator.ts
 ├── infrastructure/
 │   ├── in/rest/rooms.controller.ts
 │   └── out/module1/module1-http.adapter.ts
@@ -367,6 +368,7 @@ fallos del Módulo 1.
 | NFR-001 | Tiempo | Con el Módulo 1 simulado a 200 ms, la consulta puntual responde en menos de 1 s |
 | Contrato | Módulo 1 | Respuestas con `maxCapacity` inválido, campo faltante, lista vacía, 404, 400 y 503; también tiempo agotado, sin conexión (error de red), otro estado que no es de éxito (302) y un cuerpo que no es JSON |
 | Contrato | Datos de las pruebas del adaptador (T008) | Habitaciones del ejemplo A2: la 201 (`DOBLE`, capacidad 2) y la 202 (`DOBLE`, capacidad 3). **Éxito:** A1 devuelve la 201 y descarta los campos que no son del contrato (por ejemplo un estado `Occupied`); A2 (`DOBLE`) y A3 devuelven las dos; A3 no envía filtro. **Lista vacía:** la categoría `SUITE_JUNIOR` no tiene habitaciones. **404** (la habitación no existe) solo en A1; **400** en A1 (`roomId` inválido: un número de habitación, `201`, en lugar de un UUID) y en A2 (categoría inválida: `doble`, en minúsculas). **En A1, A2 y A3:** 500, 502, 503, 302, tiempo agotado (el Módulo 1 responde después de `MODULE1_TIMEOUT_MS`, 1 s), sin conexión y un cuerpo que no es JSON. **Mal formadas:** en A1, `maxCapacity` no entero (`1.5`) o menor que 1 (`0`), sin `roomNumber`, `categoryRoom` vacía y una lista en lugar de una habitación; en A2 y A3, una habitación en lugar de una lista y una lista con una habitación con `maxCapacity` como texto (`"dos"`) |
+| Validadores | Datos de las pruebas (T002) | **`roomId`:** es válido un UUID (`994d1375-dbbd-4072-8724-b2ab32ce781b`, el `room_type_id` de Channex de los planes de `configure-ota` y `generate-ota-reservation`, porque ningún plan trae un `roomId` con UUID); no lo son uno vacío ni un número de habitación (`201`). **`categoryRoom`:** son válidas `DOBLE` y `SUITE_JUNIOR` (ejemplos de A), una con un dígito (`DOBLE_2`) y una de 50 caracteres, el máximo (50 letras `A`); no lo son una vacía, `doble` (en minúsculas), `CABAÑA` (con `Ñ`), `DÚPLEX` (con tilde), `SUITE JUNIOR` (con espacio), `SUITE-JUNIOR` (con guion) ni una de 51 caracteres (51 letras `A`) |
 
 ## Dependencies & Execution Order
 
