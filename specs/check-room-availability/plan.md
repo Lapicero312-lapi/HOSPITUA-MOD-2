@@ -197,7 +197,7 @@ sequenceDiagram
     participant M1 as Módulo 1
 
     F->>V: check({ categoryRoom, startDate, endDate, excludeReservationRef })
-    V->>V: Validar fechas, categoría y que venga solo categoría o roomId
+    V->>V: Validar fechas, que venga solo categoría o roomId y el formato de excludeReservationRef
     alt dato inválido
         V-->>F: BusinessError (400), sin llamar a nadie
     end
@@ -416,6 +416,7 @@ ocupadas hoy y liberadas dentro de una reserva en curso.
 | FR-002a | Por habitación | Una categoría con tres habitaciones devuelve cada una con su motivo |
 | Contrato | Intervalo semiabierto | Salida y llegada el mismo día no chocan; un día de solape sí |
 | NFR-001 | Tiempo | Categoría de 20 habitaciones con el Módulo 1 simulado a 150 ms en menos de 2 s |
+| Validador | Datos de las pruebas (T002) | **Fechas** (ejemplo del DTO): del 2026-10-10 al 2026-10-12 son válidas; no lo son la salida anterior a la llegada (del 2026-10-12 al 2026-10-10), la salida el mismo día de la llegada (2026-10-10), una fecha inexistente (`2026-02-30`, del plan de `check-view-reservation`), esa misma fecha como salida (del 2026-02-28, el último día de ese mes, al 2026-02-30) ni una mal formada (`12/10/2026`, la salida del ejemplo en el formato de pantalla del plan base). **Categoría o habitación:** la categoría `DOBLE` o un `roomId` (un UUID cualquiera); no vale ninguno de los dos ni los dos a la vez; un campo vacío cuenta como indicado (su formato lo revisa `consult-room-inventory`). **`excludeReservationRef`:** sin ella, la consulta es válida; `RSV-3F9A1C7B` (plan base) es válida; no lo son `rsv-3f9a1c7b` (en minúsculas), `RSV-3F9A1C7` (7 caracteres), `RSV-3F9A1C7G` (una `G`, que no es hexadecimal), `3F9A1C7B` (sin `RSV-`) ni una vacía |
 
 ## Dependencies & Execution Order
 
