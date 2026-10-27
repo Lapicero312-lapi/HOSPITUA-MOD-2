@@ -12,6 +12,9 @@ import type {
 } from '../../integration/maintenance-calendar.js';
 import {
   MODULE1_PORT,
+  Module1RejectedError,
+  Module1RoomNotFoundError,
+  Module1UnavailableError,
   type Module1Port,
 } from '../../ports/out/module1.port.js';
 import {
@@ -50,11 +53,12 @@ export class ConsultMaintenanceCalendarService implements ConsultMaintenanceCale
       );
     }
 
-    const calendar = await this.module1.getMaintenances(
-      roomId,
-      startDate,
-      endDate,
-    );
+    let calendar: MaintenanceCalendar;
+    try {
+      calendar = await this.module1.getMaintenances(roomId, startDate, endDate);
+    } catch (error) {
+      throw this.module1Failure(roomId, error);
+    }
     const incoherence = incoherenceOf(calendar, roomId);
     if (incoherence !== null) {
       throw this.incoherentResponse(roomId, incoherence);
@@ -77,6 +81,30 @@ export class ConsultMaintenanceCalendarService implements ConsultMaintenanceCale
       });
     }
     return { roomId, available: calendar.available, conflicts };
+  }
+
+  /**
+   * El error del Módulo 1 con su código del plan (D1): un 404 o un 400 es `INVALID_ROOM_ID` (las fechas
+   * ya se validaron, así que lo que rechaza es el `roomId`); si no responde, falla o responde algo mal
+   * formado, `MAINTENANCE_CHECK_UNAVAILABLE`, con el detalle en el log. Un error inesperado sale tal cual.
+   */
+  private module1Failure(roomId: string, error: unknown): unknown {
+    if (
+      error instanceof Module1RoomNotFoundError ||
+      error instanceof Module1RejectedError
+    ) {
+      return new BusinessError(INVALID_ROOM_ID.code, INVALID_ROOM_ID.message);
+    }
+    if (error instanceof Module1UnavailableError) {
+      this.logger.warn(
+        `Consulta de mantenimientos de la habitación ${roomId}: ${error.message}`,
+      );
+      return new BusinessError(
+        MAINTENANCE_CHECK_UNAVAILABLE.code,
+        MAINTENANCE_CHECK_UNAVAILABLE.message,
+      );
+    }
+    return error;
   }
 
   /** Deja en el log por qué la respuesta del Módulo 1 es incoherente y la bloquea. */
