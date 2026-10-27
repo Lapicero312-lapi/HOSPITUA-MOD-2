@@ -22,3 +22,29 @@ export const MAINTENANCE_CHECK_UNAVAILABLE = {
   message:
     'No es posible validar mantenimientos en este momento. Intente de nuevo.',
 } as const;
+
+/** `categoryRoom` vacía o con caracteres no permitidos, o que el Módulo 1 o el Módulo 3 no reconocen. */
+export const INVALID_CATEGORY = {
+  code: 'INVALID_CATEGORY',
+  message: 'La categoría indicada no es válida.',
+} as const;
+
+/** El Módulo 3 no responde, falla o responde algo inválido al cotizar una reserva nueva: nunca se asume una tarifa. */
+export const PRICING_UNAVAILABLE = {
+  code: 'PRICING_UNAVAILABLE',
+  message:
+    'Error 400: El servicio de cotización de tarifas no se encuentra disponible. Por favor intente más tarde',
+} as const;
+
+/** Lo mismo al recotizar una reserva `ACTIVE`: no se aplica ningún cambio y se conservan las tarifas. */
+export const RECALCULATION_UNAVAILABLE = {
+  code: 'RECALCULATION_UNAVAILABLE',
+  message:
+    'No se pudo calcular la nueva tarifa en este momento. Intente más tarde.',
+} as const;
+
+/** La tarifa cambió entre la vista previa y la confirmación (decisión D1): no se guarda nada. */
+export const RATE_CHANGED = {
+  code: 'RATE_CHANGED',
+  message: 'La tarifa cambió, vuelva a cotizar.',
+} as const;
