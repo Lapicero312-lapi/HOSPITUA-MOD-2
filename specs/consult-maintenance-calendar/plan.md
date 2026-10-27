@@ -178,6 +178,10 @@ sequenceDiagram
     else respuesta válida
         M1-->>P: { roomId, available, conflicts }
         P-->>U: respuesta del Módulo 1
+        U->>U: ¿Es coherente? (el roomId pedido, available contra conflicts y que cada mantenimiento se cruce)
+        alt incoherente
+            U-->>V: BusinessError MAINTENANCE_CHECK_UNAVAILABLE (400), el detalle va al log, sin asumir que está libre
+        end
         U->>U: Calcula overlapStart y overlapEnd de cada cruce
         U-->>V: MaintenanceCheck (available true sin cruces, o false con el periodo del cruce)
     end
