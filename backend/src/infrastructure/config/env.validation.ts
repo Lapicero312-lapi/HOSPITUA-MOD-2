@@ -111,6 +111,12 @@ export class EnvironmentVariables {
   @IsInt()
   @Min(0)
   ASSIGNMENT_MAX_RETRIES!: number;
+
+  // Conciliación de comisiones OTA: máximo de ítems por solicitud del Módulo 3
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  RECONCILIATION_MAX_ITEMS!: number;
 }
 
 /** Valores que se usan si la variable no está definida, en cualquier entorno. */
@@ -126,6 +132,7 @@ const DEFAULTS = {
   MODULE3_TIMEOUT_MS: 3000,
   MAINTENANCE_CONCURRENCY: 5,
   ASSIGNMENT_MAX_RETRIES: 3,
+  RECONCILIATION_MAX_ITEMS: 500,
 };
 
 /**
