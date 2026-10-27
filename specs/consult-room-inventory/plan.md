@@ -169,10 +169,10 @@ sequenceDiagram
     P->>M1: GET /api/rooms/{roomId} (timeout MODULE1_TIMEOUT_MS)
     alt 404 (no existe)
         M1-->>P: 404
-        P-->>U: RoomNotFound
+        P-->>U: Module1RoomNotFoundError
         U-->>V: BusinessError INVALID_ROOM_ID (400)
     else tiempo agotado, error de red o 5xx
-        P-->>U: Module1Unavailable
+        P-->>U: Module1UnavailableError
         U-->>V: BusinessError INVENTORY_UNAVAILABLE (400)
     else respuesta válida
         M1-->>P: { id, roomNumber, categoryRoom, maxCapacity }
@@ -198,7 +198,7 @@ sequenceDiagram
     U->>P: listRoomsByCategory(categoryRoom)
     P->>M1: GET /api/rooms?categoryRoom=...
     alt tiempo agotado, error de red o 5xx
-        P-->>U: Module1Unavailable
+        P-->>U: Module1UnavailableError
         U-->>V: BusinessError INVENTORY_UNAVAILABLE (400)
     else lista (con habitaciones o vacía)
         M1-->>P: [ {id, roomNumber, categoryRoom, maxCapacity}, ... ]
@@ -265,7 +265,7 @@ Todo error sale con `{ "errorCode", "message", "timestamp", "path" }` y **siempr
 | `categoryRoom` vacía o que no cumple `^[A-Z0-9_]{1,50}$` | M2, antes de llamar | 400 | `INVALID_CATEGORY` | "La categoría indicada no es válida." |
 | El Módulo 1 responde 400 | Módulo 1 | 400 | `INVALID_ROOM_ID` o `INVALID_CATEGORY` (según la consulta) | Los de arriba |
 | Tiempo agotado, error de red o respuesta 5xx del Módulo 1 | Módulo 1 | 400 | `INVENTORY_UNAVAILABLE` | "No se pudo consultar el inventario de habitaciones en este momento. Intente de nuevo." |
-| Respuesta del Módulo 1 con campos faltantes o de tipo incorrecto (por ejemplo, `maxCapacity` no entero o menor que 1) | Módulo 1 | 400 | `INVENTORY_UNAVAILABLE` | El mismo; el detalle va al log |
+| Respuesta del Módulo 1 con campos faltantes o de tipo incorrecto (por ejemplo, `maxCapacity` no entero o menor que 1, una `categoryRoom` que no cumple la forma acordada o un `id` que no es un UUID) | Módulo 1 | 400 | `INVENTORY_UNAVAILABLE` | El mismo; el detalle va al log |
 
 - **Una categoría sin habitaciones no es un error**: devuelve una lista vacía (escenario 3).
 - **Una habitación ocupada hoy se devuelve igual**: es vendible; si está libre en unas fechas lo decide
@@ -367,7 +367,7 @@ fallos del Módulo 1.
 | FR-006 | Pantalla | Todas las categorías, sin campo de estado, con `SCHEDULED`, `NONE` y `UNAVAILABLE`; falla de inventario: 400, no una lista parcial |
 | NFR-001 | Tiempo | Con el Módulo 1 simulado a 200 ms, la consulta puntual responde en menos de 1 s |
 | Contrato | Módulo 1 | Respuestas con `maxCapacity` inválido, campo faltante, lista vacía, 404, 400 y 503; también tiempo agotado, sin conexión (error de red), otro estado que no es de éxito (302) y un cuerpo que no es JSON |
-| Contrato | Datos de las pruebas del adaptador (T008) | Habitaciones del ejemplo A2: la 201 (`DOBLE`, capacidad 2) y la 202 (`DOBLE`, capacidad 3). **Éxito:** A1 devuelve la 201 y descarta los campos que no son del contrato (por ejemplo un estado `Occupied`); A2 (`DOBLE`) y A3 devuelven las dos; A3 no envía filtro. **Lista vacía:** la categoría `SUITE_JUNIOR` no tiene habitaciones. **404** (la habitación no existe) solo en A1; **400** en A1 (`roomId` inválido: un número de habitación, `201`, en lugar de un UUID) y en A2 (categoría inválida: `doble`, en minúsculas). **En A1, A2 y A3:** 500, 502, 503, 302, tiempo agotado (el Módulo 1 responde después de `MODULE1_TIMEOUT_MS`, 1 s), sin conexión y un cuerpo que no es JSON. **Mal formadas:** en A1, `maxCapacity` no entero (`1.5`) o menor que 1 (`0`), sin `roomNumber`, `categoryRoom` vacía y una lista en lugar de una habitación; en A2 y A3, una habitación en lugar de una lista y una lista con una habitación con `maxCapacity` como texto (`"dos"`) |
+| Contrato | Datos de las pruebas del adaptador (T008) | Habitaciones del ejemplo A2: la 201 (`DOBLE`, capacidad 2) y la 202 (`DOBLE`, capacidad 3). **Éxito:** A1 devuelve la 201 y descarta los campos que no son del contrato (por ejemplo un estado `Occupied`); A2 (`DOBLE`) y A3 devuelven las dos; A3 no envía filtro. **Lista vacía:** la categoría `SUITE_JUNIOR` no tiene habitaciones. **404** (la habitación no existe) solo en A1; **400** en A1 (`roomId` inválido: un número de habitación, `201`, en lugar de un UUID) y en A2 (categoría inválida: `doble`, en minúsculas). **En A1, A2 y A3:** 500, 502, 503, 302, tiempo agotado (el Módulo 1 responde después de `MODULE1_TIMEOUT_MS`, 1 s), sin conexión y un cuerpo que no es JSON. **Mal formadas:** en A1, `maxCapacity` no entero (`1.5`) o menor que 1 (`0`), sin `roomNumber`, `categoryRoom` vacía o que no cumple la forma acordada (`doble`), un `id` que no es un UUID (`201`) y una lista en lugar de una habitación; en A2 y A3, una habitación en lugar de una lista, una lista con una habitación con `maxCapacity` como texto (`"dos"`) y una lista con una habitación con `categoryRoom` `doble` |
 | Validadores | Datos de las pruebas (T002) | **`roomId`:** es válido un UUID (`994d1375-dbbd-4072-8724-b2ab32ce781b`, el `room_type_id` de Channex de los planes de `configure-ota` y `generate-ota-reservation`, porque ningún plan trae un `roomId` con UUID), también con mayúsculas y minúsculas mezcladas (`994D1375-dbbd-4072-8724-B2AB32ce781b`); no lo son uno vacío, un número de habitación (`201`), ese UUID con un carácter de más al final (`994d1375-dbbd-4072-8724-b2ab32ce781b0`) o al inicio (`0994d1375-dbbd-4072-8724-b2ab32ce781b`), ni con una letra que no es hexadecimal (`994d1375-dbbd-4072-8724-b2ab32ce781g`). **`categoryRoom`:** son válidas `DOBLE` y `SUITE_JUNIOR` (ejemplos de A), una con un dígito (`DOBLE_2`) y una de 50 caracteres, el máximo (50 letras `A`); no lo son una vacía, `doble` (en minúsculas), `CABAÑA` (con `Ñ`), `DÚPLEX` (con tilde), `SUITE JUNIOR` (con espacio), `SUITE-JUNIOR` (con guion) ni una de 51 caracteres (51 letras `A`) |
 
 ## Dependencies & Execution Order
