@@ -99,6 +99,12 @@ export class EnvironmentVariables {
   @Min(100)
   @Max(60000)
   MODULE3_TIMEOUT_MS!: number;
+
+  // Reserva directa: reintentos de asignación cuando la base rechaza una habitación por solape
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  ASSIGNMENT_MAX_RETRIES!: number;
 }
 
 /** Valores que se usan si la variable no está definida, en cualquier entorno. */
@@ -112,6 +118,7 @@ const DEFAULTS = {
   DB_USER: 'hospitua',
   MODULE1_TIMEOUT_MS: 1000,
   MODULE3_TIMEOUT_MS: 3000,
+  ASSIGNMENT_MAX_RETRIES: 3,
 };
 
 /**
