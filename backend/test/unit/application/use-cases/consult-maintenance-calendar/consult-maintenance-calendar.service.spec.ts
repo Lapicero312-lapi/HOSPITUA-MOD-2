@@ -84,6 +84,29 @@ describe('ConsultMaintenanceCalendarService.check', () => {
     });
   });
 
+  it('con un cruce total: el cruce termina el día antes de la salida', async () => {
+    const { module1 } = fakeModule1(
+      calendarWith([
+        { maintenanceStart: '2026-10-10', maintenanceEnd: '2026-10-14' },
+      ]),
+    );
+
+    const check = await new ConsultMaintenanceCalendarService(module1).check(
+      ROOM_ID,
+      START_DATE,
+      END_DATE,
+    );
+
+    expect(check.conflicts).toEqual([
+      {
+        maintenanceStart: '2026-10-10',
+        maintenanceEnd: '2026-10-14',
+        overlapStart: '2026-10-11',
+        overlapEnd: '2026-10-13',
+      },
+    ]);
+  });
+
   it('con varios cruces: devuelve cada mantenimiento con su periodo', async () => {
     const { module1 } = fakeModule1(
       calendarWith([
