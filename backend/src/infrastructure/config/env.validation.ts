@@ -100,6 +100,12 @@ export class EnvironmentVariables {
   @Max(60000)
   MODULE3_TIMEOUT_MS!: number;
 
+  // Verificar disponibilidad: cuántas consultas de mantenimiento al Módulo 1 van en paralelo
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  MAINTENANCE_CONCURRENCY!: number;
+
   // Conciliación de comisiones OTA: máximo de ítems por solicitud del Módulo 3
   @Type(() => Number)
   @IsInt()
@@ -118,6 +124,7 @@ const DEFAULTS = {
   DB_USER: 'hospitua',
   MODULE1_TIMEOUT_MS: 1000,
   MODULE3_TIMEOUT_MS: 3000,
+  MAINTENANCE_CONCURRENCY: 5,
   RECONCILIATION_MAX_ITEMS: 500,
 };
 
