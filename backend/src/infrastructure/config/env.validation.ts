@@ -117,6 +117,12 @@ export class EnvironmentVariables {
   @IsInt()
   @Min(1)
   RECONCILIATION_MAX_ITEMS!: number;
+
+  // Calcular tarifa dinámica: cuántas cotizaciones al Módulo 3 van en paralelo (una por habitación)
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  QUOTE_CONCURRENCY!: number;
 }
 
 /** Valores que se usan si la variable no está definida, en cualquier entorno. */
@@ -133,6 +139,7 @@ const DEFAULTS = {
   MAINTENANCE_CONCURRENCY: 5,
   ASSIGNMENT_MAX_RETRIES: 3,
   RECONCILIATION_MAX_ITEMS: 500,
+  QUOTE_CONCURRENCY: 5,
 };
 
 /**
