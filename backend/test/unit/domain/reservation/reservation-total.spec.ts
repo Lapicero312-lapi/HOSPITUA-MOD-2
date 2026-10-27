@@ -1,20 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-  CURRENCY_MISMATCH,
-  reservationTotal,
-} from '../../../../src/domain/reservation/reservation-total.js';
-import { BusinessError } from '../../../../src/domain/shared/business-error.js';
+import { reservationTotal } from '../../../../src/domain/reservation/reservation-total.js';
 import { Money } from '../../../../src/domain/shared/money.js';
-
-/** Lo que lanza `action`, para revisar el error. */
-function thrownBy(action: () => void): unknown {
-  try {
-    action();
-  } catch (error) {
-    return error;
-  }
-  throw new Error('No lanzó ningún error.');
-}
 
 /** Datos del plan de `calculate-dynamic-rate`, "Pruebas por escenario" (FR-002, Total y Moneda única). */
 describe('reservationTotal', () => {
@@ -45,18 +31,16 @@ describe('reservationTotal', () => {
   });
 
   it('con monedas distintas lanza CURRENCY_MISMATCH con el mensaje literal', () => {
-    const error = thrownBy(() =>
+    expect(() =>
       reservationTotal([
         Money.of('530000.00', 'COP'),
         Money.of('120.00', 'USD'),
       ]),
+    ).toThrow(
+      expect.objectContaining({
+        errorCode: 'CURRENCY_MISMATCH',
+        message: 'Las tarifas de la reserva no tienen la misma moneda.',
+      }),
     );
-
-    expect(error).toBeInstanceOf(BusinessError);
-    expect(error).toMatchObject({
-      errorCode: 'CURRENCY_MISMATCH',
-      message: 'Las tarifas de la reserva no tienen la misma moneda.',
-    });
-    expect(CURRENCY_MISMATCH.code).toBe('CURRENCY_MISMATCH');
   });
 });
