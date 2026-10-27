@@ -1,4 +1,7 @@
-import type { MaintenanceCheck } from '../../../../integration/maintenance-calendar.js';
+import type {
+  MaintenanceCheck,
+  MaintenanceConflict,
+} from '../../../../integration/maintenance-calendar.js';
 
 /** Símbolo con el que Nest inyecta el servicio en los demás casos de uso. */
 export const CONSULT_MAINTENANCE_CALENDAR = Symbol(
@@ -7,7 +10,8 @@ export const CONSULT_MAINTENANCE_CALENDAR = Symbol(
 
 /**
  * Consulta de solo lectura al calendario de mantenimientos del Módulo 1 (plan, B). La usa "Verificar
- * disponibilidades" por cada habitación candidata.
+ * disponibilidades" por cada habitación candidata, y la pantalla "Habitaciones" para el mantenimiento
+ * próximo de cada habitación.
  */
 export interface ConsultMaintenanceCalendar {
   /**
@@ -22,4 +26,16 @@ export interface ConsultMaintenanceCalendar {
     startDate: string,
     endDate: string,
   ): Promise<MaintenanceCheck>;
+
+  /**
+   * B2: el mantenimiento más cercano dentro de la ventana, es decir, el cruce de menor
+   * `maintenanceStart`, o `null` si no hay. Es una consulta `check` con la ventana: `toDate` cuenta como
+   * la salida, así que la ventana va de `fromDate` al día anterior a `toDate`.
+   * @throws BusinessError Los mismos que `check`.
+   */
+  nextMaintenance(
+    roomId: string,
+    fromDate: string,
+    toDate: string,
+  ): Promise<MaintenanceConflict | null>;
 }
