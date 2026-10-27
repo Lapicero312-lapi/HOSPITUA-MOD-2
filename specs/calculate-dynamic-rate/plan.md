@@ -89,15 +89,18 @@ fechas.
 
 ```json
 {
-  "quoteId": "Q-12345",
+  "quoteId": "a1f2c3d4-e5b6-4789-8a9b-0c1d2e3f4a5b",
   "currency": "COP",
   "nightlyRates": [
-    { "date": "2026-10-10", "rate": 250000 },
-    { "date": "2026-10-11", "rate": 280000 }
+    { "date": "2026-10-10", "rate": "250000.00" },
+    { "date": "2026-10-11", "rate": "280000.00" }
   ],
-  "lodgingAmount": 530000
+  "lodgingAmount": "530000.00"
 }
 ```
+
+El Módulo 3 envía los importes como texto decimal con dos decimales y el `quoteId` como UUID. El
+adaptador también acepta los importes como número, siempre sin pasarlos por `number`.
 
 Los valores del ejemplo son ilustrativos. De la respuesta, el Módulo 2 guarda en cada `ReservationRoom`
 solo el `lodgingAmount` (como `roomGrossAmount`), el `quoteId` y la `currency` (decisiones D1 y D2 del
@@ -344,13 +347,13 @@ Todo error sale con `{ "errorCode", "message", "timestamp", "path" }` y **siempr
 
 | Situación | Origen | HTTP | `errorCode` | `message` |
 |---|---|---|---|---|
-| El Módulo 3 no responde, agota el tiempo o devuelve 5xx al cotizar una **reserva nueva** | Módulo 3 | 400 | `PRICING_UNAVAILABLE` | "Error 400: El servicio de cotización de tarifas no se encuentra disponible. Por favor intente más tarde" |
+| El Módulo 3 no responde, agota el tiempo, devuelve 5xx o un error de disponibilidad (`424` `MODULE1_UNAVAILABLE` o `INVALID_BASE_RATE`, `422` `UNEXPECTED_ERROR`) al cotizar una **reserva nueva** | Módulo 3 | 400 | `PRICING_UNAVAILABLE` | "Error 400: El servicio de cotización de tarifas no se encuentra disponible. Por favor intente más tarde" |
 | Lo mismo al **recotizar** una reserva `ACTIVE` | Módulo 3 | 400 | `RECALCULATION_UNAVAILABLE` | "No se pudo calcular la nueva tarifa en este momento. Intente más tarde." |
 | Respuesta del Módulo 3 inválida (campos faltantes, `lodgingAmount` ≤ 0, más de 2 decimales, moneda inválida, fechas fuera del rango) | Módulo 3 | 400 | El de la fila anterior según el contexto | El de la fila anterior; el detalle va al log |
 | `categoryRoom` vacía o con caracteres no permitidos | M2, antes de llamar | 400 | `INVALID_CATEGORY` | "La categoría indicada no es válida." |
 | El Módulo 3 rechaza la categoría (no existe en su catálogo) | Módulo 3 | 400 | `INVALID_CATEGORY` | "La categoría indicada no es válida." |
 | Fechas mal formadas o `endDate` no posterior a `startDate` | M2, antes de llamar | 400 | `INVALID_STAY_DATES` | "Rango de fechas inválido. Verifique las fechas seleccionadas." |
-| Otro 4xx del Módulo 3 (parámetros ausentes, rango incoherente) | Módulo 3 | 400 | `INVALID_STAY_DATES` | "Rango de fechas inválido. Verifique las fechas seleccionadas." |
+| Otro 4xx del Módulo 3 (`400` `INVALID_QUERY_PARAMS` o `INVALID_DATE_RANGE`, `404` `BASE_RATE_NOT_FOUND`) | Módulo 3 | 400 | `INVALID_STAY_DATES` | "Rango de fechas inválido. Verifique las fechas seleccionadas." |
 | La tarifa cambió entre la vista previa y la confirmación | M2 (`verifyQuotes`) | 400 | `RATE_CHANGED` | "La tarifa cambió, vuelva a cotizar." |
 | Habitaciones de una reserva con monedas distintas al sumar el total | M2 | 400 | `CURRENCY_MISMATCH` | "Las tarifas de la reserva no tienen la misma moneda." |
 
