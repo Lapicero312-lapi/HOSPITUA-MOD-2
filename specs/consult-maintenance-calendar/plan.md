@@ -178,6 +178,10 @@ sequenceDiagram
     else respuesta válida
         M1-->>P: { roomId, available, conflicts }
         P-->>U: respuesta del Módulo 1
+        U->>U: ¿Es coherente? (el roomId pedido, available contra conflicts y que cada mantenimiento se cruce)
+        alt incoherente
+            U-->>V: BusinessError MAINTENANCE_CHECK_UNAVAILABLE (400), el detalle va al log, sin asumir que está libre
+        end
         U->>U: Calcula overlapStart y overlapEnd de cada cruce
         U-->>V: MaintenanceCheck (available true sin cruces, o false con el periodo del cruce)
     end
@@ -230,11 +234,12 @@ Todo error sale con `{ "errorCode", "message", "timestamp", "path" }` y **siempr
 | Tiempo agotado o error de red | Módulo 1 | 400 | `MAINTENANCE_CHECK_UNAVAILABLE` | "No es posible validar mantenimientos en este momento. Intente de nuevo." |
 | El Módulo 1 responde 5xx | Módulo 1 | 400 | `MAINTENANCE_CHECK_UNAVAILABLE` | El mismo |
 | El Módulo 1 responde 400 (el Módulo 2 ya validó las fechas, así que lo que rechaza es el `roomId`) | Módulo 1 | 400 | `INVALID_ROOM_ID` | "El identificador de la habitación es inválido." |
-| Respuesta con campos faltantes, fechas inválidas o `available` incoherente con `conflicts` | Módulo 1 | 400 | `MAINTENANCE_CHECK_UNAVAILABLE` | El mismo; el detalle va al log |
+| Respuesta con campos faltantes, fechas inválidas o `available` incoherente con `conflicts`, o de otra habitación (un `roomId` distinto del pedido) | Módulo 1 | 400 | `MAINTENANCE_CHECK_UNAVAILABLE` | El mismo; el detalle va al log |
 
 - **Nunca se asume disponibilidad** (FR-005): cualquier fallo o duda bloquea la validación. Si el Módulo 1
   dice `available: true` pero trae `conflicts`, o dice `available: false` sin `conflicts`, se trata como
-  respuesta incoherente y se bloquea.
+  respuesta incoherente y se bloquea. También es incoherente una respuesta con un `roomId` distinto del
+  pedido, y se bloquea.
 - **Sin reintentos automáticos** hacia el Módulo 1: ante un fallo se informa y quien llama decide.
 - Una excepción inesperada la traduce el filtro global a 400 `REQUEST_NOT_PROCESSED`, con el detalle en
   el log y sin datos de infraestructura.
@@ -321,12 +326,13 @@ contiguo, más los fallos del Módulo 1.
 | Casos borde | Fechas inválidas | Salida anterior a la llegada, fecha inexistente o mal formada: `400` `INVALID_STAY_DATES`, sin llamar al Módulo 1 |
 | Casos borde | `roomId` inválido o inexistente | Formato inválido: `400` sin llamar al Módulo 1; 404 del Módulo 1: `400` `INVALID_ROOM_ID` |
 | Casos borde | Mantenimiento posterior a la reserva | Fuera de alcance: esta consulta solo valida en el momento de reservar; no hay prueba de reubicación |
-| Contrato | Módulo 1 | Respuestas con campos faltantes, fechas mal formadas, 400, 404, 503 y lenta (más del tiempo máximo). Una respuesta con `available` incoherente con `conflicts` la detecta el caso de uso (T008), no el adaptador |
+| Contrato | Módulo 1 | Respuestas con campos faltantes, fechas mal formadas, 400, 404, 503 y lenta (más del tiempo máximo). Una respuesta con `available` incoherente con `conflicts`, o con un `roomId` distinto del pedido, la detecta el caso de uso (T008), no el adaptador |
 | Contrato | Datos de las pruebas del adaptador (T010) | Estadía del 2026-10-11 al 2026-10-14. **Sin cruce** y **contiguo** (un mantenimiento que termina el 2026-10-10): `available: true` y `conflicts: []`. **Un cruce:** del 2026-10-10 al 2026-10-12. **Varios cruces:** ese y uno el 2026-10-13. **Mal formadas:** sin `available`; `conflicts` que no es una lista; una fecha inexistente (`2026-02-30`); una fecha mal formada (`14/10/2026`); un mantenimiento que termina antes de empezar (del 2026-10-12 al 2026-10-10); un cuerpo que no es JSON. **Tiempo agotado:** el Módulo 1 responde después de `MODULE1_TIMEOUT_MS` (1 s) |
 | Validadores | Datos de las pruebas (T003) | **`roomId`:** es válido un UUID (`994d1375-dbbd-4072-8724-b2ab32ce781b`, el `room_type_id` de Channex de los planes de `configure-ota` y `generate-ota-reservation`, porque ningún plan trae un `roomId` con UUID), también con mayúsculas y minúsculas mezcladas (`994D1375-dbbd-4072-8724-B2AB32ce781b`); no lo son uno vacío, un número de habitación (`201`), ese UUID con un carácter de más al final (`994d1375-dbbd-4072-8724-b2ab32ce781b0`) o al inicio (`0994d1375-dbbd-4072-8724-b2ab32ce781b`), ni con una letra que no es hexadecimal (`994d1375-dbbd-4072-8724-b2ab32ce781g`). **Fechas** (ejemplo del plan): del 2026-10-11 al 2026-10-14 son válidas; no lo son la salida anterior a la llegada (del 2026-10-14 al 2026-10-11), la salida el mismo día de la llegada (2026-10-11), una fecha inexistente (`2026-02-30`, del plan de `check-view-reservation`), esa misma fecha como salida (del 2026-02-28, el último día de ese mes, al 2026-02-30) ni una mal formada (`14/10/2026`, la salida del ejemplo en el formato de pantalla del plan base) |
 | NFR-001 | Tiempo | Con el Módulo 1 simulado a 200 ms, la consulta responde en menos de 1 s |
 | SC-001, SC-002 | Cobertura | Se verifica en `check-room-availability`: toda reserva nueva o modificada pasa por esta consulta y ninguna se confirma con un cruce |
 | Servicio | Datos de las pruebas (T007) | Estadía del 2026-10-11 al 2026-10-14 (ejemplo del plan) y un `roomId` cualquiera (un UUID). **Sin mantenimientos:** el Módulo 1 responde `available: true` y `conflicts: []`. **Un cruce:** el mantenimiento del 2026-10-10 al 2026-10-12, que cruza del 2026-10-11 al 2026-10-12. **Cruce total:** el mantenimiento del 2026-10-10 al 2026-10-14, que cruza del 2026-10-11 al 2026-10-13, porque el día de la salida no cuenta. **Varios cruces:** ese y uno el 2026-10-13, que cruza ese mismo día. **Un mantenimiento que no se cruza** (respuesta incoherente): el contiguo, de un solo día, el 2026-10-10. **Inválidos, sin llamar al Módulo 1:** un `roomId` que es un número de habitación (`201`) y la salida anterior a la llegada (del 2026-10-14 al 2026-10-11) |
+| Servicio | Datos de las pruebas (T008) | Estadía del 2026-10-11 al 2026-10-14 (ejemplo del plan) y un `roomId` cualquiera (un UUID). **Respuestas incoherentes**, que se bloquean con `MAINTENANCE_CHECK_UNAVAILABLE` y dejan el detalle en el log: `available: true` con el mantenimiento del 2026-10-10 al 2026-10-12; `available: false` sin mantenimientos; `available: false` con un mantenimiento que no se cruza (el contiguo, de un solo día, el 2026-10-10); y la respuesta de otra habitación (otro UUID). **No es incoherente:** el mismo `roomId` en mayúsculas, porque un UUID es el mismo en mayúsculas o en minúsculas |
 
 ## Dependencies & Execution Order
 

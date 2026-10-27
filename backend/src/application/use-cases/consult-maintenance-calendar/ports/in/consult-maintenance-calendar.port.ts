@@ -13,8 +13,9 @@ export interface ConsultMaintenanceCalendar {
   /**
    * B1: los mantenimientos que se cruzan con la estadía, con el periodo de cada cruce. El Módulo 1
    * decide si hay cruce.
-   * @throws BusinessError `INVALID_ROOM_ID` o `INVALID_STAY_DATES`, sin llamar al Módulo 1. Los errores
-   * de `Module1Port` salen tal cual.
+   * @throws BusinessError `INVALID_ROOM_ID` o `INVALID_STAY_DATES`, sin llamar al Módulo 1, y
+   * `MAINTENANCE_CHECK_UNAVAILABLE` si la respuesta del Módulo 1 es incoherente. Los errores de
+   * `Module1Port` salen tal cual.
    */
   check(
     roomId: string,

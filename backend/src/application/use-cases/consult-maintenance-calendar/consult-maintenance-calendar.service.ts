@@ -1,13 +1,14 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { BusinessError } from '../../../domain/shared/business-error.js';
 import {
   INVALID_ROOM_ID,
   INVALID_STAY_DATES,
+  MAINTENANCE_CHECK_UNAVAILABLE,
 } from '../../../domain/shared/error-codes.js';
 import type {
+  MaintenanceCalendar,
   MaintenanceCheck,
   MaintenanceConflict,
-  MaintenancePeriod,
 } from '../../integration/maintenance-calendar.js';
 import {
   MODULE1_PORT,
@@ -22,10 +23,13 @@ import type { ConsultMaintenanceCalendar } from './ports/in/consult-maintenance-
 
 /**
  * Valida la consulta, le pide al Módulo 1 los mantenimientos de la habitación en la estadía y arma el
- * resultado con el periodo de cada cruce (plan, D1).
+ * resultado con el periodo de cada cruce (plan, D1). Una respuesta incoherente del Módulo 1 se bloquea:
+ * nunca se asume que la habitación está libre (plan, "Reglas de validación y manejo de errores").
  */
 @Injectable()
 export class ConsultMaintenanceCalendarService implements ConsultMaintenanceCalendar {
+  private readonly logger = new Logger(ConsultMaintenanceCalendarService.name);
+
   constructor(
     @Inject(MODULE1_PORT)
     private readonly module1: Module1Port,
@@ -51,31 +55,58 @@ export class ConsultMaintenanceCalendarService implements ConsultMaintenanceCale
       startDate,
       endDate,
     );
-    return {
-      roomId,
-      available: calendar.available,
-      conflicts: calendar.conflicts.map((maintenance) =>
-        toConflict(maintenance, { startDate, endDate }),
-      ),
-    };
+    const incoherence = incoherenceOf(calendar, roomId);
+    if (incoherence !== null) {
+      throw this.incoherentResponse(roomId, incoherence);
+    }
+
+    const conflicts: MaintenanceConflict[] = [];
+    for (const maintenance of calendar.conflicts) {
+      const period = overlap(maintenance, { startDate, endDate });
+      if (period === null) {
+        throw this.incoherentResponse(
+          roomId,
+          `el mantenimiento del ${maintenance.maintenanceStart} al ${maintenance.maintenanceEnd} no se cruza con la estadía del ${startDate} al ${endDate}`,
+        );
+      }
+      conflicts.push({
+        maintenanceStart: maintenance.maintenanceStart,
+        maintenanceEnd: maintenance.maintenanceEnd,
+        overlapStart: period.overlapStart,
+        overlapEnd: period.overlapEnd,
+      });
+    }
+    return { roomId, available: calendar.available, conflicts };
+  }
+
+  /** Deja en el log por qué la respuesta del Módulo 1 es incoherente y la bloquea. */
+  private incoherentResponse(roomId: string, detail: string): BusinessError {
+    this.logger.warn(
+      `Respuesta incoherente del Módulo 1 para la habitación ${roomId}: ${detail}.`,
+    );
+    return new BusinessError(
+      MAINTENANCE_CHECK_UNAVAILABLE.code,
+      MAINTENANCE_CHECK_UNAVAILABLE.message,
+    );
   }
 }
 
-/** El mantenimiento con el periodo en que se cruza con la estadía. */
-function toConflict(
-  maintenance: MaintenancePeriod,
-  stay: { startDate: string; endDate: string },
-): MaintenanceConflict {
-  const period = overlap(maintenance, stay);
-  if (period === null) {
-    throw new Error(
-      `Respuesta incoherente del Módulo 1: el mantenimiento del ${maintenance.maintenanceStart} al ${maintenance.maintenanceEnd} no se cruza con la estadía.`,
-    );
+/**
+ * Por qué la respuesta del Módulo 1 no cuadra, o `null` si cuadra: es de otra habitación, o `available`
+ * contradice a `conflicts`. Un UUID es el mismo en mayúsculas o en minúsculas.
+ */
+function incoherenceOf(
+  calendar: MaintenanceCalendar,
+  roomId: string,
+): string | null {
+  if (calendar.roomId.toLowerCase() !== roomId.toLowerCase()) {
+    return `responde por otra habitación (${calendar.roomId})`;
   }
-  return {
-    maintenanceStart: maintenance.maintenanceStart,
-    maintenanceEnd: maintenance.maintenanceEnd,
-    overlapStart: period.overlapStart,
-    overlapEnd: period.overlapEnd,
-  };
+  if (calendar.available && calendar.conflicts.length > 0) {
+    return `available es true pero conflicts no está vacío (${calendar.conflicts.length})`;
+  }
+  if (!calendar.available && calendar.conflicts.length === 0) {
+    return 'available es false pero conflicts está vacío';
+  }
+  return null;
 }
