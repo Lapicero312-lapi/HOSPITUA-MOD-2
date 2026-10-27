@@ -12,6 +12,8 @@ import {
   Module1UnavailableError,
   type Module1Port,
 } from '../../../application/ports/out/module1.port.js';
+import { isValidCategoryRoom } from '../../../application/use-cases/consult-room-inventory/category-room.validator.js';
+import { isValidRoomId } from '../../../application/use-cases/consult-room-inventory/room-id.validator.js';
 import { isNonEmptyString, isObject, isRealDate, send } from '../http-call.js';
 
 /**
@@ -79,13 +81,18 @@ function unexpectedShape(): Module1UnavailableError {
   return new Module1UnavailableError('respuesta distinta del contrato');
 }
 
-/** Solo los campos del contrato; cualquier otro se ignora. */
+/**
+ * Solo los campos del contrato; cualquier otro se ignora. El `id` es un UUID y la `categoryRoom` tiene la
+ * forma acordada (`consult-room-inventory`, A), con los mismos validadores de ese caso de uso.
+ */
 function toRoom(value: unknown): Room {
   if (
     !isObject(value) ||
-    !isNonEmptyString(value.id) ||
+    typeof value.id !== 'string' ||
+    !isValidRoomId(value.id) ||
     !isNonEmptyString(value.roomNumber) ||
-    !isNonEmptyString(value.categoryRoom) ||
+    typeof value.categoryRoom !== 'string' ||
+    !isValidCategoryRoom(value.categoryRoom) ||
     !Number.isInteger(value.maxCapacity) ||
     (value.maxCapacity as number) < 1
   ) {

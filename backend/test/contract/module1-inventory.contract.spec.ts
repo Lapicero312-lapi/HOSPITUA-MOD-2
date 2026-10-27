@@ -192,6 +192,11 @@ describe('Module1HttpAdapter, inventario, contra el Módulo 1 simulado (contrato
       ['con maxCapacity menor que 1', { ...ROOM_201, maxCapacity: 0 }],
       ['sin roomNumber', { ...ROOM_201, roomNumber: undefined }],
       ['con categoryRoom vacía', { ...ROOM_201, categoryRoom: '' }],
+      [
+        'con categoryRoom que no cumple la forma acordada (doble)',
+        { ...ROOM_201, categoryRoom: 'doble' },
+      ],
+      ['con un id que no es un UUID (201)', { ...ROOM_201, id: '201' }],
       ['con una lista en lugar de una habitación', [ROOM_201]],
     ])('getRoom (A1): una respuesta %s', async (_, body) => {
       module1Responds(ROOM_201_URL, body);
@@ -212,6 +217,17 @@ describe('Module1HttpAdapter, inventario, contra el Módulo 1 simulado (contrato
 
       it('una lista con una habitación con maxCapacity como texto', async () => {
         module1Responds(url, [ROOM_201, { ...ROOM_202, maxCapacity: 'dos' }]);
+
+        await expect(call()).rejects.toThrow(
+          new Module1UnavailableError('respuesta distinta del contrato'),
+        );
+      });
+
+      it('una lista con una habitación con categoryRoom que no cumple la forma acordada (doble)', async () => {
+        module1Responds(url, [
+          ROOM_201,
+          { ...ROOM_202, categoryRoom: 'doble' },
+        ]);
 
         await expect(call()).rejects.toThrow(
           new Module1UnavailableError('respuesta distinta del contrato'),
