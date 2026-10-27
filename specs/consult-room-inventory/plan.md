@@ -171,6 +171,10 @@ sequenceDiagram
         M1-->>P: 404
         P-->>U: RoomNotFound
         U-->>V: BusinessError INVALID_ROOM_ID (400)
+    else 400 (rechaza el roomId)
+        M1-->>P: 400
+        P-->>U: Module1RejectedError
+        U-->>V: BusinessError INVALID_ROOM_ID (400)
     else tiempo agotado, error de red o 5xx
         P-->>U: Module1Unavailable
         U-->>V: BusinessError INVENTORY_UNAVAILABLE (400)
