@@ -2,7 +2,12 @@ import { randomUUID } from 'node:crypto';
 import { Logger } from '@nestjs/common';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { MaintenanceCalendar } from '../../../../../src/application/integration/maintenance-calendar.js';
-import type { Module1Port } from '../../../../../src/application/ports/out/module1.port.js';
+import {
+  Module1RejectedError,
+  Module1RoomNotFoundError,
+  Module1UnavailableError,
+  type Module1Port,
+} from '../../../../../src/application/ports/out/module1.port.js';
 import { ConsultMaintenanceCalendarService } from '../../../../../src/application/use-cases/consult-maintenance-calendar/consult-maintenance-calendar.service.js';
 import {
   INVALID_ROOM_ID,
@@ -11,8 +16,8 @@ import {
 } from '../../../../../src/domain/shared/error-codes.js';
 
 /**
- * Datos de las pruebas del plan ("Pruebas por escenario", T007 y T008), que dice de dónde sale cada uno.
- * Los `roomId` son UUID cualesquiera.
+ * Datos de las pruebas del plan ("Pruebas por escenario", T007, T008 y T009), que dice de dónde sale cada
+ * uno. Los `roomId` son UUID cualesquiera.
  */
 const ROOM_ID = randomUUID();
 const OTHER_ROOM_ID = randomUUID();
@@ -26,6 +31,12 @@ function fakeModule1(calendar: MaintenanceCalendar) {
     getMaintenances,
     module1: { getMaintenances } as unknown as Module1Port,
   };
+}
+
+/** Un Módulo 1 que falla con `error`. */
+function failingModule1(error: Error) {
+  const getMaintenances = vi.fn(() => Promise.reject(error));
+  return { module1: { getMaintenances } as unknown as Module1Port };
 }
 
 /** La respuesta del Módulo 1 con los mantenimientos que se cruzan (`[]` si no hay). */
@@ -241,6 +252,77 @@ describe('ConsultMaintenanceCalendarService.check', () => {
       expect(warn).toHaveBeenCalledWith(
         `Respuesta incoherente del Módulo 1 para la habitación ${ROOM_ID}: ${detail}.`,
       );
+    });
+  });
+
+  describe('los errores del Módulo 1 salen con el código del plan', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it.each<[string, Error]>([
+      ['un 404 (la habitación no existe)', new Module1RoomNotFoundError()],
+      ['un 400 (rechaza la consulta)', new Module1RejectedError()],
+    ])('%s es INVALID_ROOM_ID, sin nada en el log', async (_, error) => {
+      const warn = vi
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
+      const { module1 } = failingModule1(error);
+
+      await expect(
+        new ConsultMaintenanceCalendarService(module1).check(
+          ROOM_ID,
+          START_DATE,
+          END_DATE,
+        ),
+      ).rejects.toMatchObject({
+        errorCode: INVALID_ROOM_ID.code,
+        message: INVALID_ROOM_ID.message,
+      });
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      'tiempo de espera agotado',
+      'sin respuesta (ECONNREFUSED)',
+      'respondió 503',
+      'la respuesta no es JSON',
+      'respuesta distinta del contrato',
+    ])(
+      'el Módulo 1 no disponible (%s) es MAINTENANCE_CHECK_UNAVAILABLE y deja el detalle en el log',
+      async (detail) => {
+        const warn = vi
+          .spyOn(Logger.prototype, 'warn')
+          .mockImplementation(() => undefined);
+        const { module1 } = failingModule1(new Module1UnavailableError(detail));
+
+        await expect(
+          new ConsultMaintenanceCalendarService(module1).check(
+            ROOM_ID,
+            START_DATE,
+            END_DATE,
+          ),
+        ).rejects.toMatchObject({
+          errorCode: MAINTENANCE_CHECK_UNAVAILABLE.code,
+          message: MAINTENANCE_CHECK_UNAVAILABLE.message,
+        });
+        expect(warn).toHaveBeenCalledWith(
+          `Consulta de mantenimientos de la habitación ${ROOM_ID}: El Módulo 1 no está disponible: ${detail}.`,
+        );
+      },
+    );
+
+    it('un error inesperado sale sin convertir', async () => {
+      const unexpected = new Error('falla inesperada');
+      const { module1 } = failingModule1(unexpected);
+
+      await expect(
+        new ConsultMaintenanceCalendarService(module1).check(
+          ROOM_ID,
+          START_DATE,
+          END_DATE,
+        ),
+      ).rejects.toBe(unexpected);
     });
   });
 });
