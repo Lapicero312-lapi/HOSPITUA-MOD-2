@@ -99,6 +99,12 @@ export class EnvironmentVariables {
   @Min(100)
   @Max(60000)
   MODULE3_TIMEOUT_MS!: number;
+
+  // Verificar disponibilidad: cuántas consultas de mantenimiento al Módulo 1 van en paralelo
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  MAINTENANCE_CONCURRENCY!: number;
 }
 
 /** Valores que se usan si la variable no está definida, en cualquier entorno. */
@@ -112,6 +118,7 @@ const DEFAULTS = {
   DB_USER: 'hospitua',
   MODULE1_TIMEOUT_MS: 1000,
   MODULE3_TIMEOUT_MS: 3000,
+  MAINTENANCE_CONCURRENCY: 5,
 };
 
 /**
