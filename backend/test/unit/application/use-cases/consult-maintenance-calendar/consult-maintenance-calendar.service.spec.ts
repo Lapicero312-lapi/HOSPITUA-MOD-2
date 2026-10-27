@@ -1,18 +1,21 @@
 import { randomUUID } from 'node:crypto';
-import { describe, expect, it, vi } from 'vitest';
+import { Logger } from '@nestjs/common';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { MaintenanceCalendar } from '../../../../../src/application/integration/maintenance-calendar.js';
 import type { Module1Port } from '../../../../../src/application/ports/out/module1.port.js';
 import { ConsultMaintenanceCalendarService } from '../../../../../src/application/use-cases/consult-maintenance-calendar/consult-maintenance-calendar.service.js';
 import {
   INVALID_ROOM_ID,
   INVALID_STAY_DATES,
+  MAINTENANCE_CHECK_UNAVAILABLE,
 } from '../../../../../src/domain/shared/error-codes.js';
 
 /**
- * Datos de las pruebas del plan ("Pruebas por escenario", T007), que dice de dónde sale cada uno. El
- * `roomId` es un UUID cualquiera.
+ * Datos de las pruebas del plan ("Pruebas por escenario", T007 y T008), que dice de dónde sale cada uno.
+ * Los `roomId` son UUID cualesquiera.
  */
 const ROOM_ID = randomUUID();
+const OTHER_ROOM_ID = randomUUID();
 const START_DATE = '2026-10-11';
 const END_DATE = '2026-10-14';
 
@@ -169,21 +172,75 @@ describe('ConsultMaintenanceCalendarService.check', () => {
     expect(getMaintenances).not.toHaveBeenCalled();
   });
 
-  it('un mantenimiento que no se cruza con la estadía es una respuesta incoherente: no se asume nada', async () => {
-    const { module1 } = fakeModule1(
-      calendarWith([
-        { maintenanceStart: '2026-10-10', maintenanceEnd: '2026-10-10' },
-      ]),
-    );
+  it('el mismo roomId en mayúsculas no es una respuesta incoherente', async () => {
+    const { module1 } = fakeModule1({
+      roomId: ROOM_ID.toUpperCase(),
+      available: true,
+      conflicts: [],
+    });
 
-    await expect(
-      new ConsultMaintenanceCalendarService(module1).check(
+    expect(
+      await new ConsultMaintenanceCalendarService(module1).check(
         ROOM_ID,
         START_DATE,
         END_DATE,
       ),
-    ).rejects.toThrow(
-      'Respuesta incoherente del Módulo 1: el mantenimiento del 2026-10-10 al 2026-10-10 no se cruza con la estadía.',
-    );
+    ).toEqual({ roomId: ROOM_ID, available: true, conflicts: [] });
+  });
+
+  describe('una respuesta incoherente del Módulo 1 se bloquea con MAINTENANCE_CHECK_UNAVAILABLE y deja el detalle en el log', () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it.each<[string, MaintenanceCalendar, string]>([
+      [
+        'available true con mantenimientos',
+        {
+          roomId: ROOM_ID,
+          available: true,
+          conflicts: [
+            { maintenanceStart: '2026-10-10', maintenanceEnd: '2026-10-12' },
+          ],
+        },
+        'available es true pero conflicts no está vacío (1)',
+      ],
+      [
+        'available false sin mantenimientos',
+        { roomId: ROOM_ID, available: false, conflicts: [] },
+        'available es false pero conflicts está vacío',
+      ],
+      [
+        'un mantenimiento que no se cruza con la estadía',
+        calendarWith([
+          { maintenanceStart: '2026-10-10', maintenanceEnd: '2026-10-10' },
+        ]),
+        'el mantenimiento del 2026-10-10 al 2026-10-10 no se cruza con la estadía del 2026-10-11 al 2026-10-14',
+      ],
+      [
+        'la respuesta de otra habitación',
+        { roomId: OTHER_ROOM_ID, available: true, conflicts: [] },
+        `responde por otra habitación (${OTHER_ROOM_ID})`,
+      ],
+    ])('%s', async (_, calendar, detail) => {
+      const warn = vi
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
+      const { module1 } = fakeModule1(calendar);
+
+      await expect(
+        new ConsultMaintenanceCalendarService(module1).check(
+          ROOM_ID,
+          START_DATE,
+          END_DATE,
+        ),
+      ).rejects.toMatchObject({
+        errorCode: MAINTENANCE_CHECK_UNAVAILABLE.code,
+        message: MAINTENANCE_CHECK_UNAVAILABLE.message,
+      });
+      expect(warn).toHaveBeenCalledWith(
+        `Respuesta incoherente del Módulo 1 para la habitación ${ROOM_ID}: ${detail}.`,
+      );
+    });
   });
 });
