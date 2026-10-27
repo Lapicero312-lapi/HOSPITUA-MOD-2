@@ -474,7 +474,8 @@ seguro ante un Módulo 3 caído.
 | FR-002a | Todo o nada | Una de tres cotizaciones falla: ninguna tarifa se guarda |
 | D1 | Tarifa cambió | Dos llamadas con importes distintos: `400` `RATE_CHANGED` y nada se guarda |
 | NFR-002 | Precisión | Importes con dos decimales se conservan exactos; con tres decimales o en cero se rechazan |
-| FR-002 | Total | La suma de los `lodgingAmount` coincide y no se guarda en ninguna columna |
+| FR-002 | Total | La suma de los `lodgingAmount` coincide y no se guarda en ninguna columna. Datos de `reservationTotal`: una habitación de `530000.00 COP` da `530000.00 COP`; `530000.00 COP` y `350000.50 COP` dan `880000.50 COP`; `0.10 COP` y `0.20 COP` dan `0.30 COP` exacto |
+| FR-002 | Moneda única | `530000.00 COP` y `120.00 USD`: `reservationTotal` lanza `CURRENCY_MISMATCH` con el mensaje literal |
 | FR-009 | Pantalla "Tarifas" | Resultado con la tarifa efectiva calculada; sin llamar al Módulo 3 y sin capacidad |
 | NFR-001 | Tiempo | 10 cotizaciones en paralelo en menos de 1,5 s con el Módulo 3 simulado a 300 ms |
 
