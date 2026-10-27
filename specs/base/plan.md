@@ -66,7 +66,7 @@ describe lo propio.
 | Versión de TypeScript | La que trae el proyecto de `nest new`, fija y con `strict` | Es la combinación que Nest prueba; no se actualiza por separado |
 | ORM | TypeORM (aprobado) | Permite escribir a mano el SQL propio de PostgreSQL (D3, bloqueo asesor, `FOR UPDATE`) dentro de las migraciones |
 | Migraciones de esquema | Migraciones de TypeORM escritas en SQL, versionadas en `backend/src/migrations` | El esquema no se genera solo desde las clases: se revisa y se versiona |
-| Librería de RabbitMQ | `@golevelup/nestjs-rabbitmq` (aprobado) | Exchange topic, reintentos con espera creciente y dead-letter sin armarlos a mano |
+| Librería de RabbitMQ | `@golevelup/nestjs-rabbitmq` (aprobado) | Exchange topic, colas, consumidores y confirmación de publicación desde Nest. Los reintentos con espera y la dead-letter se arman con argumentos de RabbitMQ (ver "Convenciones de colas") |
 | Gestor de paquetes | pnpm (aprobado) | Instalación rápida, dependencias estrictas y filtros por paquete (`pnpm --filter backend test`) |
 | Control de concurrencia | Comparación de `updatedAt` al guardar (`UPDATE … WHERE updated_at = :leído`), con precisión de microsegundos. No se usa `@UpdateDateColumn`: TypeORM convierte la columna a `Date` y JavaScript solo guarda milisegundos, así que la comparación nunca coincidiría. El repositorio lee `updated_at` como texto y lo actualiza con `now()` en cada cambio | Edición y cancelación simultáneas (`CONCURRENT_UPDATE`) |
 | Dinero | `decimal.js`, columnas `numeric(14,2)`, redondeo `ROUND_HALF_UP`; **nunca `number`** | Comisión exacta |
@@ -344,6 +344,24 @@ interacciones M1 ↔ M3 (liquidación, tarifa base, registrar check-out) no invo
 - Consumidores idempotentes (se ignoran los `messageId` repetidos), con reintentos y dead-letter queue.
 - La publicación de la lista del día y de sus actualizaciones respeta el orden: las actualizaciones
   esperan detrás de la lista (ver `check-view-reservation`).
+- **Lo que declara el Módulo 2 al arrancar** (todo durable; declararlo otra vez no cambia nada): el
+  exchange `hospitua.events`, sus cuatro colas de entrada unidas a su routing key y la cola
+  `m1.reservas.diarias.queue` unida a `reserva.lista-del-dia` y `reserva.lista-del-dia.actualizacion`.
+  Así la lista del día no se pierde si el Módulo 1 todavía no creó su cola. El Módulo 1 la declara
+  igual, sin argumentos extra.
+- **Dead-letter:** cada cola de entrada tiene la suya, con el mismo nombre terminado en `.dlq` (por
+  ejemplo `m2.habitacion.checkin.dlq`). Nadie la consume: se revisa a mano.
+- **Reintentos de los consumidores:** ante un fallo temporal, 5 reintentos con espera de 5 s, 15 s,
+  45 s, 2 min y 5 min (la misma escala que la publicación de la lista del día). Agotados, el mensaje va
+  a la dead-letter. La espera se hace con una cola por cada tiempo (`m2.reintento.5s.queue`, …) que
+  devuelve el mensaje a su cola cuando vence. La cuenta va en la cabecera `x-retry-count`. RabbitMQ no
+  trae una espera propia y así no hace falta un plugin.
+- Un payload que no es JSON, o que el consumidor rechaza por inválido, va directo a la dead-letter,
+  sin reintentos.
+- **Conexión:** el backend arranca aunque RabbitMQ no responda (las rutas REST siguen funcionando) y
+  se reconecta solo. Los mensajes son persistentes y la publicación espera la confirmación de
+  RabbitMQ; si no se confirma en 5 s, cuenta como fallo y el mensaje queda `PENDING`. Cada consumidor
+  toma un mensaje a la vez (`prefetch` 1), para procesarlos en el orden de la cola.
 
 ### Traducción de respuestas HTTP a cola (decisión C1)
 
