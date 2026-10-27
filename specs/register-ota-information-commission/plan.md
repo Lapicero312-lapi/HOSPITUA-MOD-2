@@ -561,7 +561,7 @@ frontend/src/pages/otas/                            # pantalla "Agencias OTA" (s
 | Casos borde | Simultaneidad | Dos solicitudes con el mismo código a la vez: una se crea y la otra falla por la restricción única |
 | Casos borde | Dos actualizaciones de la misma reserva | Se procesan en secuencia con el bloqueo de fila |
 | FR-006 | Conciliación repetida | `ALREADY_APPLIED` sin cambios |
-| NFR-002 | Exactitud decimal | Una batería de importes con redondeo exacto; nunca `number` |
+| NFR-002 | Exactitud decimal | Una batería de importes con redondeo exacto; nunca `number`. Datos de `calculateCommission` (`grossAmount` en `COP` × porcentaje / 100): `400.00` × `15` = `60.00` (ejemplo de la regla 1); `100.30` × `15` = `15.045` → `15.05`; `0.10` × `15` = `0.015` → `0.02` (con `number`, los dos casos de `.005` darían `15.04` y `0.01`); `333.33` × `15` = `49.9995` → `50.00`; `100.10` × `14.95` = `14.96495` → `14.96` (se redondea una sola vez: redondear antes a tres decimales daría `14.97`); `1000.00` × `0` = `0.00`; `250000.00` × `100` = `250000.00`. La comisión queda en la moneda del `grossAmount` |
 | NFR-001 | Tiempo | El cálculo en menos de 1 s |
 | Contrato | REST | Forma exacta de A1, A2 y A3 |
 
