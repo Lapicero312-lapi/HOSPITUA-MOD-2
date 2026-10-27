@@ -20,7 +20,10 @@ export interface Module3Port {
   ): Promise<RateQuote>;
 }
 
-/** El Módulo 3 respondió con un 4xx: rechazó la categoría, las fechas o los parámetros. */
+/**
+ * El Módulo 3 respondió con un 4xx que no es de disponibilidad (`400` o `404`): rechazó la categoría,
+ * las fechas o los parámetros.
+ */
 export class Module3RejectedError extends Error {
   constructor(readonly status: number) {
     super(`El Módulo 3 rechazó la cotización (${status}).`);
@@ -28,8 +31,9 @@ export class Module3RejectedError extends Error {
 }
 
 /**
- * El Módulo 3 no respondió a tiempo, no se pudo conectar, respondió 5xx u otro estado inesperado, o
- * envió una cotización que no cumple el contrato. Nunca se asume una tarifa, ni por defecto ni a cero.
+ * El Módulo 3 no respondió a tiempo, no se pudo conectar, respondió 5xx, un error de disponibilidad
+ * (`422` o `424`) u otro estado inesperado, o envió una cotización que no cumple el contrato. Nunca se
+ * asume una tarifa, ni por defecto ni a cero.
  */
 export class Module3UnavailableError extends Error {
   constructor(detail: string) {

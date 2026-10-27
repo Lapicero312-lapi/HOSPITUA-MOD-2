@@ -14,9 +14,19 @@ const URL_QUOTES = `${BASE_URL}/pricing/quotes`;
 const TIMEOUT_MS = 200;
 
 /** Respuesta de ejemplo del contrato (calculate-dynamic-rate, A1), escrita como texto para no tocar los decimales. */
+const QUOTE_ID = 'a1f2c3d4-e5b6-4789-8a9b-0c1d2e3f4a5b';
 const quoteBody = (lodgingAmount = '530000.10', rate = '250000.05') =>
-  `{"quoteId":"Q-12345","currency":"COP","nightlyRates":[{"date":"2026-10-10","rate":${rate}},` +
+  `{"quoteId":"${QUOTE_ID}","currency":"COP","nightlyRates":[{"date":"2026-10-10","rate":${rate}},` +
   `{"date":"2026-10-11","rate":280000.05}],"lodgingAmount":${lodgingAmount}}`;
+
+/** Cuerpo de error del Módulo 3 (formato `ApiError`). */
+const errorBody = (errorCode: string) =>
+  JSON.stringify({
+    errorCode,
+    message: 'Mensaje del Módulo 3',
+    timestamp: '2026-10-27T15:00:00Z',
+    path: '/pricing/quotes',
+  });
 
 const json = (body: string, status = 200) =>
   new HttpResponse(body, {
@@ -52,7 +62,7 @@ describe('Module3HttpAdapter contra respuestas simuladas del Módulo 3', () => {
       checkInDate: '2026-10-10',
       checkOutDate: '2026-10-12',
     });
-    expect(result.quoteId).toBe('Q-12345');
+    expect(result.quoteId).toBe(QUOTE_ID);
     expect(result.currency).toBe('COP');
     expect(result.nightlyRates.map((night) => night.date)).toEqual([
       '2026-10-10',
@@ -90,7 +100,7 @@ describe('Module3HttpAdapter contra respuestas simuladas del Módulo 3', () => {
     ],
     ['en cero', quoteBody('0.00')],
     ['negativo', quoteBody('-530000')],
-    ['sin quoteId', quoteBody().replace('"quoteId":"Q-12345",', '')],
+    ['sin quoteId', quoteBody().replace(`"quoteId":"${QUOTE_ID}",`, '')],
     ['con una moneda inválida', quoteBody().replace('"COP"', '"pesos"')],
     [
       'con una noche fuera de la estadía',
@@ -105,12 +115,35 @@ describe('Module3HttpAdapter contra respuestas simuladas del Módulo 3', () => {
     },
   );
 
-  it.each([400, 404, 422])(
-    'un %s (categoría o fechas rechazadas) es Module3RejectedError con su estado',
-    async (status) => {
-      server.use(http.post(URL_QUOTES, () => json('{}', status)));
+  it.each([
+    [400, 'INVALID_QUERY_PARAMS'],
+    [400, 'INVALID_DATE_RANGE'],
+    [404, 'BASE_RATE_NOT_FOUND'],
+  ])(
+    'un %s %s (categoría o fechas rechazadas) es Module3RejectedError con su estado',
+    async (status, errorCode) => {
+      server.use(
+        http.post(URL_QUOTES, () => json(errorBody(errorCode), status)),
+      );
 
       await expect(quote()).rejects.toEqual(new Module3RejectedError(status));
+    },
+  );
+
+  it.each([
+    [424, 'MODULE1_UNAVAILABLE'],
+    [424, 'INVALID_BASE_RATE'],
+    [422, 'UNEXPECTED_ERROR'],
+  ])(
+    'un %s %s (no puede cotizar) es Module3UnavailableError',
+    async (status, errorCode) => {
+      server.use(
+        http.post(URL_QUOTES, () => json(errorBody(errorCode), status)),
+      );
+
+      await expect(quote()).rejects.toThrow(
+        new Module3UnavailableError(`respondió ${status}`),
+      );
     },
   );
 
