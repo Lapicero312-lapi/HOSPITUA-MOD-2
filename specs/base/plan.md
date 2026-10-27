@@ -422,6 +422,47 @@ quedan fuera).
 | Feed de revisiones de reserva y `ack` (`/api/v1/booking_revisions/feed`, `/api/v1/booking_revisions/{id}/ack`) | Channex GET y POST | `generate-ota-reservation` |
 | Propiedades (`/api/v1/properties/options`), tipos de habitación (`/api/v1/room_types`) y disponibilidad (`/api/v1/availability`) | Channex GET, POST y PUT | `configure-ota` |
 
+**`ChannexPort`** (T021). El adaptador pone la cabecera `user-api-key`, el `CHANNEX_PROPERTY_ID` y la
+ruta de cada llamada: los casos de uso no los conocen. La clave nunca sale en los logs ni en los mensajes
+de error. Los contratos de cada llamada están en `configure-ota` (A0 a A4) y en
+`generate-ota-reservation` (A1 a A3).
+
+```typescript
+interface ChannexPort {
+  listProperties(): Promise<{ id: string; title: string }[]>;                    // A0 configure-ota
+  listRoomTypes(): Promise<ChannexRoomType[]>;                                    // A1, solo los de la propiedad
+  createRoomType(input: ChannexRoomTypeInput): Promise<ChannexRoomType>;          // A2
+  updateRoomType(id: string, input: ChannexRoomTypeInput): Promise<void>;         // A3
+  pushAvailability(values: AvailabilityRange[]): Promise<{ warnings: string[] }>; // A4 (meta.warnings)
+  fetchBookingFeed(page: number): Promise<BookingFeedPage>;                       // A1 generate-ota-reservation
+  ackBookingRevision(revisionId: string): Promise<void>;                          // A2
+  reportNoShow(bookingId: string): Promise<void>;                                 // A3
+}
+```
+
+- `ChannexRoomTypeInput` lleva `title`, `countOfRooms` y `occupancy`. El adaptador arma el resto del
+  cuerpo de A2: `occ_adults` y `default_occupancy` iguales a `occupancy`, `occ_children` y `occ_infants`
+  en `0`, y `room_kind` `room`.
+- `BookingFeedPage` trae las revisiones de la página y `meta.total`. Cada revisión es el objeto de
+  integración `BookingRevision`, con los campos de la tabla de B de `generate-ota-reservation`. El
+  importe va en `Money`, sin pasar por `number`.
+- Una revisión que no se puede leer (sin `id` o `booking_id`, o con un `status` o una fecha inválidos) se
+  omite y se registra en el log, sin datos personales. Como no se confirma, sigue en el feed, y Channex
+  avisa por correo a los 30 minutos.
+- **Errores**: `ChannexUnauthorizedError` (401 o 403); `ChannexRateLimitedError` (429, o una llamada
+  dentro de la pausa); `ChannexRejectedError` (otro 4xx, con el estado y el código de Channex, por ejemplo
+  `resource_not_found`); `ChannexUnavailableError` (5xx, tiempo agotado, error de red, respuesta con otra
+  forma o configuración incompleta). Cada caso de uso decide qué hace con cada uno, según su tabla de
+  respuestas.
+- **Pausa ante 429** (la hace el adaptador para todas las llamadas de la propiedad): tras un 429, ninguna
+  llamada sale a Channex durante 1 minuto; fallan con `ChannexRateLimitedError`. Si después llega otro
+  429, la pausa se duplica: 2, 4 y 8 minutos, con un tope de 10. Cualquier respuesta que no sea 429 la
+  vuelve a 1 minuto. La pausa vive en la memoria del proceso (una sola instancia).
+- **Tiempo máximo de espera**: 10 s por llamada, fijo. Una página del feed trae hasta 100 revisiones y un
+  envío de disponibilidad puede ser grande.
+- El adaptador no valida la configuración: eso es T001 de `configure-ota`, que apaga las tareas de
+  Channex si falta algo.
+
 **Errores**: cuerpo `{ "errorCode", "message", "timestamp", "path" }` con HTTP 400 (por defecto, también
 para recursos inexistentes, como piden los specs, y para la falta de disponibilidad) o 429 (exportación
 SIRE). La única excepción es la consulta de una reserva por referencia para el Módulo 3, que
