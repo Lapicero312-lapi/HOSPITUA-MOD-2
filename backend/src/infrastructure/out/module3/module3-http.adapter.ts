@@ -18,6 +18,13 @@ const AMOUNT_FORMAT = /^\d{1,12}(\.\d{1,2})?$/;
 const CURRENCY_FORMAT = /^[A-Z]{3}$/;
 
 /**
+ * Los 4xx con los que el Módulo 3 dice que no puede cotizar (no que rechaza los datos): `422`
+ * `UNEXPECTED_ERROR` y `424` `MODULE1_UNAVAILABLE` o `INVALID_BASE_RATE`. Son un error de disponibilidad
+ * (FR-003 de `calculate-dynamic-rate`).
+ */
+const AVAILABILITY_ERRORS = new Set([422, 424]);
+
+/**
  * Cliente HTTP del Módulo 3, con su tiempo máximo de espera (`MODULE3_TIMEOUT_MS`). Contrato en
  * `calculate-dynamic-rate` (A1). Sin reintentos. Los importes se leen como texto, nunca como `number`
  * (NFR-002), y no se redondean: una cotización con más de dos decimales se rechaza.
@@ -40,7 +47,11 @@ export class Module3HttpAdapter implements Module3Port {
     if (outcome.kind === 'no-response') {
       throw new Module3UnavailableError(outcome.reason);
     }
-    if (outcome.status >= 400 && outcome.status < 500) {
+    if (
+      outcome.status >= 400 &&
+      outcome.status < 500 &&
+      !AVAILABILITY_ERRORS.has(outcome.status)
+    ) {
       throw new Module3RejectedError(outcome.status);
     }
     if (outcome.status !== 200 && outcome.status !== 201) {
