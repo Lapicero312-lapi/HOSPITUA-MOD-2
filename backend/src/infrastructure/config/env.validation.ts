@@ -106,6 +106,12 @@ export class EnvironmentVariables {
   @Min(1)
   MAINTENANCE_CONCURRENCY!: number;
 
+  // Reserva directa: reintentos de asignación cuando la base rechaza una habitación por solape
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  ASSIGNMENT_MAX_RETRIES!: number;
+
   // Conciliación de comisiones OTA: máximo de ítems por solicitud del Módulo 3
   @Type(() => Number)
   @IsInt()
@@ -125,6 +131,7 @@ const DEFAULTS = {
   MODULE1_TIMEOUT_MS: 1000,
   MODULE3_TIMEOUT_MS: 3000,
   MAINTENANCE_CONCURRENCY: 5,
+  ASSIGNMENT_MAX_RETRIES: 3,
   RECONCILIATION_MAX_ITEMS: 500,
 };
 
