@@ -356,7 +356,7 @@ revisión se confirma.
 
 ## Phase 3: User Story 1 - Reservas nuevas (P1)
 
-- [ ] T005 [US1] `ReadBookingFeed` y `ChannexSyncJob`: lectura de todas las páginas, `lastSyncAt`, `DISCONNECTED` ante 401/403 y pausa de un minuto ante 429 (la pausa ante 429 la hace la base: T021; el caso solo conserva lo pendiente)
+- [ ] T005 [US1] `ReadBookingFeed` y `ChannexSyncJob`: lectura de todas las páginas, `lastSyncAt`, `DISCONNECTED` ante 401/403 y pausa de un minuto ante 429
 - [ ] T006 [US1] `ProcessBookingRevision` para `new` (B1), en una transacción
 - [ ] T007 [US1] `ack` después del commit y repetición de los `ack` pendientes
 - [ ] T008 [US1] Pruebas de integración de los escenarios 1 a 7 con Channex simulado (el 8 va en T011c)

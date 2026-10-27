@@ -439,7 +439,7 @@ reserva.
 ## Phase 5: User Story 3 - Disponibilidad (P1)
 
 - [ ] T009 [US3] `AriChangeRecorder` y su uso en los casos de uso que cambian la ocupación
-- [ ] T010 [US3] `PublishPendingAvailability` y `ChannexSyncJob` (feed primero, agrupación cada 30 s, tope por `count_of_rooms`, mantenimientos sin contar dos veces, mínimo 0, rangos, pausa de un minuto ante 429) (la pausa ante 429 la hace la base: T021; el caso solo conserva lo pendiente)
+- [ ] T010 [US3] `PublishPendingAvailability` y `ChannexSyncJob` (feed primero, agrupación cada 30 s, tope por `count_of_rooms`, mantenimientos sin contar dos veces, mínimo 0, rangos, pausa de un minuto ante 429)
 - [ ] T011 [US3] `PublishDailyAvailability` y `AriDailyJob` (03:00): feed, sincronización de tipos y disponibilidad completa de 90 días
 - [ ] T012 [US3] Pruebas de los escenarios 1 a 6
 - [ ] T012b [US3] Consumidores E1 y E2 (`HandleMaintenanceNotice`, `HandleInventoryNotice`), idempotencia y dead-letter queue
