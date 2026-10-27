@@ -48,3 +48,13 @@ export const RATE_CHANGED = {
   code: 'RATE_CHANGED',
   message: 'La tarifa cambió, vuelva a cotizar.',
 } as const;
+
+/**
+ * El Módulo 1 no responde, falla o responde algo mal formado al consultar el inventario: nunca se asume
+ * ninguna habitación.
+ */
+export const INVENTORY_UNAVAILABLE = {
+  code: 'INVENTORY_UNAVAILABLE',
+  message:
+    'No se pudo consultar el inventario de habitaciones en este momento. Intente de nuevo.',
+} as const;
