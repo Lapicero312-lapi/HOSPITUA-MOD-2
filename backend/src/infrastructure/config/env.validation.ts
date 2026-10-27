@@ -105,6 +105,12 @@ export class EnvironmentVariables {
   @IsInt()
   @Min(1)
   MAINTENANCE_CONCURRENCY!: number;
+
+  // Reserva directa: reintentos de asignación cuando la base rechaza una habitación por solape
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  ASSIGNMENT_MAX_RETRIES!: number;
 }
 
 /** Valores que se usan si la variable no está definida, en cualquier entorno. */
@@ -119,6 +125,7 @@ const DEFAULTS = {
   MODULE1_TIMEOUT_MS: 1000,
   MODULE3_TIMEOUT_MS: 3000,
   MAINTENANCE_CONCURRENCY: 5,
+  ASSIGNMENT_MAX_RETRIES: 3,
 };
 
 /**
