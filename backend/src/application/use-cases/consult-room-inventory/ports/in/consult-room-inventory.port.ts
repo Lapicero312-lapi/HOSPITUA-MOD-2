@@ -14,4 +14,12 @@ export interface ConsultRoomInventory {
    * Módulo 1 no reconoce o rechaza la habitación. Los demás errores de `Module1Port` salen tal cual.
    */
   byRoomId(roomId: string): Promise<Room>;
+
+  /**
+   * B2: todas las habitaciones de la categoría `categoryRoom`, sin filtrar por estado y sin modificar
+   * ningún dato; `[]` si la categoría no tiene habitaciones.
+   * @throws BusinessError `INVALID_CATEGORY` si la `categoryRoom` no tiene la forma acordada (sin llamar
+   * al Módulo 1) o si el Módulo 1 la rechaza. Los demás errores de `Module1Port` salen tal cual.
+   */
+  byCategory(categoryRoom: string): Promise<Room[]>;
 }

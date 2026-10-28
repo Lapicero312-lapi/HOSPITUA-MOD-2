@@ -201,7 +201,11 @@ sequenceDiagram
     end
     U->>P: listRoomsByCategory(categoryRoom)
     P->>M1: GET /api/rooms?categoryRoom=...
-    alt tiempo agotado, error de red o 5xx
+    alt 400 (rechaza la categoryRoom)
+        M1-->>P: 400
+        P-->>U: Module1RejectedError
+        U-->>V: BusinessError INVALID_CATEGORY (400)
+    else tiempo agotado, error de red o 5xx
         P-->>U: Module1UnavailableError
         U-->>V: BusinessError INVENTORY_UNAVAILABLE (400)
     else lista (con habitaciones o vacía)
@@ -374,6 +378,7 @@ fallos del Módulo 1.
 | Contrato | Datos de las pruebas del adaptador (T008) | Habitaciones del ejemplo A2: la 201 (`DOBLE`, capacidad 2) y la 202 (`DOBLE`, capacidad 3). **Éxito:** A1 devuelve la 201 y descarta los campos que no son del contrato (por ejemplo un estado `Occupied`); A2 (`DOBLE`) y A3 devuelven las dos; A3 no envía filtro. **Lista vacía:** la categoría `SUITE_JUNIOR` no tiene habitaciones. **404** (la habitación no existe) solo en A1; **400** en A1 (`roomId` inválido: un número de habitación, `201`, en lugar de un UUID) y en A2 (categoría inválida: `doble`, en minúsculas). **En A1, A2 y A3:** 500, 502, 503, 302, tiempo agotado (el Módulo 1 responde después de `MODULE1_TIMEOUT_MS`, 1 s), sin conexión y un cuerpo que no es JSON. **Mal formadas:** en A1, `maxCapacity` no entero (`1.5`) o menor que 1 (`0`), sin `roomNumber`, `categoryRoom` vacía o que no cumple la forma acordada (`doble`), un `id` que no es un UUID (`201`) y una lista en lugar de una habitación; en A2 y A3, una habitación en lugar de una lista, una lista con una habitación con `maxCapacity` como texto (`"dos"`) y una lista con una habitación con `categoryRoom` `doble` |
 | Validadores | Datos de las pruebas (T002) | **`roomId`:** es válido un UUID (`994d1375-dbbd-4072-8724-b2ab32ce781b`, el `room_type_id` de Channex de los planes de `configure-ota` y `generate-ota-reservation`, porque ningún plan trae un `roomId` con UUID), también con mayúsculas y minúsculas mezcladas (`994D1375-dbbd-4072-8724-B2AB32ce781b`); no lo son uno vacío, un número de habitación (`201`), ese UUID con un carácter de más al final (`994d1375-dbbd-4072-8724-b2ab32ce781b0`) o al inicio (`0994d1375-dbbd-4072-8724-b2ab32ce781b`), ni con una letra que no es hexadecimal (`994d1375-dbbd-4072-8724-b2ab32ce781g`). **`categoryRoom`:** son válidas `DOBLE` y `SUITE_JUNIOR` (ejemplos de A), una con un dígito (`DOBLE_2`) y una de 50 caracteres, el máximo (50 letras `A`); no lo son una vacía, `doble` (en minúsculas), `CABAÑA` (con `Ñ`), `DÚPLEX` (con tilde), `SUITE JUNIOR` (con espacio), `SUITE-JUNIOR` (con guion) ni una de 51 caracteres (51 letras `A`) |
 | Servicio | Datos de las pruebas (T005) | La habitación 201 del ejemplo A1 (`DOBLE`, capacidad 2), con un `id` cualquiera (un UUID): `byRoomId` la devuelve tal como la manda el Módulo 1. **Inválidos, sin llamar al Módulo 1:** un `roomId` que es un número de habitación (`201`) y uno vacío. **Errores del Módulo 1:** el 404 (la habitación no existe) y el 400 (rechaza el `roomId`) dan `INVALID_ROOM_ID` |
+| Servicio | Datos de las pruebas (T006) | Las habitaciones 201 (`DOBLE`, capacidad 2) y 202 (`DOBLE`, capacidad 3) del ejemplo A2, cada una con un `id` cualquiera (un UUID): `byCategory` las devuelve tal como las manda el Módulo 1. **Lista vacía:** la categoría `SUITE_JUNIOR` no tiene habitaciones y devuelve `[]`, sin error. **Inválidas, sin llamar al Módulo 1:** una categoría en minúsculas (`doble`) y una vacía. **Error del Módulo 1:** el 400 (rechaza la `categoryRoom`) da `INVALID_CATEGORY` |
 
 ## Dependencies & Execution Order
 
@@ -392,7 +397,7 @@ fallos del Módulo 1.
 | FR-002 | `byCategory`, `Module1Port.listRoomsByCategory` | T003, T006 |
 | FR-003 | Solo `GET` en el adaptador; ningún método de escritura | T003 |
 | FR-004 | Puerto de entrada `ConsultRoomInventory` | T005, T006 |
-| FR-005 | Validadores, mapeo de errores y códigos 400 | T002, T004, T007 |
+| FR-005 | Validadores, mapeo de errores y códigos 400 | T002, T004, T006, T007 |
 | FR-006 | `listAll`, `ListRoomsWithMaintenance`, `GET /api/rooms`, pantalla | T010–T014 |
 | NFR-001, SC-002 | Timeout configurable y prueba de tiempo | T001, T015 |
 | SC-001 | Sin caché ni copia local del inventario | T003 |

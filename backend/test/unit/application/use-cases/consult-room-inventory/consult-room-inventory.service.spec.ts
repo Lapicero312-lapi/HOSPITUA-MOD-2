@@ -7,17 +7,26 @@ import {
   type Module1Port,
 } from '../../../../../src/application/ports/out/module1.port.js';
 import { ConsultRoomInventoryService } from '../../../../../src/application/use-cases/consult-room-inventory/consult-room-inventory.service.js';
-import { INVALID_ROOM_ID } from '../../../../../src/domain/shared/error-codes.js';
+import {
+  INVALID_CATEGORY,
+  INVALID_ROOM_ID,
+} from '../../../../../src/domain/shared/error-codes.js';
 
 /**
- * Datos de las pruebas del plan ("Pruebas por escenario", T005), que dice de dónde sale cada uno. El `id`
- * es un UUID cualquiera.
+ * Datos de las pruebas del plan ("Pruebas por escenario", T005 y T006), que dice de dónde sale cada uno.
+ * El `id` es un UUID cualquiera.
  */
 const ROOM_201: Room = {
   id: randomUUID(),
   roomNumber: '201',
   categoryRoom: 'DOBLE',
   maxCapacity: 2,
+};
+const ROOM_202: Room = {
+  id: randomUUID(),
+  roomNumber: '202',
+  categoryRoom: 'DOBLE',
+  maxCapacity: 3,
 };
 
 /** Un Módulo 1 que responde `room` y registra cada consulta. */
@@ -26,10 +35,24 @@ function fakeModule1(room: Room) {
   return { getRoom, module1: { getRoom } as unknown as Module1Port };
 }
 
-/** Un Módulo 1 que falla con `error`. */
+/** Un Módulo 1 que responde `rooms` a la consulta por categoría y registra cada consulta. */
+function fakeModule1List(rooms: Room[]) {
+  const listRoomsByCategory = vi.fn(() => Promise.resolve(rooms));
+  return {
+    listRoomsByCategory,
+    module1: { listRoomsByCategory } as unknown as Module1Port,
+  };
+}
+
+/** Un Módulo 1 que falla con `error` en las dos consultas. */
 function failingModule1(error: Error) {
-  const getRoom = vi.fn(() => Promise.reject(error));
-  return { module1: { getRoom } as unknown as Module1Port };
+  const fail = vi.fn(() => Promise.reject(error));
+  return {
+    module1: {
+      getRoom: fail,
+      listRoomsByCategory: fail,
+    } as unknown as Module1Port,
+  };
 }
 
 describe('ConsultRoomInventoryService.byRoomId', () => {
@@ -71,6 +94,61 @@ describe('ConsultRoomInventoryService.byRoomId', () => {
     ).rejects.toMatchObject({
       errorCode: INVALID_ROOM_ID.code,
       message: INVALID_ROOM_ID.message,
+    });
+  });
+});
+
+describe('ConsultRoomInventoryService.byCategory', () => {
+  it('devuelve todas las habitaciones de la categoría tal como las manda el Módulo 1 y le pide esa categoryRoom', async () => {
+    const { listRoomsByCategory, module1 } = fakeModule1List([
+      ROOM_201,
+      ROOM_202,
+    ]);
+
+    expect(
+      await new ConsultRoomInventoryService(module1).byCategory('DOBLE'),
+    ).toEqual([ROOM_201, ROOM_202]);
+    expect(listRoomsByCategory).toHaveBeenCalledWith('DOBLE');
+  });
+
+  it('una categoría sin habitaciones (SUITE_JUNIOR) devuelve una lista vacía, sin error', async () => {
+    const { listRoomsByCategory, module1 } = fakeModule1List([]);
+
+    expect(
+      await new ConsultRoomInventoryService(module1).byCategory('SUITE_JUNIOR'),
+    ).toEqual([]);
+    expect(listRoomsByCategory).toHaveBeenCalledWith('SUITE_JUNIOR');
+  });
+
+  it.each([
+    ['en minúsculas (doble)', 'doble'],
+    ['vacía', ''],
+  ])(
+    'una categoryRoom %s es INVALID_CATEGORY y no llama al Módulo 1',
+    async (_, categoryRoom) => {
+      const { listRoomsByCategory, module1 } = fakeModule1List([
+        ROOM_201,
+        ROOM_202,
+      ]);
+
+      await expect(
+        new ConsultRoomInventoryService(module1).byCategory(categoryRoom),
+      ).rejects.toMatchObject({
+        errorCode: INVALID_CATEGORY.code,
+        message: INVALID_CATEGORY.message,
+      });
+      expect(listRoomsByCategory).not.toHaveBeenCalled();
+    },
+  );
+
+  it('un 400 del Módulo 1 (rechaza la categoryRoom) es INVALID_CATEGORY', async () => {
+    const { module1 } = failingModule1(new Module1RejectedError());
+
+    await expect(
+      new ConsultRoomInventoryService(module1).byCategory('DOBLE'),
+    ).rejects.toMatchObject({
+      errorCode: INVALID_CATEGORY.code,
+      message: INVALID_CATEGORY.message,
     });
   });
 });
