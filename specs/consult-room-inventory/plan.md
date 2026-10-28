@@ -403,7 +403,7 @@ fallos del Módulo 1.
 | FR-002 | `byCategory`, `Module1Port.listRoomsByCategory` | T003, T006 |
 | FR-003 | Solo `GET` en el adaptador; ningún método de escritura | T003 |
 | FR-004 | Puerto de entrada `ConsultRoomInventory` | T005, T006 |
-| FR-005 | Validadores, mapeo de errores y códigos 400 | T002, T004, T006, T007 |
+| FR-005 | Validadores, mapeo de errores y códigos 400 | T002, T004, T005, T006, T007 |
 | FR-006 | `listAll`, `ListRoomsWithMaintenance`, `GET /api/rooms`, pantalla | T010–T014 |
 | NFR-001, SC-002 | Timeout configurable y prueba de tiempo | T001, T015 |
 | SC-001 | Sin caché ni copia local del inventario | T003 |
