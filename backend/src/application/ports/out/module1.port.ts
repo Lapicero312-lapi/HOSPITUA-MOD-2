@@ -13,10 +13,16 @@ export interface Module1Port {
   /** @throws Module1RoomNotFoundError, Module1RejectedError o Module1UnavailableError. */
   getRoom(roomId: string): Promise<Room>;
 
-  /** Todas las habitaciones vendibles de la categoría; `[]` si no tiene. */
+  /**
+   * Todas las habitaciones vendibles de la categoría; `[]` si no tiene.
+   * @throws Module1RoomNotFoundError, Module1RejectedError o Module1UnavailableError.
+   */
   listRoomsByCategory(categoryRoom: string): Promise<Room[]>;
 
-  /** Todas las habitaciones vendibles, de todas las categorías. */
+  /**
+   * Todas las habitaciones vendibles, de todas las categorías.
+   * @throws Module1RoomNotFoundError, Module1RejectedError o Module1UnavailableError.
+   */
   listRooms(): Promise<Room[]>;
 
   /**
