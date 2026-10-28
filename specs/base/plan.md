@@ -1015,6 +1015,28 @@ ningún cambio quede entre la lista y su primera actualización (ver `check-view
 
 Se inserta en la misma transacción que el cambio que produce el mensaje.
 
+**Idempotencia (T014).** El puerto `ProcessedMessageRepository` (`application/ports/out/`) tiene su
+adaptador en `infrastructure/out/messaging/`. Lo usan todos los consumidores de colas
+(`update-reservation`, `process-guest-data` y `configure-ota`).
+
+```typescript
+interface ProcessedMessageRepository {
+  // Si el messageId ya se atendió, en cualquier cola.
+  isProcessed(messageId: string, tx: Transaction): Promise<boolean>;
+  // Lo registra en la misma transacción que el cambio que produce el mensaje.
+  record(message: { messageId: string; queue: string; sequenceNumber: number }, tx: Transaction): Promise<void>;
+}
+```
+
+- El consumidor llama a `isProcessed` dentro de su transacción, antes de aplicar el cambio. Si es
+  `true`, confirma el mensaje sin efectos.
+- `record` inserta la fila con `processed_at = now()`. Si otra entrega del mismo mensaje lo registró al
+  mismo tiempo, la clave primaria lo rechaza y la transacción se revierte. El reintento lo encuentra ya
+  procesado y lo confirma sin efectos.
+- El `messageId` es la única clave de duplicados. El `sequenceNumber` solo sirve para detectar saltos, y
+  eso lo hace `update-reservation` (FR-023).
+- La tabla la crea la migración base (T007). T014 agrega el puerto y su adaptador.
+
 **`ota_room_type_mapping`** — relación de tipos de habitación de Channex con categorías (`configure-ota`)
 
 | Columna | Tipo | Nulo | Regla |
