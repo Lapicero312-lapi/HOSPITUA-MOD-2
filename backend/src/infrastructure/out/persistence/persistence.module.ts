@@ -3,10 +3,12 @@ import { ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { GUEST_REPOSITORY } from '../../../application/ports/out/guest.repository.js';
 import { OTA_REPOSITORY } from '../../../application/ports/out/ota.repository.js';
+import { PROCESSED_MESSAGE_REPOSITORY } from '../../../application/ports/out/processed-message.repository.js';
 import { RESERVATION_REPOSITORY } from '../../../application/ports/out/reservation.repository.js';
 import { TRANSACTION_RUNNER } from '../../../application/ports/out/transaction.js';
 import type { EnvironmentVariables } from '../../config/env.validation.js';
 import { typeOrmOptions } from '../../config/typeorm.options.js';
+import { TypeOrmProcessedMessageRepository } from '../messaging/processed-message.repository.js';
 import { TypeOrmGuestRepository } from './repositories/guest.repository.js';
 import { TypeOrmOtaRepository } from './repositories/ota.repository.js';
 import { TypeOrmReservationRepository } from './repositories/reservation.repository.js';
@@ -36,12 +38,17 @@ import { TypeOrmTransactionRunner } from './typeorm-transaction.js';
     { provide: RESERVATION_REPOSITORY, useClass: TypeOrmReservationRepository },
     { provide: GUEST_REPOSITORY, useClass: TypeOrmGuestRepository },
     { provide: OTA_REPOSITORY, useClass: TypeOrmOtaRepository },
+    {
+      provide: PROCESSED_MESSAGE_REPOSITORY,
+      useClass: TypeOrmProcessedMessageRepository,
+    },
     { provide: TRANSACTION_RUNNER, useClass: TypeOrmTransactionRunner },
   ],
   exports: [
     RESERVATION_REPOSITORY,
     GUEST_REPOSITORY,
     OTA_REPOSITORY,
+    PROCESSED_MESSAGE_REPOSITORY,
     TRANSACTION_RUNNER,
   ],
 })
