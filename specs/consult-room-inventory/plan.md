@@ -278,6 +278,7 @@ Todo error sale con `{ "errorCode", "message", "timestamp", "path" }` y **siempr
 | El Módulo 1 responde 400 | Módulo 1 | 400 | `INVALID_ROOM_ID` o `INVALID_CATEGORY` (según la consulta) | Los de arriba |
 | Tiempo agotado, error de red o respuesta 5xx del Módulo 1 | Módulo 1 | 400 | `INVENTORY_UNAVAILABLE` | "No se pudo consultar el inventario de habitaciones en este momento. Intente de nuevo." |
 | Respuesta del Módulo 1 con campos faltantes o de tipo incorrecto (por ejemplo, `maxCapacity` no entero o menor que 1, una `categoryRoom` que no cumple la forma acordada o un `id` que no es un UUID) | Módulo 1 | 400 | `INVENTORY_UNAVAILABLE` | El mismo; el detalle va al log |
+| El Módulo 1 responde 404 a la consulta por categoría (el contrato no lo prevé: una categoría sin habitaciones es una lista vacía) | Módulo 1 | 400 | `INVENTORY_UNAVAILABLE` | El mismo; el detalle va al log |
 
 - **Una categoría sin habitaciones no es un error**: devuelve una lista vacía (escenario 3).
 - **Una habitación ocupada hoy se devuelve igual**: es vendible; si está libre en unas fechas lo decide
