@@ -376,6 +376,7 @@ fallos del Módulo 1.
 | US1 | 3 categoría sin habitaciones | Lista vacía, sin error |
 | Casos borde | Módulo 1 no responde | Tiempo agotado: `400` `INVENTORY_UNAVAILABLE` con el mensaje del spec, nunca 500 |
 | Casos borde | `roomId` inexistente o inválido | Formato inválido: `400` sin llamar al Módulo 1; 404 del Módulo 1: `400` `INVALID_ROOM_ID` |
+| Casos borde | Categoría vacía o con otro formato | `400` `INVALID_CATEGORY` con el mensaje del spec, sin llamar al Módulo 1 |
 | Casos borde | Habitación ocupada hoy | Se devuelve igual (el Módulo 1 simulado no envía estado) |
 | FR-006 | Pantalla | Todas las categorías, sin campo de estado, con `SCHEDULED`, `NONE` y `UNAVAILABLE`; falla de inventario: 400, no una lista parcial |
 | NFR-001 | Tiempo | Con el Módulo 1 simulado a 200 ms, la consulta puntual responde en menos de 1 s |
