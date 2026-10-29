@@ -326,3 +326,72 @@ describe('ConsultMaintenanceCalendarService.check', () => {
     });
   });
 });
+
+describe('ConsultMaintenanceCalendarService.nextMaintenance', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('sin cruces devuelve null', async () => {
+    const { module1 } = fakeModule1(calendarWith([]));
+
+    expect(
+      await new ConsultMaintenanceCalendarService(module1).nextMaintenance(
+        ROOM_ID,
+        START_DATE,
+        END_DATE,
+      ),
+    ).toBeNull();
+  });
+
+  // El contrato con el Módulo 1 no fija un orden: el más cercano puede venir primero o último.
+  it.each([
+    [
+      'el más cercano primero',
+      [
+        { maintenanceStart: '2026-10-10', maintenanceEnd: '2026-10-12' },
+        { maintenanceStart: '2026-10-13', maintenanceEnd: '2026-10-13' },
+      ],
+    ],
+    [
+      'el más cercano último',
+      [
+        { maintenanceStart: '2026-10-13', maintenanceEnd: '2026-10-13' },
+        { maintenanceStart: '2026-10-10', maintenanceEnd: '2026-10-12' },
+      ],
+    ],
+  ])('con varios cruces devuelve el más cercano (%s)', async (_, conflicts) => {
+    const { module1 } = fakeModule1(calendarWith(conflicts));
+
+    expect(
+      await new ConsultMaintenanceCalendarService(module1).nextMaintenance(
+        ROOM_ID,
+        START_DATE,
+        END_DATE,
+      ),
+    ).toEqual({
+      maintenanceStart: '2026-10-10',
+      maintenanceEnd: '2026-10-12',
+      overlapStart: '2026-10-11',
+      overlapEnd: '2026-10-12',
+    });
+  });
+
+  it('un fallo del Módulo 1 se propaga como MAINTENANCE_CHECK_UNAVAILABLE', async () => {
+    vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    const { module1 } = failingModule1(
+      new Module1UnavailableError('tiempo de espera agotado'),
+    );
+
+    await expect(
+      new ConsultMaintenanceCalendarService(module1).nextMaintenance(
+        ROOM_ID,
+        START_DATE,
+        END_DATE,
+      ),
+    ).rejects.toMatchObject({
+      errorCode: MAINTENANCE_CHECK_UNAVAILABLE.code,
+      message: MAINTENANCE_CHECK_UNAVAILABLE.message,
+    });
+  });
+});
