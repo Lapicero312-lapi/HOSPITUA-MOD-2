@@ -24,7 +24,7 @@ No persiste nada y no cambia ninguna `Room`. Si el Módulo 1 falla, no asume hab
 | Dato | Valor |
 |---|---|
 | Caso de uso | Consultar inventario de habitaciones (`consult-room-inventory`) |
-| Spec | [spec.md](./spec.md), historia 1 y FR-001 a FR-006 |
+| Spec | [spec.md](./spec.md), historia 1 y FR-001 a FR-007 |
 | Actores | Caso de uso "Verificar disponibilidades" (interno); Recepcionista (pantalla); Módulo 1 (dueño de los datos) |
 | Naturaleza | Solo lectura; sin tablas propias |
 
@@ -407,6 +407,7 @@ fallos del Módulo 1.
 | FR-004 | Puerto de entrada `ConsultRoomInventory` | T005, T006 |
 | FR-005 | Validadores, mapeo de errores y códigos 400 | T002, T004, T005, T006, T007 |
 | FR-006 | `listAll`, `ListRoomsWithMaintenance`, `GET /api/rooms`, pantalla | T010–T014 |
+| FR-007 | `listAll`, con una sola consulta a A3 | T010 |
 | NFR-001, SC-002 | Timeout configurable y prueba de tiempo | T001, T015 |
 | SC-001 | Sin caché ni copia local del inventario | T003 |
 | SC-003 | Mapeo a 400 de todo fallo | T007, T009 |
