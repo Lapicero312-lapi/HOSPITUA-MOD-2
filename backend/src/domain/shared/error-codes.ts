@@ -94,3 +94,15 @@ export const INVALID_RESERVATION_CODE = {
   code: 'INVALID_RESERVATION_CODE',
   message: 'Debe proveer un código de reserva válido para la consulta.',
 } as const;
+
+/** Un número de página menor que 1 en un listado paginado. */
+export const INVALID_PAGE = {
+  code: 'INVALID_PAGE',
+  message: 'El número de página debe ser 1 o mayor.',
+} as const;
+
+/** Una búsqueda por nombre de menos de 3 caracteres (cada plan dice cuándo un texto es un nombre). */
+export const NAME_SEARCH_TOO_SHORT = {
+  code: 'NAME_SEARCH_TOO_SHORT',
+  message: 'La búsqueda por nombre requiere al menos 3 caracteres.',
+} as const;
