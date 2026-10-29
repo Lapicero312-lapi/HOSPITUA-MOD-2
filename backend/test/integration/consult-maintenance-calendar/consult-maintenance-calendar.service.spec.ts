@@ -28,14 +28,14 @@ import type { EnvironmentVariables } from '../../../src/infrastructure/config/en
 import { Module1ClientModule } from '../../../src/infrastructure/out/module1/module1-client.module.js';
 
 /**
- * Pruebas de integración de `consult-maintenance-calendar` (T011): el servicio, el adaptador HTTP y la
- * configuración reales, armados con Nest, contra el Módulo 1 simulado (msw). Las pruebas unitarias del
+ * Pruebas de integración de `consult-maintenance-calendar` (T011 y T014): el servicio, el adaptador HTTP y
+ * la configuración reales, armados con Nest, contra el Módulo 1 simulado (msw). Las pruebas unitarias del
  * servicio usan un `Module1Port` simulado; estas comprueban que las piezas funcionan juntas.
  */
 
 /**
- * Datos de las pruebas del plan ("Pruebas por escenario", T011), que dice de dónde sale cada uno. El
- * `roomId` es un UUID cualquiera.
+ * Datos de las pruebas del plan ("Pruebas por escenario", T011 y T014), que dice de dónde sale cada uno.
+ * El `roomId` es un UUID cualquiera.
  */
 const ROOM_ID = randomUUID();
 const START_DATE = '2026-10-11';
@@ -237,6 +237,117 @@ describe('ConsultMaintenanceCalendar contra el Módulo 1 simulado', () => {
         message: INVALID_ROOM_ID.message,
       });
       expect(requests).toBe(1);
+    });
+  });
+
+  /** El mantenimiento del 2026-10-10 al 2026-10-12, que cruza la estadía. */
+  const crossing = {
+    maintenanceStart: '2026-10-10',
+    maintenanceEnd: '2026-10-12',
+  };
+
+  describe('tiempo de respuesta (NFR-001)', () => {
+    it.each<[string, JsonBodyType]>([
+      ['sin mantenimientos', available],
+      [
+        'con un cruce',
+        { roomId: ROOM_ID, available: false, conflicts: [crossing] },
+      ],
+    ])(
+      '%s: con el Módulo 1 a 200 ms, check responde en menos de 1 s',
+      async (_, body) => {
+        server.use(
+          http.get(maintenancesUrl, async () => {
+            await delay(200);
+            return HttpResponse.json(body);
+          }),
+        );
+
+        const start = performance.now();
+        await calendar.check(ROOM_ID, START_DATE, END_DATE);
+
+        expect(performance.now() - start).toBeLessThan(1000);
+      },
+    );
+  });
+
+  describe('logs sin datos personales', () => {
+    /** El nombre de una persona (el del ejemplo del plan de `check-view-reservation`). */
+    const PERSON = 'Ana Pérez';
+
+    /** El mantenimiento que cruza, con un motivo que el Módulo 1 no debería enviar (no llega al Módulo 2). */
+    const withReason = {
+      ...crossing,
+      reason: `Reparación pedida por ${PERSON}`,
+    };
+
+    /** Todo lo que se escribe en el log durante la prueba, en cualquier nivel. */
+    function captureLogs(): string[] {
+      const lines: string[] = [];
+      for (const level of [
+        'log',
+        'error',
+        'warn',
+        'debug',
+        'verbose',
+        'fatal',
+      ] as const) {
+        vi.spyOn(Logger.prototype, level).mockImplementation(
+          (...args: unknown[]) => {
+            lines.push(args.map(String).join(' '));
+          },
+        );
+      }
+      return lines;
+    }
+
+    it.each<[string, JsonBodyType, number]>([
+      [
+        'un 503',
+        { roomId: ROOM_ID, available: false, conflicts: [withReason] },
+        503,
+      ],
+      [
+        'una respuesta incoherente (available true con un cruce)',
+        { roomId: ROOM_ID, available: true, conflicts: [withReason] },
+        200,
+      ],
+      [
+        'una respuesta mal formada (una fecha inexistente)',
+        {
+          roomId: ROOM_ID,
+          available: false,
+          conflicts: [{ ...withReason, maintenanceStart: '2026-02-30' }],
+        },
+        200,
+      ],
+    ])(
+      '%s: se escribe el log, sin la respuesta del Módulo 1',
+      async (_, body, status) => {
+        const logs = captureLogs();
+        module1Responds(body, status);
+
+        await expect(
+          calendar.check(ROOM_ID, START_DATE, END_DATE),
+        ).rejects.toMatchObject({
+          errorCode: MAINTENANCE_CHECK_UNAVAILABLE.code,
+        });
+        expect(logs).not.toHaveLength(0);
+        expect(logs.join('\n')).not.toContain(PERSON);
+      },
+    );
+
+    it('una respuesta válida con un cruce no deja la respuesta del Módulo 1 en el log', async () => {
+      const logs = captureLogs();
+      module1Responds({
+        roomId: ROOM_ID,
+        available: false,
+        conflicts: [withReason],
+      });
+
+      await calendar.check(ROOM_ID, START_DATE, END_DATE);
+
+      expect(logs.join('\n')).not.toContain(PERSON);
     });
   });
 });
