@@ -377,6 +377,29 @@ describe('ConsultMaintenanceCalendarService.nextMaintenance', () => {
     });
   });
 
+  it('con varios cruces devuelve el de menor inicio aunque termine después', async () => {
+    // El cruce total empieza antes que el del 2026-10-13, pero termina después.
+    const { module1 } = fakeModule1(
+      calendarWith([
+        { maintenanceStart: '2026-10-10', maintenanceEnd: '2026-10-14' },
+        { maintenanceStart: '2026-10-13', maintenanceEnd: '2026-10-13' },
+      ]),
+    );
+
+    expect(
+      await new ConsultMaintenanceCalendarService(module1).nextMaintenance(
+        ROOM_ID,
+        START_DATE,
+        END_DATE,
+      ),
+    ).toEqual({
+      maintenanceStart: '2026-10-10',
+      maintenanceEnd: '2026-10-14',
+      overlapStart: '2026-10-11',
+      overlapEnd: '2026-10-13',
+    });
+  });
+
   it('un fallo del Módulo 1 se propaga como MAINTENANCE_CHECK_UNAVAILABLE', async () => {
     vi.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
     const { module1 } = failingModule1(
