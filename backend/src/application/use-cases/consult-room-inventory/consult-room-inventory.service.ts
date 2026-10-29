@@ -18,11 +18,12 @@ import type { ConsultRoomInventory } from './ports/in/consult-room-inventory.por
 import { isValidRoomId } from './room-id.validator.js';
 
 /**
- * Consulta el inventario del Módulo 1 (plan, D1 y D2): valida el `roomId` o la `categoryRoom` antes de
- * llamarlo y devuelve lo que responde sin modificar ningún dato. En `byRoomId`, un 404 o un 400 del
- * Módulo 1 es `INVALID_ROOM_ID`; en `byCategory`, un 400 es `INVALID_CATEGORY`. Si el Módulo 1 no
- * responde, falla o responde algo mal formado (en `byCategory`, también un 404, que el contrato no prevé
- * en una lista), es `INVENTORY_UNAVAILABLE`, con el detalle en el log: nunca se asume ninguna habitación.
+ * Consulta el inventario del Módulo 1 (plan, D1, D2 y D3): valida el `roomId` o la `categoryRoom`, si los
+ * recibe, antes de llamarlo y devuelve lo que responde sin modificar ningún dato. En `byRoomId`, un 404 o
+ * un 400 del Módulo 1 es `INVALID_ROOM_ID`; en `byCategory`, un 400 es `INVALID_CATEGORY`. Si el Módulo 1
+ * no responde, falla o responde algo mal formado (también un 404 en `byCategory`, y un 404 o un 400 en
+ * `listAll`, que el contrato no prevé), es `INVENTORY_UNAVAILABLE`, con el detalle en el log: nunca se
+ * asume ninguna habitación.
  */
 @Injectable()
 export class ConsultRoomInventoryService implements ConsultRoomInventory {
@@ -71,6 +72,26 @@ export class ConsultRoomInventoryService implements ConsultRoomInventory {
         throw this.unavailable(
           query,
           'El Módulo 1 respondió 404, que el contrato no prevé en una lista.',
+        );
+      }
+      throw this.module1Failure(query, error);
+    }
+  }
+
+  async listAll(): Promise<Room[]> {
+    try {
+      return await this.module1.listRooms();
+    } catch (error) {
+      const query = 'de todas las habitaciones';
+      if (
+        error instanceof Module1RoomNotFoundError ||
+        error instanceof Module1RejectedError
+      ) {
+        // A3 no tiene filtro (plan, A): el contrato no prevé ni un 404 ni un 400.
+        const status = error instanceof Module1RoomNotFoundError ? 404 : 400;
+        throw this.unavailable(
+          query,
+          `El Módulo 1 respondió ${status}, que el contrato no prevé en la consulta de todas las habitaciones.`,
         );
       }
       throw this.module1Failure(query, error);

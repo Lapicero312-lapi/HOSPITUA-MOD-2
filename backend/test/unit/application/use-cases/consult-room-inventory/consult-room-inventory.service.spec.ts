@@ -16,8 +16,8 @@ import {
 } from '../../../../../src/domain/shared/error-codes.js';
 
 /**
- * Datos de las pruebas del plan ("Pruebas por escenario", T005, T006 y T007), que dice de dónde sale cada
- * uno. El `id` es un UUID cualquiera.
+ * Datos de las pruebas del plan ("Pruebas por escenario", T005, T006, T007 y T010), que dice de dónde sale
+ * cada uno. El `id` es un UUID cualquiera.
  */
 const ROOM_201: Room = {
   id: randomUUID(),
@@ -60,13 +60,28 @@ function fakeModule1List(rooms: Room[]) {
   };
 }
 
-/** Un Módulo 1 que falla con `error` en las dos consultas. */
+/**
+ * Un Módulo 1 que responde `rooms` a la consulta de todas las habitaciones y registra cada consulta, también
+ * las que se hicieran por categoría.
+ */
+function fakeModule1All(rooms: Room[]) {
+  const listRooms = vi.fn(() => Promise.resolve(rooms));
+  const listRoomsByCategory = vi.fn(() => Promise.resolve(rooms));
+  return {
+    listRooms,
+    listRoomsByCategory,
+    module1: { listRooms, listRoomsByCategory } as unknown as Module1Port,
+  };
+}
+
+/** Un Módulo 1 que falla con `error` en todas las consultas. */
 function failingModule1(error: Error) {
   const fail = vi.fn(() => Promise.reject(error));
   return {
     module1: {
       getRoom: fail,
       listRoomsByCategory: fail,
+      listRooms: fail,
     } as unknown as Module1Port,
   };
 }
@@ -240,6 +255,83 @@ describe('ConsultRoomInventoryService.byCategory', () => {
 
     await expect(
       new ConsultRoomInventoryService(module1).byCategory('DOBLE'),
+    ).rejects.toBe(unexpected);
+  });
+});
+
+describe('ConsultRoomInventoryService.listAll', () => {
+  it('devuelve todas las habitaciones tal como las manda el Módulo 1, con una sola consulta y sin consultar por categoría', async () => {
+    const { listRooms, listRoomsByCategory, module1 } = fakeModule1All([
+      ROOM_201,
+      ROOM_202,
+    ]);
+
+    expect(await new ConsultRoomInventoryService(module1).listAll()).toEqual([
+      ROOM_201,
+      ROOM_202,
+    ]);
+    expect(listRooms).toHaveBeenCalledTimes(1);
+    expect(listRooms).toHaveBeenCalledWith();
+    expect(listRoomsByCategory).not.toHaveBeenCalled();
+  });
+
+  it('sin habitaciones devuelve una lista vacía, sin error', async () => {
+    const { module1 } = fakeModule1All([]);
+
+    expect(await new ConsultRoomInventoryService(module1).listAll()).toEqual(
+      [],
+    );
+  });
+
+  it.each(UNAVAILABLE_DETAILS)(
+    'el Módulo 1 no disponible (%s) es INVENTORY_UNAVAILABLE y deja el detalle en el log',
+    async (detail) => {
+      const warn = vi
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
+      const { module1 } = failingModule1(new Module1UnavailableError(detail));
+
+      await expect(
+        new ConsultRoomInventoryService(module1).listAll(),
+      ).rejects.toMatchObject({
+        errorCode: INVENTORY_UNAVAILABLE.code,
+        message: INVENTORY_UNAVAILABLE.message,
+      });
+      expect(warn).toHaveBeenCalledWith(
+        `Consulta del inventario de todas las habitaciones: El Módulo 1 no está disponible: ${detail}.`,
+      );
+    },
+  );
+
+  it.each<[number, Error]>([
+    [404, new Module1RoomNotFoundError()],
+    [400, new Module1RejectedError()],
+  ])(
+    'un %i del Módulo 1, que el contrato no prevé en esta consulta, es INVENTORY_UNAVAILABLE y deja el detalle en el log',
+    async (status, error) => {
+      const warn = vi
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => undefined);
+      const { module1 } = failingModule1(error);
+
+      await expect(
+        new ConsultRoomInventoryService(module1).listAll(),
+      ).rejects.toMatchObject({
+        errorCode: INVENTORY_UNAVAILABLE.code,
+        message: INVENTORY_UNAVAILABLE.message,
+      });
+      expect(warn).toHaveBeenCalledWith(
+        `Consulta del inventario de todas las habitaciones: El Módulo 1 respondió ${status}, que el contrato no prevé en la consulta de todas las habitaciones.`,
+      );
+    },
+  );
+
+  it('un error inesperado sale sin convertir', async () => {
+    const unexpected = new Error('falla inesperada');
+    const { module1 } = failingModule1(unexpected);
+
+    await expect(
+      new ConsultRoomInventoryService(module1).listAll(),
     ).rejects.toBe(unexpected);
   });
 });
