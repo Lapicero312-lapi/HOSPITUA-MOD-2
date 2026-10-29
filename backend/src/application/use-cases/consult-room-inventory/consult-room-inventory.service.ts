@@ -99,8 +99,8 @@ export class ConsultRoomInventoryService implements ConsultRoomInventory {
   }
 
   /**
-   * Un Módulo 1 que no responde, falla o responde algo mal formado es `INVENTORY_UNAVAILABLE` (plan, D1 y
-   * D2), con el detalle en el log: nunca se asume ninguna habitación. Un error inesperado sale tal cual.
+   * Un Módulo 1 que no responde, falla o responde algo mal formado es `INVENTORY_UNAVAILABLE` (plan, D1, D2
+   * y D3), con el detalle en el log: nunca se asume ninguna habitación. Un error inesperado sale tal cual.
    */
   private module1Failure(query: string, error: unknown): unknown {
     if (error instanceof Module1UnavailableError) {
