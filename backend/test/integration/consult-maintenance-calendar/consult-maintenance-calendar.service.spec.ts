@@ -281,9 +281,15 @@ describe('ConsultMaintenanceCalendar contra el Módulo 1 simulado', () => {
       reason: `Reparación pedida por ${PERSON}`,
     };
 
-    /** Todo lo que se escribe en el log durante la prueba, en cualquier nivel. */
+    /**
+     * Todo lo que se escribe en el log durante la prueba, en cualquier nivel y por cualquier vía: las
+     * instancias de `Logger`, sus métodos estáticos y `console`.
+     */
     function captureLogs(): string[] {
       const lines: string[] = [];
+      const record = (...args: unknown[]) => {
+        lines.push(args.map(String).join(' '));
+      };
       for (const level of [
         'log',
         'error',
@@ -292,11 +298,11 @@ describe('ConsultMaintenanceCalendar contra el Módulo 1 simulado', () => {
         'verbose',
         'fatal',
       ] as const) {
-        vi.spyOn(Logger.prototype, level).mockImplementation(
-          (...args: unknown[]) => {
-            lines.push(args.map(String).join(' '));
-          },
-        );
+        vi.spyOn(Logger.prototype, level).mockImplementation(record);
+        vi.spyOn(Logger, level).mockImplementation(record);
+      }
+      for (const method of ['log', 'info', 'warn', 'error', 'debug'] as const) {
+        vi.spyOn(console, method).mockImplementation(record);
       }
       return lines;
     }
