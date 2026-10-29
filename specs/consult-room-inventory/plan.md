@@ -24,7 +24,7 @@ No persiste nada y no cambia ninguna `Room`. Si el Módulo 1 falla, no asume hab
 | Dato | Valor |
 |---|---|
 | Caso de uso | Consultar inventario de habitaciones (`consult-room-inventory`) |
-| Spec | [spec.md](./spec.md), historia 1 y FR-001 a FR-006 |
+| Spec | [spec.md](./spec.md), historia 1 y FR-001 a FR-007 |
 | Actores | Caso de uso "Verificar disponibilidades" (interno); Recepcionista (pantalla); Módulo 1 (dueño de los datos) |
 | Naturaleza | Solo lectura; sin tablas propias |
 
@@ -104,7 +104,7 @@ interface ConsultRoomInventory {
 }
 ```
 
-- `byRoomId` y `byCategory` lanzan `BusinessError` (que el filtro global convierte en 400) con los
+- `byRoomId`, `byCategory` y `listAll` lanzan `BusinessError` (que el filtro global convierte en 400) con los
   códigos de "Reglas de validación y manejo de errores".
 - No filtran por estado ni modifican nada (FR-001 a FR-004).
 
@@ -279,6 +279,7 @@ Todo error sale con `{ "errorCode", "message", "timestamp", "path" }` y **siempr
 | Tiempo agotado, error de red o respuesta 5xx del Módulo 1 | Módulo 1 | 400 | `INVENTORY_UNAVAILABLE` | "No se pudo consultar el inventario de habitaciones en este momento. Intente de nuevo." |
 | Respuesta del Módulo 1 con campos faltantes o de tipo incorrecto (por ejemplo, `maxCapacity` no entero o menor que 1, una `categoryRoom` que no cumple la forma acordada o un `id` que no es un UUID) | Módulo 1 | 400 | `INVENTORY_UNAVAILABLE` | El mismo; el detalle va al log |
 | El Módulo 1 responde 404 a la consulta por categoría (el contrato no lo prevé: una categoría sin habitaciones es una lista vacía) | Módulo 1 | 400 | `INVENTORY_UNAVAILABLE` | El mismo; el detalle va al log |
+| El Módulo 1 responde 404 o 400 a la consulta de todas las habitaciones (A3 no tiene filtro: el contrato no los prevé) | Módulo 1 | 400 | `INVENTORY_UNAVAILABLE` | El mismo; el detalle va al log |
 
 - **Una categoría sin habitaciones no es un error**: devuelve una lista vacía (escenario 3).
 - **Una habitación ocupada hoy se devuelve igual**: es vendible; si está libre en unas fechas lo decide
@@ -385,6 +386,7 @@ fallos del Módulo 1.
 | Servicio | Datos de las pruebas (T005) | La habitación 201 del ejemplo A1 (`DOBLE`, capacidad 2), con un `id` cualquiera (un UUID): `byRoomId` la devuelve tal como la manda el Módulo 1. **Inválidos, sin llamar al Módulo 1:** un `roomId` que es un número de habitación (`201`) y uno vacío. **Errores del Módulo 1:** el 404 (la habitación no existe) y el 400 (rechaza el `roomId`) dan `INVALID_ROOM_ID` |
 | Servicio | Datos de las pruebas (T006) | Las habitaciones 201 (`DOBLE`, capacidad 2) y 202 (`DOBLE`, capacidad 3) del ejemplo A2, cada una con un `id` cualquiera (un UUID): `byCategory` las devuelve tal como las manda el Módulo 1. **Lista vacía:** la categoría `SUITE_JUNIOR` no tiene habitaciones y devuelve `[]`, sin error. **Inválidas, sin llamar al Módulo 1:** una categoría en minúsculas (`doble`) y una vacía. **Error del Módulo 1:** el 400 (rechaza la `categoryRoom`) da `INVALID_CATEGORY` |
 | Servicio | Datos de las pruebas (T007) | La habitación 201 del ejemplo A1 (`DOBLE`, capacidad 2), con un `id` cualquiera (un UUID), para `byRoomId`, y la categoría `DOBLE` para `byCategory`. El Módulo 1 simulado falla con los errores del adaptador: **no disponible** (`Module1UnavailableError`), con los motivos que da el adaptador ("tiempo de espera agotado", "sin respuesta (ECONNREFUSED)", "respondió 503", "la respuesta no es JSON" y "respuesta distinta del contrato"), da `INVENTORY_UNAVAILABLE` y deja el detalle en el log. En `byCategory`, **un 404** (`Module1RoomNotFoundError`), que el contrato no prevé en una lista, también da `INVENTORY_UNAVAILABLE` y deja el detalle en el log. **Un error inesperado** (un `Error` cualquiera) sale sin convertir |
+| Servicio | Datos de las pruebas (T010) | Las habitaciones 201 (`DOBLE`, capacidad 2) y 202 (`DOBLE`, capacidad 3) de los ejemplos A2 y C1, cada una con un `id` cualquiera (un UUID): `listAll` las devuelve tal como las manda el Módulo 1, con una sola consulta (A3) y sin consultar por categoría. **Sin habitaciones:** el Módulo 1 responde una lista vacía y `listAll` devuelve `[]`, sin error. **Errores del Módulo 1:** **no disponible** (`Module1UnavailableError`), con los motivos que da el adaptador ("tiempo de espera agotado", "sin respuesta (ECONNREFUSED)", "respondió 503", "la respuesta no es JSON" y "respuesta distinta del contrato"), y **un 404 o un 400**, que el contrato no prevé en A3, dan `INVENTORY_UNAVAILABLE` y dejan el detalle en el log. **Un error inesperado** (un `Error` cualquiera) sale sin convertir |
 
 ## Dependencies & Execution Order
 
@@ -405,6 +407,7 @@ fallos del Módulo 1.
 | FR-004 | Puerto de entrada `ConsultRoomInventory` | T005, T006 |
 | FR-005 | Validadores, mapeo de errores y códigos 400 | T002, T004, T005, T006, T007 |
 | FR-006 | `listAll`, `ListRoomsWithMaintenance`, `GET /api/rooms`, pantalla | T010–T014 |
+| FR-007 | `listAll`, con una sola consulta a A3 | T010 |
 | NFR-001, SC-002 | Timeout configurable y prueba de tiempo | T001, T015 |
 | SC-001 | Sin caché ni copia local del inventario | T003 |
 | SC-003 | Mapeo a 400 de todo fallo | T007, T009 |

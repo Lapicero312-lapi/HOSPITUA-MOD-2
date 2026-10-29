@@ -25,4 +25,14 @@ export interface ConsultRoomInventory {
    * inesperado sale tal cual.
    */
   byCategory(categoryRoom: string): Promise<Room[]>;
+
+  /**
+   * B3: todas las habitaciones vendibles, de todas las categorías, con una sola consulta al Módulo 1 (A3),
+   * sin filtrar por estado y sin modificar ningún dato; `[]` si no hay ninguna. La usan la pantalla
+   * "Habitaciones" y "Configurar OTA".
+   * @throws BusinessError `INVENTORY_UNAVAILABLE` si el Módulo 1 no responde, falla o responde algo mal
+   * formado (también un 404 o un 400, que el contrato no prevé en esta consulta). Un error inesperado
+   * sale tal cual.
+   */
+  listAll(): Promise<Room[]>;
 }
