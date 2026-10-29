@@ -58,3 +58,39 @@ export const INVENTORY_UNAVAILABLE = {
   message:
     'No se pudo consultar el inventario de habitaciones en este momento. Intente de nuevo.',
 } as const;
+
+/** Una fecha de un filtro o de un periodo mal formada o inexistente (por ejemplo `2026-02-30`). */
+export const INVALID_DATE = {
+  code: 'INVALID_DATE',
+  message: 'La fecha indicada no es válida.',
+} as const;
+
+/** Un rango de fechas con solo una de las dos fechas. */
+export const INCOMPLETE_DATE_RANGE = {
+  code: 'INCOMPLETE_DATE_RANGE',
+  message: 'Debe completar ambas fechas del rango.',
+} as const;
+
+/** Un rango de fechas con la fecha inicial posterior a la final. */
+export const INVALID_DATE_RANGE = {
+  code: 'INVALID_DATE_RANGE',
+  message: 'La fecha inicial no puede ser posterior a la fecha final.',
+} as const;
+
+/** Un rango de fechas de más de 366 días. */
+export const DATE_RANGE_TOO_LARGE = {
+  code: 'DATE_RANGE_TOO_LARGE',
+  message: 'El rango de fechas no puede superar 366 días.',
+} as const;
+
+/** Un filtro por estado de la reserva fuera del enumerado `ReservationStatus`. */
+export const INVALID_STATUS = {
+  code: 'INVALID_STATUS',
+  message: 'El estado indicado no es válido.',
+} as const;
+
+/** Una referencia de reserva inválida (cada plan dice cuándo: formato, vacía, caracteres no permitidos…). */
+export const INVALID_RESERVATION_CODE = {
+  code: 'INVALID_RESERVATION_CODE',
+  message: 'Debe proveer un código de reserva válido para la consulta.',
+} as const;
