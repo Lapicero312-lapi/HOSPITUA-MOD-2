@@ -234,9 +234,13 @@ interface RegisterOtaConfirmationAndCommission {
 - **Validaciones** (en este orden): la `Ota` existe; si no tiene porcentaje, `reportedCommission` viene y
   el `grossAmount` es mayor que 0; el porcentaje, el de la agencia o el calculado, está entre 0 y 100; el
   `externalConfirmationCode` no está ya registrado para esa `Ota` (FR-005; `generate-ota-reservation` ya
-  trata un código repetido como un cambio, así que este error solo protege contra un uso indebido).
+  trata un código repetido como un cambio, así que este error solo protege contra un uso indebido). Lo
+  revisa `ReservationRepository.existsOtaConfirmationCode(otaId, externalConfirmationCode, tx?)`; la
+  restricción única `(ota_id, external_confirmation_code)` sigue siendo el respaldo.
 - **Advertencia** (FR-004a): si la `Ota` ya tiene porcentaje y `reportedCommission` da uno que difiere en
   más de 0.01 puntos, `calculate` registra una advertencia en el log (sin datos personales) y usa el fijo.
+  El porcentaje de la comisión informada se calcula igual que el de la primera reserva
+  (`reportedCommission ÷ grossAmount × 100`, dos decimales, `ROUND_HALF_UP`) y se compara con el fijo.
 - `recalculate` tampoco persiste: quien llama (`ApplyOtaChange`) guarda los importes nuevos y llama a
   `recordAudit`, que deja la fila `CALCULATED` con ellos.
 - La reserva guarda **su propia copia** del porcentaje y del importe.
@@ -254,10 +258,11 @@ interface ManageOta {
 }
 ```
 
-- **Validaciones** (`400`, indicando los campos inválidos): `name` vacío o ya usado por otra `Ota`, o un
-  porcentaje fuera de 0 a 100 en `setCommissionPercentage`.
+- **Validaciones** (`400`, indicando los campos inválidos): `name` vacío, o un porcentaje fuera de 0 a 100
+  en `setCommissionPercentage`.
 - Una `Ota` **nace en `CONNECTED`**, con `linkedAt` y `lastSyncAt` iguales a la hora del registro (`at`).
-  Registrarla de nuevo al reiniciar **no crea** una `Ota` nueva ni cambia `linkedAt`.
+  Registrarla de nuevo al reiniciar **no crea** una `Ota` nueva ni cambia `linkedAt`: si ya existe una `Ota`
+  con ese `name`, `register` la devuelve sin cambiarla.
 - El porcentaje **no se recalcula**: una vez guardado, `setCommissionPercentage` no lo cambia (FR-002).
   Corregirlo es una tarea manual de administración, en la base de datos.
 - La `Ota` **nunca se borra**: si Channex rechaza la conexión pasa a `DISCONNECTED`, y sus reservas no
@@ -280,7 +285,6 @@ interface OtaConnectionTracker {
 | `errorCode` | Cuándo | `message` |
 |---|---|---|
 | `INVALID_OTA_DATA` | `name` vacío, o porcentaje fuera de 0 a 100 | "Datos de la agencia inválidos: {campos}." |
-| `OTA_NAME_ALREADY_EXISTS` | El `name` coincide con el de otra `Ota` | "Ya existe una agencia con ese nombre." |
 
 **Errores de B1** (los registra `generate-ota-reservation` en el log):
 
@@ -421,8 +425,12 @@ sequenceDiagram
 
     X->>M: register
     M->>M: Validar nombre
-    alt datos ausentes o inválidos, o nombre repetido
-        M-->>X: BusinessError con los campos inválidos (400)
+    alt nombre vacío
+        M-->>X: BusinessError INVALID_OTA_DATA (400)
+    end
+    M->>DB: ¿existe una Ota con ese nombre?
+    alt ya existe
+        M-->>X: la Ota existente, sin cambios
     end
     M->>DB: INSERT ota si no existe (nace CONNECTED y sin porcentaje; linkedAt no cambia al reconectar)
     M->>DB: linked_at y last_sync_at = hora del registro (solo al crearla)
