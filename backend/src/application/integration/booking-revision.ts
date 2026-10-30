@@ -2,15 +2,20 @@ import type { Money } from '../../domain/shared/money.js';
 
 export type BookingRevisionStatus = 'new' | 'modified' | 'cancelled';
 
-/** Una habitación de la revisión. `roomTypeId` vacío: la habitación de Booking no está mapeada en Channex. */
+/**
+ * Una habitación de la revisión. `roomTypeId` vacío: la habitación de Booking no está mapeada en
+ * Channex. Una cantidad de personas vacía: Channex no la envió o vino con otra forma.
+ */
 export type BookingRevisionRoom = {
   roomTypeId: string | null;
   ratePlanId: string | null;
   checkinDate: string;
   checkoutDate: string;
-  adults: number;
-  children: number;
-  infants: number;
+  adults: number | null;
+  /** `0` si Channex no la envía. */
+  children: number | null;
+  /** `0` si Channex no la envía. */
+  infants: number | null;
 };
 
 /** El titular tal como lo envía Booking; cualquier dato puede faltar. */
@@ -37,7 +42,7 @@ export type BookingRevision = {
   status: BookingRevisionStatus;
   arrivalDate: string;
   departureDate: string;
-  /** Valor bruto que envía la agencia, en su moneda; `null` si no viene. */
+  /** Valor bruto que envía la agencia, en su moneda; `null` si no viene o viene con otra forma. */
   amount: Money | null;
   notes: string | null;
   customer: BookingRevisionCustomer;

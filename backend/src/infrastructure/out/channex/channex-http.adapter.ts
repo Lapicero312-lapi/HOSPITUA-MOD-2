@@ -82,7 +82,7 @@ export class ChannexHttpAdapter implements ChannexPort {
   }
 
   async updateRoomType(id: string, input: ChannexRoomTypeInput): Promise<void> {
-    await this.call({
+    await this.request({
       method: 'PUT',
       url: `/api/v1/room_types/${encodeURIComponent(id)}`,
       data: this.roomTypeBody(input),
@@ -156,14 +156,14 @@ export class ChannexHttpAdapter implements ChannexPort {
   }
 
   async ackBookingRevision(revisionId: string): Promise<void> {
-    await this.call({
+    await this.request({
       method: 'POST',
       url: `/api/v1/booking_revisions/${encodeURIComponent(revisionId)}/ack`,
     });
   }
 
   async reportNoShow(bookingId: string): Promise<void> {
-    await this.call({
+    await this.request({
       method: 'POST',
       url: `/api/v1/bookings/${encodeURIComponent(bookingId)}/no_show`,
       data: { no_show_report: { waived_fees: true } },
@@ -186,11 +186,22 @@ export class ChannexHttpAdapter implements ChannexPort {
     };
   }
 
-  /**
-   * 2xx con un JSON: el cuerpo. 429: pausa. 401 o 403: sin acceso. Otro 4xx: rechazo. Lo demás: no
-   * disponible.
-   */
+  /** Una llamada cuya respuesta se usa: el cuerpo de un 2xx, que debe ser JSON. */
   private async call(config: AxiosRequestConfig): Promise<unknown> {
+    const body = await this.request(config);
+    try {
+      return JSON.parse(body) as unknown;
+    } catch {
+      throw invalid('la respuesta no es JSON');
+    }
+  }
+
+  /**
+   * 2xx: el cuerpo como texto, sin leerlo (A3 de `configure-ota` y A2 y A3 de
+   * `generate-ota-reservation` solo necesitan saber que salió bien). 429: pausa. 401 o 403: sin acceso.
+   * Otro 4xx: rechazo. Lo demás: no disponible.
+   */
+  private async request(config: AxiosRequestConfig): Promise<string> {
     const { baseUrl, apiKey } = this.settings();
     if (this.pause.isActive()) {
       throw new ChannexRateLimitedError();
@@ -224,11 +235,7 @@ export class ChannexHttpAdapter implements ChannexPort {
     if (outcome.status < 200 || outcome.status >= 300) {
       throw new ChannexUnavailableError(`respondió ${outcome.status}`);
     }
-    try {
-      return JSON.parse(outcome.body) as unknown;
-    } catch {
-      throw invalid('la respuesta no es JSON');
-    }
+    return outcome.body;
   }
 
   private settings(): ChannexSettings {

@@ -7,11 +7,13 @@ import {
   afterAll,
   afterEach,
   beforeAll,
+  beforeEach,
   describe,
   expect,
   it,
   vi,
 } from 'vitest';
+import type { BookingRevision } from '../../src/application/integration/booking-revision.js';
 import {
   ChannexRateLimitedError,
   ChannexRejectedError,
@@ -384,18 +386,102 @@ describe('ChannexHttpAdapter contra respuestas simuladas de Channex', () => {
       expect(revision.amount).toBeNull();
     });
 
+    it('A1: sin children ni infants en la ocupación, quedan en 0', async () => {
+      const onlyAdults = aRevision();
+      onlyAdults.attributes.rooms[0].occupancy = { adults: 2 } as never;
+      server.use(
+        http.get(`${BASE_URL}/api/v1/booking_revisions/feed`, () =>
+          HttpResponse.json(feed([onlyAdults])),
+        ),
+      );
+
+      const [revision] = (await newAdapter().fetchBookingFeed(1)).revisions;
+
+      expect(revision.rooms[0]).toMatchObject({
+        adults: 2,
+        children: 0,
+        infants: 0,
+      });
+    });
+
+    it.each([
+      [
+        'un importe de más de dos decimales',
+        { amount: '220.005' },
+        (revision: BookingRevision) => expect(revision.amount).toBeNull(),
+      ],
+      [
+        'una moneda inválida',
+        { currency: 'dólares' },
+        (revision: BookingRevision) => expect(revision.amount).toBeNull(),
+      ],
+      [
+        'sin rooms',
+        { rooms: undefined },
+        (revision: BookingRevision) => expect(revision.rooms).toEqual([]),
+      ],
+      [
+        'una habitación sin ocupación',
+        {
+          rooms: [{ checkin_date: '2026-11-10', checkout_date: '2026-11-12' }],
+        },
+        (revision: BookingRevision) =>
+          expect(revision.rooms[0]).toMatchObject({
+            adults: null,
+            children: 0,
+            infants: 0,
+          }),
+      ],
+      [
+        'una cantidad de personas que no es un entero',
+        {
+          rooms: [
+            {
+              checkin_date: '2026-11-10',
+              checkout_date: '2026-11-12',
+              occupancy: { adults: 'dos', children: -1, infants: 0 },
+            },
+          ],
+        },
+        (revision: BookingRevision) =>
+          expect(revision.rooms[0]).toMatchObject({
+            adults: null,
+            children: null,
+            infants: 0,
+          }),
+      ],
+    ])(
+      'A1: una revisión con %s se lee igual, con ese dato vacío (lo decide el caso de uso)',
+      async (_, attributes, check) => {
+        server.use(
+          http.get(`${BASE_URL}/api/v1/booking_revisions/feed`, () =>
+            HttpResponse.json(feed([aRevision(attributes)])),
+          ),
+        );
+
+        const { revisions } = await newAdapter().fetchBookingFeed(1);
+
+        expect(revisions).toHaveLength(1);
+        check(revisions[0]);
+      },
+    );
+
     it.each([
       ['sin id', { id: undefined }],
       ['sin booking_id', { booking_id: '' }],
       ['con un status desconocido', { status: 'requested' }],
-      ['con una fecha inválida', { arrival_date: '2026-02-30' }],
-      ['con un importe de más de dos decimales', { amount: '220.005' }],
-      ['con una moneda inválida', { currency: 'dólares' }],
-      ['sin rooms', { rooms: undefined }],
+      ['con una fecha de llegada inválida', { arrival_date: '2026-02-30' }],
+      ['sin fecha de salida', { departure_date: undefined }],
       [
-        'con una habitación sin personas',
+        'con una habitación con una fecha inválida',
         {
-          rooms: [{ checkin_date: '2026-11-10', checkout_date: '2026-11-12' }],
+          rooms: [
+            {
+              checkin_date: '2026-11-10',
+              checkout_date: '12/11/2026',
+              occupancy: { adults: 2 },
+            },
+          ],
         },
       ],
     ])(
@@ -442,6 +528,37 @@ describe('ChannexHttpAdapter contra respuestas simuladas de Channex', () => {
         ChannexUnavailableError,
       );
     });
+
+    it.each([
+      ['un 200 sin cuerpo', () => new HttpResponse(null, { status: 200 })],
+      ['un 204', () => new HttpResponse(null, { status: 204 })],
+      ['un 200 que no es JSON', () => new HttpResponse('OK', { status: 200 })],
+    ])(
+      'A3 de configure-ota y A2 y A3: %s basta, porque no se lee el cuerpo',
+      async (_, reply) => {
+        server.use(
+          http.put(`${BASE_URL}/api/v1/room_types/${ROOM_TYPE_ID}`, reply),
+          http.post(
+            `${BASE_URL}/api/v1/booking_revisions/${REVISION_ID}/ack`,
+            reply,
+          ),
+          http.post(`${BASE_URL}/api/v1/bookings/${BOOKING_ID}/no_show`, reply),
+        );
+        const adapter = newAdapter();
+
+        await expect(
+          adapter.updateRoomType(ROOM_TYPE_ID, {
+            title: 'DOBLE',
+            countOfRooms: 3,
+            occupancy: 2,
+          }),
+        ).resolves.toBeUndefined();
+        await expect(
+          adapter.ackBookingRevision(REVISION_ID),
+        ).resolves.toBeUndefined();
+        await expect(adapter.reportNoShow(BOOKING_ID)).resolves.toBeUndefined();
+      },
+    );
 
     it('A2: confirma la revisión por su id', async () => {
       let called = false;
@@ -540,6 +657,84 @@ describe('ChannexHttpAdapter contra respuestas simuladas de Channex', () => {
       expect(calls).toBe(1);
     });
 
+    describe('la pausa ante 429', () => {
+      const MINUTE = 60_000;
+      const feedUrl = `${BASE_URL}/api/v1/booking_revisions/feed`;
+      let replies: number[];
+
+      // Solo se finge la hora: msw y axios siguen con sus temporizadores reales.
+      beforeEach(() => {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(new Date('2026-10-29T12:00:00Z'));
+        replies = [];
+        server.use(
+          http.get(feedUrl, () => {
+            const status = replies.shift() ?? 200;
+            return status === 429
+              ? HttpResponse.json(
+                  channexError('http_too_many_requests', 'Too Many Requests'),
+                  { status },
+                )
+              : HttpResponse.json(feed([]));
+          }),
+        );
+      });
+
+      afterEach(() => {
+        vi.useRealTimers();
+      });
+
+      const advance = (ms: number) =>
+        vi.setSystemTime(new Date(Date.now() + ms));
+
+      it('dos 429 seguidos: la segunda pausa es de 2 minutos', async () => {
+        const adapter = newAdapter();
+        replies = [429, 429];
+
+        await expect(adapter.fetchBookingFeed(1)).rejects.toBeInstanceOf(
+          ChannexRateLimitedError,
+        );
+        advance(MINUTE);
+        await expect(adapter.fetchBookingFeed(1)).rejects.toBeInstanceOf(
+          ChannexRateLimitedError,
+        );
+
+        advance(2 * MINUTE - 1);
+        await expect(adapter.fetchBookingFeed(1)).rejects.toBeInstanceOf(
+          ChannexRateLimitedError,
+        );
+        advance(1);
+        await expect(adapter.fetchBookingFeed(1)).resolves.toMatchObject({
+          total: 0,
+        });
+      });
+
+      it('una respuesta buena en medio vuelve la siguiente pausa a 1 minuto', async () => {
+        const adapter = newAdapter();
+        replies = [429, 200, 429];
+
+        await expect(adapter.fetchBookingFeed(1)).rejects.toBeInstanceOf(
+          ChannexRateLimitedError,
+        );
+        advance(MINUTE);
+        await expect(adapter.fetchBookingFeed(1)).resolves.toMatchObject({
+          total: 0,
+        });
+        await expect(adapter.fetchBookingFeed(1)).rejects.toBeInstanceOf(
+          ChannexRateLimitedError,
+        );
+
+        advance(MINUTE - 1);
+        await expect(adapter.fetchBookingFeed(1)).rejects.toBeInstanceOf(
+          ChannexRateLimitedError,
+        );
+        advance(1);
+        await expect(adapter.fetchBookingFeed(1)).resolves.toMatchObject({
+          total: 0,
+        });
+      });
+    });
+
     it.each([500, 503, 302])(
       'un %s es ChannexUnavailableError',
       async (status) => {
@@ -549,10 +744,17 @@ describe('ChannexHttpAdapter contra respuestas simuladas de Channex', () => {
       },
     );
 
-    it('una respuesta que no es JSON es ChannexUnavailableError', async () => {
-      server.use(http.post(ackUrl, () => new HttpResponse('<html>')));
+    it('una respuesta que no es JSON, donde se lee el cuerpo, es ChannexUnavailableError', async () => {
+      server.use(
+        http.get(
+          `${BASE_URL}/api/v1/booking_revisions/feed`,
+          () => new HttpResponse('<html>'),
+        ),
+      );
 
-      await expect(ack()).rejects.toBeInstanceOf(ChannexUnavailableError);
+      await expect(newAdapter().fetchBookingFeed(1)).rejects.toBeInstanceOf(
+        ChannexUnavailableError,
+      );
     });
 
     it('si no responde en el tiempo máximo es ChannexUnavailableError', async () => {
