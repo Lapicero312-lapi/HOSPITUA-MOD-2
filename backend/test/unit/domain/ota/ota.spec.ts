@@ -11,14 +11,17 @@ describe('Ota', () => {
     expect(ota.connectionStatus).toBe('CONNECTED');
   });
 
+  it('sin porcentaje es válida: lo calcula el sistema con su primera reserva', () => {
+    const ota = anOta({ commissionPercentage: null });
+
+    expect(ota.commissionPercentage).toBeNull();
+  });
+
   it('dice qué campos son inválidos', () => {
-    expect(() =>
-      anOta({ name: ' ', hotelAccountId: '', commissionPercentage: '101' }),
-    ).toThrow(
+    expect(() => anOta({ name: ' ', commissionPercentage: '101' })).toThrow(
       expect.objectContaining({
         errorCode: 'INVALID_OTA_DATA',
-        message:
-          'Datos de la agencia inválidos: name, hotelAccountId, commissionPercentage.',
+        message: 'Datos de la agencia inválidos: name, commissionPercentage.',
       }),
     );
   });
