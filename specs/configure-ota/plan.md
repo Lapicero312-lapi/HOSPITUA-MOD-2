@@ -230,7 +230,10 @@ Las tareas de Channex de este caso de uso y de `generate-ota-reservation` no hac
 **Quién lo llama**: `ChannexSetupJob` (`infrastructure/in/jobs/`) llama a `ensure()` al arrancar la
 aplicación. Si devuelve `RETRY`, lo vuelve a llamar cada `CHANNEX_SYNC_INTERVAL_SECONDS` con un
 temporizador de `@nestjs/schedule`, hasta que devuelva `READY` o `DISABLED`. Es una sola instancia, como la
-pausa de Channex, y no necesita bloqueo asesor: registrar la agencia ya es idempotente.
+pausa de Channex, y no necesita bloqueo asesor: registrar la agencia ya es idempotente. Si `ensure()` falla
+por un error inesperado (por ejemplo, la base de datos no responde al registrar la agencia),
+`ChannexSetupJob` lo registra en el log y lo trata como `RETRY`. No bloquea el arranque: el resto del
+Módulo 2 funciona mientras tanto.
 
 **B2. Anotar un cambio**: inserta una fila en `ari_pending_change` por cada categoría y rango de noches
 afectado (`dateFrom` incluido, `dateTo` excluido: el día de salida no se ocupa). Lo llaman
