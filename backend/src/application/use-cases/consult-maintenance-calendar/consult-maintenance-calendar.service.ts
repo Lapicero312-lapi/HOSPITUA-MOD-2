@@ -83,6 +83,23 @@ export class ConsultMaintenanceCalendarService implements ConsultMaintenanceCale
     return { roomId, available: calendar.available, conflicts };
   }
 
+  /** Una consulta `check` con la ventana pedida y el cruce de menor `maintenanceStart` (plan, B y D2). */
+  async nextMaintenance(
+    roomId: string,
+    fromDate: string,
+    toDate: string,
+  ): Promise<MaintenanceConflict | null> {
+    const { conflicts } = await this.check(roomId, fromDate, toDate);
+    // Las fechas AAAA-MM-DD se ordenan igual como texto que como fecha.
+    return conflicts.reduce<MaintenanceConflict | null>(
+      (nearest, conflict) =>
+        nearest === null || conflict.maintenanceStart < nearest.maintenanceStart
+          ? conflict
+          : nearest,
+      null,
+    );
+  }
+
   /**
    * El error del Módulo 1 con su código del plan (D1): un 404 o un 400 es `INVALID_ROOM_ID` (las fechas
    * ya se validaron, así que lo que rechaza es el `roomId`); si no responde, falla o responde algo mal

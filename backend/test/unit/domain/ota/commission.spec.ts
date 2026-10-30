@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { calculateCommission } from '../../../../src/domain/ota/commission.js';
+import {
+  calculateCommission,
+  canChangeCommissionStatus,
+} from '../../../../src/domain/ota/commission.js';
+import {
+  COMMISSION_STATUSES,
+  type CommissionStatus,
+} from '../../../../src/domain/shared/enums.js';
 import { Money } from '../../../../src/domain/shared/money.js';
 
 /**
@@ -32,6 +39,28 @@ describe('calculateCommission', () => {
   it('la comisión queda en la moneda del grossAmount', () => {
     expect(calculateCommission(Money.of('400.00', 'COP'), '15').currency).toBe(
       'COP',
+    );
+  });
+});
+
+/** Las transiciones del plan (A2 y punto 5). Cualquier otra se rechaza, también quedarse igual. */
+const PLAN_COMMISSION_TRANSITIONS = [
+  'CALCULATED→RECONCILED',
+  'CALCULATED→PAID',
+  'RECONCILED→PAID',
+];
+
+describe('Transiciones de commissionStatus', () => {
+  it.each(
+    COMMISSION_STATUSES.flatMap((from) =>
+      COMMISSION_STATUSES.map((to): [CommissionStatus, CommissionStatus] => [
+        from,
+        to,
+      ]),
+    ),
+  )('%s → %s', (from, to) => {
+    expect(canChangeCommissionStatus(from, to)).toBe(
+      PLAN_COMMISSION_TRANSITIONS.includes(`${from}→${to}`),
     );
   });
 });
