@@ -36,21 +36,19 @@ function fakeChannel(publishError?: Error) {
   };
 }
 
-const silentLogger = () =>
-  ({ warn: vi.fn(), error: vi.fn() }) as unknown as Logger;
-
 async function handle(
   error: unknown,
   msg = aMessage(),
   channel = fakeChannel(),
 ) {
-  const logger = silentLogger();
-  await retryOrDeadLetter(QUEUE, logger)(
-    channel as unknown as Channel,
-    msg,
-    error,
-  );
-  return { channel, logger };
+  // Los espías se devuelven aparte: así las pruebas no leen métodos sueltos del logger.
+  const warn = vi.fn();
+  const logError = vi.fn();
+  await retryOrDeadLetter(QUEUE, {
+    warn,
+    error: logError,
+  } as unknown as Logger)(channel as unknown as Channel, msg, error);
+  return { channel, warn, logError };
 }
 
 describe('retryOrDeadLetter', () => {
@@ -118,11 +116,11 @@ describe('retryOrDeadLetter', () => {
 
   it('agotados los 5 reintentos, va a la dead-letter y lo registra como error', async () => {
     const msg = aMessage({ 'x-retry-count': 5 });
-    const { channel, logger } = await handle(new Error('base caída'), msg);
+    const { channel, logError } = await handle(new Error('base caída'), msg);
 
     expect(channel.nack).toHaveBeenCalledWith(msg, false, false);
     expect(channel.publish).not.toHaveBeenCalled();
-    expect(logger.error).toHaveBeenCalledWith(
+    expect(logError).toHaveBeenCalledWith(
       `Mensaje de ${QUEUE} sin procesar después de 5 reintentos: va a la dead-letter`,
     );
   });
@@ -140,9 +138,9 @@ describe('retryOrDeadLetter', () => {
   });
 
   it('los logs no llevan el contenido del mensaje ni el detalle del error', async () => {
-    const { logger } = await handle(new Error('Ana Pérez, pasaporte X123'));
+    const { warn } = await handle(new Error('Ana Pérez, pasaporte X123'));
 
-    const logged = JSON.stringify(vi.mocked(logger.warn).mock.calls);
+    const logged = JSON.stringify(warn.mock.calls);
     expect(logged).not.toContain('Ana Pérez');
     expect(logged).not.toContain('m-1');
   });
