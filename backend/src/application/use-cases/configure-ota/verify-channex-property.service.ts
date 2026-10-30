@@ -1,6 +1,7 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import {
   CHANNEX_PORT,
+  ChannexRejectedError,
   ChannexUnauthorizedError,
   type ChannexPort,
 } from '../../ports/out/channex.port.js';
@@ -15,8 +16,9 @@ import type {
 
 /**
  * Verifica con A0 que `CHANNEX_PROPERTY_ID` esté entre las propiedades de la cuenta (`configure-ota`,
- * B0). Si no está, o Channex rechaza la clave, apaga las tareas de Channex hasta reiniciar. Si Channex
- * no responde, las deja sin trabajar y pide reintentar.
+ * B0). Si no está, o Channex responde 401, 403 u otro 4xx, apaga las tareas de Channex hasta reiniciar.
+ * Si Channex no responde (5xx, tiempo agotado, error de red o 429), las deja sin trabajar y pide
+ * reintentar.
  */
 @Injectable()
 export class VerifyChannexPropertyService implements VerifyChannexProperty {
@@ -45,6 +47,13 @@ export class VerifyChannexPropertyService implements VerifyChannexProperty {
       if (error instanceof ChannexUnauthorizedError) {
         this.logger.error(
           `Channex rechazó la clave de acceso (${error.status}): las tareas de Channex quedan apagadas`,
+        );
+        this.state.disable();
+        return 'DISABLED';
+      }
+      if (error instanceof ChannexRejectedError) {
+        this.logger.error(
+          `Channex rechazó la verificación de la propiedad (${error.status} ${error.code ?? 'sin código'}): las tareas de Channex quedan apagadas`,
         );
         this.state.disable();
         return 'DISABLED';

@@ -84,13 +84,16 @@ describe('VerifyChannexPropertyService', () => {
     );
   });
 
-  it.each([401, 403])(
-    'si Channex rechaza la clave (%s), apaga las tareas hasta reiniciar',
-    async (status) => {
+  it.each([
+    ['401', new ChannexUnauthorizedError(401)],
+    ['403', new ChannexUnauthorizedError(403)],
+    ['otro 4xx (404)', new ChannexRejectedError(404, 'resource_not_found')],
+    ['otro 4xx (422)', new ChannexRejectedError(422, null)],
+  ])(
+    'si Channex responde %s, apaga las tareas hasta reiniciar',
+    async (_, error) => {
       const state = stateWith();
-      const channex = channexWith(() =>
-        Promise.reject(new ChannexUnauthorizedError(status)),
-      );
+      const channex = channexWith(() => Promise.reject(error));
       const service = new VerifyChannexPropertyService(channex, state);
 
       await expect(service.verify()).resolves.toBe('DISABLED');
@@ -102,12 +105,16 @@ describe('VerifyChannexPropertyService', () => {
   );
 
   it.each([
-    ['no está disponible', new ChannexUnavailableError('respondió 503')],
-    ['limita las solicitudes', new ChannexRateLimitedError()],
+    ['responde 5xx', new ChannexUnavailableError('respondió 503')],
     [
-      'rechaza la consulta',
-      new ChannexRejectedError(404, 'resource_not_found'),
+      'agota el tiempo de espera',
+      new ChannexUnavailableError('tiempo de espera agotado'),
     ],
+    [
+      'no se puede conectar',
+      new ChannexUnavailableError('sin respuesta (ECONNREFUSED)'),
+    ],
+    ['responde 429', new ChannexRateLimitedError()],
   ])(
     'si Channex %s, pide reintentar y las tareas siguen sin trabajar',
     async (_, error) => {
