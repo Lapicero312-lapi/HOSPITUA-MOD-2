@@ -197,15 +197,20 @@ variable falló, nunca su valor.
 | `CHANNEX_ARI_DAYS` | Entero, 1 o más | `90` |
 
 El puerto `ChannexSetupState` (`application/ports/out/`) entrega la configuración válida, o `null` si es
-inválida, y dice si la propiedad ya se verificó (`isReady()`). Las tareas de Channex de este caso de uso
-y de `generate-ota-reservation` no hacen nada mientras `isReady()` sea `false`.
+inválida, y dice si la propiedad ya se verificó (`isReady()`) o si las tareas quedaron apagadas hasta el
+siguiente arranque (`isDisabled()`). `VerifyChannexProperty` lo marca con `markReady()` o `disable()`.
+Las tareas de Channex de este caso de uso y de `generate-ota-reservation` no hacen nada mientras
+`isReady()` sea `false`.
 
-**Verificación de la propiedad (A0).**
+**Verificación de la propiedad (A0, `VerifyChannexProperty`).** La usa `EnsureChannexSetup` (B1, paso
+1). Devuelve `READY`, `DISABLED` o `RETRY`:
 
-- **La propiedad no está en la lista, o Channex responde 401 o 403:** se registra el error y las tareas
-  quedan apagadas hasta el siguiente arranque.
+- **La propiedad no está en la lista, o Channex responde 401, 403 u otro 4xx:** se registra el error y
+  las tareas quedan apagadas hasta el siguiente arranque (`DISABLED`).
 - **Channex no responde** (5xx, tiempo agotado, error de red o 429): se registra y se vuelve a intentar
-  cada `CHANNEX_SYNC_INTERVAL_SECONDS` hasta verificarla. Mientras tanto, las tareas no envían nada.
+  cada `CHANNEX_SYNC_INTERVAL_SECONDS` hasta verificarla (`RETRY`). Mientras tanto, las tareas no envían
+  nada.
+- **Con la configuración inválida,** no se llama a Channex (`DISABLED`).
 
 **B1. Configuración al iniciar** (`EnsureChannexSetup`):
 
@@ -434,7 +439,7 @@ reserva.
 | Capa | Piezas de este caso de uso |
 |---|---|
 | `domain/ota/` | `OtaRoomTypeMapping`; funciones puras `groupRoomsByCategory` y `toChannexRanges` |
-| `application/use-cases/configure-ota/` | **Entrada**: `EnsureChannexSetup`, `SyncRoomTypes`, `AriChangeRecorder`, `PublishPendingAvailability`, `PublishDailyAvailability`, `HandleMaintenanceNotice`, `HandleInventoryNotice` |
+| `application/use-cases/configure-ota/` | **Entrada**: `EnsureChannexSetup`, `VerifyChannexProperty`, `SyncRoomTypes`, `AriChangeRecorder`, `PublishPendingAvailability`, `PublishDailyAvailability`, `HandleMaintenanceNotice`, `HandleInventoryNotice` |
 | `application/ports/out/` | `ChannexPort`, `OtaRepository`, `OtaRoomTypeMappingRepository`, `AriPendingChangeRepository` |
 | `infrastructure/in/jobs/` | `ChannexSyncJob` (30 s: feed y luego disponibilidad pendiente) y `AriDailyJob` (03:00: feed, tipos y disponibilidad completa), con el mismo bloqueo asesor |
 | `infrastructure/in/messaging/` | Consumidores de `m2.habitacion.mantenimiento.queue` y `m2.habitacion.inventario.queue` |
