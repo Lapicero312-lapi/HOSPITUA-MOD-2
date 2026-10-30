@@ -17,8 +17,6 @@ const API_KEY = 'clave-de-prueba-que-no-debe-salir';
 const SETTINGS = {
   CHANNEX_API_KEY: API_KEY,
   CHANNEX_PROPERTY_ID: PROPERTY_ID,
-  BOOKING_HOTEL_ID: '10485037',
-  BOOKING_COMMISSION_PERCENTAGE: '15',
 };
 
 const stateWith = (values: Record<string, string | undefined> = SETTINGS) =>
@@ -171,7 +169,7 @@ describe('VerifyChannexPropertyService', () => {
   it('ningún log lleva la clave ni el valor de las variables', async () => {
     await new VerifyChannexPropertyService(
       channexWith(() => Promise.resolve([])),
-      stateWith({ ...SETTINGS, BOOKING_COMMISSION_PERCENTAGE: '150' }),
+      stateWith({ ...SETTINGS, CHANNEX_ARI_DAYS: '-150' }),
     ).verify();
     await new VerifyChannexPropertyService(
       channexWith(() => Promise.reject(new ChannexUnauthorizedError(401))),

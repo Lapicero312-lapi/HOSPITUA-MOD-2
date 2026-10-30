@@ -8,8 +8,6 @@ const VALID = {
   CHANNEX_BASE_URL: 'https://staging.channex.io/',
   CHANNEX_API_KEY: API_KEY,
   CHANNEX_PROPERTY_ID: PROPERTY_ID,
-  BOOKING_HOTEL_ID: '10485037',
-  BOOKING_COMMISSION_PERCENTAGE: '15.00',
   CHANNEX_SYNC_INTERVAL_SECONDS: '45',
   CHANNEX_ARI_DAYS: '120',
 };
@@ -18,14 +16,12 @@ const configWith = (values: Record<string, string | undefined>) =>
   readChannexConfig((name) => values[name]);
 
 describe('readChannexConfig', () => {
-  it('con todas las variables válidas entrega la configuración, sin la clave', () => {
+  it('con las cinco variables válidas entrega la configuración, sin la clave', () => {
     expect(configWith(VALID)).toEqual({
       valid: true,
       settings: {
         baseUrl: 'https://staging.channex.io',
         propertyId: PROPERTY_ID.toLowerCase(),
-        bookingHotelId: '10485037',
-        commissionPercentage: '15.00',
         syncIntervalSeconds: 45,
         ariDays: 120,
       },
@@ -51,17 +47,22 @@ describe('readChannexConfig', () => {
     });
   });
 
+  it('el id del hotel y el porcentaje de comisión ya no se configuran: se ignoran si siguen en el .env', () => {
+    const result = configWith({
+      ...VALID,
+      BOOKING_HOTEL_ID: 'no es un número',
+      BOOKING_COMMISSION_PERCENTAGE: '150',
+    });
+
+    expect(result.valid).toBe(true);
+    expect(JSON.stringify(result)).not.toContain('150');
+  });
+
   it.each([
     ['CHANNEX_API_KEY', ''],
     ['CHANNEX_API_KEY', undefined],
     ['CHANNEX_PROPERTY_ID', undefined],
     ['CHANNEX_PROPERTY_ID', 'propiedad-1'],
-    ['BOOKING_HOTEL_ID', undefined],
-    ['BOOKING_HOTEL_ID', 'BKG-10485037'],
-    ['BOOKING_COMMISSION_PERCENTAGE', undefined],
-    ['BOOKING_COMMISSION_PERCENTAGE', '100.01'],
-    ['BOOKING_COMMISSION_PERCENTAGE', '15.123'],
-    ['BOOKING_COMMISSION_PERCENTAGE', '-1'],
     ['CHANNEX_BASE_URL', 'ftp://staging.channex.io'],
     ['CHANNEX_BASE_URL', 'staging.channex.io'],
     ['CHANNEX_SYNC_INTERVAL_SECONDS', '29'],
@@ -77,21 +78,7 @@ describe('readChannexConfig', () => {
   it('nombra todas las variables que fallan a la vez', () => {
     expect(configWith({})).toEqual({
       valid: false,
-      invalid: [
-        'CHANNEX_API_KEY',
-        'CHANNEX_PROPERTY_ID',
-        'BOOKING_HOTEL_ID',
-        'BOOKING_COMMISSION_PERCENTAGE',
-      ],
+      invalid: ['CHANNEX_API_KEY', 'CHANNEX_PROPERTY_ID'],
     });
-  });
-
-  it('acepta el porcentaje en los extremos, 0 y 100', () => {
-    expect(
-      configWith({ ...VALID, BOOKING_COMMISSION_PERCENTAGE: '0' }).valid,
-    ).toBe(true);
-    expect(
-      configWith({ ...VALID, BOOKING_COMMISSION_PERCENTAGE: '100' }).valid,
-    ).toBe(true);
   });
 });

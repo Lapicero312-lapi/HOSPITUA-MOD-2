@@ -1,5 +1,4 @@
 import type { ChannexSettings } from '../../application/ports/out/channex-setup-state.js';
-import { isPercentage } from '../../domain/ota/ota.js';
 
 /** Valores que se usan si la variable no está definida (`configure-ota`, B0). */
 export const CHANNEX_DEFAULTS = {
@@ -47,11 +46,6 @@ export function readChannexConfig(
   const propertyId = check('CHANNEX_PROPERTY_ID', (raw) =>
     UUID_FORMAT.test(raw),
   );
-  const bookingHotelId = check('BOOKING_HOTEL_ID', (raw) => /^\d+$/.test(raw));
-  const commissionPercentage = check(
-    'BOOKING_COMMISSION_PERCENTAGE',
-    isPercentage,
-  );
   const syncIntervalSeconds = check('CHANNEX_SYNC_INTERVAL_SECONDS', (raw) =>
     isIntegerFrom(raw, MIN_SYNC_INTERVAL_SECONDS),
   );
@@ -65,8 +59,6 @@ export function readChannexConfig(
     settings: {
       baseUrl: baseUrl.replace(/\/+$/, ''),
       propertyId: propertyId.toLowerCase(),
-      bookingHotelId,
-      commissionPercentage,
       syncIntervalSeconds: Number(syncIntervalSeconds),
       ariDays: Number(ariDays),
     },

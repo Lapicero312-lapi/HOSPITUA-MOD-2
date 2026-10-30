@@ -3,15 +3,12 @@ export const CHANNEX_SETUP_STATE = Symbol('CHANNEX_SETUP_STATE');
 
 /**
  * La configuración de Channex ya validada (`configure-ota`, B0). La clave no está aquí: solo la usa el
- * adaptador de `ChannexPort`.
+ * adaptador de `ChannexPort`. El id del hotel de Booking se indica en Channex y el porcentaje de comisión
+ * lo calcula el sistema con la primera reserva: ninguno de los dos se configura.
  */
 export type ChannexSettings = {
   baseUrl: string;
   propertyId: string;
-  /** El id del hotel en Booking (`hotelAccountId` de la `Ota`). */
-  bookingHotelId: string;
-  /** De 0 a 100, con hasta dos decimales, como texto (`15.00`). */
-  commissionPercentage: string;
   syncIntervalSeconds: number;
   ariDays: number;
 };
