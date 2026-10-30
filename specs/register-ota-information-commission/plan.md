@@ -11,15 +11,16 @@ la estadía. Este caso de uso hace cuatro cosas:
 
 1. **Calcula y registra la comisión** de cada reserva OTA nueva, al registrarla
    (`generate-ota-reservation` lo llama): `commissionAmount = grossAmount × commissionPercentage / 100`,
-   con precisión decimal exacta, y estado inicial `CALCULATED`. La **recalcula** con el mismo porcentaje
-   congelado cuando Booking cambia el valor de la reserva. Nunca calcula con un porcentaje fuera de 0 a
-   100.
+   con precisión decimal exacta, y estado inicial `CALCULATED`. El porcentaje es **fijo por agencia**: si la
+   agencia todavía no lo tiene, lo calcula con su primera reserva (`ota_commission ÷ grossAmount × 100`). La
+   **recalcula** con el mismo porcentaje congelado cuando Booking cambia el valor de la reserva. Nunca
+   calcula sin porcentaje ni con uno fuera de 0 a 100.
 2. **Concilia comisiones con el Módulo 3** (finanzas): el Módulo 3 consulta las comisiones de un periodo y
    le indica al Módulo 2 cuáles pasan a `RECONCILED` o `PAID`. La Recepcionista no concilia.
 3. **Consulta de agencias** (solo lectura): `GET /api/otas` y `GET /api/otas/{otaId}` para la pantalla de
    agencias de la Recepcionista y para el Módulo 3.
-4. **Registro y estado de la agencia**: `ManageOta` registra o actualiza la agencia Booking.com cuando la
-   configura `configure-ota`, y `OtaConnectionTracker` lleva el `connectionStatus` y el `lastSyncAt` a
+4. **Registro y estado de la agencia**: `ManageOta` registra la agencia Booking.com al iniciar
+   (`configure-ota`), sin porcentaje, y guarda el porcentaje que se calcula con su primera reserva, y `OtaConnectionTracker` lleva el `connectionStatus` y el `lastSyncAt` a
    partir de las lecturas del feed de Channex (`generate-ota-reservation`). No hay rutas para la OTA.
 
 La comisión de una reserva **cancelada por Booking o en `NO_SHOW` no se toca ni se concilia** (FR-007):
@@ -176,7 +177,6 @@ y el Módulo 3, con la misma respuesta para los dos.
     {
       "id": "uuid",
       "name": "Booking.com",
-      "hotelAccountId": "10485037",
       "commissionPercentage": 15.00,
       "connectionStatus": "CONNECTED",
       "linkedAt": "2026-03-02T09:14:00-05:00",
@@ -189,6 +189,7 @@ y el Módulo 3, con la misma respuesta para los dos.
 ```
 
 - `GET /api/otas/{otaId}` devuelve un solo objeto con esos mismos campos.
+- `commissionPercentage` es `null` mientras la agencia no tenga su primera reserva.
 - `activeReservations`: reservas de esa agencia en `PENDING`, `ACTIVE` o `IN_PROGRESS`.
 - Una `Ota` desconectada **sigue apareciendo**, con `connectionStatus: DISCONNECTED`.
 - No hay rutas de alta, edición ni borrado para la Recepcionista (plan base): solo lectura.
@@ -204,12 +205,14 @@ y el Módulo 3, con la misma respuesta para los dos.
 interface CommissionInput {
   otaId: string;
   grossAmount: Money;                  // valor bruto de toda la reserva, recibido de la OTA
+  reportedCommission: Money | null;    // ota_commission de la revisión de Channex
   externalConfirmationCode: string;
 }
 
 interface CommissionResult {
   otaId: string;
-  commissionPercentage: string;        // el de la agencia en este momento, de 0 a 100
+  commissionPercentage: string;        // el fijo de la agencia, de 0 a 100
+  learnedPercentage: boolean;          // true si se calculó con esta reserva: quien llama lo guarda en la Ota
   commissionAmount: Money;             // grossAmount × commissionPercentage / 100, 2 decimales, ROUND_HALF_UP
   commissionStatus: 'CALCULATED';
 }
@@ -224,30 +227,39 @@ interface RegisterOtaConfirmationAndCommission {
 
 - `calculate` **no persiste**: valida y calcula. La reserva con sus campos de comisión la inserta quien
   llama en su transacción, y luego llama a `recordAudit`.
-- **Validaciones** (en este orden): la `Ota` existe; su `commissionPercentage` está entre 0 y 100; el
+- **El porcentaje** (FR-002): si la `Ota` ya lo tiene, se usa ese. Si no, se calcula con esta reserva:
+  `reportedCommission ÷ grossAmount × 100`, con dos decimales y `ROUND_HALF_UP`, y el resultado sale con
+  `learnedPercentage: true`. Quien llama lo guarda con `ManageOta.setCommissionPercentage` en su misma
+  transacción. Solo lo calculan las revisiones `new`: `recalculate` nunca lo hace.
+- **Validaciones** (en este orden): la `Ota` existe; si no tiene porcentaje, `reportedCommission` viene y
+  el `grossAmount` es mayor que 0; el porcentaje, el de la agencia o el calculado, está entre 0 y 100; el
   `externalConfirmationCode` no está ya registrado para esa `Ota` (FR-005; `generate-ota-reservation` ya
   trata un código repetido como un cambio, así que este error solo protege contra un uso indebido).
+- **Advertencia** (FR-004a): si la `Ota` ya tiene porcentaje y `reportedCommission` da uno que difiere en
+  más de 0.01 puntos, `calculate` registra una advertencia en el log (sin datos personales) y usa el fijo.
 - `recalculate` tampoco persiste: quien llama (`ApplyOtaChange`) guarda los importes nuevos y llama a
   `recordAudit`, que deja la fila `CALCULATED` con ellos.
-- La reserva guarda **su propia copia** del porcentaje y del importe: un cambio posterior del porcentaje de
-  la agencia **no afecta** a las reservas ya registradas.
+- La reserva guarda **su propia copia** del porcentaje y del importe.
 
-**B2. Registrar o actualizar la agencia** (`ManageOta`, lo usa `configure-ota` al iniciar):
+**B2. Registrar la agencia y guardar su porcentaje** (`ManageOta`; `register` lo usa `configure-ota` al
+iniciar y `setCommissionPercentage`, `generate-ota-reservation` con la primera reserva):
 
 ```typescript
-interface OtaRegistration { name: string; hotelAccountId: string; commissionPercentage: string }
+interface OtaRegistration { name: string }
 
 interface ManageOta {
-  register(data: OtaRegistration, at: Date): Promise<Ota>;                 // nace CONNECTED, linkedAt = lastSyncAt = at
-  update(otaId: string, data: Partial<OtaRegistration>, at: Date): Promise<Ota>;
+  register(data: OtaRegistration, at: Date): Promise<Ota>;  // nace CONNECTED y sin porcentaje, linkedAt = lastSyncAt = at
+  // Solo si la agencia todavía no tiene porcentaje; si ya lo tiene, no lo cambia
+  setCommissionPercentage(tx: Transaction, otaId: string, commissionPercentage: string): Promise<void>;
 }
 ```
 
-- **Validaciones** (`400`, indicando los campos inválidos): `name` o `hotelAccountId` vacíos,
-  `commissionPercentage` fuera de 0 a 100, o `name` ya usado por otra `Ota`.
+- **Validaciones** (`400`, indicando los campos inválidos): `name` vacío o ya usado por otra `Ota`, o un
+  porcentaje fuera de 0 a 100 en `setCommissionPercentage`.
 - Una `Ota` **nace en `CONNECTED`**, con `linkedAt` y `lastSyncAt` iguales a la hora del registro (`at`).
   Registrarla de nuevo al reiniciar **no crea** una `Ota` nueva ni cambia `linkedAt`.
-- Un nuevo `commissionPercentage` **aplica solo a las reservas futuras**.
+- El porcentaje **no se recalcula**: una vez guardado, `setCommissionPercentage` no lo cambia (FR-002).
+  Corregirlo es una tarea manual de administración, en la base de datos.
 - La `Ota` **nunca se borra**: si Channex rechaza la conexión pasa a `DISCONNECTED`, y sus reservas no
   cambian (`status`, `commissionAmount` y `commissionStatus` se conservan).
 
@@ -267,15 +279,15 @@ interface OtaConnectionTracker {
 
 | `errorCode` | Cuándo | `message` |
 |---|---|---|
-| `INVALID_OTA_DATA` | `name` o `hotelAccountId` vacío, o porcentaje fuera de 0 a 100 | "Datos de la agencia inválidos: {campos}." |
+| `INVALID_OTA_DATA` | `name` vacío, o porcentaje fuera de 0 a 100 | "Datos de la agencia inválidos: {campos}." |
 | `OTA_NAME_ALREADY_EXISTS` | El `name` coincide con el de otra `Ota` | "Ya existe una agencia con ese nombre." |
-| `OTA_ACCOUNT_ALREADY_EXISTS` | El `hotelAccountId` ya está registrado | "Ya existe una agencia con esa cuenta del hotel." |
 
 **Errores de B1** (los registra `generate-ota-reservation` en el log):
 
 | `errorCode` | Cuándo | `message` |
 |---|---|---|
-| `INVALID_COMMISSION_PERCENTAGE` | El porcentaje de la agencia es menor que 0 o mayor que 100 | "El porcentaje de comisión no es válido." |
+| `INVALID_COMMISSION_PERCENTAGE` | El porcentaje de la agencia, o el calculado con la primera reserva, es menor que 0 o mayor que 100 | "El porcentaje de comisión no es válido." |
+| `COMMISSION_NOT_REPORTED` | La agencia no tiene porcentaje y la revisión no trae `ota_commission`, o trae un `grossAmount` de 0 | "Booking no informó la comisión de la primera reserva de la agencia." |
 | `DUPLICATE_CONFIRMATION_CODE` | El `externalConfirmationCode` ya existe para esa `Ota` | "El código de confirmación ya está registrado para esta agencia." |
 | `OTA_NOT_FOUND` | La `Ota` no existe | "La agencia no existe." |
 
@@ -285,6 +297,9 @@ interface OtaConnectionTracker {
    decimales y redondeo `ROUND_HALF_UP`**; el valor queda positivo (el signo lo aplica el Módulo 3).
    Se calcula **una sola vez por reserva**, sobre el `grossAmount` completo, no por habitación.
    Ejemplo: `400 × 15 / 100 = 60.00`.
+1a. **Porcentaje fijo por agencia**: se calcula con la primera revisión `new` de la agencia que trae su
+   comisión: `ota_commission ÷ grossAmount × 100`, con dos decimales y `ROUND_HALF_UP`. Ejemplo:
+   `60 ÷ 400 × 100 = 15.00`. Después no cambia (FR-002).
 2. **Estado inicial** `CALCULATED`, desde el momento del registro de la reserva.
 3. **Conciliación**: solo reservas OTA en `COMPLETED`, solo con los montos que coinciden, y con las
    transiciones permitidas. Cada cambio deja un registro en `commission_audit`.
@@ -318,6 +333,12 @@ sequenceDiagram
     alt la agencia no existe
         C-->>G: BusinessError OTA_NOT_FOUND (400)
     end
+    alt la agencia no tiene porcentaje
+        alt sin reportedCommission o grossAmount en 0
+            C-->>G: BusinessError COMMISSION_NOT_REPORTED (400), no se persiste la reserva
+        end
+        C->>C: porcentaje = reportedCommission / grossAmount x 100 (learnedPercentage)
+    end
     C->>C: ¿porcentaje entre 0 y 100?
     alt porcentaje inválido
         C-->>G: BusinessError INVALID_COMMISSION_PERCENTAGE (400), no se persiste la reserva
@@ -328,6 +349,7 @@ sequenceDiagram
     end
     C->>C: commissionAmount = grossAmount x porcentaje / 100 (decimal.js, 2 decimales)
     C-->>G: CommissionResult (CALCULATED)
+    G->>DB: si learnedPercentage, ManageOta.setCommissionPercentage (en su transacción)
     G->>DB: INSERT reservation con la comisión (en su transacción)
     G->>C: recordAudit(tx, reservationId, result, performedBy)
     C->>DB: INSERT commission_audit (CALCULATED)
@@ -397,12 +419,12 @@ sequenceDiagram
     participant M as ManageOta
     participant DB as PostgreSQL
 
-    X->>M: register / update
-    M->>M: Validar nombre, cuenta del hotel y porcentaje (0 a 100)
+    X->>M: register
+    M->>M: Validar nombre
     alt datos ausentes o inválidos, o nombre repetido
         M-->>X: BusinessError con los campos inválidos (400)
     end
-    M->>DB: INSERT o UPDATE ota (nace CONNECTED; linkedAt no cambia al reconectar)
+    M->>DB: INSERT ota si no existe (nace CONNECTED y sin porcentaje; linkedAt no cambia al reconectar)
     M->>DB: linked_at y last_sync_at = hora del registro (solo al crearla)
     M-->>X: Ota
     Note over M,DB: La Ota nunca se borra; reiniciar no la duplica
@@ -414,7 +436,7 @@ sequenceDiagram
 
 | Tabla | Qué cambia este caso de uso |
 |---|---|
-| `ota` | `name`, `hotel_account_id`, `commission_percentage`, `connection_status`, `linked_at`, `last_sync_at` (únicos `name` y `hotel_account_id`) |
+| `ota` | `name`, `commission_percentage` (vacío hasta la primera reserva), `connection_status`, `linked_at`, `last_sync_at` (único `name`) |
 | `reservation` | Campos de comisión de las reservas OTA: `gross_amount`, `currency`, `commission_percentage`, `commission_amount`, `commission_status`, `external_confirmation_code` (los inserta `generate-ota-reservation`; la conciliación actualiza `commission_status`) |
 | `commission_audit` | Una fila inmutable por cada comisión calculada o conciliada |
 
@@ -445,7 +467,8 @@ Todo error REST sale con `{ "errorCode", "message", "timestamp", "path" }` y **s
 | Errores de las tablas de A1, A2, A3, B1 y B2 | 400 | Los de cada tabla |
 | Excepción inesperada o fallo de integración | 400 | `REQUEST_NOT_PROCESSED` |
 
-- **Un porcentaje inválido o un código duplicado impiden crear la reserva**: el error se lanza antes de
+- **Un porcentaje inválido, la falta de comisión en la primera reserva o un código duplicado impiden crear
+  la reserva**: el error se lanza antes de
   insertar, y la transacción de `generate-ota-reservation` no se confirma.
 - **La conciliación procesa cada ítem por separado**: el rechazo de uno no impide el resto, y el resultado
   de cada ítem va en la respuesta (no es un error HTTP).
@@ -515,12 +538,13 @@ frontend/src/pages/otas/                            # pantalla "Agencias OTA" (s
 ## Phase 3: User Story 1 - Cálculo y registro de la comisión (P1)
 
 **Goal**: toda reserva OTA nueva queda con su comisión exacta y `CALCULATED`.
-**Independent Test**: `grossAmount` de 400 y 15 % dan 60 y `CALCULATED`; un porcentaje inválido se rechaza.
+**Independent Test**: una primera reserva de 400 con una comisión informada de 60 deja la agencia en 15.00 %
+y da 60 y `CALCULATED`; una segunda de 200 da 30; una primera reserva sin comisión informada se rechaza.
 
-- [ ] T006 [US1] `RegisterOtaConfirmationAndCommission.calculate`: agencia, porcentaje de 0 a 100, código duplicado y fórmula
+- [ ] T006 [US1] `RegisterOtaConfirmationAndCommission.calculate`: agencia, porcentaje fijo o calculado con la primera reserva, porcentaje de 0 a 100, advertencia si la comisión informada no coincide, código duplicado y fórmula
 - [ ] T007 [US1] `recordAudit` y la inserción de `commission_audit` dentro de la transacción de quien llama
-- [ ] T008 [US1] Prueba de que la comisión se calcula una sola vez sobre el total completo y de que un cambio posterior del porcentaje de la agencia no afecta a las reservas existentes
-- [ ] T009 [US1] Pruebas de integración de los escenarios 1 y 2 y de los casos borde (duplicado y simultaneidad)
+- [ ] T008 [US1] Prueba de que la comisión se calcula una sola vez sobre el total completo y de que el porcentaje de la agencia no cambia después de la primera reserva
+- [ ] T009 [US1] Pruebas de integración de los escenarios 1 a 4 y de los casos borde (duplicado y simultaneidad)
 - [ ] T010 [US1] Coordinar con el plan de `generate-ota-reservation` la llamada dentro de su transacción
 
 ## Phase 4: User Story 2 - Conciliación con el Módulo 3 (P2)
@@ -532,10 +556,10 @@ frontend/src/pages/otas/                            # pantalla "Agencias OTA" (s
 
 ## Phase 5: User Story 3 - Registro y estado de la OTA (P3)
 
-- [ ] T015 [US3] `ManageOta` (`register`, `update`) con las validaciones y los códigos de error
+- [ ] T015 [US3] `ManageOta` (`register`, `setCommissionPercentage`) con las validaciones y los códigos de error
 - [ ] T016 [US3] `OtaConnectionTracker` (`markSynced`, `markDisconnected`)
 - [ ] T017 [US3] `ListOtas`, `GetOta` y `GET /api/otas` y `/{otaId}` (A3) con `activeReservations`
-- [ ] T018 [US3] Pruebas de los escenarios 1 a 5 y de los casos borde (nace `CONNECTED`, rechazo de Channex y recuperación, porcentaje nuevo solo para reservas futuras)
+- [ ] T018 [US3] Pruebas de los escenarios 1 a 5 y de los casos borde (nace `CONNECTED` y sin porcentaje, rechazo de Channex y recuperación)
 - [ ] T019 [P] [US3] Frontend: pantalla "Agencias OTA" (solo lectura)
 
 ## Phase N: Polish
@@ -547,13 +571,15 @@ frontend/src/pages/otas/                            # pantalla "Agencias OTA" (s
 
 | Historia | Escenario | Qué se verifica |
 |---|---|---|
-| US1 | 1 registro exitoso | `grossAmount` 400 y 15 %: `commissionAmount` 60.00, `commissionStatus` `CALCULATED`, fila en `commission_audit` |
-| US1 | 2 porcentaje inválido | Menor que 0 o mayor que 100: `400` `INVALID_COMMISSION_PERCENTAGE` y la reserva no se persiste |
+| US1 | 1 registro exitoso | Agencia con 15 % y `grossAmount` 400: `commissionAmount` 60.00, `commissionStatus` `CALCULATED`, fila en `commission_audit` |
+| US1 | 2 primera reserva | Agencia sin porcentaje, `grossAmount` 400 y `ota_commission` 60: la agencia queda en 15.00 y la reserva con 60.00; una segunda de 200 da 30.00 |
+| US1 | 3 primera reserva sin comisión o inválida | Sin `ota_commission`: `400` `COMMISSION_NOT_REPORTED`; con una mayor que el valor bruto: `INVALID_COMMISSION_PERCENTAGE`; en los dos casos no se persiste nada |
+| US1 | 4 comisión que no coincide | Agencia con 15.00 y una reserva de 400 con `ota_commission` 62: comisión 60.00 y una advertencia en el log |
 | US2 | 1 conciliación | Reservas `COMPLETED` y `CALCULATED` pasan a `RECONCILED` cuando los montos coinciden; queda auditoría con el canal `MODULE3` |
 | US2 | 2 cancelada por Booking | Su `commissionAmount` y `commissionStatus` no cambian, ni al cancelar ni al conciliar (`RESERVATION_CANCELLED`) |
 | US2 | 3 en `NO_SHOW` | La conciliación la rechaza (`RESERVATION_NO_SHOW`) y la comisión no cambia |
-| US3 | 1 registro por configuración | Una `Ota` "Booking.com" nace `CONNECTED` con `linkedAt`, sin duplicarse al reiniciar |
-| US3 | 2 cambio del porcentaje | El nuevo porcentaje se guarda y solo aplica a reservas futuras |
+| US3 | 1 registro al iniciar | Una `Ota` "Booking.com" nace `CONNECTED`, con `linkedAt` y sin porcentaje |
+| US3 | 2 reinicio | No se duplica y conserva su porcentaje |
 | US3 | 3 Channex rechaza la conexión | `DISCONNECTED`; la `Ota` y sus reservas se conservan y sigue visible en la pantalla |
 | US3 | 4 conexión recuperada | `CONNECTED`, sin `Ota` nueva ni cambio de `linkedAt` |
 | US3 | 5 `lastSyncAt` | Cada lectura del feed que termina bien lo actualiza |
@@ -578,9 +604,9 @@ frontend/src/pages/otas/                            # pantalla "Agencias OTA" (s
 | Requisito | Componente | Tarea |
 |---|---|---|
 | FR-001 | `calculateCommission` | T002, T006 |
-| FR-002 | Lectura del porcentaje de la `Ota` | T006 |
+| FR-002 | Porcentaje fijo de la `Ota`, calculado con la primera reserva | T006, T015 |
 | FR-003 | Estado inicial `CALCULATED` | T006 |
-| FR-004 | Validación del porcentaje de 0 a 100 | T006, T009 |
+| FR-004, FR-004a | Validación del porcentaje de 0 a 100, comisión de la primera reserva y advertencia | T006, T009 |
 | FR-005 | Código duplicado y restricción única | T006, T009 |
 | FR-006 | `ReconcileCommissions` (A2) | T012, T013 |
 | FR-007 | Rechazo de reservas canceladas | T013, T014 |
@@ -603,9 +629,8 @@ frontend/src/pages/otas/                            # pantalla "Agencias OTA" (s
    Módulo 2 los compara con los guardados.
 5. **Transiciones permitidas**: `CALCULATED → RECONCILED`, `CALCULATED → PAID` y `RECONCILED → PAID`.
 6. **Solo se concilian reservas `COMPLETED`.**
-7. **La reserva guarda su propio porcentaje y su importe**, así que un cambio posterior del porcentaje de
-   la agencia no cambia lo ya registrado.
-8. **`GET /api/otas` devuelve más campos que el plan base** (`hotelAccountId`, `linkedAt`, `lastSyncAt` y
+7. **La reserva guarda su propio porcentaje y su importe.**
+8. **`GET /api/otas` devuelve más campos que el plan base** (`linkedAt`, `lastSyncAt` y
    `activeReservations`), porque la pantalla de agencias los muestra.
 9. **La comisión se recalcula** con el porcentaje congelado cuando Booking cambia el valor (`recalculate`).
 

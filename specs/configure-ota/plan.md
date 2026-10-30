@@ -11,7 +11,8 @@ mantiene en Channex lo que es del Módulo 2: los **tipos de habitación** y su *
 cuatro capacidades:
 
 1. **Configuración al iniciar**: valida la configuración, verifica que la propiedad exista en Channex y
-   registra la `Ota` "Booking.com" con su porcentaje de comisión.
+   registra la `Ota` "Booking.com", sin porcentaje de comisión (lo calcula `register-ota-information-commission`
+   con la primera reserva de Booking).
 2. **Tipos de habitación**: traduce las habitaciones vendibles que informa el Módulo 1 a un tipo de
    habitación de Channex por categoría (cantidad y capacidad), los crea o los actualiza al iniciar y a
    las 03:00, y guarda la relación en `ota_room_type_mapping`.
@@ -55,8 +56,9 @@ propio de este caso de uso:
 - **Almacenamiento**: `ota`, `ota_room_type_mapping`, `ari_pending_change` y `processed_message` (plan
   base).
 - **Configuración** (plan base): `CHANNEX_BASE_URL`, `CHANNEX_API_KEY`, `CHANNEX_PROPERTY_ID`,
-  `BOOKING_HOTEL_ID` (`10485037`, el hotel de Booking que se usa), `BOOKING_COMMISSION_PERCENTAGE`, `CHANNEX_SYNC_INTERVAL_SECONDS` (`30`) y
-  `CHANNEX_ARI_DAYS` (`90`).
+  `CHANNEX_SYNC_INTERVAL_SECONDS` (`30`) y `CHANNEX_ARI_DAYS` (`90`). El id del hotel de Booking
+  (`10485037`) se indica en Channex al conectar el canal Booking.com, no en el Módulo 2: ninguna llamada
+  a Channex lo usa.
 - **Límites de Channex** (página *Rate limits*): 10 solicitudes por minuto por propiedad a `/availability`
   y otras 10 a `/restrictions` (esas son del Módulo 3). Con una cada 30 s quedan 2 por minuto, más el envío
   de las 03:00. Channex recomienda agrupar cada 30 a 60 s (guía de integración para PMS) y, ante un
@@ -191,8 +193,6 @@ variable falló, nunca su valor.
 | `CHANNEX_BASE_URL` | URL `http` o `https` | `https://staging.channex.io` |
 | `CHANNEX_API_KEY` | No vacía | — |
 | `CHANNEX_PROPERTY_ID` | UUID | — |
-| `BOOKING_HOTEL_ID` | Solo dígitos (`10485037`) | — |
-| `BOOKING_COMMISSION_PERCENTAGE` | Número de 0 a 100 con hasta dos decimales | — |
 | `CHANNEX_SYNC_INTERVAL_SECONDS` | Entero, 30 o más (Channex recomienda agrupar cada 30 a 60 s) | `30` |
 | `CHANNEX_ARI_DAYS` | Entero, 1 o más | `90` |
 
@@ -214,12 +214,12 @@ Las tareas de Channex de este caso de uso y de `generate-ota-reservation` no hac
 
 **B1. Configuración al iniciar** (`EnsureChannexSetup`):
 
-1. Valida la configuración (clave, propiedad, id del hotel y porcentaje de 0 a 100) y verifica con A0 que
-   la propiedad existe. Si algo falta, es inválido o la propiedad no existe, registra el error y **deja
+1. Valida la configuración (B0) y verifica con A0 que la propiedad existe. Si algo falta, es inválido o la propiedad no existe, registra el error y **deja
    apagadas** las tareas de Channex (`generate-ota-reservation` y las de este caso de uso); el resto del
    Módulo 2 funciona normal.
-2. Crea la `Ota` "Booking.com" si no existe (`hotel_account_id = BOOKING_HOTEL_ID`, `CONNECTED`,
-   `linked_at` = ahora); si existe y el porcentaje cambió, lo actualiza (solo afecta reservas futuras).
+2. Crea la `Ota` "Booking.com" si no existe (`CONNECTED`, `linked_at` = ahora y `commission_percentage`
+   vacío); si existe, no la cambia. El porcentaje lo calcula `register-ota-information-commission` con la
+   primera reserva de Booking.
 3. Ejecuta la sincronización de tipos de habitación (C1) y, si creó alguno, envía su disponibilidad
    completa.
 
@@ -256,7 +256,7 @@ de habitación, No-Show, Check-Out y habitaciones `NOT_ARRIVED`) y `cancel-reser
 | `ConsultMaintenanceCalendar.check` | `consult-maintenance-calendar` | Mantenimientos de cada habitación de la categoría en las fechas que se calculan |
 | `ReservationLookup.blockingRoomsByCategory` | `check-view-reservation` | Habitaciones ocupadas por categoría y noche (sus `roomId`) |
 | `OtaConnectionTracker.markDisconnected` | `register-ota-information-commission` | `DISCONNECTED` ante 401/403 |
-| `ManageOta.register` y `update` | `register-ota-information-commission` | La agencia Booking.com |
+| `ManageOta.register` | `register-ota-information-commission` | La agencia Booking.com |
 | `Clock` | Plan base | Hoy y los próximos 90 días |
 
 ### E. Avisos del Módulo 1 (Módulo 1 → Módulo 2, cola)
@@ -483,8 +483,8 @@ reserva.
 
 | Historia | Escenario | Qué se verifica |
 |---|---|---|
-| US1 | 1 registro de la agencia | Una `Ota` "Booking.com" con el 15 % y `CONNECTED` |
-| US1 | 2 reinicio | Sin duplicados; porcentaje nuevo solo para reservas futuras |
+| US1 | 1 registro de la agencia | Una `Ota` "Booking.com" sin porcentaje y `CONNECTED` |
+| US1 | 2 reinicio | Sin duplicados; la agencia conserva su porcentaje |
 | US1 | 3 configuración incompleta o propiedad inexistente | Tareas apagadas y el resto del Módulo 2 funcionando |
 | US2 | 1 creación de tipos | Tipo "DOBLE" con 3 habitaciones y 2 adultos, y su relación guardada |
 | US2 | 2 cambio de cantidad | Tipo actualizado a 4 habitaciones |
