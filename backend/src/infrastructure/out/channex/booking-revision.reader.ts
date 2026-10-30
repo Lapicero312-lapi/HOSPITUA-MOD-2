@@ -67,6 +67,7 @@ export function readBookingRevision(
     arrivalDate: attributes.arrival_date,
     departureDate: attributes.departure_date,
     amount: readAmount(attributes.amount, attributes.currency),
+    otaCommission: readAmount(attributes.ota_commission, attributes.currency),
     notes: optionalText(attributes.notes),
     customer: readCustomer(attributes.customer),
     rooms: rooms as BookingRevisionRoom[],
