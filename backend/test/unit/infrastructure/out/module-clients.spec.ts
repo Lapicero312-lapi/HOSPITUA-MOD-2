@@ -1,12 +1,14 @@
 import type { HttpService } from '@nestjs/axios';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { CHANNEX_SETUP_STATE } from '../../../../src/application/ports/out/channex-setup-state.js';
 import { CHANNEX_PORT } from '../../../../src/application/ports/out/channex.port.js';
 import { MODULE1_PORT } from '../../../../src/application/ports/out/module1.port.js';
 import { MODULE3_PORT } from '../../../../src/application/ports/out/module3.port.js';
 import { AppConfigModule } from '../../../../src/infrastructure/config/app-config.module.js';
 import { ChannexClientModule } from '../../../../src/infrastructure/out/channex/channex-client.module.js';
 import { ChannexHttpAdapter } from '../../../../src/infrastructure/out/channex/channex-http.adapter.js';
+import { InMemoryChannexSetupState } from '../../../../src/infrastructure/out/channex/channex-setup.state.js';
 import { Module1ClientModule } from '../../../../src/infrastructure/out/module1/module1-client.module.js';
 import { Module1HttpAdapter } from '../../../../src/infrastructure/out/module1/module1-http.adapter.js';
 import { Module3ClientModule } from '../../../../src/infrastructure/out/module3/module3-client.module.js';
@@ -51,6 +53,9 @@ describe('Clientes de los Módulos 1 y 3 y de Channex', () => {
     expect(adapter).toBeInstanceOf(ChannexHttpAdapter);
     expect(clientDefaults(adapter)).toMatchObject({ timeout: 10_000 });
     expect(clientDefaults(adapter).baseURL).toBeUndefined();
+    expect(moduleRef.get(CHANNEX_SETUP_STATE)).toBeInstanceOf(
+      InMemoryChannexSetupState,
+    );
   });
 
   it('el Módulo 3 usa MODULE3_BASE_URL y el tiempo máximo de 3 s', () => {
