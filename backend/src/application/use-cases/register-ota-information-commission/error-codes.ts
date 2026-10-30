@@ -35,12 +35,6 @@ export const OTA_NOT_FOUND = {
   message: 'La agencia no existe.',
 } as const;
 
-/** B2: el `name` coincide con el de otra `Ota`. */
-export const OTA_NAME_ALREADY_EXISTS = {
-  code: 'OTA_NAME_ALREADY_EXISTS',
-  message: 'Ya existe una agencia con ese nombre.',
-} as const;
-
 /** B1: el porcentaje de la agencia, o el calculado con la primera reserva, es menor que 0 o mayor que 100. */
 export const INVALID_COMMISSION_PERCENTAGE = {
   code: 'INVALID_COMMISSION_PERCENTAGE',
