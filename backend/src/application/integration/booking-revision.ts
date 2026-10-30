@@ -44,6 +44,12 @@ export type BookingRevision = {
   departureDate: string;
   /** Valor bruto que envía la agencia, en su moneda; `null` si no viene o viene con otra forma. */
   amount: Money | null;
+  /**
+   * Comisión que cobra la agencia por la reserva (`ota_commission`), en la misma moneda; `null` si no
+   * viene o viene con otra forma. Solo sirve para calcular el porcentaje fijo de la agencia con su
+   * primera reserva (`register-ota-information-commission`).
+   */
+  otaCommission: Money | null;
   notes: string | null;
   customer: BookingRevisionCustomer;
   rooms: BookingRevisionRoom[];

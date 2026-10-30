@@ -64,6 +64,7 @@ const aRevision = (attributes: Record<string, unknown> = {}) => ({
     arrival_date: '2026-11-10',
     departure_date: '2026-11-12',
     amount: '220.00',
+    ota_commission: '33.00',
     currency: 'USD',
     notes: 'Llegada tarde',
     customer: {
@@ -348,6 +349,8 @@ describe('ChannexHttpAdapter contra respuestas simuladas de Channex', () => {
       });
       expect(revision.amount?.amount).toBe('220');
       expect(revision.amount?.currency).toBe('USD');
+      expect(revision.otaCommission?.amount).toBe('33');
+      expect(revision.otaCommission?.currency).toBe('USD');
     });
 
     it('A1: una habitación sin room_type_id (no mapeada en Channex) se lee con roomTypeId vacío', async () => {
@@ -413,7 +416,24 @@ describe('ChannexHttpAdapter contra respuestas simuladas de Channex', () => {
       [
         'una moneda inválida',
         { currency: 'dólares' },
-        (revision: BookingRevision) => expect(revision.amount).toBeNull(),
+        (revision: BookingRevision) => {
+          expect(revision.amount).toBeNull();
+          expect(revision.otaCommission).toBeNull();
+        },
+      ],
+      [
+        'sin ota_commission',
+        { ota_commission: undefined },
+        (revision: BookingRevision) => {
+          expect(revision.otaCommission).toBeNull();
+          expect(revision.amount?.amount).toBe('220');
+        },
+      ],
+      [
+        'una comisión de más de dos decimales',
+        { ota_commission: '33.005' },
+        (revision: BookingRevision) =>
+          expect(revision.otaCommission).toBeNull(),
       ],
       [
         'sin rooms',
