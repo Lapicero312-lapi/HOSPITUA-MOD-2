@@ -182,6 +182,31 @@ interface OtaRoomTypeMappingRepository {
 }
 ```
 
+**B0. Configuración de Channex (T001).** Al arrancar se leen y se validan las variables de Channex en
+`infrastructure/config/`. Si alguna falla, las tareas de Channex quedan apagadas y el log dice qué
+variable falló, nunca su valor.
+
+| Variable | Regla | Por defecto |
+|---|---|---|
+| `CHANNEX_BASE_URL` | URL `http` o `https` | `https://staging.channex.io` |
+| `CHANNEX_API_KEY` | No vacía | — |
+| `CHANNEX_PROPERTY_ID` | UUID | — |
+| `BOOKING_HOTEL_ID` | Solo dígitos (`10485037`) | — |
+| `BOOKING_COMMISSION_PERCENTAGE` | Número de 0 a 100 con hasta dos decimales | — |
+| `CHANNEX_SYNC_INTERVAL_SECONDS` | Entero, 30 o más (Channex recomienda agrupar cada 30 a 60 s) | `30` |
+| `CHANNEX_ARI_DAYS` | Entero, 1 o más | `90` |
+
+El puerto `ChannexSetupState` (`application/ports/out/`) entrega la configuración válida, o `null` si es
+inválida, y dice si la propiedad ya se verificó (`isReady()`). Las tareas de Channex de este caso de uso
+y de `generate-ota-reservation` no hacen nada mientras `isReady()` sea `false`.
+
+**Verificación de la propiedad (A0).**
+
+- **La propiedad no está en la lista, o Channex responde 401 o 403:** se registra el error y las tareas
+  quedan apagadas hasta el siguiente arranque.
+- **Channex no responde** (5xx, tiempo agotado, error de red o 429): se registra y se vuelve a intentar
+  cada `CHANNEX_SYNC_INTERVAL_SECONDS` hasta verificarla. Mientras tanto, las tareas no envían nada.
+
 **B1. Configuración al iniciar** (`EnsureChannexSetup`):
 
 1. Valida la configuración (clave, propiedad, id del hotel y porcentaje de 0 a 100) y verifica con A0 que
