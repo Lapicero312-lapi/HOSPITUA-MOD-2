@@ -106,7 +106,10 @@ Reglas:
    cambia el adaptador. Sus datos (`Room`, `MaintenanceCalendar`, `RateQuote`) son
    objetos de integración en `application/`, no entidades del dominio.
 4. La inyección de dependencias de Nest une los puertos con sus adaptadores (símbolos como
-   `RESERVATION_REPOSITORY` o `CLOCK`); el dominio nunca usa `@Injectable`.
+   `RESERVATION_REPOSITORY` o `CLOCK`); el dominio nunca usa `@Injectable`. Cada caso de uso tiene su
+   módulo de Nest en `application/use-cases/<caso>/<caso>.module.ts`: registra sus servicios con el
+   símbolo de su puerto de entrada y los exporta, y usa los puertos de salida de los módulos globales de
+   la infraestructura sin importarlos. `AppModule` importa los módulos de los casos de uso.
 5. Las dependencias entre capas se verifican en CI con `dependency-cruiser`
    (`backend/.dependency-cruiser.cjs`, dentro de `pnpm lint`): `domain/` no importa nada de `application/`
    ni de `infrastructure/`.

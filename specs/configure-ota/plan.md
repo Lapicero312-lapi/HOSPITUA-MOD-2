@@ -223,6 +223,15 @@ Las tareas de Channex de este caso de uso y de `generate-ota-reservation` no hac
 3. Ejecuta la sincronización de tipos de habitación (C1) y, si creó alguno, envía su disponibilidad
    completa.
 
+`EnsureChannexSetup.ensure()` devuelve lo mismo que `VerifyChannexProperty` (`READY`, `DISABLED` o
+`RETRY`). El paso 2 solo se hace cuando la verificación da `READY`. El paso 3 lo conecta T007 cuando exista
+`SyncRoomTypes`.
+
+**Quién lo llama**: `ChannexSetupJob` (`infrastructure/in/jobs/`) llama a `ensure()` al arrancar la
+aplicación. Si devuelve `RETRY`, lo vuelve a llamar cada `CHANNEX_SYNC_INTERVAL_SECONDS` con un
+temporizador de `@nestjs/schedule`, hasta que devuelva `READY` o `DISABLED`. Es una sola instancia, como la
+pausa de Channex, y no necesita bloqueo asesor: registrar la agencia ya es idempotente.
+
 **B2. Anotar un cambio**: inserta una fila en `ari_pending_change` por cada categoría y rango de noches
 afectado (`dateFrom` incluido, `dateTo` excluido: el día de salida no se ocupa). Lo llaman
 `generate-direct-reservation`, `generate-ota-reservation`, `update-reservation` (modificación, asignación
@@ -441,7 +450,7 @@ reserva.
 | `domain/ota/` | `OtaRoomTypeMapping`; funciones puras `groupRoomsByCategory` y `toChannexRanges` |
 | `application/use-cases/configure-ota/` | **Entrada**: `EnsureChannexSetup`, `VerifyChannexProperty`, `SyncRoomTypes`, `AriChangeRecorder`, `PublishPendingAvailability`, `PublishDailyAvailability`, `HandleMaintenanceNotice`, `HandleInventoryNotice` |
 | `application/ports/out/` | `ChannexPort`, `OtaRepository`, `OtaRoomTypeMappingRepository`, `AriPendingChangeRepository` |
-| `infrastructure/in/jobs/` | `ChannexSyncJob` (30 s: feed y luego disponibilidad pendiente) y `AriDailyJob` (03:00: feed, tipos y disponibilidad completa), con el mismo bloqueo asesor |
+| `infrastructure/in/jobs/` | `ChannexSetupJob` (al arrancar: `EnsureChannexSetup`, con reintento cada `CHANNEX_SYNC_INTERVAL_SECONDS` mientras Channex no responda), `ChannexSyncJob` (30 s: feed y luego disponibilidad pendiente) y `AriDailyJob` (03:00: feed, tipos y disponibilidad completa), con el mismo bloqueo asesor |
 | `infrastructure/in/messaging/` | Consumidores de `m2.habitacion.mantenimiento.queue` y `m2.habitacion.inventario.queue` |
 | `infrastructure/config/` | Validación de las variables de Channex |
 | `infrastructure/out/persistence/` | Repositorios de `ota_room_type_mapping` y `ari_pending_change` |
