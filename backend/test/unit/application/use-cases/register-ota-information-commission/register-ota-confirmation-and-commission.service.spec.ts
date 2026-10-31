@@ -137,6 +137,38 @@ describe('RegisterOtaConfirmationAndCommission.calculate', () => {
     });
   });
 
+  it.each([
+    [
+      'una comisión mayor que el valor bruto',
+      { reportedCommission: usd('401.00') },
+      'INVALID_COMMISSION_PERCENTAGE',
+    ],
+    [
+      'sin ota_commission',
+      { reportedCommission: null },
+      'COMMISSION_NOT_REPORTED',
+    ],
+  ])(
+    'el orden del plan: una primera reserva con %s y además un código repetido da %s, no DUPLICATE_CONFIRMATION_CODE',
+    async (_, changes, errorCode) => {
+      const ota = anOta({ commissionPercentage: null });
+
+      await expect(
+        serviceWith(ota, '4417829013').calculate(anInput(ota, changes)),
+      ).rejects.toMatchObject({ errorCode });
+    },
+  );
+
+  it('el orden del plan: una agencia que no existe da OTA_NOT_FOUND aunque falte la comisión', async () => {
+    const ota = anOta({ commissionPercentage: null });
+
+    await expect(
+      serviceWith(null, '4417829013').calculate(
+        anInput(ota, { reportedCommission: null }),
+      ),
+    ).rejects.toMatchObject({ errorCode: 'OTA_NOT_FOUND' });
+  });
+
   it('escenario 4: una comisión informada que no coincide (62 de 400 es 15.50) aplica el 15 y deja una advertencia', async () => {
     const ota = anOta({ commissionPercentage: '15' });
 
