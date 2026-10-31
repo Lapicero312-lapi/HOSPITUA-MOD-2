@@ -38,10 +38,6 @@ function toItem(room: RoomWithMaintenance): RoomItem {
     roomNumber: room.roomNumber,
     categoryRoom: room.categoryRoom,
     maxCapacity: room.maxCapacity,
-    maintenance: {
-      status: room.maintenance.status,
-      maintenanceStart: room.maintenance.maintenanceStart,
-      maintenanceEnd: room.maintenance.maintenanceEnd,
-    },
+    maintenance: room.maintenance,
   };
 }
