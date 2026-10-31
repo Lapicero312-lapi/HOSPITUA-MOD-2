@@ -1,6 +1,9 @@
 import { Module } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
+import { ConsultMaintenanceCalendarModule } from './application/use-cases/consult-maintenance-calendar/consult-maintenance-calendar.module.js';
+import { ConsultRoomInventoryModule } from './application/use-cases/consult-room-inventory/consult-room-inventory.module.js';
 import { AppConfigModule } from './infrastructure/config/app-config.module.js';
+import { RestModule } from './infrastructure/in/rest/rest.module.js';
 import { ChannexClientModule } from './infrastructure/out/channex/channex-client.module.js';
 import { ClockModule } from './infrastructure/out/clock/clock.module.js';
 import { Module1ClientModule } from './infrastructure/out/module1/module1-client.module.js';
@@ -16,6 +19,9 @@ import { LoggingModule } from './infrastructure/shared/logging.module.js';
     Module1ClientModule,
     Module3ClientModule,
     ChannexClientModule,
+    ConsultMaintenanceCalendarModule,
+    ConsultRoomInventoryModule,
+    RestModule,
   ],
   providers: [{ provide: APP_FILTER, useClass: ApiErrorFilter }],
 })
