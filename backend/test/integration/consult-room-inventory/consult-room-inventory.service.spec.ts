@@ -222,7 +222,10 @@ describe('ConsultRoomInventory contra el Módulo 1 simulado', () => {
     /** El nombre de una persona (el del ejemplo del plan de `check-view-reservation`). */
     const PERSON = 'Ana Pérez';
 
-    /** La 201 con un campo que no es del contrato: el nombre de una persona (según C1, no llegan datos de reservas). */
+    /**
+     * La 201 con un campo que no es del contrato, con el nombre de una persona: el contrato A trae, por cada
+     * habitación, `id`, `roomNumber`, `categoryRoom` y `maxCapacity`.
+     */
     const withGuest = { ...ROOM_201, guestName: PERSON };
 
     /**
