@@ -65,3 +65,6 @@ export type StatusReason = (typeof STATUS_REASONS)[number];
 
 export const CONNECTION_STATUSES = ['CONNECTED', 'DISCONNECTED'] as const;
 export type ConnectionStatus = (typeof CONNECTION_STATUSES)[number];
+
+export const CANCELLATION_CHANNELS = ['RECEPTION', 'OTA_API'] as const;
+export type CancellationChannel = (typeof CANCELLATION_CHANNELS)[number];
