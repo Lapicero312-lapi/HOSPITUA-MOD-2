@@ -15,11 +15,10 @@ import {
 const PROPERTY_ID = '716305c4-561a-4561-a187-7f5b8aeb5920';
 
 /** Channex simulado: solo A0, con la propiedad configurada. */
-const channex = {
-  listProperties: vi.fn(() =>
-    Promise.resolve([{ id: PROPERTY_ID, title: 'Hotel de prueba' }]),
-  ),
-} as unknown as ChannexPort;
+const listProperties = vi.fn(() =>
+  Promise.resolve([{ id: PROPERTY_ID, title: 'Hotel de prueba' }]),
+);
+const channex = { listProperties } as unknown as ChannexPort;
 
 /**
  * La aplicación completa (`AppModule`) con PostgreSQL real y Channex simulado: comprueba que
@@ -77,6 +76,6 @@ describe('Al arrancar la aplicación con Channex configurado', () => {
       },
       { timeout: 10_000, interval: 100 },
     );
-    expect(channex.listProperties).toHaveBeenCalledTimes(1);
+    expect(listProperties).toHaveBeenCalledTimes(1);
   });
 });
