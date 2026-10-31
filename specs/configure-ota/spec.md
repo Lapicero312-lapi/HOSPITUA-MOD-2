@@ -37,10 +37,11 @@ precios** (eso es del Módulo 3).
    en `false`): la disponibilidad la recalcula y la envía el Módulo 2, para no descontarla dos veces.
    Channex descuenta solo una reserva nueva, y eso no se puede apagar.
 2. En la configuración del sistema se indican la dirección de Channex, la clave de acceso
-   (`user-api-key`), el identificador de la propiedad, el id del hotel de Booking (`10485037`) y el
-   porcentaje de comisión de Booking.
+   (`user-api-key`) y el identificador de la propiedad. El id del hotel de Booking (`10485037`) se indica
+   en Channex al conectar el canal Booking.com, no en el sistema.
 3. Al iniciar, el sistema verifica que la propiedad exista en Channex y registra la agencia
-   **Booking.com** (`Ota`) con su porcentaje de comisión, si aún no existe.
+   **Booking.com** (`Ota`), si aún no existe. Su porcentaje de comisión no se configura: el sistema lo
+   calcula con la primera reserva que llega de Booking ("Registrar confirmación y comisión de ota").
 
 **Tipos de habitación (al iniciar, cada día y con cada aviso de inventario del Módulo 1)**
 
@@ -82,29 +83,27 @@ precios** (eso es del Módulo 3).
 ### User Story 1 - Configuración de Booking.com en Channex (Priority: P1)
 
 El sistema queda configurado para trabajar con Booking.com a través de Channex: la propiedad
-verificada y la agencia registrada con su porcentaje de comisión.
+verificada y la agencia registrada, todavía sin porcentaje de comisión.
 
-**Why this priority**: Sin la agencia, el Módulo 2 no puede calcular la comisión de las reservas de
-Booking.
+**Why this priority**: Sin la agencia, el Módulo 2 no puede registrar las reservas de Booking ni
+calcular su comisión.
 
 **Independent Test**: Se arranca el sistema con la configuración de Channex y se verifica que exista
-una sola `Ota` "Booking.com" con el porcentaje configurado. Se arranca con una propiedad que no existe y
+una sola `Ota` "Booking.com", sin porcentaje de comisión. Se arranca con una propiedad que no existe y
 se verifica que no se envíe nada a Channex.
 
 **Acceptance Scenarios**:
 
 1. **Scenario**: Registro de la agencia al iniciar (Happy Path)
-   - **Given** la configuración de Channex con un porcentaje de comisión de `15` y una propiedad que
-     existe en Channex
+   - **Given** la configuración de Channex con una propiedad que existe en Channex
    - **When** el sistema inicia y no existe la agencia Booking.com
-   - **Then** el sistema registra la `Ota` "Booking.com" con `commissionPercentage` `15` y
+   - **Then** el sistema registra la `Ota` "Booking.com" sin `commissionPercentage` y con
      `connectionStatus` `CONNECTED`
 
 2. **Scenario**: Reinicio sin duplicar la agencia
-   - **Given** la `Ota` "Booking.com" ya registrada
+   - **Given** la `Ota` "Booking.com" ya registrada, con o sin porcentaje de comisión
    - **When** el sistema inicia de nuevo
-   - **Then** no crea otra agencia; si el porcentaje configurado cambió, lo actualiza y el cambio
-     solo aplica a las reservas futuras
+   - **Then** no crea otra agencia y conserva su porcentaje
 
 3. **Scenario**: Configuración incompleta o propiedad inexistente (Error)
    - **Given** una configuración sin la clave de acceso o sin la propiedad, o con una propiedad que no
@@ -227,12 +226,13 @@ cancela la reserva y se verifica que reciba `3`.
 ### Functional Requirements
 
 - **FR-001**: El sistema debe tomar de la configuración (variables de entorno) la dirección de
-  Channex, la clave de acceso, el identificador de la propiedad, el id del hotel de Booking y el porcentaje de
-  comisión de Booking. La clave de acceso nunca se guarda en la base de datos ni se escribe en los logs. Al iniciar debe
-  verificar en Channex que la propiedad configurada existe; si no existe, no envía nada a Channex ni lee
-  reservas, sin afectar el resto del Módulo 2.
-- **FR-002**: El sistema debe registrar al iniciar la `Ota` "Booking.com" con el porcentaje
-  configurado, sin duplicarla, y actualizar el porcentaje si cambió, solo para las reservas futuras.
+  Channex, la clave de acceso y el identificador de la propiedad. La clave de acceso nunca se guarda en la
+  base de datos ni se escribe en los logs. Al iniciar debe verificar en Channex que la propiedad
+  configurada existe; si no existe, no envía nada a Channex ni lee reservas, sin afectar el resto del
+  Módulo 2.
+- **FR-002**: El sistema debe registrar al iniciar la `Ota` "Booking.com", sin porcentaje de comisión y
+  sin duplicarla. El porcentaje lo calcula el sistema con la primera reserva de Booking ("Registrar
+  confirmación y comisión de ota").
 - **FR-003**: El sistema debe crear en Channex un tipo de habitación por cada categoría con habitaciones
   vendibles según el Módulo 1, con el nombre de la categoría, la cantidad de habitaciones vendibles y la
   capacidad máxima de la categoría, y guardar la relación entre el tipo de Channex (`room_type_id`) y la
@@ -274,8 +274,8 @@ cancela la reserva y se verifica que reciba `3`.
 
 ### Key Entities *(include if feature involves data)*
 
-- **Ota**: La agencia Booking.com. Atributos: `id`, `name`, `hotelAccountId` (`10485037`, el id del hotel
-  en Booking), `commissionPercentage`, `connectionStatus` y `linkedAt`.
+- **Ota**: La agencia Booking.com. Atributos: `id`, `name`, `commissionPercentage` (fijo, calculado con su
+  primera reserva; vacío hasta entonces), `connectionStatus` y `linkedAt`.
 - **OtaRoomTypeMapping**: Relación entre un tipo de habitación de Channex y una categoría del Módulo 2.
   Atributos: `channexRoomTypeId`, `categoryRoom`, `countOfRooms` y `occupancy` (los últimos valores
   enviados a Channex, para saber si hay que actualizarlos).

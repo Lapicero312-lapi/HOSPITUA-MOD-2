@@ -106,3 +106,15 @@ export const NAME_SEARCH_TOO_SHORT = {
   code: 'NAME_SEARCH_TOO_SHORT',
   message: 'La búsqueda por nombre requiere al menos 3 caracteres.',
 } as const;
+
+/** La reserva no existe (cada plan dice cuándo: referencia, búsqueda o reserva que se excluye). */
+export const RESERVATION_NOT_FOUND = {
+  code: 'RESERVATION_NOT_FOUND',
+  message: 'La reserva no existe.',
+} as const;
+
+/** Caracteres no válidos en un texto libre (cada plan dice cuáles campos: `reason`, `notes`, titular…). */
+export const INVALID_CHARACTERS = {
+  code: 'INVALID_CHARACTERS',
+  message: 'El formato de los datos contiene caracteres no válidos.',
+} as const;

@@ -56,8 +56,10 @@ describe lo propio.
 - **Scale/Scope**: hasta 100 habitaciones en hasta 10 categorías, 5 recepcionistas a la vez, 1
   agencia OTA (Booking.com, por Channex staging), 300 reservas nuevas por día y 50 000 reservas guardadas en total.
 - **Configuración de Channex** (variables de entorno, nunca en la base de datos): `CHANNEX_BASE_URL`
-  (`https://staging.channex.io`), `CHANNEX_API_KEY`, `CHANNEX_PROPERTY_ID`, `BOOKING_HOTEL_ID`,
-  `BOOKING_COMMISSION_PERCENTAGE`, `CHANNEX_SYNC_INTERVAL_SECONDS` (`30`) y `CHANNEX_ARI_DAYS` (`90`).
+  (`https://staging.channex.io`), `CHANNEX_API_KEY`, `CHANNEX_PROPERTY_ID`,
+  `CHANNEX_SYNC_INTERVAL_SECONDS` (`30`) y `CHANNEX_ARI_DAYS` (`90`). El id del hotel de Booking se indica en
+  Channex al conectar el canal Booking.com, y el porcentaje de comisión de la agencia lo calcula el sistema
+  con su primera reserva (`register-ota-information-commission`): ninguno de los dos se configura.
 
 ### Decisiones de stack
 
@@ -104,7 +106,10 @@ Reglas:
    cambia el adaptador. Sus datos (`Room`, `MaintenanceCalendar`, `RateQuote`) son
    objetos de integración en `application/`, no entidades del dominio.
 4. La inyección de dependencias de Nest une los puertos con sus adaptadores (símbolos como
-   `RESERVATION_REPOSITORY` o `CLOCK`); el dominio nunca usa `@Injectable`.
+   `RESERVATION_REPOSITORY` o `CLOCK`); el dominio nunca usa `@Injectable`. Cada caso de uso tiene su
+   módulo de Nest en `application/use-cases/<caso>/<caso>.module.ts`: registra sus servicios con el
+   símbolo de su puerto de entrada y los exporta, y usa los puertos de salida de los módulos globales de
+   la infraestructura sin importarlos. `AppModule` importa los módulos de los casos de uso.
 5. Las dependencias entre capas se verifican en CI con `dependency-cruiser`
    (`backend/.dependency-cruiser.cjs`, dentro de `pnpm lint`): `domain/` no importa nada de `application/`
    ni de `infrastructure/`.
@@ -166,12 +171,12 @@ están en "Modelo de datos base".
 | `nationality` | texto | Nombre del país; si no es Colombia, el huésped es extranjero (se deduce, no se guarda). En reservas de Booking es informativa: se convierte del código de país de Channex y puede quedar vacía |
 | `contactPhone`, `contactEmail` | texto | Opcionales |
 
-**Ota** (agencia; se registra por configuración, `configure-ota`)
+**Ota** (agencia; se registra al iniciar, `configure-ota`)
 
 | Atributo | Tipo | Regla |
 |---|---|---|
-| `id`, `name`, `hotelAccountId` | texto | De la configuración: `Booking.com` y el id del hotel en Booking (`BOOKING_HOTEL_ID`) |
-| `commissionPercentage` | decimal de 0 a 100 | Porcentaje pactado por defecto |
+| `id`, `name` | texto | `Booking.com` |
+| `commissionPercentage` | decimal de 0 a 100 | Porcentaje fijo de la agencia: lo calcula el sistema con su primera reserva (`ota_commission ÷ grossAmount × 100`); vacío hasta entonces |
 | `connectionStatus` | `CONNECTED` o `DISCONNECTED` | |
 | `linkedAt`, `lastSyncAt` | fecha y hora | `lastSyncAt`: última lectura del feed de Channex que terminó bien |
 
@@ -409,7 +414,7 @@ puede responder.
 **Booking.com no llama al Módulo 2**: no hay rutas para la OTA. El Módulo 2 lee sus reservas del feed de
 Channex (`generate-ota-reservation`) y le envía los tipos de habitación y la disponibilidad
 (`configure-ota`); los precios los envía el Módulo 3. La
-agencia se registra por configuración; no hay rutas de alta ni edición manual (`POST`/`PUT /api/otas`
+agencia se registra al iniciar (`configure-ota`); no hay rutas de alta ni edición manual (`POST`/`PUT /api/otas`
 quedan fuera).
 
 **El Módulo 2 consume** (a través de los puertos `Module1Port`, `Module3Port` y `ChannexPort`):
@@ -611,8 +616,7 @@ erDiagram
     ota {
         uuid id PK
         varchar name UK
-        varchar hotel_account_id UK
-        numeric commission_percentage "0 a 100"
+        numeric commission_percentage "0 a 100, vacío hasta la primera reserva"
         varchar connection_status "CONNECTED DISCONNECTED"
         timestamptz linked_at
         timestamptz last_sync_at
@@ -816,14 +820,13 @@ tablas se unen por sus claves. Hay cuatro excepciones a propósito:
   reservas directas lo valida la aplicación, porque el canal está en `reservation`.
 - Índices: `(document_number)` para la búsqueda por documento y trigram (`gin_trgm_ops`) sobre `immutable_unaccent(lower(first_name || ' ' || last_name))`. No es único por documento: la misma persona puede ser titular de varias reservas, con sus datos en cada una (corregirlos en una reserva no cambia las demás).
 
-**`ota`** — agencia; se registra por configuración (`configure-ota`)
+**`ota`** — agencia; se registra al iniciar (`configure-ota`)
 
 | Columna | Tipo | Nulo | Regla |
 |---|---|---|---|
 | `id` | `uuid` | no | PK |
 | `name` | `varchar(100)` | no | Único; `Booking.com` |
-| `hotel_account_id` | `varchar(100)` | no | Único; id del hotel en Booking (`10485037`) |
-| `commission_percentage` | `numeric(5,2)` | no | De 0 a 100 |
+| `commission_percentage` | `numeric(5,2)` | sí | De 0 a 100; vacío hasta que llega la primera reserva de la agencia, que lo calcula (`register-ota-information-commission`) |
 | `connection_status` | `varchar(12)` | no | `CONNECTED`, `DISCONNECTED` |
 | `linked_at` | `timestamptz` | no | Fecha de la primera vinculación; no cambia al volver a vincular |
 | `last_sync_at` | `timestamptz` | no | Al registrar la agencia, igual a `linked_at`; después se actualiza con cada lectura del feed de Channex que termina bien |
