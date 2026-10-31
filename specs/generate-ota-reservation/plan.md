@@ -86,6 +86,7 @@ Devuelve las revisiones **no confirmadas**, de la más antigua a la más recient
     "arrival_date": "2026-11-10",
     "departure_date": "2026-11-12",
     "amount": "220.00",
+    "ota_commission": "33.00",
     "currency": "USD",
     "notes": "Llegada tarde",
     "customer": {
@@ -146,6 +147,7 @@ Devuelve las revisiones **no confirmadas**, de la más antigua a la más recient
 | `ota_reservation_code` | `reservation.external_confirmation_code` |
 | `arrival_date`, `departure_date` | `start_date`, `end_date` |
 | `amount`, `currency` | `gross_amount`, `currency` |
+| `ota_commission` | No se guarda: solo calcula el porcentaje fijo de la agencia si todavía no lo tiene (`register-ota-information-commission`) |
 | `notes` | `notes`, saneado y recortado a 500 caracteres |
 | `customer.name`, `surname`, `mail`, `phone` | `guest.first_name`, `last_name`, `contact_email`, `contact_phone` |
 | `customer.country` | `guest.nationality`: nombre del país según la tabla `CountryNames` (`CO` → `Colombia`); vacía si el código no está |
@@ -169,7 +171,12 @@ Módulo 1; regla 6 del plan base); los pasos 6 a 10 van en **una transacción**:
    de menor `roomNumber`, sin repetir. Las que no tengan habitación libre quedan **sin asignar**
    (`room_id` vacío, `blocks_inventory = false`).
 6. Crea la `Reservation` en `ACTIVE`, con `source = OTA`, `ota_id` de Booking.com y el titular nuevo.
-7. Calcula la comisión con `RegisterOtaConfirmationAndCommission.calculate` y escribe su auditoría.
+7. Calcula la comisión con `RegisterOtaConfirmationAndCommission.calculate`, con el porcentaje fijo de la
+   agencia, y escribe su auditoría. Si la agencia todavía no tiene porcentaje, `calculate` lo calcula con el
+   `ota_commission` de esta revisión y este caso de uso lo guarda con `ManageOta.setCommissionPercentage`, en
+   la misma transacción. Si la revisión no trae
+   `ota_commission`, o trae uno que da un porcentaje fuera de 0 a 100, no guarda nada ni confirma la
+   revisión, y lo registra en el log (FR-004 de `register-ota-information-commission`).
 8. Si hay habitaciones sin asignar, marca `NO_ROOM_AVAILABLE`; si alguna supera su `maxCapacity`,
    `CAPACITY_EXCEEDED` (si hay varios motivos, el primero en este orden: `NO_ROOM_AVAILABLE`,
    `CAPACITY_EXCEEDED`, `CHANGE_NOT_APPLICABLE`).
@@ -209,6 +216,7 @@ revisión se procesa de nuevo en la siguiente lectura, sin `ack`.
 | `OtaRoomTypeMappingRepository.findByChannexRoomType` | `configure-ota` | Categoría de cada habitación |
 | `VerifyAvailability.check` y `assignRooms` | `check-room-availability` | Disponibilidad y asignación (sin `requireAvailable`: nunca se rechaza) |
 | `RegisterOtaConfirmationAndCommission.calculate` y `recordAudit` | `register-ota-information-commission` | Comisión y auditoría |
+| `ManageOta.setCommissionPercentage` | `register-ota-information-commission` | Guardar el porcentaje fijo de la agencia con su primera reserva |
 | `OtaConnectionTracker.markSynced` y `markDisconnected` | `register-ota-information-commission` | `lastSyncAt` y `connectionStatus` |
 | `ApplyOtaChange.prepare` y `apply` | `update-reservation` | Revisiones `modified` |
 | `CancelReservation` | `cancel-reservation` | Revisiones `cancelled` |

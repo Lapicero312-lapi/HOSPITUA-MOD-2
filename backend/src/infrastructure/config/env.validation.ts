@@ -34,7 +34,7 @@ const HTTP_URL_OPTIONS = {
 /**
  * Variables de entorno que necesita el Módulo 2 para arrancar.
  *
- * Las de Channex (CHANNEX_*, BOOKING_*) NO están aquí a propósito: si faltan o son inválidas, solo se
+ * Las de Channex (CHANNEX_*) NO están aquí a propósito: si faltan o son inválidas, solo se
  * apagan las tareas de Channex y el resto del Módulo 2 debe funcionar igual (spec "Configurar OTA").
  * Esas las valida ese caso de uso.
  */
