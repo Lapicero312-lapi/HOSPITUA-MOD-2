@@ -64,8 +64,8 @@ describe('validateEnv', () => {
       RABBITMQ_URL: 'amqps://usuario:clave@rabbit.interno:5671',
       MODULE1_BASE_URL: 'https://modulo1.interno',
       MODULE3_BASE_URL: 'https://modulo3.interno',
-      SIRE_HOTEL_CODE: '12345',
-      SIRE_CITY_CODE: '11001',
+      SIRE_HOTEL_CODE: 'HOTEL-PRUEBA',
+      SIRE_CITY_CODE: 'CIUDAD-PRUEBA',
     });
 
     expect(config.NODE_ENV).toBe('production');
@@ -77,5 +77,79 @@ describe('validateEnv', () => {
 
   it('no exige las variables de Channex: el Módulo 2 arranca sin ellas', () => {
     expect(() => validateEnv({})).not.toThrow();
+  });
+
+  describe('variables de SIRE (plan de export-sire-file, "Configuración del formato")', () => {
+    /** Producción con todo lo obligatorio salvo SIRE. */
+    const PRODUCTION = {
+      NODE_ENV: 'production',
+      DB_PASSWORD: 'una-clave-larga',
+      RABBITMQ_URL: 'amqps://usuario:clave@rabbit.interno:5671',
+      MODULE1_BASE_URL: 'https://modulo1.interno',
+      MODULE3_BASE_URL: 'https://modulo3.interno',
+    };
+
+    it('en producción no arranca sin el hotel ni la ciudad, y las nombra sin sus valores', () => {
+      expect(() => validateEnv(PRODUCTION)).toThrow(
+        /SIRE_HOTEL_CODE[\s\S]*SIRE_CITY_CODE/,
+      );
+      expect(() =>
+        validateEnv({ ...PRODUCTION, SIRE_HOTEL_CODE: 'HOTEL-PRUEBA' }),
+      ).toThrow(/SIRE_CITY_CODE/);
+    });
+
+    it('fuera de producción usa valores que se notan falsos y los valores por defecto del plan', () => {
+      const config = validateEnv({});
+
+      expect(config.SIRE_HOTEL_CODE).toBe('DEV-HOTEL');
+      expect(config.SIRE_CITY_CODE).toBe('DEV-CIUDAD');
+      expect(config.SIRE_FIELD_SEPARATOR).toBe('TAB');
+      expect(config.SIRE_DATE_FORMAT).toBe('dd/MM/yyyy');
+      expect(config.SIRE_LINE_BREAK).toBe('CRLF');
+      expect(config.SIRE_FILE_ENCODING).toBe('utf-8');
+      expect(config.SIRE_MAX_PERIOD_DAYS).toBe(366);
+      expect(config.SIRE_MAX_RECORDS).toBe(50000);
+      expect(config.SIRE_RATE_LIMIT_PER_MINUTE).toBe(10);
+      expect(config.SIRE_MAX_CONCURRENT).toBe(3);
+    });
+
+    it('un hotel vacío definido a propósito se rechaza', () => {
+      expect(() => validateEnv({ SIRE_HOTEL_CODE: '' })).toThrow(
+        /SIRE_HOTEL_CODE/,
+      );
+    });
+
+    it.each([
+      ['SIRE_FIELD_SEPARATOR', '|'],
+      ['SIRE_DATE_FORMAT', 'yyyy-MM-dd'],
+      ['SIRE_LINE_BREAK', 'LF'],
+      ['SIRE_FILE_ENCODING', 'latin1'],
+    ])('acepta %s = %s', (name, value) => {
+      expect(validateEnv({ [name]: value })[name as 'SIRE_LINE_BREAK']).toBe(
+        value,
+      );
+    });
+
+    it.each([
+      ['SIRE_FIELD_SEPARATOR', 'A'],
+      ['SIRE_FIELD_SEPARATOR', 'ab'],
+      ['SIRE_FIELD_SEPARATOR', '||'],
+      ['SIRE_DATE_FORMAT', 'dd/MM'],
+      ['SIRE_LINE_BREAK', 'CR'],
+      ['SIRE_FILE_ENCODING', 'ascii'],
+      ['SIRE_MAX_PERIOD_DAYS', '0'],
+      ['SIRE_MAX_RECORDS', '0'],
+      ['SIRE_RATE_LIMIT_PER_MINUTE', '0'],
+      ['SIRE_MAX_CONCURRENT', '0'],
+      ['SIRE_MAX_CONCURRENT', '1.5'],
+    ])('rechaza %s = %s', (name, value) => {
+      expect(() => validateEnv({ [name]: value })).toThrow(new RegExp(name));
+    });
+
+    it('convierte a número los límites que llegan como texto', () => {
+      expect(
+        validateEnv({ SIRE_MAX_PERIOD_DAYS: '30' }).SIRE_MAX_PERIOD_DAYS,
+      ).toBe(30);
+    });
   });
 });
