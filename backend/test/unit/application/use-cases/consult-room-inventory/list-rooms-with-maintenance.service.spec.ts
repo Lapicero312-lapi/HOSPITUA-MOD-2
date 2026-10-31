@@ -287,7 +287,7 @@ describe('ListRoomsWithMaintenanceService.execute', () => {
   );
 
   it('devuelve las habitaciones ordenadas por categoría y luego por número, con los dígitos como número (plan, C1)', async () => {
-    // La 1001 y la 101 de SUITE_JUNIOR no están en el plan: muestran el orden por número y por categoría.
+    // Datos de las pruebas del plan (T012): la 1001 y la 101 de `SUITE_JUNIOR` muestran el orden por número y por categoría.
     const room1001: Room = {
       id: randomUUID(),
       roomNumber: '1001',

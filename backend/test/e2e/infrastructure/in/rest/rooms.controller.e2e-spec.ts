@@ -55,10 +55,11 @@ describe('GET /api/rooms (e2e)', () => {
     await app.close();
   });
 
-  it('responde 200 con las habitaciones ordenadas por categoría y número, y el total', async () => {
+  it('responde 200 con las habitaciones en orden y el total', async () => {
     const res = await request(app.getHttpServer())
       .get('/api/rooms')
-      .expect(200);
+      .expect(200)
+      .expect('Content-Type', /application\/json/);
 
     const none = {
       status: 'NONE',

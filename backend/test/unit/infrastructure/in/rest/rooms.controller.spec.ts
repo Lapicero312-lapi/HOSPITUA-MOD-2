@@ -50,11 +50,7 @@ describe('RoomsController.list (C1)', () => {
 
   it('solo lleva los campos de C1: un estado de la habitación no sale (FR-006)', async () => {
     // El estado `Occupied` es el del ejemplo de los datos de las pruebas del adaptador (T008).
-    const withStatus = {
-      ...ROOM_201,
-      status: 'Occupied',
-      maintenance: { ...ROOM_201.maintenance, status: 'SCHEDULED' as const },
-    };
+    const withStatus = { ...ROOM_201, status: 'Occupied' };
     const { controller } = controllerAnswering([withStatus]);
 
     const response = await controller.list();
