@@ -11,7 +11,28 @@ export interface ConsultRoomInventory {
   /**
    * B1: la habitación `roomId`, sin estado y sin modificar ningún dato.
    * @throws BusinessError `INVALID_ROOM_ID` si el `roomId` no es un UUID (sin llamar al Módulo 1) o si el
-   * Módulo 1 no reconoce o rechaza la habitación. Los demás errores de `Module1Port` salen tal cual.
+   * Módulo 1 no reconoce o rechaza la habitación, o `INVENTORY_UNAVAILABLE` si el Módulo 1 no responde,
+   * falla o responde algo mal formado. Un error inesperado sale tal cual.
    */
   byRoomId(roomId: string): Promise<Room>;
+
+  /**
+   * B2: todas las habitaciones de la categoría `categoryRoom`, sin filtrar por estado y sin modificar
+   * ningún dato; `[]` si la categoría no tiene habitaciones.
+   * @throws BusinessError `INVALID_CATEGORY` si la `categoryRoom` no tiene la forma acordada (sin llamar
+   * al Módulo 1) o si el Módulo 1 la rechaza, o `INVENTORY_UNAVAILABLE` si el Módulo 1 no responde, falla
+   * o responde algo mal formado (también un 404, que el contrato no prevé en una lista). Un error
+   * inesperado sale tal cual.
+   */
+  byCategory(categoryRoom: string): Promise<Room[]>;
+
+  /**
+   * B3: todas las habitaciones vendibles, de todas las categorías, con una sola consulta al Módulo 1 (A3),
+   * sin filtrar por estado y sin modificar ningún dato; `[]` si no hay ninguna. La usan la pantalla
+   * "Habitaciones" y "Configurar OTA".
+   * @throws BusinessError `INVENTORY_UNAVAILABLE` si el Módulo 1 no responde, falla o responde algo mal
+   * formado (también un 404 o un 400, que el contrato no prevé en esta consulta). Un error inesperado
+   * sale tal cual.
+   */
+  listAll(): Promise<Room[]>;
 }

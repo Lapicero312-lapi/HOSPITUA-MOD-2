@@ -10,6 +10,7 @@ import {
   OTA_REPOSITORY,
   type OtaRepository,
 } from '../../../src/application/ports/out/ota.repository.js';
+import { PROCESSED_MESSAGE_REPOSITORY } from '../../../src/application/ports/out/processed-message.repository.js';
 import {
   RESERVATION_REPOSITORY,
   type ReservationRepository,
@@ -18,6 +19,7 @@ import {
   TRANSACTION_RUNNER,
   type TransactionRunner,
 } from '../../../src/application/ports/out/transaction.js';
+import { TypeOrmProcessedMessageRepository } from '../../../src/infrastructure/out/messaging/processed-message.repository.js';
 import { aDirectReservation } from '../../support/builders.js';
 import { integrationEnv } from '../support/database.js';
 
@@ -63,5 +65,8 @@ describe('PersistenceModule', () => {
     );
     expect(moduleRef.get<GuestRepository>(GUEST_REPOSITORY)).toBeDefined();
     expect(moduleRef.get<OtaRepository>(OTA_REPOSITORY)).toBeDefined();
+    expect(moduleRef.get(PROCESSED_MESSAGE_REPOSITORY)).toBeInstanceOf(
+      TypeOrmProcessedMessageRepository,
+    );
   });
 });

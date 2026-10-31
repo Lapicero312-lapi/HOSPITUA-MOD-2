@@ -33,7 +33,8 @@ habitaciones: el Módulo 1 decide qué hace con la lista del día.
    disponibilidades" (la de menor `roomNumber`), y registra la `Reservation` directamente en
    **`ACTIVE`** (Booking ya la confirmó), con `source` `OTA`, el código de Booking como
    `externalConfirmationCode` y el valor bruto y la moneda que envía Booking. Ejecuta "Registrar
-   confirmación y comisión de ota" para calcular la comisión con el porcentaje de la agencia.
+   confirmación y comisión de ota" para calcular la comisión con el porcentaje fijo de la agencia (si es su
+   primera reserva, ese porcentaje se calcula con la comisión que informa Booking).
 4. **Cambio (`modified`)**: el sistema aplica el cambio a la reserva mediante "Actualizar
    reservación" (fechas, habitaciones, personas, valor, observaciones y datos del titular).
 5. **Cancelación (`cancelled`)**: el sistema cancela la reserva mediante "Cancelar reservación", por
@@ -214,8 +215,9 @@ pase a `CANCELLED` con una `Cancellation` del canal `OTA_API`.
   `ReservationRoom` en `EXPECTED` por cada habitación, con su categoría (según "Configurar OTA") y la
   `Room` asignada mediante "Verificar disponibilidades".
 - **FR-004**: El sistema debe calcular la comisión con "Registrar confirmación y comisión de ota":
-  `grossAmount × commissionPercentage / 100`, con el porcentaje de la agencia, que queda congelado en
-  la reserva.
+  `grossAmount × commissionPercentage / 100`, con el porcentaje fijo de la agencia, que queda congelado en
+  la reserva. Si la agencia todavía no tiene porcentaje, se calcula con la comisión que informa Booking en
+  esta revisión (`ota_commission`); si no la trae, la revisión no se procesa ni se confirma a Channex.
 - **FR-005**: Ante una revisión `modified`, el sistema debe aplicar el cambio mediante "Actualizar
   reservación" y recalcular la comisión con el porcentaje congelado de la reserva.
 - **FR-006**: Ante una revisión `cancelled`, el sistema debe cancelar la reserva mediante "Cancelar
@@ -263,10 +265,11 @@ pase a `CANCELLED` con una `Cancellation` del canal `OTA_API`.
 - **Guest**: Titular de la reserva. Atributos: `firstName`, `lastName`, `contactEmail`,
   `contactPhone`, `nationality` (informativa) y `documentType` y `documentNumber` (vacíos en reservas
   de Booking).
-- **Ota**: La agencia Booking.com, con su `commissionPercentage` (ver "Configurar OTA").
+- **Ota**: La agencia Booking.com, con su `commissionPercentage` fijo, calculado con su primera reserva (ver
+  "Registrar confirmación y comisión de ota").
 - **BookingRevision**: Revisión de reserva de Channex. Atributos usados: `id`, `booking_id`, `status` (`new`,
   `modified`, `cancelled`), `ota_reservation_code`, `arrival_date`, `departure_date`, `amount`,
-  `currency`, `customer` (`name`, `surname`, `mail`, `phone`, `country`), `rooms` (`room_type_id`,
+  `ota_commission` (comisión que cobra Booking), `currency`, `customer` (`name`, `surname`, `mail`, `phone`, `country`), `rooms` (`room_type_id`,
   `occupancy`, `checkin_date`, `checkout_date`) y `notes`.
 
 ## Success Criteria *(mandatory)*

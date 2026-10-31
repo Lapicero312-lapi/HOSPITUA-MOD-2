@@ -56,8 +56,10 @@ describe lo propio.
 - **Scale/Scope**: hasta 100 habitaciones en hasta 10 categorías, 5 recepcionistas a la vez, 1
   agencia OTA (Booking.com, por Channex staging), 300 reservas nuevas por día y 50 000 reservas guardadas en total.
 - **Configuración de Channex** (variables de entorno, nunca en la base de datos): `CHANNEX_BASE_URL`
-  (`https://staging.channex.io`), `CHANNEX_API_KEY`, `CHANNEX_PROPERTY_ID`, `BOOKING_HOTEL_ID`,
-  `BOOKING_COMMISSION_PERCENTAGE`, `CHANNEX_SYNC_INTERVAL_SECONDS` (`30`) y `CHANNEX_ARI_DAYS` (`90`).
+  (`https://staging.channex.io`), `CHANNEX_API_KEY`, `CHANNEX_PROPERTY_ID`,
+  `CHANNEX_SYNC_INTERVAL_SECONDS` (`30`) y `CHANNEX_ARI_DAYS` (`90`). El id del hotel de Booking se indica en
+  Channex al conectar el canal Booking.com, y el porcentaje de comisión de la agencia lo calcula el sistema
+  con su primera reserva (`register-ota-information-commission`): ninguno de los dos se configura.
 
 ### Decisiones de stack
 
@@ -104,7 +106,10 @@ Reglas:
    cambia el adaptador. Sus datos (`Room`, `MaintenanceCalendar`, `RateQuote`) son
    objetos de integración en `application/`, no entidades del dominio.
 4. La inyección de dependencias de Nest une los puertos con sus adaptadores (símbolos como
-   `RESERVATION_REPOSITORY` o `CLOCK`); el dominio nunca usa `@Injectable`.
+   `RESERVATION_REPOSITORY` o `CLOCK`); el dominio nunca usa `@Injectable`. Cada caso de uso tiene su
+   módulo de Nest en `application/use-cases/<caso>/<caso>.module.ts`: registra sus servicios con el
+   símbolo de su puerto de entrada y los exporta, y usa los puertos de salida de los módulos globales de
+   la infraestructura sin importarlos. `AppModule` importa los módulos de los casos de uso.
 5. Las dependencias entre capas se verifican en CI con `dependency-cruiser`
    (`backend/.dependency-cruiser.cjs`, dentro de `pnpm lint`): `domain/` no importa nada de `application/`
    ni de `infrastructure/`.
@@ -166,12 +171,12 @@ están en "Modelo de datos base".
 | `nationality` | texto | Nombre del país; si no es Colombia, el huésped es extranjero (se deduce, no se guarda). En reservas de Booking es informativa: se convierte del código de país de Channex y puede quedar vacía |
 | `contactPhone`, `contactEmail` | texto | Opcionales |
 
-**Ota** (agencia; se registra por configuración, `configure-ota`)
+**Ota** (agencia; se registra al iniciar, `configure-ota`)
 
 | Atributo | Tipo | Regla |
 |---|---|---|
-| `id`, `name`, `hotelAccountId` | texto | De la configuración: `Booking.com` y el id del hotel en Booking (`BOOKING_HOTEL_ID`) |
-| `commissionPercentage` | decimal de 0 a 100 | Porcentaje pactado por defecto |
+| `id`, `name` | texto | `Booking.com` |
+| `commissionPercentage` | decimal de 0 a 100 | Porcentaje fijo de la agencia: lo calcula el sistema con su primera reserva (`ota_commission ÷ grossAmount × 100`); vacío hasta entonces |
 | `connectionStatus` | `CONNECTED` o `DISCONNECTED` | |
 | `linkedAt`, `lastSyncAt` | fecha y hora | `lastSyncAt`: última lectura del feed de Channex que terminó bien |
 
@@ -409,7 +414,7 @@ puede responder.
 **Booking.com no llama al Módulo 2**: no hay rutas para la OTA. El Módulo 2 lee sus reservas del feed de
 Channex (`generate-ota-reservation`) y le envía los tipos de habitación y la disponibilidad
 (`configure-ota`); los precios los envía el Módulo 3. La
-agencia se registra por configuración; no hay rutas de alta ni edición manual (`POST`/`PUT /api/otas`
+agencia se registra al iniciar (`configure-ota`); no hay rutas de alta ni edición manual (`POST`/`PUT /api/otas`
 quedan fuera).
 
 **El Módulo 2 consume** (a través de los puertos `Module1Port`, `Module3Port` y `ChannexPort`):
@@ -421,6 +426,47 @@ quedan fuera).
 | Tarifa dinámica por habitación (contrato en [`calculate-dynamic-rate/plan.md`](../calculate-dynamic-rate/plan.md)) | M3 POST | `calculate-dynamic-rate` |
 | Feed de revisiones de reserva y `ack` (`/api/v1/booking_revisions/feed`, `/api/v1/booking_revisions/{id}/ack`) | Channex GET y POST | `generate-ota-reservation` |
 | Propiedades (`/api/v1/properties/options`), tipos de habitación (`/api/v1/room_types`) y disponibilidad (`/api/v1/availability`) | Channex GET, POST y PUT | `configure-ota` |
+
+**`ChannexPort`** (T021). El adaptador pone la cabecera `user-api-key`, el `CHANNEX_PROPERTY_ID` y la
+ruta de cada llamada: los casos de uso no los conocen. La clave nunca sale en los logs ni en los mensajes
+de error. Los contratos de cada llamada están en `configure-ota` (A0 a A4) y en
+`generate-ota-reservation` (A1 a A3).
+
+```typescript
+interface ChannexPort {
+  listProperties(): Promise<{ id: string; title: string }[]>;                    // A0 configure-ota
+  listRoomTypes(): Promise<ChannexRoomType[]>;                                    // A1, solo los de la propiedad
+  createRoomType(input: ChannexRoomTypeInput): Promise<ChannexRoomType>;          // A2
+  updateRoomType(id: string, input: ChannexRoomTypeInput): Promise<void>;         // A3
+  pushAvailability(values: AvailabilityRange[]): Promise<{ warnings: string[] }>; // A4 (meta.warnings)
+  fetchBookingFeed(page: number): Promise<BookingFeedPage>;                       // A1 generate-ota-reservation
+  ackBookingRevision(revisionId: string): Promise<void>;                          // A2
+  reportNoShow(bookingId: string): Promise<void>;                                 // A3
+}
+```
+
+- `ChannexRoomTypeInput` lleva `title`, `countOfRooms` y `occupancy`. El adaptador arma el resto del
+  cuerpo de A2: `occ_adults` y `default_occupancy` iguales a `occupancy`, `occ_children` y `occ_infants`
+  en `0`, y `room_kind` `room`.
+- `BookingFeedPage` trae las revisiones de la página y `meta.total`. Cada revisión es el objeto de
+  integración `BookingRevision`, con los campos de la tabla de B de `generate-ota-reservation`. El
+  importe va en `Money`, sin pasar por `number`.
+- Una revisión que no se puede leer (sin `id` o `booking_id`, o con un `status` o una fecha inválidos) se
+  omite y se registra en el log, sin datos personales. Como no se confirma, sigue en el feed, y Channex
+  avisa por correo a los 30 minutos.
+- **Errores**: `ChannexUnauthorizedError` (401 o 403); `ChannexRateLimitedError` (429, o una llamada
+  dentro de la pausa); `ChannexRejectedError` (otro 4xx, con el estado y el código de Channex, por ejemplo
+  `resource_not_found`); `ChannexUnavailableError` (5xx, tiempo agotado, error de red, respuesta con otra
+  forma o configuración incompleta). Cada caso de uso decide qué hace con cada uno, según su tabla de
+  respuestas.
+- **Pausa ante 429** (la hace el adaptador para todas las llamadas de la propiedad): tras un 429, ninguna
+  llamada sale a Channex durante 1 minuto; fallan con `ChannexRateLimitedError`. Si después llega otro
+  429, la pausa se duplica: 2, 4 y 8 minutos, con un tope de 10. Cualquier respuesta que no sea 429 la
+  vuelve a 1 minuto. La pausa vive en la memoria del proceso (una sola instancia).
+- **Tiempo máximo de espera**: 10 s por llamada, fijo. Una página del feed trae hasta 100 revisiones y un
+  envío de disponibilidad puede ser grande.
+- El adaptador no valida la configuración: eso es T001 de `configure-ota`, que apaga las tareas de
+  Channex si falta algo.
 
 **Errores**: cuerpo `{ "errorCode", "message", "timestamp", "path" }` con HTTP 400 (por defecto, también
 para recursos inexistentes, como piden los specs, y para la falta de disponibilidad) o 429 (exportación
@@ -570,8 +616,7 @@ erDiagram
     ota {
         uuid id PK
         varchar name UK
-        varchar hotel_account_id UK
-        numeric commission_percentage "0 a 100"
+        numeric commission_percentage "0 a 100, vacío hasta la primera reserva"
         varchar connection_status "CONNECTED DISCONNECTED"
         timestamptz linked_at
         timestamptz last_sync_at
@@ -775,14 +820,13 @@ tablas se unen por sus claves. Hay cuatro excepciones a propósito:
   reservas directas lo valida la aplicación, porque el canal está en `reservation`.
 - Índices: `(document_number)` para la búsqueda por documento y trigram (`gin_trgm_ops`) sobre `immutable_unaccent(lower(first_name || ' ' || last_name))`. No es único por documento: la misma persona puede ser titular de varias reservas, con sus datos en cada una (corregirlos en una reserva no cambia las demás).
 
-**`ota`** — agencia; se registra por configuración (`configure-ota`)
+**`ota`** — agencia; se registra al iniciar (`configure-ota`)
 
 | Columna | Tipo | Nulo | Regla |
 |---|---|---|---|
 | `id` | `uuid` | no | PK |
 | `name` | `varchar(100)` | no | Único; `Booking.com` |
-| `hotel_account_id` | `varchar(100)` | no | Único; id del hotel en Booking (`10485037`) |
-| `commission_percentage` | `numeric(5,2)` | no | De 0 a 100 |
+| `commission_percentage` | `numeric(5,2)` | sí | De 0 a 100; vacío hasta que llega la primera reserva de la agencia, que lo calcula (`register-ota-information-commission`) |
 | `connection_status` | `varchar(12)` | no | `CONNECTED`, `DISCONNECTED` |
 | `linked_at` | `timestamptz` | no | Fecha de la primera vinculación; no cambia al volver a vincular |
 | `last_sync_at` | `timestamptz` | no | Al registrar la agencia, igual a `linked_at`; después se actualiza con cada lectura del feed de Channex que termina bien |
@@ -973,6 +1017,28 @@ ningún cambio quede entre la lista y su primera actualización (ver `check-view
 | `processed_at` | `timestamptz` | no | |
 
 Se inserta en la misma transacción que el cambio que produce el mensaje.
+
+**Idempotencia (T014).** El puerto `ProcessedMessageRepository` (`application/ports/out/`) tiene su
+adaptador en `infrastructure/out/messaging/`. Lo usan todos los consumidores de colas
+(`update-reservation`, `process-guest-data` y `configure-ota`).
+
+```typescript
+interface ProcessedMessageRepository {
+  // Si el messageId ya se atendió, en cualquier cola.
+  isProcessed(messageId: string, tx: Transaction): Promise<boolean>;
+  // Lo registra en la misma transacción que el cambio que produce el mensaje.
+  record(message: { messageId: string; queue: string; sequenceNumber: number }, tx: Transaction): Promise<void>;
+}
+```
+
+- El consumidor llama a `isProcessed` dentro de su transacción, antes de aplicar el cambio. Si es
+  `true`, confirma el mensaje sin efectos.
+- `record` inserta la fila con `processed_at = now()`. Si otra entrega del mismo mensaje lo registró al
+  mismo tiempo, la clave primaria lo rechaza y la transacción se revierte. El reintento lo encuentra ya
+  procesado y lo confirma sin efectos.
+- El `messageId` es la única clave de duplicados. El `sequenceNumber` solo sirve para detectar saltos, y
+  eso lo hace `update-reservation` (FR-023).
+- La tabla la crea la migración base (T007). T014 agrega el puerto y su adaptador.
 
 **`ota_room_type_mapping`** — relación de tipos de habitación de Channex con categorías (`configure-ota`)
 
