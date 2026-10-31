@@ -4,6 +4,10 @@ import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { AppModule } from '../../src/app.module.js';
+import {
+  CHANNEX_SETUP_STATE,
+  type ChannexSetupState,
+} from '../../src/application/ports/out/channex-setup-state.js';
 import { configureApp } from '../../src/configure-app.js';
 
 describe('Módulo 2 (e2e)', () => {
@@ -20,6 +24,13 @@ describe('Módulo 2 (e2e)', () => {
 
   afterAll(async () => {
     await app.close();
+  });
+
+  it('arranca con la base de datos y, sin clave de Channex, deja las tareas de Channex apagadas', () => {
+    const state = app.get<ChannexSetupState>(CHANNEX_SETUP_STATE);
+
+    expect(state.isDisabled()).toBe(true);
+    expect(state.isReady()).toBe(false);
   });
 
   it('una ruta que no existe responde 400 REQUEST_NOT_PROCESSED con el cuerpo de error del plan base', async () => {
