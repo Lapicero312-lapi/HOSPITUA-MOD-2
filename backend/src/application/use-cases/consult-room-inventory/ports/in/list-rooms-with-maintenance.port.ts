@@ -5,7 +5,11 @@ export const LIST_ROOMS_WITH_MAINTENANCE = Symbol(
   'LIST_ROOMS_WITH_MAINTENANCE',
 );
 
-/** Símbolo con el que Nest le entrega al servicio el tope de consultas de mantenimiento en paralelo. */
+/**
+ * Símbolo con el que Nest le entrega al servicio el tope de consultas de mantenimiento en paralelo. El
+ * valor viene de la configuración validada (`MAINTENANCE_CONCURRENCY`, mínimo 1), así que el servicio no
+ * lo vuelve a revisar.
+ */
 export const MAINTENANCE_CONCURRENCY = Symbol('MAINTENANCE_CONCURRENCY');
 
 /**
