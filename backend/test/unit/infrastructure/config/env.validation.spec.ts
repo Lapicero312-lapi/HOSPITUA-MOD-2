@@ -64,6 +64,8 @@ describe('validateEnv', () => {
       RABBITMQ_URL: 'amqps://usuario:clave@rabbit.interno:5671',
       MODULE1_BASE_URL: 'https://modulo1.interno',
       MODULE3_BASE_URL: 'https://modulo3.interno',
+      SIRE_HOTEL_CODE: '12345',
+      SIRE_CITY_CODE: '11001',
     });
 
     expect(config.NODE_ENV).toBe('production');
