@@ -65,6 +65,26 @@ describe('ChannexSetupJob', () => {
     expect(retryPending(scheduler)).toBe(false);
   });
 
+  it('no bloquea el arranque: onApplicationBootstrap termina aunque ensure() no termine nunca', async () => {
+    const ensure = vi.fn(
+      () => new Promise<ChannexVerification>(() => undefined),
+    );
+    const job = new ChannexSetupJob(
+      { ensure } as EnsureChannexSetup,
+      { settings: () => null } as unknown as ChannexSetupState,
+      new SchedulerRegistry(),
+    );
+
+    // Nest espera lo que devuelve onApplicationBootstrap: tiene que terminar enseguida.
+    const outcome = await Promise.race([
+      Promise.resolve(job.onApplicationBootstrap()).then(() => 'terminó'),
+      vi.advanceTimersByTimeAsync(60_000).then(() => 'quedó esperando'),
+    ]);
+
+    expect(outcome).toBe('terminó');
+    expect(ensure).toHaveBeenCalledTimes(1);
+  });
+
   it('con DISABLED no vuelve a intentar', async () => {
     const { job, scheduler } = jobAnswering('DISABLED');
 
