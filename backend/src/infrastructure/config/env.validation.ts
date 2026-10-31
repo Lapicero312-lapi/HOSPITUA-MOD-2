@@ -11,6 +11,11 @@ import {
   Min,
   validateSync,
 } from 'class-validator';
+import {
+  SIRE_DEFAULTS,
+  SIRE_NON_PRODUCTION_DEFAULTS,
+  SireEnvironmentVariables,
+} from './sire.config.js';
 
 export const ENVIRONMENTS = ['development', 'test', 'production'] as const;
 export type Environment = (typeof ENVIRONMENTS)[number];
@@ -37,8 +42,11 @@ const HTTP_URL_OPTIONS = {
  * Las de Channex (CHANNEX_*, BOOKING_*) NO están aquí a propósito: si faltan o son inválidas, solo se
  * apagan las tareas de Channex y el resto del Módulo 2 debe funcionar igual (spec "Configurar OTA").
  * Esas las valida ese caso de uso.
+ *
+ * Las de SIRE (SIRE_*) están en `sire.config.ts` (plan de `export-sire-file`) y se heredan aquí: sí
+ * impiden arrancar si faltan.
  */
-export class EnvironmentVariables {
+export class EnvironmentVariables extends SireEnvironmentVariables {
   @IsIn(ENVIRONMENTS)
   NODE_ENV!: Environment;
 
@@ -140,6 +148,7 @@ const DEFAULTS = {
   ASSIGNMENT_MAX_RETRIES: 3,
   RECONCILIATION_MAX_ITEMS: 500,
   QUOTE_CONCURRENCY: 5,
+  ...SIRE_DEFAULTS,
 };
 
 /**
@@ -151,6 +160,7 @@ const NON_PRODUCTION_DEFAULTS = {
   RABBITMQ_URL: 'amqp://hospitua:hospitua@localhost:5672',
   MODULE1_BASE_URL: 'http://localhost:4001',
   MODULE3_BASE_URL: 'http://localhost:4003',
+  ...SIRE_NON_PRODUCTION_DEFAULTS,
 };
 
 /**
