@@ -21,9 +21,15 @@ describe('Cancellation', () => {
     const cancellation = Cancellation.restore(PROPS);
 
     expect(cancellation.snapshot()).toEqual(PROPS);
-    expect(cancellation.reservationRef).toBe('RSV-3F9A1C7B');
-    expect(cancellation.channel).toBe('RECEPTION');
-    expect(cancellation.status).toBe('COMPLETED');
+    expect({
+      id: cancellation.id,
+      reservationRef: cancellation.reservationRef,
+      cancellationDate: cancellation.cancellationDate,
+      reason: cancellation.reason,
+      channel: cancellation.channel,
+      processedBy: cancellation.processedBy,
+      status: cancellation.status,
+    }).toEqual(PROPS);
   });
 
   it('es inmutable: cambiar los datos de entrada o la copia no la cambia', () => {
