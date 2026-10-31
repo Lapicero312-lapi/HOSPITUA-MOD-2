@@ -7,8 +7,10 @@ export function otaToDomain(row: OtaTable): Ota {
   return Ota.restore({
     id: row.id,
     name: row.name,
-    hotelAccountId: row.hotelAccountId,
-    commissionPercentage: decimalText(row.commissionPercentage),
+    commissionPercentage:
+      row.commissionPercentage === null
+        ? null
+        : decimalText(row.commissionPercentage),
     connectionStatus: row.connectionStatus as ConnectionStatus,
     linkedAt: row.linkedAt,
     lastSyncAt: row.lastSyncAt,
@@ -19,7 +21,6 @@ export function otaToTable(ota: Ota): OtaTable {
   return Object.assign(new OtaTable(), {
     id: ota.id,
     name: ota.name,
-    hotelAccountId: ota.hotelAccountId,
     commissionPercentage: ota.commissionPercentage,
     connectionStatus: ota.connectionStatus,
     linkedAt: ota.linkedAt,
