@@ -12,7 +12,7 @@ import {
 /**
  * El ejemplo de la lista del día del plan de `check-view-reservation` (contrato con el Módulo 1): la
  * reserva directa `RSV-3F9A1C7B` del 2026-10-09 al 2026-10-12, la 201 `DOBLE` con 2 personas y la
- * titular Ana Pérez. El `updatedAt` es como lo escribe PostgreSQL.
+ * titular Ana Pérez. El `updatedAt` es como lo entrega el repositorio, y la proyección lo copia igual.
  */
 const ROOM_ID = randomUUID();
 const GUEST_REF = randomUUID();
@@ -56,7 +56,7 @@ describe('projectReservation', () => {
       endDate: '2026-10-12',
       guestCount: 2,
       notes: 'Llegada tarde',
-      updatedAt: '2026-10-08T15:42:10.123456-05:00',
+      updatedAt: '2026-10-08 15:42:10.123456-05',
       rooms: [
         {
           roomId: ROOM_ID,
@@ -146,35 +146,13 @@ describe('projectReservation', () => {
     expect(projection.guest.contactEmail).toBeNull();
   });
 
-  it.each([
-    [
-      'con los seis dígitos',
-      '2026-10-08 15:42:10.123456-05',
-      '2026-10-08T15:42:10.123456-05:00',
-    ],
-    [
-      'sin los ceros finales',
-      '2026-10-08 20:42:10.12+00',
-      '2026-10-08T20:42:10.120000+00:00',
-    ],
-    [
-      'sin microsegundos',
-      '2026-10-08 20:42:10+00',
-      '2026-10-08T20:42:10.000000+00:00',
-    ],
-    [
-      'con minutos en la zona',
-      '2026-10-09 02:12:10.12+05:30',
-      '2026-10-09T02:12:10.120000+05:30',
-    ],
-  ])(
-    'updatedAt %s sale en ISO 8601 con microsegundos y zona, a la misma hora',
-    (_, updatedAt, expected) => {
-      expect(
-        projectReservation(aDirectReservation({ updatedAt }), null).updatedAt,
-      ).toBe(expected);
-    },
-  );
+  it('updatedAt pasa tal como lo entrega el repositorio: para el dominio es opaco (plan base)', () => {
+    const updatedAt = '2026-10-08 20:42:10.12+00';
+
+    expect(
+      projectReservation(aDirectReservation({ updatedAt }), null).updatedAt,
+    ).toBe(updatedAt);
+  });
 
   it('no proyecta una reserva con una habitación sin asignar', () => {
     const reservation = anOtaReservation(randomUUID(), {

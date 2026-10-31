@@ -18,7 +18,10 @@ export type ReservationProjection = {
   endDate: string;
   guestCount: number;
   notes: string | null;
-  /** ISO 8601 con zona horaria y microsegundos (es el control de concurrencia). */
+  /**
+   * La versión de la reserva, tal como la entrega el repositorio: para el dominio es opaca (plan base).
+   * Pasarla a ISO 8601 con zona horaria y microsegundos es de quien publica el mensaje.
+   */
   updatedAt: string;
   rooms: {
     roomId: string;
@@ -68,7 +71,7 @@ export function projectReservation(
     endDate: reservation.endDate,
     guestCount: reservation.guestCount,
     notes: reservation.notes,
-    updatedAt: isoTimestamp(reservation.updatedAt),
+    updatedAt: reservation.updatedAt,
     rooms: reservation.rooms.map((room) => {
       if (room.roomId === null || room.roomNumber === null) {
         throw new Error(
@@ -99,24 +102,4 @@ export function projectReservation(
 /** El nombre de la agencia en mayúsculas y sin el dominio: `Booking.com` → `BOOKING`. */
 function agencySource(otaName: string): string {
   return otaName.split('.')[0].toUpperCase();
-}
-
-/**
- * El `updatedAt` como lo escribe PostgreSQL (`2026-10-08 20:42:10.12+00`: con espacio, sin los ceros
- * finales de los microsegundos y la zona sin minutos) en ISO 8601, con sus seis dígitos de microsegundos
- * y la zona completa: `2026-10-08T20:42:10.120000+00:00`. Es la misma hora: solo cambia cómo se escribe.
- * Se hace sobre el texto porque `Date` solo guarda milisegundos.
- */
-function isoTimestamp(updatedAt: string): string {
-  const match =
-    /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})(?:\.(\d{1,6}))?(?:(Z)|([+-]\d{2})(?::?(\d{2}))?)$/.exec(
-      updatedAt,
-    );
-  if (match === null) {
-    throw new Error('El updatedAt de la reserva no tiene un formato conocido.');
-  }
-  const [, date, time, fraction = '', utc, offsetHours, offsetMinutes = '00'] =
-    match;
-  const zone = utc === 'Z' ? '+00:00' : `${offsetHours}:${offsetMinutes}`;
-  return `${date}T${time}.${fraction.padEnd(6, '0')}${zone}`;
 }
