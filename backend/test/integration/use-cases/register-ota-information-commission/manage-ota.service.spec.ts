@@ -61,6 +61,12 @@ describe('ManageOta contra PostgreSQL real', () => {
     expect(again.linkedAt).toEqual(AT);
     const rows: unknown[] = await dataSource.query('SELECT id FROM ota');
     expect(rows).toHaveLength(1);
+    // Se vuelve a leer de la base: el segundo registro no cambió la agencia que ya existía.
+    const stored = await otas.findById(first.id);
+    expect(stored?.linkedAt).toEqual(AT);
+    expect(stored?.lastSyncAt).toEqual(AT);
+    expect(stored?.connectionStatus).toBe('CONNECTED');
+    expect(stored?.commissionPercentage).toBe('15');
   });
 
   it('un nombre vacío es INVALID_OTA_DATA', async () => {
