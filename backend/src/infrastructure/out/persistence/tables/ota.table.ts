@@ -9,16 +9,15 @@ export class OtaTable {
   @Column({ type: 'varchar', length: 100 })
   name: string;
 
-  @Column({ name: 'hotel_account_id', type: 'varchar', length: 100 })
-  hotelAccountId: string;
-
+  /** Vacío hasta la primera reserva de la agencia. */
   @Column({
     name: 'commission_percentage',
     type: 'numeric',
     precision: 5,
     scale: 2,
+    nullable: true,
   })
-  commissionPercentage: string;
+  commissionPercentage: string | null;
 
   @Column({ name: 'connection_status', type: 'varchar', length: 12 })
   connectionStatus: string;
