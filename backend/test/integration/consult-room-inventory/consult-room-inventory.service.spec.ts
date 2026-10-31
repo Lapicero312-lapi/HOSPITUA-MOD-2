@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
-import { delay, http, HttpResponse } from 'msw';
+import { delay, http, HttpResponse, type JsonBodyType } from 'msw';
 import { setupServer } from 'msw/node';
 import {
   afterAll,
@@ -29,14 +29,14 @@ import type { EnvironmentVariables } from '../../../src/infrastructure/config/en
 import { Module1ClientModule } from '../../../src/infrastructure/out/module1/module1-client.module.js';
 
 /**
- * Pruebas de integración de `consult-room-inventory` (T009): el servicio, el adaptador HTTP y la
+ * Pruebas de integración de `consult-room-inventory` (T009 y T015): el servicio, el adaptador HTTP y la
  * configuración reales, armados con Nest, contra el Módulo 1 simulado (msw). Las pruebas unitarias del
  * servicio usan un `Module1Port` simulado; estas comprueban que las piezas funcionan juntas.
  */
 
 /**
- * Datos de las pruebas del plan ("Pruebas por escenario", T009), que dice de dónde sale cada uno. El `id`
- * es un UUID cualquiera.
+ * Datos de las pruebas del plan ("Pruebas por escenario", T009 y T015), que dice de dónde sale cada uno.
+ * El `id` es un UUID cualquiera.
  */
 const ROOM_201: Room = {
   id: randomUUID(),
@@ -200,5 +200,121 @@ describe('ConsultRoomInventory contra el Módulo 1 simulado', () => {
         expect(requests).toEqual([]);
       },
     );
+  });
+
+  describe('tiempo de respuesta (NFR-001)', () => {
+    it('con el Módulo 1 a 200 ms, la consulta puntual responde en menos de 1 s', async () => {
+      server.use(
+        http.get(`${roomsUrl}/${ROOM_201.id}`, async () => {
+          await delay(200);
+          return HttpResponse.json(ROOM_201);
+        }),
+      );
+
+      const start = performance.now();
+      await inventory.byRoomId(ROOM_201.id);
+
+      expect(performance.now() - start).toBeLessThan(1000);
+    });
+  });
+
+  describe('logs sin datos personales', () => {
+    /** El nombre de una persona (el del ejemplo del plan de `check-view-reservation`). */
+    const PERSON = 'Ana Pérez';
+
+    /** La 201 con un campo que no es del contrato: el nombre de una persona (según C1, no llegan datos de reservas). */
+    const withGuest = { ...ROOM_201, guestName: PERSON };
+
+    /**
+     * Todo lo que se escribe en el log durante la prueba, en cualquier nivel y por cualquier vía: las
+     * instancias de `Logger`, sus métodos estáticos y `console`.
+     */
+    function captureLogs(): string[] {
+      const lines: string[] = [];
+      const record = (...args: unknown[]) => {
+        lines.push(args.map(String).join(' '));
+      };
+      for (const level of [
+        'log',
+        'error',
+        'warn',
+        'debug',
+        'verbose',
+        'fatal',
+      ] as const) {
+        vi.spyOn(Logger.prototype, level).mockImplementation(record);
+        vi.spyOn(Logger, level).mockImplementation(record);
+      }
+      for (const method of ['log', 'info', 'warn', 'error', 'debug'] as const) {
+        vi.spyOn(console, method).mockImplementation(record);
+      }
+      return lines;
+    }
+
+    // Cada consulta con lo que se le pide al Módulo 1 (después de `/api/rooms`), su respuesta válida y la
+    // mal formada, con los datos de T008: `maxCapacity` `0` en A1 y `"dos"` en A2 y A3.
+    describe.each<
+      [
+        string,
+        (port: ConsultRoomInventory) => Promise<unknown>,
+        string,
+        JsonBodyType,
+        JsonBodyType,
+      ]
+    >([
+      [
+        'byRoomId (A1)',
+        (port) => port.byRoomId(ROOM_201.id),
+        `/${ROOM_201.id}`,
+        withGuest,
+        { ...withGuest, maxCapacity: 0 },
+      ],
+      [
+        'byCategory (A2)',
+        (port) => port.byCategory('DOBLE'),
+        '',
+        [withGuest],
+        [{ ...withGuest, maxCapacity: 'dos' }],
+      ],
+      [
+        'listAll (A3)',
+        (port) => port.listAll(),
+        '',
+        [withGuest],
+        [{ ...withGuest, maxCapacity: 'dos' }],
+      ],
+    ])('%s', (_, consult, path, valid, malformed) => {
+      it.each<[string, () => Response]>([
+        ['un 503', () => HttpResponse.json(valid, { status: 503 })],
+        ['una respuesta mal formada', () => HttpResponse.json(malformed)],
+        [
+          'un cuerpo que no es JSON',
+          () => HttpResponse.text(`Huésped: ${PERSON}`),
+        ],
+      ])(
+        '%s: se escribe el log, sin la respuesta del Módulo 1',
+        async (_, respond) => {
+          const logs = captureLogs();
+          server.use(http.get(`${roomsUrl}${path}`, respond));
+
+          await expect(consult(inventory)).rejects.toMatchObject({
+            errorCode: INVENTORY_UNAVAILABLE.code,
+          });
+          expect(logs).not.toHaveLength(0);
+          expect(logs.join('\n')).not.toContain(PERSON);
+        },
+      );
+
+      it('una respuesta válida no deja la respuesta del Módulo 1 en el log', async () => {
+        const logs = captureLogs();
+        server.use(
+          http.get(`${roomsUrl}${path}`, () => HttpResponse.json(valid)),
+        );
+
+        await consult(inventory);
+
+        expect(logs.join('\n')).not.toContain(PERSON);
+      });
+    });
   });
 });
