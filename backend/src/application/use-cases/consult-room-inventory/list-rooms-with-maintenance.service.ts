@@ -19,10 +19,14 @@ import {
 /** Días de la ventana del mantenimiento próximo, contando hoy (plan, punto 4: "los siguientes 30 días"). */
 const WINDOW_DAYS = 30;
 
+/** Compara textos con los dígitos como número: la 201 va antes que la 1001. */
+const naturalOrder = new Intl.Collator('es', { numeric: true }).compare;
+
 /**
  * La pantalla "Habitaciones" (plan, D3): pide todas las habitaciones vendibles con una sola consulta y,
- * por cada una, su mantenimiento próximo, en paralelo y sin pasar del tope. Si falla el inventario, no
- * devuelve nada; si falla el calendario de una habitación, esa sale `UNAVAILABLE` y las demás siguen.
+ * por cada una, su mantenimiento próximo, en paralelo y sin pasar del tope. Las devuelve ordenadas por
+ * categoría y luego por número (plan, C1). Si falla el inventario, no devuelve nada; si falla el
+ * calendario de una habitación, esa sale `UNAVAILABLE` y las demás siguen.
  */
 @Injectable()
 export class ListRoomsWithMaintenanceService implements ListRoomsWithMaintenance {
@@ -40,7 +44,9 @@ export class ListRoomsWithMaintenanceService implements ListRoomsWithMaintenance
   ) {}
 
   async execute(): Promise<RoomWithMaintenance[]> {
-    const rooms = await this.inventory.listAll();
+    const rooms = (await this.inventory.listAll()).toSorted(
+      byCategoryAndNumber,
+    );
     const fromDate = this.clock.today();
     // `toDate` cuenta como la salida: la ventana va de hoy al día 29 después de hoy.
     const toDate = addDays(fromDate, WINDOW_DAYS);
@@ -93,6 +99,14 @@ export class ListRoomsWithMaintenanceService implements ListRoomsWithMaintenance
       };
     }
   }
+}
+
+/** El orden de la pantalla (plan, C1): por `categoryRoom` y luego por `roomNumber`. */
+function byCategoryAndNumber(a: Room, b: Room): number {
+  return (
+    naturalOrder(a.categoryRoom, b.categoryRoom) ||
+    naturalOrder(a.roomNumber, b.roomNumber)
+  );
 }
 
 /** El código del `BusinessError`, o el tipo del error si no es uno: nunca su mensaje. */

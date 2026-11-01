@@ -1,9 +1,12 @@
 import { Module } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
 import { ConfigureOtaModule } from './application/use-cases/configure-ota/configure-ota.module.js';
+import { ConsultMaintenanceCalendarModule } from './application/use-cases/consult-maintenance-calendar/consult-maintenance-calendar.module.js';
+import { ConsultRoomInventoryModule } from './application/use-cases/consult-room-inventory/consult-room-inventory.module.js';
 import { RegisterOtaInformationCommissionModule } from './application/use-cases/register-ota-information-commission/register-ota-information-commission.module.js';
 import { AppConfigModule } from './infrastructure/config/app-config.module.js';
 import { JobsModule } from './infrastructure/in/jobs/jobs.module.js';
+import { RestModule } from './infrastructure/in/rest/rest.module.js';
 import { ChannexClientModule } from './infrastructure/out/channex/channex-client.module.js';
 import { ClockModule } from './infrastructure/out/clock/clock.module.js';
 import { Module1ClientModule } from './infrastructure/out/module1/module1-client.module.js';
@@ -15,7 +18,7 @@ import { LoggingModule } from './infrastructure/shared/logging.module.js';
 /**
  * El Módulo 2: la configuración, la infraestructura global (base de datos, reloj y clientes de los otros
  * módulos y de Channex), los módulos de los casos de uso (plan base, regla 4 de la arquitectura) y las
- * tareas programadas.
+ * tareas programadas y los controladores REST.
  */
 @Module({
   imports: [
@@ -28,7 +31,10 @@ import { LoggingModule } from './infrastructure/shared/logging.module.js';
     ChannexClientModule,
     RegisterOtaInformationCommissionModule,
     ConfigureOtaModule,
+    ConsultMaintenanceCalendarModule,
+    ConsultRoomInventoryModule,
     JobsModule,
+    RestModule,
   ],
   providers: [{ provide: APP_FILTER, useClass: ApiErrorFilter }],
 })

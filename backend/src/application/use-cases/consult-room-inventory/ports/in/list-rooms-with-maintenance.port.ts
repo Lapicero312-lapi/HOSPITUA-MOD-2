@@ -31,8 +31,8 @@ export type RoomWithMaintenance = Room & {
 /** La pantalla "Habitaciones" (plan, D3): todas las habitaciones vendibles con su mantenimiento próximo. */
 export interface ListRoomsWithMaintenance {
   /**
-   * Todas las habitaciones vendibles, cada una con su mantenimiento próximo dentro de los siguientes 30
-   * días contando hoy.
+   * Todas las habitaciones vendibles, ordenadas por categoría y luego por número (plan, C1), cada una con
+   * su mantenimiento próximo dentro de los siguientes 30 días contando hoy.
    * @throws BusinessError `INVENTORY_UNAVAILABLE` si falla el inventario: nunca se devuelve una lista
    * incompleta. Si falla solo el calendario de una habitación, esa sale `UNAVAILABLE` y las demás siguen.
    */
