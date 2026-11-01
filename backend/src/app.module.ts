@@ -18,7 +18,7 @@ import { LoggingModule } from './infrastructure/shared/logging.module.js';
 /**
  * El Módulo 2: la configuración, la infraestructura global (base de datos, reloj y clientes de los otros
  * módulos y de Channex), los módulos de los casos de uso (plan base, regla 4 de la arquitectura) y las
- * tareas programadas.
+ * tareas programadas y los controladores REST.
  */
 @Module({
   imports: [
