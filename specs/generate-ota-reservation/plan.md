@@ -431,6 +431,12 @@ revisión se confirma.
 2. **Si una revisión de una reserva falla, las siguientes de esa misma reserva esperan** a la siguiente
    lectura, para no aplicar un cambio antes que su alta.
 3. **`processedBy` de la cancelación de Booking** es `Booking.com`.
+4. **`CountryNames`** tiene los 249 códigos oficiales de ISO 3166-1 alfa-2, con el nombre del país en
+   español (`CO` → `Colombia`, `US` → `Estados Unidos`, `VE` → `Venezuela`). El código se compara sin
+   espacios alrededor y sin distinguir mayúsculas (`co` → `Colombia`); si llega vacío o no está en la
+   tabla, la nacionalidad queda vacía. Es una tabla escrita en el código, y no `Intl.DisplayNames` de
+   Node, para que los nombres no cambien al actualizar Node: el nombre `Colombia` es el que decide si el
+   huésped es extranjero.
 
 ## Puntos abiertos
 
