@@ -70,7 +70,9 @@ propio de este caso de uso:
 
 ### A. Channex (Módulo 2 → Channex, REST)
 
-Cabecera `user-api-key: {CHANNEX_API_KEY}` en todas las llamadas. La clave nunca se escribe en los logs.
+Cabecera `user-api-key: {CHANNEX_API_KEY}` en todas las llamadas. La clave nunca sale en los logs, en una
+respuesta ni en la base de datos (NFR-002): solo está en el entorno (`CHANNEX_API_KEY`), y este caso de uso
+no tiene rutas REST.
 
 **A0. Verificar la propiedad**: `GET {CHANNEX_BASE_URL}/api/v1/properties/options`. Devuelve las
 propiedades de la cuenta, sin paginar, con su id y su nombre. Al iniciar, el sistema comprueba que
@@ -531,6 +533,10 @@ reserva.
 | FR-008 | Sin fechas pasadas, sin precios ni planes de tarifa | T010, T011 |
 | FR-009 | Fallos sin efecto en las reservas | T010, T011 |
 | FR-010 | Consumidores E1 y E2 | T012b |
+| NFR-002 | La clave solo en el entorno (B0); nunca en logs, respuestas ni base de datos | T001, T014 |
+| SC-001 | `SyncRoomTypes`: un tipo de habitación por categoría vendible, con la cantidad y la capacidad del Módulo 1 | T007, T008, T013 |
+| SC-002 | `AriChangeRecorder` en cada cambio confirmado y `PublishPendingAvailability` | T009, T010, T012 |
+| SC-003 | Fallos de Channex sin efecto en las reservas | T010, T011, T012 |
 
 ## Puntos que este plan propone (el spec no los dice)
 

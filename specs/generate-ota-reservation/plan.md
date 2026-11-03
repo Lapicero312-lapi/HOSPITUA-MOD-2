@@ -455,6 +455,11 @@ revisión se confirma.
 | FR-010 | Una transacción por revisión y reintentos | T005, T006 |
 | FR-011 | `OtaNoShowReporter`, `PublishPendingNoShows` y A3 | T011b |
 | FR-012 | Paso 4 de B1 | T011c |
+| NFR-002 | Logs sin datos personales del titular ni la clave de Channex | T013 |
+| SC-001 | `ota_booking_revision` (una vez por revisión) y `ack` después del commit | T002, T005, T007 |
+| SC-002 | `externalConfirmationCode` y `RegisterOtaConfirmationAndCommission` | T003, T006 |
+| SC-003 | Habitaciones sin asignar y `conflict_reason`: nunca se rechaza una reserva | T004, T006 |
+| SC-004 | `DailyListChangeRecorder` (`ADDED` solo con llegada hoy) | T006 |
 
 ## Puntos que este plan propone (el spec no los dice)
 
