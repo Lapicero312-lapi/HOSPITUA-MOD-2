@@ -1,6 +1,7 @@
 packages:
   - backend
   - frontend
+  - simulators
 
 # Todos usan la versión de Node del CI (.nvmrc y "engines" del package.json raíz): con otra versión,
 # pnpm se niega a instalar en vez de solo avisar.
