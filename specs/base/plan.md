@@ -494,9 +494,10 @@ specs/
 
 ```text
 package.json                      # scripts del monorepo
-pnpm-workspace.yaml               # backend y frontend
+pnpm-workspace.yaml               # backend, frontend y simulators
 .nvmrc                            # Node 22 LTS
 docker-compose.yml                # PostgreSQL y RabbitMQ para desarrollo
+simulators/                       # simuladores del Módulo 1 y del Módulo 3 (demo y desarrollo)
 
 backend/
 ├── package.json
@@ -572,6 +573,30 @@ están relacionadas y sus reglas se cruzan entre casos de uso, así que separarl
 reglas. Los casos de uso de las specs se reflejan en `application/use-cases/`. El frontend cubre solo a la
 Recepcionista; Booking no usa ninguna pantalla ni ruta del Módulo 2, y el Módulo 1 tiene su propia
 interfaz.
+
+### Simuladores del Módulo 1 y del Módulo 3 (demo y desarrollo)
+
+Mientras los otros módulos no estén desplegados, un servicio aparte, `simulators/` en la raíz del
+monorepo y fuera de `backend/`, responde los contratos REST ya acordados con datos de ejemplo de los
+planes:
+
+| Simula | Contrato | Puerto |
+|---|---|---|
+| Módulo 1 | A1, A2 y A3 de `consult-room-inventory` (`GET /api/rooms/{roomId}`, `GET /api/rooms?categoryRoom=…`, `GET /api/rooms`) y A1 de `consult-maintenance-calendar` (`GET /api/rooms/{roomId}/maintenances?startDate=…&endDate=…`) | `4001` |
+| Módulo 3 | A1 de `calculate-dynamic-rate` (`POST /pricing/quotes`) | `4003` |
+
+- **El backend no cambia:** apunta a los simuladores con `MODULE1_BASE_URL` y `MODULE3_BASE_URL`. Los
+  puertos son los de los valores por defecto de desarrollo (`localhost:4001` y `localhost:4003`). Cuando
+  los módulos reales estén listos, solo cambian esas dos variables.
+- **Datos:** las habitaciones de los ejemplos de los planes (201 y 202 `DOBLE`, 101 `SUITE_JUNIOR`, 1001
+  `DOBLE`). Los mantenimientos usan fechas relativas a hoy, para que siempre caigan en los próximos 30
+  días. Las cotizaciones dan una tarifa fija por categoría y por noche, con un `quoteId` nuevo en cada
+  respuesta. Respetan los errores de los contratos: 404 si la habitación no existe y 400 si el `roomId` o
+  las fechas son inválidos.
+- **No simula** las colas de RabbitMQ (los avisos de Check-In y Check-Out del Módulo 1) ni nada de
+  Channex.
+- **Es solo para la demo y el desarrollo:** no forma parte del Módulo 2 ni se usa en sus pruebas, que
+  siguen con `msw`. Está escrito en Node 22 sin dependencias.
 
 ## Diseño técnico base
 
