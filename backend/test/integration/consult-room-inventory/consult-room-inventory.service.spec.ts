@@ -27,6 +27,7 @@ import {
 import { AppConfigModule } from '../../../src/infrastructure/config/app-config.module.js';
 import type { EnvironmentVariables } from '../../../src/infrastructure/config/env.validation.js';
 import { Module1ClientModule } from '../../../src/infrastructure/out/module1/module1-client.module.js';
+import { captureLogs } from '../support/capture-logs.js';
 
 /**
  * Pruebas de integración de `consult-room-inventory` (T009 y T015): el servicio, el adaptador HTTP y la
@@ -227,32 +228,6 @@ describe('ConsultRoomInventory contra el Módulo 1 simulado', () => {
      * habitación, `id`, `roomNumber`, `categoryRoom` y `maxCapacity`.
      */
     const withGuest = { ...ROOM_201, guestName: PERSON };
-
-    /**
-     * Todo lo que se escribe en el log durante la prueba, en cualquier nivel y por cualquier vía: las
-     * instancias de `Logger`, sus métodos estáticos y `console`.
-     */
-    function captureLogs(): string[] {
-      const lines: string[] = [];
-      const record = (...args: unknown[]) => {
-        lines.push(args.map(String).join(' '));
-      };
-      for (const level of [
-        'log',
-        'error',
-        'warn',
-        'debug',
-        'verbose',
-        'fatal',
-      ] as const) {
-        vi.spyOn(Logger.prototype, level).mockImplementation(record);
-        vi.spyOn(Logger, level).mockImplementation(record);
-      }
-      for (const method of ['log', 'info', 'warn', 'error', 'debug'] as const) {
-        vi.spyOn(console, method).mockImplementation(record);
-      }
-      return lines;
-    }
 
     // Cada consulta con lo que se le pide al Módulo 1 (después de `/api/rooms`), su respuesta válida y la
     // mal formada, con los datos de T008: `maxCapacity` `0` en A1 y `"dos"` en A2 y A3.
