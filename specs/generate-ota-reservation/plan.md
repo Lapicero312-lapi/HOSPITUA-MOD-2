@@ -437,6 +437,15 @@ revisión se confirma.
    tabla, la nacionalidad queda vacía. Es una tabla escrita en el código, y no `Intl.DisplayNames` de
    Node, para que los nombres no cambien al actualizar Node: el nombre `Colombia` es el que decide si el
    huésped es extranjero.
+5. **El mapeador de la revisión (T003)** copia los datos de Booking tal como llegan, sin completarlos ni
+   recortarlos: Booking siempre envía el titular completo.
+   - **`notes`** es lo único que se cambia (spec, casos límite): se quitan los caracteres de control
+     (`\p{Cc}`, como `\u0000`), salvo el salto de línea y la tabulación, y los espacios alrededor; luego se
+     recorta a 500 caracteres (contando caracteres, no bytes). Si queda vacía, `null`.
+   - **Si falta un dato obligatorio o no cabe en su columna** (`ota_reservation_code` hasta 50
+     caracteres; nombre y apellido, obligatorios y de hasta 100; teléfono hasta 30; correo hasta 254; al
+     menos una habitación y al menos una persona por habitación), la revisión se trata como **payload
+     ilegible** (tabla de errores): no se guarda ni se confirma, y queda en el log sin datos personales.
 
 ## Puntos abiertos
 
