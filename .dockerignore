@@ -1,0 +1,17 @@
+# Lo que no entra en la imagen del backend (backend/Dockerfile se construye desde la raíz).
+**/node_modules
+**/dist
+.git
+.github
+specs
+
+# Del frontend y de los simuladores solo hace falta su package.json, para que pnpm reconozca el monorepo.
+frontend/*
+!frontend/package.json
+simulators/*
+!simulators/package.json
+
+# Nunca las claves: el .env local queda fuera; las variables las pone Render.
+**/.env
+**/.env.*
+.mcp.json
