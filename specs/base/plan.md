@@ -598,6 +598,34 @@ planes:
 - **Es solo para la demo y el desarrollo:** no forma parte del Módulo 2 ni se usa en sus pruebas, que
   siguen con `msw`. Está escrito en Node 22 sin dependencias.
 
+### Despliegue de la demo (Render)
+
+Para la presentación del avance, el Módulo 2 se despliega en Render con los Módulos 1 y 3 reemplazados por
+los simuladores. Lo describe `render.yaml` en la raíz del repositorio (un *Blueprint* de Render):
+
+| Servicio | Tipo | Qué corre |
+|---|---|---|
+| `hospitua-m2-frontend` | Static Site | `pnpm --filter frontend build` y publica `frontend/dist`. Reescribe `/api/*` al backend, como el proxy de Vite en desarrollo (sin CORS), y todo lo demás a `index.html` |
+| `hospitua-m2-backend` | Web Service (Docker, `backend/Dockerfile`) | Aplica las migraciones pendientes y arranca `node dist/main` |
+| `hospitua-m2-simulators` | Web Service (Node) | Los dos simuladores en el único puerto que da Render (`PORT`). Sus rutas no se cruzan: `/api/rooms…` del Módulo 1 y `/pricing/quotes` del Módulo 3 |
+| `hospitua-m2-db` | Postgres | La base del backend |
+
+- **Variables del backend:**
+  - `NODE_ENV=production`;
+  - las `DB_*` de la base de Render;
+  - `MODULE1_BASE_URL` y `MODULE3_BASE_URL` con la URL de los simuladores;
+  - `RABBITMQ_URL` de una cuenta gratuita de CloudAMQP: todavía no se usa, pero producción la exige;
+  - `SIRE_HOTEL_CODE` y `SIRE_CITY_CODE` con valores de demo (`DEMO-HOTEL` y `DEMO-CIUDAD`), porque el
+    hotel todavía no tiene sus códigos de SIRE.
+- **Los secretos** (`CHANNEX_API_KEY`, `CHANNEX_PROPERTY_ID` y `RABBITMQ_URL`) se escriben solo en el panel
+  de Render, nunca en `render.yaml` ni en el repositorio.
+- **Channex:** mientras la demo esté encendida, es la única copia conectada a la propiedad compartida de
+  staging. Nadie arranca otra con la misma clave.
+- **Plan gratuito:** los Web Services se duermen tras un rato sin uso y despiertan en cerca de un minuto;
+  mientras duermen, las tareas de Channex no corren. La base gratuita dura un tiempo limitado.
+- **No cambia el código del backend ni del frontend.** Los simuladores agregan el modo de un solo puerto:
+  con la variable `PORT`, responden los dos módulos en ese puerto. Sin ella, siguen en 4001 y 4003.
+
 ## Diseño técnico base
 
 ### Modelo de datos base (PostgreSQL)
