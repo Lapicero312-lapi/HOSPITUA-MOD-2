@@ -1,6 +1,7 @@
 # HOSPITUA · Módulo 2: Operación de Reservas y Cumplimiento Legal
 
-Monorepo del Módulo 2: `backend/` (NestJS) y `frontend/` (React + Vite). La especificación completa está
+Monorepo del Módulo 2: `backend/` (NestJS), `frontend/` (React + Vite) y `simulators/` (los Módulos 1 y 3
+simulados, para la demo y el desarrollo). La especificación completa está
 en [`specs/`](specs/): empieza por el [diccionario](specs/diccionario.md) y el
 [plan base](specs/base/plan.md).
 
@@ -22,9 +23,38 @@ docker compose up -d                         # PostgreSQL y RabbitMQ
 pnpm --filter backend migration:run          # crea las tablas en PostgreSQL
 pnpm --filter backend start:dev              # backend en http://localhost:3000
 pnpm --filter frontend dev                   # frontend en http://localhost:5173
+pnpm --filter simulators start               # opcional: simuladores del Módulo 1 y del Módulo 3
 ```
 
 El panel de RabbitMQ queda en <http://localhost:15672> (usuario y clave: `hospitua`).
+
+## Simuladores del Módulo 1 y del Módulo 3
+
+Mientras los otros módulos no estén desplegados, `simulators/` responde en su lugar los contratos REST ya
+acordados, con los datos de ejemplo de los planes. Sirven para la demo y para probar a mano en local.
+**No cambian nada del backend:** solo se apunta a ellos con dos variables (plan base, "Simuladores del
+Módulo 1 y del Módulo 3").
+
+```bash
+pnpm --filter simulators start     # Módulo 1 en http://localhost:4001 y Módulo 3 en http://localhost:4003
+```
+
+| Simula | Rutas | Puerto | Variable del backend |
+|---|---|---|---|
+| Módulo 1 (inventario y mantenimientos) | `GET /api/rooms`, `GET /api/rooms?categoryRoom=…`, `GET /api/rooms/{roomId}` y `GET /api/rooms/{roomId}/maintenances?startDate=…&endDate=…` | `4001` | `MODULE1_BASE_URL` |
+| Módulo 3 (cotizaciones) | `POST /pricing/quotes` | `4003` | `MODULE3_BASE_URL` |
+
+- **En local no hay que configurar nada:** `backend/.env.example` ya apunta a esos dos puertos.
+- **Datos:** las habitaciones 101 (`SUITE_JUNIOR`) y 201, 202 y 1001 (`DOBLE`). Los mantenimientos usan
+  fechas relativas a hoy, así que siempre caen en los próximos 30 días. Las cotizaciones dan una tarifa
+  fija por categoría y por noche.
+- **Responden los errores de los contratos:** 404 si la habitación no existe y 400 si el `roomId` o las
+  fechas son inválidos.
+- **No simulan** RabbitMQ (los avisos de Check-In y Check-Out) ni Channex. Las pruebas del backend no los
+  usan: siguen con `msw`.
+- **Si cambia un contrato con el Módulo 1 o el Módulo 3,** hay que actualizar también el simulador.
+- **Cuando los módulos reales estén listos,** se cambian `MODULE1_BASE_URL` y `MODULE3_BASE_URL` y los
+  simuladores dejan de usarse.
 
 ## Comandos
 
@@ -114,7 +144,7 @@ cambies sin preguntar.
 |---|---|
 | `package.json` (raíz, `backend/`, `frontend/`) | Las librerías del proyecto y los comandos (`pnpm test`, `pnpm build`, ...) |
 | `pnpm-lock.yaml` | Las versiones exactas de todo. Lo genera pnpm: **nunca se edita a mano**, pero sí se sube |
-| `pnpm-workspace.yaml` | Dice que `backend` y `frontend` son un solo proyecto |
+| `pnpm-workspace.yaml` | Dice que `backend`, `frontend` y `simulators` son un solo proyecto |
 | `tsconfig*.json` | Las reglas con las que TypeScript revisa y compila el código |
 | `.oxlintrc.json`, `.prettierrc` | Las reglas del lint y el formato único del código |
 | `backend/.dependency-cruiser.cjs` | Las reglas de las capas (qué carpeta puede importar de cuál) |
