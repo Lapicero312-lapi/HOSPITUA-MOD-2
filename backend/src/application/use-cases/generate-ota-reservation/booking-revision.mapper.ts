@@ -11,6 +11,8 @@ const MAX_NAME = 100;
 const MAX_PHONE = 30;
 const MAX_EMAIL = 254;
 const MAX_NOTES = 500;
+/** Lo más que cabe en `reservation_room.guest_count` (`smallint`). */
+const MAX_GUESTS_PER_ROOM = 32_767;
 
 /** Los caracteres de control (`\p{Cc}`), salvo el salto de línea y la tabulación (plan, punto 5). */
 const INVALID_NOTES_CHARACTERS = /[^\P{Cc}\n\t]/gu;
@@ -46,8 +48,8 @@ export type OtaReservationData = {
   externalConfirmationCode: string;
   startDate: string;
   endDate: string;
-  /** El valor bruto (`amount`), en la moneda de Booking. */
-  grossAmount: Money | null;
+  /** El valor bruto (`amount`), en la moneda de Booking. Obligatorio: sin él, la revisión es ilegible. */
+  grossAmount: Money;
   /** Solo para calcular el porcentaje de la agencia con su primera reserva: no se guarda. */
   otaCommission: Money | null;
   /** Saneada y recortada a 500 caracteres. */
@@ -90,12 +92,27 @@ export function mapBookingRevision(
   if (customer.mail !== null && length(customer.mail) > MAX_EMAIL) {
     return illegible('el correo del titular de más de 254 caracteres');
   }
+  if (revision.amount === null) {
+    return illegible('sin el valor (amount) con su moneda');
+  }
   if (revision.rooms.length === 0) {
     return illegible('sin habitaciones');
+  }
+  if (
+    revision.rooms.some(
+      (room) => room.adults === null || room.children === null,
+    )
+  ) {
+    return illegible(
+      'una habitación con los adultos o los niños con otra forma',
+    );
   }
   const rooms = revision.rooms.map(toRoomData);
   if (rooms.some((room) => room.guestCount < 1)) {
     return illegible('una habitación sin personas');
+  }
+  if (rooms.some((room) => room.guestCount > MAX_GUESTS_PER_ROOM)) {
+    return illegible('una habitación con más de 32767 personas');
   }
 
   return {
@@ -133,7 +150,10 @@ function sanitizeNotes(notes: string | null): string | null {
   return clean === '' ? null : Array.from(clean).slice(0, MAX_NOTES).join('');
 }
 
-/** Adultos más niños; el que no venga cuenta como 0 y los bebés no se cuentan (plan, tabla de B). */
+/**
+ * Adultos más niños; los bebés no se cuentan (plan, tabla de B). Ya se revisó que los dos vengan como
+ * enteros: si Channex no envía los niños, el lector del adaptador los deja en 0.
+ */
 function toRoomData(room: BookingRevisionRoom): OtaRoomData {
   return {
     channexRoomTypeId: room.roomTypeId,

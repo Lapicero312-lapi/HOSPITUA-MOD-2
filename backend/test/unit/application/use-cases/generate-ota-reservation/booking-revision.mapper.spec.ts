@@ -139,11 +139,11 @@ describe('mapBookingRevision', () => {
       expect(guest.contactPhone).toBeNull();
     });
 
-    it('sin valor ni comisión, los deja vacíos: los decide el caso de uso (pasos 6 y 7 de B1)', () => {
-      const data = mapped(aRevision({ amount: null, otaCommission: null }));
+    it('sin comisión la deja vacía: la decide el caso de uso (paso 7 de B1)', () => {
+      const data = mapped(aRevision({ otaCommission: null }));
 
-      expect(data.grossAmount).toBeNull();
       expect(data.otaCommission).toBeNull();
+      expect(data.grossAmount).toEqual(Money.of('220.00', 'USD'));
     });
 
     it('cada habitación cuenta adultos y niños, sin los bebés', () => {
@@ -159,9 +159,9 @@ describe('mapBookingRevision', () => {
       expect(data.rooms.map((room) => room.guestCount)).toEqual([3, 1]);
     });
 
-    it('cuenta como 0 los adultos que no vienen, si hay niños', () => {
+    it('una habitación solo con niños cuenta los niños', () => {
       const data = mapped(
-        aRevision({ rooms: [aRoom({ adults: null, children: 2 })] }),
+        aRevision({ rooms: [aRoom({ adults: 0, children: 2 })] }),
       );
 
       expect(data.rooms[0]?.guestCount).toBe(2);
@@ -190,12 +190,12 @@ describe('mapBookingRevision', () => {
 
     it('no cambia la revisión que recibe', () => {
       const notes = '  Llegada\u0000 tarde  ';
-      const revision = aRevision({ notes, rooms: [aRoom({ adults: null })] });
+      const revision = aRevision({ notes, rooms: [aRoom({ children: 1 })] });
 
       mapBookingRevision(revision);
 
       expect(revision).toEqual(
-        aRevision({ notes, rooms: [aRoom({ adults: null })] }),
+        aRevision({ notes, rooms: [aRoom({ children: 1 })] }),
       );
     });
   });
@@ -206,6 +206,12 @@ describe('mapBookingRevision', () => {
 
     it('quita los caracteres de control', () => {
       expect(notesOf('Llegada\u0000 tarde\u0007\u001B\u007F')).toBe(
+        'Llegada tarde',
+      );
+    });
+
+    it('quita también los caracteres de control C1 (\\p{Cc} incluye U+0080 a U+009F)', () => {
+      expect(notesOf('Llegada\u0085 tarde\u009B\u0080\u009F')).toBe(
         'Llegada tarde',
       );
     });
@@ -241,6 +247,10 @@ describe('mapBookingRevision', () => {
 
     it('recorta después de limpiar: los caracteres de control no cuentan', () => {
       expect(notesOf(`\u0000${text(500)}\u0000`)).toBe(text(500));
+    });
+
+    it('recorta después de quitar los espacios alrededor: no cuentan para los 500', () => {
+      expect(notesOf(`  ${text(500)}`)).toBe(text(500));
     });
 
     it.each([
@@ -309,9 +319,24 @@ describe('mapBookingRevision', () => {
         'una habitación sin personas',
       ],
       [
-        'con una habitación sin el dato de adultos ni niños',
-        aRevision({ rooms: [aRoom({ adults: null, children: null })] }),
-        'una habitación sin personas',
+        'sin el valor (amount)',
+        aRevision({ amount: null }),
+        'sin el valor (amount) con su moneda',
+      ],
+      [
+        'con los adultos de una habitación con otra forma',
+        aRevision({ rooms: [aRoom(), aRoom({ adults: null, children: 1 })] }),
+        'una habitación con los adultos o los niños con otra forma',
+      ],
+      [
+        'con los niños de una habitación con otra forma',
+        aRevision({ rooms: [aRoom({ adults: 2, children: null })] }),
+        'una habitación con los adultos o los niños con otra forma',
+      ],
+      [
+        'con más personas en una habitación de las que caben en guest_count',
+        aRevision({ rooms: [aRoom({ adults: 32_767, children: 1 })] }),
+        'una habitación con más de 32767 personas',
       ],
     ])('%s', (_caso, revision, reason) => {
       expect(reasonOf(revision)).toBe(reason);
@@ -328,6 +353,10 @@ describe('mapBookingRevision', () => {
       ],
       ['teléfono de 30 caracteres', aRevision({}, { phone: text(30) })],
       ['correo de 254 caracteres', aRevision({}, { mail: text(254) })],
+      [
+        '32767 personas en una habitación',
+        aRevision({ rooms: [aRoom({ adults: 32_766, children: 1 })] }),
+      ],
     ])('con %s, la revisión sí se puede guardar', (_caso, revision) => {
       expect(isIllegible(mapBookingRevision(revision))).toBe(false);
     });
@@ -342,7 +371,7 @@ describe('mapBookingRevision', () => {
 
     it('el motivo no lleva datos personales', () => {
       const name = 'Valentina'.repeat(12);
-      const reason = reasonOf(aRevision({}, { name, phone: text(31) }));
+      const reason = reasonOf(aRevision({}, { name }));
 
       expect(reason).not.toContain('Valentina');
     });
