@@ -494,9 +494,10 @@ specs/
 
 ```text
 package.json                      # scripts del monorepo
-pnpm-workspace.yaml               # backend y frontend
+pnpm-workspace.yaml               # backend, frontend y simulators
 .nvmrc                            # Node 22 LTS
 docker-compose.yml                # PostgreSQL y RabbitMQ para desarrollo
+simulators/                       # simuladores del Módulo 1 y del Módulo 3 (demo y desarrollo)
 
 backend/
 ├── package.json
@@ -572,6 +573,58 @@ están relacionadas y sus reglas se cruzan entre casos de uso, así que separarl
 reglas. Los casos de uso de las specs se reflejan en `application/use-cases/`. El frontend cubre solo a la
 Recepcionista; Booking no usa ninguna pantalla ni ruta del Módulo 2, y el Módulo 1 tiene su propia
 interfaz.
+
+### Simuladores del Módulo 1 y del Módulo 3 (demo y desarrollo)
+
+Mientras los otros módulos no estén desplegados, un servicio aparte, `simulators/` en la raíz del
+monorepo y fuera de `backend/`, responde los contratos REST ya acordados con datos de ejemplo de los
+planes:
+
+| Simula | Contrato | Puerto |
+|---|---|---|
+| Módulo 1 | A1, A2 y A3 de `consult-room-inventory` (`GET /api/rooms/{roomId}`, `GET /api/rooms?categoryRoom=…`, `GET /api/rooms`) y A1 de `consult-maintenance-calendar` (`GET /api/rooms/{roomId}/maintenances?startDate=…&endDate=…`) | `4001` |
+| Módulo 3 | A1 de `calculate-dynamic-rate` (`POST /pricing/quotes`) | `4003` |
+
+- **El backend no cambia:** apunta a los simuladores con `MODULE1_BASE_URL` y `MODULE3_BASE_URL`. Los
+  puertos son los de los valores por defecto de desarrollo (`localhost:4001` y `localhost:4003`). Cuando
+  los módulos reales estén listos, solo cambian esas dos variables.
+- **Datos:** las habitaciones de los ejemplos de los planes (201 y 202 `DOBLE`, 101 `SUITE_JUNIOR`, 1001
+  `DOBLE`). Los mantenimientos usan fechas relativas a hoy, para que siempre caigan en los próximos 30
+  días. Las cotizaciones dan una tarifa fija por categoría y por noche, con un `quoteId` nuevo en cada
+  respuesta. Respetan los errores de los contratos: 404 si la habitación no existe y 400 si el `roomId` o
+  las fechas son inválidos.
+- **No simula** las colas de RabbitMQ (los avisos de Check-In y Check-Out del Módulo 1) ni nada de
+  Channex.
+- **Es solo para la demo y el desarrollo:** no forma parte del Módulo 2 ni se usa en sus pruebas, que
+  siguen con `msw`. Está escrito en Node 22 sin dependencias.
+
+### Despliegue de la demo (Render)
+
+Para la presentación del avance, el Módulo 2 se despliega en Render con los Módulos 1 y 3 reemplazados por
+los simuladores. Lo describe `render.yaml` en la raíz del repositorio (un *Blueprint* de Render):
+
+| Servicio | Tipo | Qué corre |
+|---|---|---|
+| `hospitua-m2-frontend` | Static Site | `pnpm --filter frontend build` y publica `frontend/dist`. Reescribe `/api/*` al backend, como el proxy de Vite en desarrollo (sin CORS), y todo lo demás a `index.html` |
+| `hospitua-m2-backend` | Web Service (Docker, `backend/Dockerfile`) | Aplica las migraciones pendientes y arranca `node dist/main` |
+| `hospitua-m2-simulators` | Web Service (Node) | Los dos simuladores en el único puerto que da Render (`PORT`). Sus rutas no se cruzan: `/api/rooms…` del Módulo 1 y `/pricing/quotes` del Módulo 3 |
+| `hospitua-m2-db` | Postgres | La base del backend |
+
+- **Variables del backend:**
+  - `NODE_ENV=production`;
+  - las `DB_*` de la base de Render;
+  - `MODULE1_BASE_URL` y `MODULE3_BASE_URL` con la URL de los simuladores;
+  - `RABBITMQ_URL` de una cuenta gratuita de CloudAMQP: todavía no se usa, pero producción la exige;
+  - `SIRE_HOTEL_CODE` y `SIRE_CITY_CODE` con valores de demo (`DEMO-HOTEL` y `DEMO-CIUDAD`), porque el
+    hotel todavía no tiene sus códigos de SIRE.
+- **Los secretos** (`CHANNEX_API_KEY`, `CHANNEX_PROPERTY_ID` y `RABBITMQ_URL`) se escriben solo en el panel
+  de Render, nunca en `render.yaml` ni en el repositorio.
+- **Channex:** mientras la demo esté encendida, es la única copia conectada a la propiedad compartida de
+  staging. Nadie arranca otra con la misma clave.
+- **Plan gratuito:** los Web Services se duermen tras un rato sin uso y despiertan en cerca de un minuto;
+  mientras duermen, las tareas de Channex no corren. La base gratuita dura un tiempo limitado.
+- **No cambia el código del backend ni del frontend.** Los simuladores agregan el modo de un solo puerto:
+  con la variable `PORT`, responden los dos módulos en ese puerto. Sin ella, siguen en 4001 y 4003.
 
 ## Diseño técnico base
 
