@@ -106,6 +106,10 @@ describe('Simulador del Módulo 3 (calculate-dynamic-rate, A1)', () => {
         checkOutDate: '2026-03-02',
       },
     ],
+    [
+      'con una fecha sin el día',
+      { roomType: 'DOBLE', checkInDate: '2026-10', checkOutDate: '2026-10-11' },
+    ],
     ['con un cuerpo que no es JSON', 'no es JSON'],
     ['con una lista en lugar de un objeto', []],
   ]) {

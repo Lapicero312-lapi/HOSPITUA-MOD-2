@@ -76,10 +76,20 @@ function findRoom(roomId) {
       'El roomId tiene un formato inválido.',
     );
   }
-  const room = ROOMS.find((candidate) => candidate.id === roomId);
+  const room = roomWithId(roomId);
   return room
     ? reply(200, room)
     : errorReply(404, 'ROOM_NOT_FOUND', 'La habitación no existe.');
+}
+
+/**
+ * La habitación con ese `roomId`, sin distinguir mayúsculas: un UUID es el mismo en mayúsculas o en
+ * minúsculas, y el 404 es solo para la habitación que no existe.
+ * @param {string} roomId
+ */
+function roomWithId(roomId) {
+  const id = roomId.toLowerCase();
+  return ROOMS.find((room) => room.id === id);
 }
 
 /**
@@ -106,13 +116,18 @@ function checkMaintenances(roomId, startDate, endDate, today) {
       'El rango de fechas es inválido.',
     );
   }
-  if (!ROOMS.some((room) => room.id === roomId)) {
+  const room = roomWithId(roomId);
+  if (!room) {
     return errorReply(404, 'ROOM_NOT_FOUND', 'La habitación no existe.');
   }
-  const conflicts = (maintenancesFrom(today).get(roomId) ?? []).filter(
+  const conflicts = (maintenancesFrom(today).get(room.id) ?? []).filter(
     (maintenance) =>
       maintenance.maintenanceStart < endDate &&
       maintenance.maintenanceEnd >= startDate,
   );
-  return reply(200, { roomId, available: conflicts.length === 0, conflicts });
+  return reply(200, {
+    roomId: room.id,
+    available: conflicts.length === 0,
+    conflicts,
+  });
 }
