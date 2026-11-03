@@ -847,6 +847,15 @@ devuelve, por cada noche del rango, los `roomId` de la categoría que bloquean i
 `configure-ota` para la disponibilidad de Channex. No usan la ruta REST ni las clases internas de este caso de uso (regla 6 de la
 arquitectura).
 
+**`ReservationLookup.findBlockingRooms` (T016a; es también la T004 de `check-room-availability`).** El
+puerto de entrada está en `application/use-cases/check-view-reservation/ports/in/reservation-lookup.port.ts`,
+con su símbolo `RESERVATION_LOOKUP`. Lo implementa `ReservationLookupService`, que delega en
+`ReservationQueryPort.findBlockingRooms` (`application/ports/out/`, solo lectura). La consulta SQL es la de
+A1 de `check-room-availability`, en `TypeOrmReservationQuery`. Con `roomIds` vacío devuelve `[]` sin
+consultar la base. `CheckViewReservationModule` registra el servicio y lo exporta (regla 4). Los demás
+métodos del puerto (`findByRef`, `findByCode`, `findForUpdate` y `blockingRoomsByCategory`) los agrega cada
+tarea cuando le toca.
+
 **Integración con otros casos de uso**: `cancel-reservation`, `update-reservation`,
 `generate-direct-reservation` y `generate-ota-reservation` llaman a `DailyListChangeRecorder.record(tx,
 before, after, operationalDate?)` dentro de su transacción (`operationalDate` es opcional y por defecto

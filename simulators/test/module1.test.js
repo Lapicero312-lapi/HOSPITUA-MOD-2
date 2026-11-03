@@ -1,12 +1,39 @@
 import assert from 'node:assert/strict';
 import { after, before, describe, it } from 'node:test';
-import { ROOMS } from '../src/data.js';
 import { module1Handler } from '../src/module1.js';
 import { startSimulator } from './support.js';
 
 /** El día del ejemplo de C1 de `consult-room-inventory`. */
 const TODAY = '2026-10-11';
-const [ROOM_201, ROOM_202, ROOM_1001, ROOM_101] = ROOMS;
+
+/**
+ * Las habitaciones que fija el plan base ("Simuladores del Módulo 1 y del Módulo 3"), escritas aquí y no
+ * leídas de `data.js`: si cambian los datos del simulador, la prueba lo nota.
+ */
+const ROOM_201 = {
+  id: '3f6c1e2a-8b4d-4c7e-9a1f-2b3c4d5e6f70',
+  roomNumber: '201',
+  categoryRoom: 'DOBLE',
+  maxCapacity: 2,
+};
+const ROOM_202 = {
+  id: '7a2d9c4e-1f3b-4e8a-b6c5-0d9e8f7a6b51',
+  roomNumber: '202',
+  categoryRoom: 'DOBLE',
+  maxCapacity: 3,
+};
+const ROOM_1001 = {
+  id: 'c8e4b2a6-5d7f-4a1c-8e3b-9f0a1b2c3d42',
+  roomNumber: '1001',
+  categoryRoom: 'DOBLE',
+  maxCapacity: 2,
+};
+const ROOM_101 = {
+  id: '5b9f3d7c-2e4a-4b6d-a8c1-7e6f5d4c3b23',
+  roomNumber: '101',
+  categoryRoom: 'SUITE_JUNIOR',
+  maxCapacity: 2,
+};
 const UNKNOWN_ROOM = '9f1c2b3a-4d5e-4f60-8a7b-1c2d3e4f5a6b';
 
 describe('Simulador del Módulo 1', () => {
@@ -22,24 +49,11 @@ describe('Simulador del Módulo 1', () => {
   });
 
   describe('inventario (consult-room-inventory, A)', () => {
-    it('A3: todas las habitaciones, con los cuatro campos del contrato', async () => {
-      const { status, body } = await simulator.call('/api/rooms');
-
-      assert.equal(status, 200);
-      assert.deepEqual(
-        body.map(
-          (/** @type {{ roomNumber: string }} */ room) => room.roomNumber,
-        ),
-        ['201', '202', '1001', '101'],
-      );
-      for (const room of body) {
-        assert.deepEqual(Object.keys(room).sort(), [
-          'categoryRoom',
-          'id',
-          'maxCapacity',
-          'roomNumber',
-        ]);
-      }
+    it('A3: las cuatro habitaciones del plan, con los cuatro campos del contrato', async () => {
+      assert.deepEqual(await simulator.call('/api/rooms'), {
+        status: 200,
+        body: [ROOM_201, ROOM_202, ROOM_1001, ROOM_101],
+      });
     });
 
     it('A2: las habitaciones de una categoría', async () => {
@@ -69,6 +83,13 @@ describe('Simulador del Módulo 1', () => {
         status: 200,
         body: ROOM_101,
       });
+    });
+
+    it('A1: el roomId en mayúsculas encuentra la habitación, porque es el mismo UUID', async () => {
+      assert.deepEqual(
+        await simulator.call(`/api/rooms/${ROOM_201.id.toUpperCase()}`),
+        { status: 200, body: ROOM_201 },
+      );
     });
 
     it('A1: una habitación que no existe da 404', async () => {
@@ -113,6 +134,18 @@ describe('Simulador del Módulo 1', () => {
       assert.deepEqual(body.conflicts, [
         { maintenanceStart: '2026-10-10', maintenanceEnd: '2026-10-12' },
       ]);
+    });
+
+    it('el roomId en mayúsculas encuentra la habitación y responde su id tal como está en el inventario', async () => {
+      const { status, body } = await maintenances(
+        ROOM_201.id.toUpperCase(),
+        TODAY,
+        '2026-11-10',
+      );
+
+      assert.equal(status, 200);
+      assert.equal(body.roomId, ROOM_201.id);
+      assert.equal(body.available, false);
     });
 
     it('sin cruce, la habitación está disponible y no trae mantenimientos', async () => {
@@ -176,6 +209,7 @@ describe('Simulador del Módulo 1', () => {
     for (const [caso, startDate, endDate] of [
       ['una fecha mal formada', '11-10-2026', '2026-10-13'],
       ['una fecha que no existe', '2026-02-30', '2026-03-02'],
+      ['una fecha sin el día', '2026-10', '2026-10-13'],
       ['la salida igual a la llegada', TODAY, TODAY],
       ['la salida antes de la llegada', '2026-10-13', TODAY],
     ]) {
