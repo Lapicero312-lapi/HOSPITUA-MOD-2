@@ -474,9 +474,11 @@ revisión se confirma.
      (`\p{Cc}`, como `\u0000`), salvo el salto de línea y la tabulación, y los espacios alrededor; luego se
      recorta a 500 caracteres (contando caracteres, no bytes). Si queda vacía, `null`.
    - **Si falta un dato obligatorio o no cabe en su columna** (`ota_reservation_code` hasta 50
-     caracteres; nombre y apellido, obligatorios y de hasta 100; teléfono hasta 30; correo hasta 254; al
-     menos una habitación y al menos una persona por habitación), la revisión se trata como **payload
-     ilegible** (tabla de errores): no se guarda ni se confirma, y queda en el log sin datos personales.
+     caracteres; el valor (`amount`) con su moneda; nombre y apellido, obligatorios y de hasta 100;
+     teléfono hasta 30; correo hasta 254; al menos una habitación; los adultos y los niños de cada
+     habitación como enteros, sin pasar de 32 767 personas (`guest_count`, `smallint`), y al menos una
+     persona por habitación), la revisión se trata como **payload ilegible** (tabla de errores): no se
+     guarda ni se confirma, y queda en el log sin datos personales.
 
 ## Puntos abiertos
 
