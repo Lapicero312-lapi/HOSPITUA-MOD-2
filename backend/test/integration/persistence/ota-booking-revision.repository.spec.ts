@@ -1,4 +1,4 @@
-import type { DataSource } from 'typeorm';
+import { QueryFailedError, type DataSource } from 'typeorm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   DuplicateOtaBookingRevisionError,
@@ -25,15 +25,38 @@ describe('TypeOrmOtaBookingRevisionRepository contra PostgreSQL real', () => {
   let transactions: TypeOrmTransactionRunner;
   let ota: Ota;
 
+  /**
+   * Por defecto, una cancelación de una reserva que el sistema no tiene: se registra `IGNORED` y sin
+   * reserva (B3). Una `APPLIED` o una `CONFLICT` siempre tienen reserva (B1 y B2).
+   */
   const aRevision = (changes: Partial<NewRevision> = {}): NewRevision => ({
     revisionId: REVISION_ID,
     otaId: ota.id,
     bookingId: BOOKING_ID,
-    status: 'new',
+    status: 'cancelled',
     reservationId: null,
-    result: 'CONFLICT',
+    result: 'IGNORED',
     ...changes,
   });
+
+  /**
+   * Espera a que otra conexión quede bloqueada insertando en `ota_booking_revision`, para que la prueba
+   * de concurrencia pruebe de verdad el caso.
+   */
+  async function waitForBlockedInsert(): Promise<void> {
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const [{ blocked }]: { blocked: number }[] = await dataSource.query(
+        `SELECT count(*)::int AS blocked FROM pg_stat_activity
+         WHERE wait_event_type = 'Lock' AND pid <> pg_backend_pid()
+           AND query LIKE '%INSERT INTO ota_booking_revision%'`,
+      );
+      if (blocked > 0) {
+        return;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    throw new Error('La segunda inserción nunca quedó bloqueada');
+  }
 
   const record = (revision: NewRevision) =>
     transactions.run((tx) => revisions.record(revision, tx));
@@ -77,9 +100,9 @@ describe('TypeOrmOtaBookingRevisionRepository contra PostgreSQL real', () => {
         revisionId: REVISION_ID,
         otaId: ota.id,
         bookingId: BOOKING_ID,
-        status: 'new',
+        status: 'cancelled',
         reservationId: null,
-        result: 'CONFLICT',
+        result: 'IGNORED',
         processedAt: expect.any(Date) as Date,
         ackedAt: null,
       });
@@ -92,32 +115,26 @@ describe('TypeOrmOtaBookingRevisionRepository contra PostgreSQL real', () => {
       );
     });
 
-    it('guarda la reserva afectada', async () => {
-      const reservation = await new TypeOrmReservationRepository(
-        dataSource,
-      ).insert(anOtaReservation(ota.id));
-
-      await record(
-        aRevision({ reservationId: reservation.id, result: 'APPLIED' }),
-      );
-
-      await expect(revisions.findById(REVISION_ID)).resolves.toMatchObject({
-        reservationId: reservation.id,
-        result: 'APPLIED',
-      });
-    });
-
     it.each([
+      ['new', 'APPLIED'],
+      ['new', 'CONFLICT'],
       ['modified', 'APPLIED'],
-      ['cancelled', 'IGNORED'],
+      ['modified', 'CONFLICT'],
     ] as const)(
-      'guarda el estado %s y el resultado %s',
+      'guarda el estado %s y el resultado %s, con la reserva afectada',
       async (status, result) => {
-        await record(aRevision({ status, result }));
+        const reservation = await new TypeOrmReservationRepository(
+          dataSource,
+        ).insert(anOtaReservation(ota.id));
+
+        await record(
+          aRevision({ status, result, reservationId: reservation.id }),
+        );
 
         await expect(revisions.findById(REVISION_ID)).resolves.toMatchObject({
           status,
           result,
+          reservationId: reservation.id,
         });
       },
     );
@@ -143,13 +160,14 @@ describe('TypeOrmOtaBookingRevisionRepository contra PostgreSQL real', () => {
     });
 
     it('una revisión repetida da DuplicateOtaBookingRevisionError y deja la primera como estaba', async () => {
-      await record(aRevision({ result: 'CONFLICT' }));
+      const otherBooking = '4d2c8e1f-7a3b-4c5d-9e6f-0a1b2c3d4e5f';
+      await record(aRevision());
 
-      await expect(record(aRevision({ result: 'APPLIED' }))).rejects.toEqual(
-        new DuplicateOtaBookingRevisionError(REVISION_ID),
-      );
+      await expect(
+        record(aRevision({ bookingId: otherBooking })),
+      ).rejects.toEqual(new DuplicateOtaBookingRevisionError(REVISION_ID));
       await expect(revisions.findById(REVISION_ID)).resolves.toMatchObject({
-        result: 'CONFLICT',
+        bookingId: BOOKING_ID,
       });
     });
 
@@ -169,8 +187,10 @@ describe('TypeOrmOtaBookingRevisionRepository contra PostgreSQL real', () => {
         await firstHolds;
       });
       await recorded;
-      // La segunda espera a que la primera confirme, y entonces la clave primaria la rechaza.
+      // La segunda espera a que la primera confirme, y entonces la clave primaria la rechaza. Solo se suelta
+      // la primera cuando la segunda ya está bloqueada.
       const second = record(aRevision());
+      await waitForBlockedInsert();
       releaseFirst();
 
       await expect(first).resolves.toBeUndefined();
@@ -183,19 +203,25 @@ describe('TypeOrmOtaBookingRevisionRepository contra PostgreSQL real', () => {
       expect(rows).toHaveLength(1);
     });
 
-    it('otro error de la base no se traduce: una agencia que no existe', async () => {
+    it('otro error de la base sale tal cual: una agencia que no existe', async () => {
       await expect(
         record(aRevision({ otaId: '9f1c2b3a-4d5e-4f60-8a7b-1c2d3e4f5a6b' })),
-      ).rejects.not.toBeInstanceOf(DuplicateOtaBookingRevisionError);
+      ).rejects.toBeInstanceOf(QueryFailedError);
     });
   });
 
   describe('markAcked', () => {
-    it('guarda la hora del ack', async () => {
+    it('guarda la hora del ack y no cambia la del procesamiento', async () => {
       await record(aRevision());
+      const before = await timesOf(REVISION_ID);
 
       await revisions.markAcked(REVISION_ID);
 
+      const after = await timesOf(REVISION_ID);
+      expect(after.processed_at).toBe(before.processed_at);
+      expect(after.acked_at).not.toBeNull();
+      // El ack va en otra sentencia, después del commit: su now() es posterior al del registro.
+      expect(after.acked_at).not.toBe(after.processed_at);
       const saved = await revisions.findById(REVISION_ID);
       expect(saved?.ackedAt).toBeInstanceOf(Date);
       expect(saved?.ackedAt?.getTime()).toBeGreaterThanOrEqual(

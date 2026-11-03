@@ -25,6 +25,12 @@ import { TypeOrmOtaBookingRevisionRepository } from '../../../src/infrastructure
 import { aDirectReservation } from '../../support/builders.js';
 import { integrationEnv } from '../support/database.js';
 
+/**
+ * Un proveedor de fuera de `PersistenceModule` que inyecta el repositorio, como lo hará un caso de uso.
+ * `moduleRef.get` encuentra un proveedor aunque el módulo no lo exporte; inyectarlo, no.
+ */
+const INJECTED_REVISIONS = Symbol('INJECTED_REVISIONS');
+
 describe('PersistenceModule', () => {
   let moduleRef: TestingModule | undefined;
 
@@ -39,6 +45,13 @@ describe('PersistenceModule', () => {
       await import('../../../src/infrastructure/out/persistence/persistence.module.js');
     moduleRef = await Test.createTestingModule({
       imports: [AppConfigModule, PersistenceModule],
+      providers: [
+        {
+          provide: INJECTED_REVISIONS,
+          inject: [OTA_BOOKING_REVISION_REPOSITORY],
+          useFactory: (repository: unknown) => repository,
+        },
+      ],
     }).compile();
   });
 
@@ -71,6 +84,10 @@ describe('PersistenceModule', () => {
       TypeOrmProcessedMessageRepository,
     );
     expect(moduleRef.get(OTA_BOOKING_REVISION_REPOSITORY)).toBeInstanceOf(
+      TypeOrmOtaBookingRevisionRepository,
+    );
+    // El módulo lo exporta: un caso de uso lo puede inyectar.
+    expect(moduleRef.get(INJECTED_REVISIONS)).toBeInstanceOf(
       TypeOrmOtaBookingRevisionRepository,
     );
   });
