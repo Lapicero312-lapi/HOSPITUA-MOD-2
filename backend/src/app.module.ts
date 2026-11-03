@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
+import { CheckViewReservationModule } from './application/use-cases/check-view-reservation/check-view-reservation.module.js';
 import { ConfigureOtaModule } from './application/use-cases/configure-ota/configure-ota.module.js';
 import { ConsultMaintenanceCalendarModule } from './application/use-cases/consult-maintenance-calendar/consult-maintenance-calendar.module.js';
 import { ConsultRoomInventoryModule } from './application/use-cases/consult-room-inventory/consult-room-inventory.module.js';
@@ -33,6 +34,7 @@ import { LoggingModule } from './infrastructure/shared/logging.module.js';
     ConfigureOtaModule,
     ConsultMaintenanceCalendarModule,
     ConsultRoomInventoryModule,
+    CheckViewReservationModule,
     JobsModule,
     RestModule,
   ],
