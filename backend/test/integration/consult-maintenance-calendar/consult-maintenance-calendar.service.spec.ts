@@ -26,6 +26,7 @@ import {
 import { AppConfigModule } from '../../../src/infrastructure/config/app-config.module.js';
 import type { EnvironmentVariables } from '../../../src/infrastructure/config/env.validation.js';
 import { Module1ClientModule } from '../../../src/infrastructure/out/module1/module1-client.module.js';
+import { captureLogs } from '../support/capture-logs.js';
 
 /**
  * Pruebas de integración de `consult-maintenance-calendar` (T011 y T014): el servicio, el adaptador HTTP y
@@ -280,32 +281,6 @@ describe('ConsultMaintenanceCalendar contra el Módulo 1 simulado', () => {
       ...crossing,
       reason: `Reparación pedida por ${PERSON}`,
     };
-
-    /**
-     * Todo lo que se escribe en el log durante la prueba, en cualquier nivel y por cualquier vía: las
-     * instancias de `Logger`, sus métodos estáticos y `console`.
-     */
-    function captureLogs(): string[] {
-      const lines: string[] = [];
-      const record = (...args: unknown[]) => {
-        lines.push(args.map(String).join(' '));
-      };
-      for (const level of [
-        'log',
-        'error',
-        'warn',
-        'debug',
-        'verbose',
-        'fatal',
-      ] as const) {
-        vi.spyOn(Logger.prototype, level).mockImplementation(record);
-        vi.spyOn(Logger, level).mockImplementation(record);
-      }
-      for (const method of ['log', 'info', 'warn', 'error', 'debug'] as const) {
-        vi.spyOn(console, method).mockImplementation(record);
-      }
-      return lines;
-    }
 
     it.each<[string, JsonBodyType, number]>([
       [

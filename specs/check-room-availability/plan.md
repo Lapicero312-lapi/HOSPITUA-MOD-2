@@ -165,9 +165,11 @@ B2 y B3 reciben **solo los campos que usan** del `AvailabilityResult` (`room.id`
     "categoryRoom": "DOBLE",
     "availableCount": 1,
     "rooms": [
-      { "roomId": "uuid", "roomNumber": "201", "available": true, "reason": null },
-      { "roomId": "uuid", "roomNumber": "202", "available": false, "reason": "RESERVED" },
+      { "roomId": "uuid", "roomNumber": "201", "available": true, "reason": null, "message": null },
+      { "roomId": "uuid", "roomNumber": "202", "available": false, "reason": "RESERVED",
+        "message": "La habitación ya está reservada en esas fechas." },
       { "roomId": "uuid", "roomNumber": "203", "available": false, "reason": "MAINTENANCE",
+        "message": "La habitación estará inhabilitada por mantenimiento en esas fechas.",
         "maintenance": [ { "overlapStart": "2026-10-11", "overlapEnd": "2026-10-12" } ] }
     ]
   }
@@ -343,7 +345,8 @@ Todo error sale con `{ "errorCode", "message", "timestamp", "path" }` y **siempr
 | `domain/reservation/` | `requireAvailable` (B2) y `assignRooms` (B3) |
 | `application/use-cases/check-room-availability/` | **Entrada**: `VerifyAvailability` (`check`); validadores de la consulta |
 | `application/use-cases/check-view-reservation/` | `ReservationLookup.findBlockingRooms` (A1, método nuevo en el plan de ese caso de uso) |
-| `infrastructure/out/persistence/` | Consulta `findBlockingRooms` sobre `reservation_room` |
+| `infrastructure/out/persistence/` | Consulta `findBlockingRooms` sobre `reservation_room`, en `TypeOrmReservationQuery` (`check-view-reservation`) |
+| `infrastructure/in/rest/` | DTO compartido `availability` (`toAvailabilityDto`), que usan las vistas previas de los flujos |
 
 ```text
 backend/src/
@@ -354,7 +357,9 @@ backend/src/
 │   ├── ports/in/verify-availability.port.ts
 │   ├── verify-availability.service.ts
 │   └── availability-query.validator.ts
-└── infrastructure/out/persistence/blocking-rooms.query.ts
+└── infrastructure/
+    ├── out/persistence/repositories/reservation.query.ts   # TypeOrmReservationQuery (findBlockingRooms)
+    └── in/rest/availability.dto.ts                          # DTO compartido availability
 backend/test/
 ├── unit/                                  # espejo de src/: B2, B3, validadores
 ├── integration/check-room-availability/   # servicio con Testcontainers (PostgreSQL) y puertos del Módulo 1 simulados
@@ -452,11 +457,28 @@ ocupadas hoy y liberadas dentro de una reserva en curso.
    parciales.
 4. **Si hay reserva y mantenimiento, el motivo es `RESERVED`**: el calendario solo se consulta para las
    habitaciones que pasaron el cruce, como dice el spec.
-5. **Opción `limit`** para detener las consultas de mantenimiento al alcanzar la cantidad necesaria.
+5. **Opción `limit`** para detener las consultas de mantenimiento al alcanzar la cantidad necesaria
+   (T010). Las candidatas (las que pasaron el cruce con las reservas) se consultan en el calendario en
+   orden numérico de `roomNumber`, para que las primeras disponibles sean las de menor número, las mismas
+   que elegiría `assignRooms`. En cuanto hay `limit` disponibles, no se empieza ninguna consulta más; las
+   que ya estaban en curso terminan y también entran en el resultado, así que puede haber más disponibles
+   que `limit`. El resultado trae las habitaciones reservadas (`RESERVED`) y las consultadas en el
+   calendario; **no trae** las que no se llegaron a consultar. Sin `limit`, se consultan todas. Un `limit`
+   que no sea un entero mayor que 0 es un error del programa (`Error`), no del usuario, porque lo pasa un
+   flujo de reserva y no la Recepcionista.
 6. **`assignRooms`**: la habitación de menor `roomNumber` (orden numérico), como pide el spec de OTA, y
    la misma regla para la reserva directa, que el spec no define.
 7. **`excludeReservationRef` inexistente** responde `400` `RESERVATION_NOT_FOUND`.
 8. **Motivos y mensajes** `RESERVED` y `MAINTENANCE`, y el código `INVALID_AVAILABILITY_QUERY`.
+9. **DTO compartido `availability` (T011).** `toAvailabilityDto(result, categoryRoom)`, en
+   `infrastructure/in/rest/availability.dto.ts`, convierte un `AvailabilityResult` en el JSON de B:
+   - `startDate`, `endDate`, `categoryRoom` (la consultada, o `null` si se verificó una habitación por
+     `roomId`) y `availableCount`;
+   - por habitación, `roomId`, `roomNumber`, `available`, `reason`, `message` (el de la tabla de motivos,
+     o `null` si está disponible) y, solo con `MAINTENANCE`, `maintenance`.
+
+   No incluye la `reservationRef` que bloquea ni datos del huésped. Los flujos que verifican varias
+   categorías a la vez, como una modificación, arman su propia lista con esta misma forma por habitación.
 
 ## Puntos abiertos
 

@@ -225,6 +225,37 @@ revisión se procesa de nuevo en la siguiente lectura, sin `ack`.
 | Reglas de transición del dominio | Plan base (T011) | Estado inicial `ACTIVE` y `stayStatus` `EXPECTED` (la fábrica `createOta`) |
 | `Clock` | Plan base | Día operativo en curso |
 
+**`OtaBookingRevisionRepository` (T002)** (`application/ports/out/`), sobre `ota_booking_revision`:
+
+```typescript
+type ProcessedRevision = {
+  revisionId: string;            // id de la revisión en Channex
+  otaId: string;
+  bookingId: string;
+  status: 'new' | 'modified' | 'cancelled';
+  reservationId: string | null;  // vacío si la revisión no se aplicó
+  result: 'APPLIED' | 'CONFLICT' | 'IGNORED';
+  processedAt: Date;
+  ackedAt: Date | null;          // vacío hasta confirmar a Channex
+};
+
+interface OtaBookingRevisionRepository {
+  // Paso 1 de B1: la revisión si ya se procesó, con su ackedAt para repetir el ack si faltaba.
+  findById(revisionId: string, tx?: Transaction): Promise<ProcessedRevision | null>;
+  // Paso 10 de B1: en la misma transacción que el cambio de la reserva, con processed_at = now().
+  record(revision: Omit<ProcessedRevision, 'processedAt' | 'ackedAt'>, tx: Transaction): Promise<void>;
+  // Después del commit, cuando Channex responde 200 al ack (A2): acked_at = now(), solo si estaba vacío.
+  markAcked(revisionId: string): Promise<void>;
+  // T007: las que quedaron sin ack, de la más antigua a la más reciente (índice parcial de processed_at).
+  findPendingAck(): Promise<ProcessedRevision[]>;
+}
+```
+
+- Si otra lectura registró la misma revisión a la vez, la clave primaria rechaza `record` con
+  `DuplicateOtaBookingRevisionError` y la transacción se revierte. La siguiente lectura la encuentra ya
+  procesada y solo repite el `ack` (regla 1).
+- `markAcked` no cambia un `acked_at` que ya tiene valor: se conserva la hora del primer `ack`.
+
 ## Reglas de negocio
 
 1. **Una revisión, un procesamiento**: la clave es el `id` de la revisión (`ota_booking_revision`), no el
@@ -424,6 +455,11 @@ revisión se confirma.
 | FR-010 | Una transacción por revisión y reintentos | T005, T006 |
 | FR-011 | `OtaNoShowReporter`, `PublishPendingNoShows` y A3 | T011b |
 | FR-012 | Paso 4 de B1 | T011c |
+| NFR-002 | Logs sin datos personales del titular ni la clave de Channex | T013 |
+| SC-001 | `ota_booking_revision` (una vez por revisión) y `ack` después del commit | T002, T005, T007 |
+| SC-002 | `externalConfirmationCode` y `RegisterOtaConfirmationAndCommission` | T003, T006 |
+| SC-003 | Habitaciones sin asignar y `conflict_reason`: nunca se rechaza una reserva | T004, T006 |
+| SC-004 | `DailyListChangeRecorder` (`ADDED` solo con llegada hoy) | T006 |
 
 ## Puntos que este plan propone (el spec no los dice)
 
@@ -437,6 +473,17 @@ revisión se confirma.
    tabla, la nacionalidad queda vacía. Es una tabla escrita en el código, y no `Intl.DisplayNames` de
    Node, para que los nombres no cambien al actualizar Node: el nombre `Colombia` es el que decide si el
    huésped es extranjero.
+5. **El mapeador de la revisión (T003)** copia los datos de Booking tal como llegan, sin completarlos ni
+   recortarlos: Booking siempre envía el titular completo.
+   - **`notes`** es lo único que se cambia (spec, casos límite): se quitan los caracteres de control
+     (`\p{Cc}`, como `\u0000`), salvo el salto de línea y la tabulación, y los espacios alrededor; luego se
+     recorta a 500 caracteres (contando caracteres, no bytes). Si queda vacía, `null`.
+   - **Si falta un dato obligatorio o no cabe en su columna** (`ota_reservation_code` hasta 50
+     caracteres; el valor (`amount`) con su moneda; nombre y apellido, obligatorios y de hasta 100;
+     teléfono hasta 30; correo hasta 254; al menos una habitación; los adultos y los niños de cada
+     habitación como enteros, sin pasar de 32 767 personas (`guest_count`, `smallint`), y al menos una
+     persona por habitación), la revisión se trata como **payload ilegible** (tabla de errores): no se
+     guarda ni se confirma, y queda en el log sin datos personales.
 
 ## Puntos abiertos
 

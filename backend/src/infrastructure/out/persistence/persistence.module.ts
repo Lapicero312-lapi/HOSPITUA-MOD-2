@@ -2,6 +2,7 @@ import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { GUEST_REPOSITORY } from '../../../application/ports/out/guest.repository.js';
+import { OTA_BOOKING_REVISION_REPOSITORY } from '../../../application/ports/out/ota-booking-revision.repository.js';
 import { OTA_REPOSITORY } from '../../../application/ports/out/ota.repository.js';
 import { PROCESSED_MESSAGE_REPOSITORY } from '../../../application/ports/out/processed-message.repository.js';
 import { RESERVATION_QUERY_PORT } from '../../../application/ports/out/reservation-query.port.js';
@@ -11,6 +12,7 @@ import type { EnvironmentVariables } from '../../config/env.validation.js';
 import { typeOrmOptions } from '../../config/typeorm.options.js';
 import { TypeOrmProcessedMessageRepository } from '../messaging/processed-message.repository.js';
 import { TypeOrmGuestRepository } from './repositories/guest.repository.js';
+import { TypeOrmOtaBookingRevisionRepository } from './repositories/ota-booking-revision.repository.js';
 import { TypeOrmOtaRepository } from './repositories/ota.repository.js';
 import { TypeOrmReservationQuery } from './repositories/reservation.query.js';
 import { TypeOrmReservationRepository } from './repositories/reservation.repository.js';
@@ -42,6 +44,10 @@ import { TypeOrmTransactionRunner } from './typeorm-transaction.js';
     { provide: GUEST_REPOSITORY, useClass: TypeOrmGuestRepository },
     { provide: OTA_REPOSITORY, useClass: TypeOrmOtaRepository },
     {
+      provide: OTA_BOOKING_REVISION_REPOSITORY,
+      useClass: TypeOrmOtaBookingRevisionRepository,
+    },
+    {
       provide: PROCESSED_MESSAGE_REPOSITORY,
       useClass: TypeOrmProcessedMessageRepository,
     },
@@ -52,6 +58,7 @@ import { TypeOrmTransactionRunner } from './typeorm-transaction.js';
     RESERVATION_QUERY_PORT,
     GUEST_REPOSITORY,
     OTA_REPOSITORY,
+    OTA_BOOKING_REVISION_REPOSITORY,
     PROCESSED_MESSAGE_REPOSITORY,
     TRANSACTION_RUNNER,
   ],

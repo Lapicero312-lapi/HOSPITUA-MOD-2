@@ -1,6 +1,7 @@
 # HOSPITUA · Módulo 2: Operación de Reservas y Cumplimiento Legal
 
-Monorepo del Módulo 2: `backend/` (NestJS) y `frontend/` (React + Vite). La especificación completa está
+Monorepo del Módulo 2: `backend/` (NestJS), `frontend/` (React + Vite) y `simulators/` (los Módulos 1 y 3
+simulados, para la demo y el desarrollo). La especificación completa está
 en [`specs/`](specs/): empieza por el [diccionario](specs/diccionario.md) y el
 [plan base](specs/base/plan.md).
 
@@ -22,9 +23,38 @@ docker compose up -d                         # PostgreSQL y RabbitMQ
 pnpm --filter backend migration:run          # crea las tablas en PostgreSQL
 pnpm --filter backend start:dev              # backend en http://localhost:3000
 pnpm --filter frontend dev                   # frontend en http://localhost:5173
+pnpm --filter simulators start               # opcional: simuladores del Módulo 1 y del Módulo 3
 ```
 
 El panel de RabbitMQ queda en <http://localhost:15672> (usuario y clave: `hospitua`).
+
+## Simuladores del Módulo 1 y del Módulo 3
+
+Mientras los otros módulos no estén desplegados, `simulators/` responde en su lugar los contratos REST ya
+acordados, con los datos de ejemplo de los planes. Sirven para la demo y para probar a mano en local.
+**No cambian nada del backend:** solo se apunta a ellos con dos variables (plan base, "Simuladores del
+Módulo 1 y del Módulo 3").
+
+```bash
+pnpm --filter simulators start     # Módulo 1 en http://localhost:4001 y Módulo 3 en http://localhost:4003
+```
+
+| Simula | Rutas | Puerto | Variable del backend |
+|---|---|---|---|
+| Módulo 1 (inventario y mantenimientos) | `GET /api/rooms`, `GET /api/rooms?categoryRoom=…`, `GET /api/rooms/{roomId}` y `GET /api/rooms/{roomId}/maintenances?startDate=…&endDate=…` | `4001` | `MODULE1_BASE_URL` |
+| Módulo 3 (cotizaciones) | `POST /pricing/quotes` | `4003` | `MODULE3_BASE_URL` |
+
+- **En local no hay que configurar nada:** `backend/.env.example` ya apunta a esos dos puertos.
+- **Datos:** las habitaciones 101 (`SUITE_JUNIOR`) y 201, 202 y 1001 (`DOBLE`). Los mantenimientos usan
+  fechas relativas a hoy, así que siempre caen en los próximos 30 días. Las cotizaciones dan una tarifa
+  fija por categoría y por noche.
+- **Responden los errores de los contratos:** 404 si la habitación no existe y 400 si el `roomId` o las
+  fechas son inválidos.
+- **No simulan** RabbitMQ (los avisos de Check-In y Check-Out) ni Channex. Las pruebas del backend no los
+  usan: siguen con `msw`.
+- **Si cambia un contrato con el Módulo 1 o el Módulo 3,** hay que actualizar también el simulador.
+- **Cuando los módulos reales estén listos,** se cambian `MODULE1_BASE_URL` y `MODULE3_BASE_URL` y los
+  simuladores dejan de usarse.
 
 ## Comandos
 
@@ -61,6 +91,43 @@ Usan la conexión de `backend/.env` (PostgreSQL de `docker compose`). La primera
 **Para agregar una migración:** crea `backend/src/migrations/<marca-de-tiempo>-<Nombre>.ts` (la marca es
 `Date.now()`), con `up` y `down` en SQL, y agrégala al final de la lista de `src/migrations/index.ts`.
 **Nunca modifiques una migración que ya está en `develop`:** si hay que cambiar algo, crea una nueva.
+
+## Despliegue de la demo (Render)
+
+La demo del avance corre en Render, con los simuladores en lugar de los Módulos 1 y 3 (plan base,
+"Despliegue de la demo (Render)"). Todo lo describe [`render.yaml`](render.yaml):
+
+| Servicio | Qué es | URL |
+|---|---|---|
+| `hospitua-m2-frontend` | La pantalla de la Recepcionista (sitio estático); `/api/*` va al backend | `https://hospitua-m2-frontend.onrender.com` |
+| `hospitua-m2-backend` | El backend ([`backend/Dockerfile`](backend/Dockerfile)): aplica las migraciones y arranca | `https://hospitua-m2-backend.onrender.com/api/docs` |
+| `hospitua-m2-simulators` | Los simuladores de los Módulos 1 y 3, en un solo puerto | `https://hospitua-m2-simulators.onrender.com/api/rooms` |
+| `hospitua-m2-db` | PostgreSQL | Solo la usa el backend |
+
+**Para crearlo (una sola vez):**
+
+1. Crea una cuenta en [Render](https://render.com) con GitHub y dale acceso a este repositorio.
+2. Crea una cuenta gratuita en [CloudAMQP](https://www.cloudamqp.com) y una instancia gratuita de RabbitMQ.
+   Copia su URL (`amqps://...`): el backend todavía no la usa, pero en producción la exige.
+3. En Render: **New → Blueprint**, elige este repositorio y la rama que quieres desplegar. Render lee
+   `render.yaml` y te pide los tres secretos:
+   - `RABBITMQ_URL`: la de CloudAMQP.
+   - `CHANNEX_API_KEY` y `CHANNEX_PROPERTY_ID`: los de tu `backend/.env`. Escríbelos solo ahí, nunca en
+     el repositorio, en un chat ni en un documento.
+4. Espera a que los tres servicios queden en *Live* y abre el frontend.
+
+**Si Render le da otra URL a un servicio** porque el nombre ya estaba ocupado, cámbiala en `render.yaml`:
+la del backend en la regla `/api/*` del frontend, y la de los simuladores en `MODULE1_BASE_URL` y
+`MODULE3_BASE_URL`.
+
+**Antes de presentar:**
+- En el plan gratuito el backend y los simuladores **se duermen tras un rato sin uso** y despiertan en cerca
+  de un minuto. Abre sus URL un par de minutos antes. Mientras duermen, las tareas de Channex no corren.
+- La base gratuita dura un tiempo limitado: alcanza para la demo, no para guardar datos.
+- **La demo es la única copia conectada a Channex** mientras esté encendida. Nadie del equipo debe arrancar
+  su backend con la misma clave al mismo tiempo; en tu `backend/.env` local, deja `CHANNEX_API_KEY` vacía.
+
+**Para probar la imagen del backend en local** (desde la raíz): `docker build -f backend/Dockerfile .`
 
 ## Dónde va cada cosa
 
@@ -114,7 +181,7 @@ cambies sin preguntar.
 |---|---|
 | `package.json` (raíz, `backend/`, `frontend/`) | Las librerías del proyecto y los comandos (`pnpm test`, `pnpm build`, ...) |
 | `pnpm-lock.yaml` | Las versiones exactas de todo. Lo genera pnpm: **nunca se edita a mano**, pero sí se sube |
-| `pnpm-workspace.yaml` | Dice que `backend` y `frontend` son un solo proyecto |
+| `pnpm-workspace.yaml` | Dice que `backend`, `frontend` y `simulators` son un solo proyecto |
 | `tsconfig*.json` | Las reglas con las que TypeScript revisa y compila el código |
 | `.oxlintrc.json`, `.prettierrc` | Las reglas del lint y el formato único del código |
 | `backend/.dependency-cruiser.cjs` | Las reglas de las capas (qué carpeta puede importar de cuál) |
@@ -123,6 +190,7 @@ cambies sin preguntar.
 | `.gitignore`, `.gitattributes` | Qué archivos ignora Git y cómo guarda los saltos de línea |
 | `backend/.env.example` | Plantilla de tu configuración local (`backend/.env`, que no se sube) |
 | `docker-compose.yml` | PostgreSQL y RabbitMQ para desarrollo |
+| `render.yaml`, `backend/Dockerfile`, `.dockerignore` | El despliegue de la demo en Render |
 | `.github/workflows/ci.yml` | La revisión automática de cada PR |
 
 ## Si algo falla

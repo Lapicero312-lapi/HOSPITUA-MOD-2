@@ -11,11 +11,13 @@ Módulo 1 programó un mantenimiento. Este caso de uso es la **consulta síncron
 calendario de mantenimientos del Módulo 1 para **una habitación y un rango de fechas**. Responde si hay
 algún mantenimiento que se cruce con la estadía y, si lo hay, el periodo del cruce.
 
-Lo usan dos consumidores internos:
+Lo usan tres consumidores internos:
 
 1. **"Verificar disponibilidades"** (`check-room-availability`): antes de confirmar cualquier reserva
    nueva o modificada, una consulta por cada habitación candidata. **Todos los mantenimientos bloquean**.
 2. **Pantalla "Habitaciones"** (`consult-room-inventory`): el mantenimiento próximo de cada habitación.
+3. **"Configurar OTA"** (`configure-ota`): las habitaciones en mantenimiento por noche, para la
+   disponibilidad que envía a Channex (FR-007).
 
 No persiste nada y no crea, modifica ni cancela mantenimientos: son del Módulo 1. **Si el Módulo 1 no
 responde, no asume que la habitación está libre**: bloquea la validación con un 4xx controlado.
@@ -355,6 +357,7 @@ contiguo, más los fallos del Módulo 1.
 | FR-004 | Solo `GET` en el adaptador; ningún método de escritura | T005 |
 | FR-005 | Todo fallo o duda bloquea la validación | T008, T009 |
 | FR-006 | Validadores y mapeo a 400 | T003, T006, T009 |
+| FR-007 | La misma consulta para "Verificar disponibilidades" (`check`), la pantalla "Habitaciones" (`nextMaintenance`) y "Configurar OTA" | T005, T012 |
 | NFR-001 | Timeout configurable y prueba de tiempo | T001, T014 |
 | SC-001, SC-002 | Verificación en `check-room-availability` | Plan de ese caso de uso |
 | SC-003 | Mapeo a 400 de todo fallo | T009, T011 |
