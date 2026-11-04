@@ -1,3 +1,4 @@
+import type { Money } from '../../../../../domain/shared/money.js';
 import type {
   RoomQuote,
   RoomQuoteRequest,
@@ -26,6 +27,20 @@ export interface CalculateDynamicRate {
    * (recotización) si el Módulo 3 no responde, falla o responde algo inválido.
    */
   quoteRooms(
+    requests: RoomQuoteRequest[],
+    context: QuoteContext,
+  ): Promise<RoomQuote[]>;
+
+  /**
+   * B4 (decisión D1): al confirmar, vuelve a cotizar todas las habitaciones de la solicitud y compara,
+   * por `key`, el `lodgingAmount` nuevo con el que vio el solicitante: el mismo valor y la misma moneda
+   * (plan, punto 10). Devuelve las cotizaciones nuevas, con su `quoteId`: nunca se guarda un monto que
+   * envía el cliente.
+   * @throws BusinessError `RATE_CHANGED` si alguno difiere o si falta el monto visto de una habitación;
+   * los mismos errores que `quoteRooms`.
+   */
+  verifyQuotes(
+    seen: { key: string; lodgingAmount: Money }[],
     requests: RoomQuoteRequest[],
     context: QuoteContext,
   ): Promise<RoomQuote[]>;
