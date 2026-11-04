@@ -1,10 +1,10 @@
-# Integración continua: corre en cada PR hacia develop o main, y en cada push a esas ramas.
+# Integración continua: corre en cada PR, sea hacia develop, hacia main o hacia otra rama (una PR
+# apilada sobre otra), y en cada push a develop y a main.
 # Si un paso falla, la PR queda en rojo y (con la protección de ramas) no se puede integrar.
 name: CI
 
 on:
   pull_request:
-    branches: [develop, main]
   push:
     branches: [develop, main]
 
