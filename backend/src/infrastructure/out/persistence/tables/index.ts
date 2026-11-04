@@ -1,3 +1,4 @@
+import { OtaBookingRevisionTable } from './ota-booking-revision.table.js';
 import { OtaTable } from './ota.table.js';
 import {
   GuestTable,
@@ -11,4 +12,5 @@ export const TABLES = [
   ReservationRoomTable,
   GuestTable,
   OtaTable,
+  OtaBookingRevisionTable,
 ];
