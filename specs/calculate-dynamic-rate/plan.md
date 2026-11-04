@@ -523,6 +523,21 @@ seguro ante un Módulo 3 caído.
    (tarifa base por categoría y un porcentaje único) y `note` informativa.
 8. **Los `nightlyRates` no se guardan**: tras confirmar solo queda el `lodgingAmount` de cada habitación.
 9. **Códigos de error y mensajes** `RATE_CHANGED` y `CURRENCY_MISMATCH`, que el spec no define.
+10. **Cómo compara `verifyQuotes` (T013).** Vuelve a cotizar todas las habitaciones de la solicitud con
+    `quoteRooms` y, por cada `key`, compara el `lodgingAmount` nuevo con el visto: **el mismo valor
+    numérico y la misma moneda** (`530000` y `530000.00` son iguales). Si alguno difiere, o si el
+    solicitante no envió el monto visto de alguna habitación de la solicitud, responde `RATE_CHANGED`,
+    porque no vio esa tarifa. Los montos vistos de habitaciones que no están en la solicitud no se usan.
+    Devuelve las cotizaciones nuevas, con su `quoteId`.
+11. **DTO compartido de la vista previa (T010).** `toQuotesDto(quotes, requests, withTotal)`, en
+    `infrastructure/in/rest/quotes.dto.ts`, convierte las cotizaciones en el JSON de B:
+    - por habitación, `key`, `categoryRoom` (el de su solicitud, con la misma `key`), `nights` (la
+      cantidad de `nightlyRates`), `nightlyRates` y `lodgingAmount`;
+    - `total` (con `reservationTotal`) solo si `withTotal` es verdadero, como en la vista previa de una
+      reserva nueva; en una modificación no va.
+
+    Los montos salen como texto con dos decimales y su moneda (`{ "amount": "250000.00", "currency":
+    "COP" }`). El `quoteId` no sale.
 
 ## Puntos abiertos
 
