@@ -427,3 +427,125 @@ describe('VerifyAvailability.check: mantenimientos en paralelo y todo o nada (T0
     expect(check).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('VerifyAvailability.check con limit (T010, punto 5 del plan)', () => {
+  /** La 301 a la 305 de una categoría, sin reservas ni mantenimientos salvo lo que diga cada prueba. */
+  const rooms = ['301', '302', '303', '304', '305'].map((number, index) =>
+    room(number, `1b2c3d4e-5f60-4a7b-8c9d-0e1f2a3b4c5${index}`),
+  );
+  const numbersOf = (result: { rooms: { room: Room }[] }) =>
+    result.rooms.map(({ room: { roomNumber } }) => roomNumber);
+
+  it('se detiene al encontrar limit disponibles y no trae las que no se consultaron', async () => {
+    const { service, check } = serviceWith({
+      rooms,
+      blocked: [],
+      concurrency: 1,
+    });
+
+    const result = await service.check(byCategory({ limit: 2 }));
+
+    expect(check).toHaveBeenCalledTimes(2);
+    expect(numbersOf(result)).toEqual(['301', '302']);
+    expect(result.rooms.every(({ available }) => available)).toBe(true);
+  });
+
+  it('una en mantenimiento no cuenta para limit: sigue hasta encontrar las disponibles', async () => {
+    const { service, check } = serviceWith({
+      rooms,
+      blocked: [],
+      concurrency: 1,
+      maintenance: (roomId) =>
+        Promise.resolve(
+          roomId === rooms[0].id
+            ? { ...MAINTENANCE_203, roomId }
+            : free(roomId),
+        ),
+    });
+
+    const result = await service.check(byCategory({ limit: 2 }));
+
+    expect(check).toHaveBeenCalledTimes(3);
+    expect(result.rooms.map(({ reason }) => reason)).toEqual([
+      'MAINTENANCE',
+      null,
+      null,
+    ]);
+  });
+
+  it('consulta las candidatas de menor a mayor roomNumber, aunque el inventario venga en otro orden', async () => {
+    const room1001 = room('1001', '5b9f3d7c-2e4a-4b6d-a8c1-7e6f5d4c3b23');
+    const { service, check } = serviceWith({
+      rooms: [room1001, ROOM_202, ROOM_201],
+      blocked: [],
+      concurrency: 1,
+    });
+
+    const result = await service.check(byCategory({ limit: 1 }));
+
+    expect(check.mock.calls).toEqual([[ROOM_201.id, START, END]]);
+    expect(numbersOf(result)).toEqual(['201']);
+  });
+
+  it('las reservadas siempre vienen en el resultado, con su motivo', async () => {
+    const { service } = serviceWith({
+      rooms,
+      blocked: [rooms[0].id, rooms[3].id],
+      concurrency: 1,
+    });
+
+    const result = await service.check(byCategory({ limit: 1 }));
+
+    expect(
+      result.rooms.map(({ room: { roomNumber }, reason }) => [
+        roomNumber,
+        reason,
+      ]),
+    ).toEqual([
+      ['301', 'RESERVED'],
+      ['302', null],
+      ['304', 'RESERVED'],
+    ]);
+  });
+
+  it('las que estaban en curso terminan y entran en el resultado: puede haber más disponibles que limit', async () => {
+    const { service, check } = serviceWith({
+      rooms,
+      blocked: [],
+      concurrency: 3,
+      maintenance: async (roomId) => {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        return free(roomId);
+      },
+    });
+
+    const result = await service.check(byCategory({ limit: 1 }));
+
+    expect(check).toHaveBeenCalledTimes(3);
+    expect(numbersOf(result)).toEqual(['301', '302', '303']);
+  });
+
+  it('con un limit mayor que las disponibles, consulta todas', async () => {
+    const { service, check } = serviceWith({ rooms, blocked: [] });
+
+    const result = await service.check(byCategory({ limit: 10 }));
+
+    expect(check).toHaveBeenCalledTimes(5);
+    expect(result.rooms).toHaveLength(5);
+  });
+
+  it.each([0, -1, 1.5, Number.NaN])(
+    'un limit de %s es un error del programa (Error, no BusinessError), sin consultar a nadie',
+    async (limit) => {
+      const { service, calls } = serviceWith();
+
+      const error: unknown = await service
+        .check(byCategory({ limit }))
+        .catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(Error);
+      expect(error).not.toBeInstanceOf(BusinessError);
+      expect(calls).toEqual([]);
+    },
+  );
+});

@@ -68,10 +68,28 @@ export class VerifyAvailabilityService implements VerifyAvailability {
         )
       ).map(({ roomId }) => roomId),
     );
-    // Las que ya están reservadas no se consultan en el calendario: su motivo es RESERVED.
-    const candidates = rooms.filter((room) => !blocked.has(room.id));
-    const checks = await mapWithLimit(candidates, this.concurrency, (room) =>
-      this.maintenances.check(room.id, startDate, endDate),
+    // Las que ya están reservadas no se consultan en el calendario: su motivo es RESERVED. Las demás, de
+    // menor a mayor número, para que con `limit` las primeras disponibles sean las que elegiría
+    // `assignRooms` (plan, punto 5).
+    const candidates = rooms
+      .filter((room) => !blocked.has(room.id))
+      .sort(byRoomNumber);
+    let availableCount = 0;
+    const checks = await mapWithLimit(
+      candidates,
+      this.concurrency,
+      async (room) => {
+        const check = await this.maintenances.check(
+          room.id,
+          startDate,
+          endDate,
+        );
+        if (check.available) {
+          availableCount++;
+        }
+        return check;
+      },
+      () => query.limit !== undefined && availableCount >= query.limit,
     );
     const maintenanceOf = new Map(
       checks.map((check, index) => [candidates[index].id, check]),
@@ -80,7 +98,9 @@ export class VerifyAvailabilityService implements VerifyAvailability {
     return {
       startDate,
       endDate,
+      // Sin las que no se llegaron a consultar por `limit`: de ellas no se sabe si están disponibles.
       rooms: rooms
+        .filter((room) => blocked.has(room.id) || maintenanceOf.has(room.id))
         .map((room): RoomAvailability => {
           const check = maintenanceOf.get(room.id);
           if (check === undefined) {
@@ -106,9 +126,7 @@ export class VerifyAvailabilityService implements VerifyAvailability {
           }
           return { room, available: true, reason: null, maintenance: [] };
         })
-        .sort((a, b) =>
-          ROOM_NUMBER_ORDER.compare(a.room.roomNumber, b.room.roomNumber),
-        ),
+        .sort((a, b) => byRoomNumber(a.room, b.room)),
     };
   }
 
@@ -120,8 +138,21 @@ export class VerifyAvailabilityService implements VerifyAvailability {
   }
 }
 
+function byRoomNumber(a: Room, b: Room): number {
+  return ROOM_NUMBER_ORDER.compare(a.roomNumber, b.roomNumber);
+}
+
 /** Las validaciones de D1, antes de consultar a nadie: las fechas, la categoría o la habitación, y la reserva que se modifica. */
 function validate(query: AvailabilityQuery): void {
+  // Lo pasa un flujo de reserva, no la Recepcionista: un `limit` inválido es un error del programa.
+  if (
+    query.limit !== undefined &&
+    (!Number.isInteger(query.limit) || query.limit < 1)
+  ) {
+    throw new Error(
+      `limit debe ser un entero mayor que 0 (llegó ${query.limit}).`,
+    );
+  }
   if (!isValidStayDates(query.startDate, query.endDate)) {
     throw new BusinessError(
       INVALID_STAY_DATES.code,
