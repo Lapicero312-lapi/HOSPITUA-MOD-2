@@ -452,7 +452,15 @@ ocupadas hoy y liberadas dentro de una reserva en curso.
    parciales.
 4. **Si hay reserva y mantenimiento, el motivo es `RESERVED`**: el calendario solo se consulta para las
    habitaciones que pasaron el cruce, como dice el spec.
-5. **Opción `limit`** para detener las consultas de mantenimiento al alcanzar la cantidad necesaria.
+5. **Opción `limit`** para detener las consultas de mantenimiento al alcanzar la cantidad necesaria
+   (T010). Las candidatas (las que pasaron el cruce con las reservas) se consultan en el calendario en
+   orden numérico de `roomNumber`, para que las primeras disponibles sean las de menor número, las mismas
+   que elegiría `assignRooms`. En cuanto hay `limit` disponibles, no se empieza ninguna consulta más; las
+   que ya estaban en curso terminan y también entran en el resultado, así que puede haber más disponibles
+   que `limit`. El resultado trae las habitaciones reservadas (`RESERVED`) y las consultadas en el
+   calendario; **no trae** las que no se llegaron a consultar. Sin `limit`, se consultan todas. Un `limit`
+   que no sea un entero mayor que 0 es un error del programa (`Error`), no del usuario, porque lo pasa un
+   flujo de reserva y no la Recepcionista.
 6. **`assignRooms`**: la habitación de menor `roomNumber` (orden numérico), como pide el spec de OTA, y
    la misma regla para la reserva directa, que el spec no define.
 7. **`excludeReservationRef` inexistente** responde `400` `RESERVATION_NOT_FOUND`.
