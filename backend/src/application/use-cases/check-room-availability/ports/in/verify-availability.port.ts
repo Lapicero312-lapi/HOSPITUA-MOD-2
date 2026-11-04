@@ -17,7 +17,11 @@ export type AvailabilityQuery = {
   roomId?: string;
   /** Solo al modificar una reserva: la propia no cuenta como ocupada (FR-003). */
   excludeReservationRef?: string;
-  /** Opcional: detenerse al encontrar esta cantidad de disponibles. */
+  /**
+   * Opcional: detenerse al encontrar esta cantidad de disponibles (plan, punto 5). Las candidatas se
+   * consultan de menor a mayor `roomNumber`; las que estaban en curso terminan, así que puede haber más
+   * disponibles que `limit`. Un entero mayor que 0.
+   */
   limit?: number;
 };
 
@@ -35,7 +39,10 @@ export type RoomAvailability = {
 export type AvailabilityResult = {
   startDate: string;
   endDate: string;
-  /** Todas las consultadas, ordenadas por `roomNumber` (orden numérico). */
+  /**
+   * Todas las consultadas, ordenadas por `roomNumber` (orden numérico). Con `limit`, no trae las que no
+   * se llegaron a consultar en el calendario.
+   */
   rooms: RoomAvailability[];
 };
 

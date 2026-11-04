@@ -73,4 +73,53 @@ describe('mapWithLimit', () => {
     await sleep(40);
     expect(state.calls).toEqual([1, 2]);
   });
+
+  describe('shouldStop', () => {
+    it('cuando devuelve true no empieza ninguna llamada más, y el resultado trae solo las que se llamaron', async () => {
+      const { tracked, state } = tracking((n: number) => Promise.resolve(n));
+      const done: number[] = [];
+
+      const results = await mapWithLimit(
+        [1, 2, 3, 4, 5],
+        1,
+        async (n) => {
+          const result = await tracked(n);
+          done.push(result);
+          return result;
+        },
+        () => done.length >= 2,
+      );
+
+      expect(results).toEqual([1, 2]);
+      expect(state.calls).toEqual([1, 2]);
+    });
+
+    it('las que estaban en curso terminan y entran en el resultado', async () => {
+      const { tracked, state } = tracking((n: number) => Promise.resolve(n));
+      let finished = 0;
+
+      const results = await mapWithLimit(
+        [1, 2, 3, 4, 5, 6],
+        3,
+        async (n) => {
+          const result = await tracked(n);
+          finished++;
+          return result;
+        },
+        () => finished >= 1,
+      );
+
+      // Las tres primeras empezaron a la vez; al terminar la primera ya no empieza la cuarta.
+      expect(results).toEqual([1, 2, 3]);
+      expect(state.calls).toEqual([1, 2, 3]);
+    });
+
+    it('si nunca devuelve true, llama a todas', async () => {
+      const { tracked, state } = tracking((n: number) => Promise.resolve(n));
+
+      await mapWithLimit([1, 2, 3], 2, tracked, () => false);
+
+      expect(state.calls).toEqual([1, 2, 3]);
+    });
+  });
 });
