@@ -90,3 +90,38 @@ describe('main.js sin PORT: cada simulador en su puerto de desarrollo', () => {
     assert.equal((await call(4003, '/api/rooms')).status, 404);
   });
 });
+
+describe('main.js con PORT (Render): los dos módulos en ese único puerto', () => {
+  const PORT = 4105;
+  /** @type {import('node:child_process').ChildProcess} */
+  let child;
+
+  before(() => {
+    child = startMain({ PORT: String(PORT) });
+  });
+
+  after(async () => {
+    await stop(child);
+  });
+
+  it('el Módulo 1 responde en PORT', async () => {
+    const { status, body } = await call(PORT, '/api/rooms');
+
+    assert.equal(status, 200);
+    assert.equal(body.length, 4);
+  });
+
+  it('el Módulo 3 responde en el mismo PORT', async () => {
+    const { status, body } = await call(PORT, '/pricing/quotes', QUOTE);
+
+    assert.equal(status, 200);
+    assert.equal(body.lodgingAmount, '220000.00');
+  });
+
+  it('no abre los puertos de desarrollo', async () => {
+    // Ya respondió en PORT: si también abriera el 4001 o el 4003, ya estarían escuchando.
+    await call(PORT, '/api/rooms');
+    await assert.rejects(fetch('http://localhost:4001/api/rooms'));
+    await assert.rejects(fetch('http://localhost:4003/api/rooms'));
+  });
+});

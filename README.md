@@ -92,6 +92,43 @@ Usan la conexión de `backend/.env` (PostgreSQL de `docker compose`). La primera
 `Date.now()`), con `up` y `down` en SQL, y agrégala al final de la lista de `src/migrations/index.ts`.
 **Nunca modifiques una migración que ya está en `develop`:** si hay que cambiar algo, crea una nueva.
 
+## Despliegue de la demo (Render)
+
+La demo del avance corre en Render, con los simuladores en lugar de los Módulos 1 y 3 (plan base,
+"Despliegue de la demo (Render)"). Todo lo describe [`render.yaml`](render.yaml):
+
+| Servicio | Qué es | URL |
+|---|---|---|
+| `hospitua-m2-frontend` | La pantalla de la Recepcionista (sitio estático); `/api/*` va al backend | `https://hospitua-m2-frontend.onrender.com` |
+| `hospitua-m2-backend` | El backend ([`backend/Dockerfile`](backend/Dockerfile)): aplica las migraciones y arranca | `https://hospitua-m2-backend.onrender.com/api/docs` |
+| `hospitua-m2-simulators` | Los simuladores de los Módulos 1 y 3, en un solo puerto | `https://hospitua-m2-simulators.onrender.com/api/rooms` |
+| `hospitua-m2-db` | PostgreSQL | Solo la usa el backend |
+
+**Para crearlo (una sola vez):**
+
+1. Crea una cuenta en [Render](https://render.com) con GitHub y dale acceso a este repositorio.
+2. Crea una cuenta gratuita en [CloudAMQP](https://www.cloudamqp.com) y una instancia gratuita de RabbitMQ.
+   Copia su URL (`amqps://...`): el backend todavía no la usa, pero en producción la exige.
+3. En Render: **New → Blueprint**, elige este repositorio y la rama que quieres desplegar. Render lee
+   `render.yaml` y te pide los tres secretos:
+   - `RABBITMQ_URL`: la de CloudAMQP.
+   - `CHANNEX_API_KEY` y `CHANNEX_PROPERTY_ID`: los de tu `backend/.env`. Escríbelos solo ahí, nunca en
+     el repositorio, en un chat ni en un documento.
+4. Espera a que los tres servicios queden en *Live* y abre el frontend.
+
+**Si Render le da otra URL a un servicio** porque el nombre ya estaba ocupado, cámbiala en `render.yaml`:
+la del backend en la regla `/api/*` del frontend, y la de los simuladores en `MODULE1_BASE_URL` y
+`MODULE3_BASE_URL`.
+
+**Antes de presentar:**
+- En el plan gratuito el backend y los simuladores **se duermen tras un rato sin uso** y despiertan en cerca
+  de un minuto. Abre sus URL un par de minutos antes. Mientras duermen, las tareas de Channex no corren.
+- La base gratuita dura un tiempo limitado: alcanza para la demo, no para guardar datos.
+- **La demo es la única copia conectada a Channex** mientras esté encendida. Nadie del equipo debe arrancar
+  su backend con la misma clave al mismo tiempo; en tu `backend/.env` local, deja `CHANNEX_API_KEY` vacía.
+
+**Para probar la imagen del backend en local** (desde la raíz): `docker build -f backend/Dockerfile .`
+
 ## Dónde va cada cosa
 
 El equipo trabaja casi solo en `backend/src/` y `backend/test/`. La estructura sigue el
@@ -153,6 +190,7 @@ cambies sin preguntar.
 | `.gitignore`, `.gitattributes` | Qué archivos ignora Git y cómo guarda los saltos de línea |
 | `backend/.env.example` | Plantilla de tu configuración local (`backend/.env`, que no se sube) |
 | `docker-compose.yml` | PostgreSQL y RabbitMQ para desarrollo |
+| `render.yaml`, `backend/Dockerfile`, `.dockerignore` | El despliegue de la demo en Render |
 | `.github/workflows/ci.yml` | La revisión automática de cada PR |
 
 ## Si algo falla
