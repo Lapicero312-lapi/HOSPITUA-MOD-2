@@ -351,9 +351,9 @@ Todo error sale con `{ "errorCode", "message", "timestamp", "path" }` y **siempr
 | Lo mismo al **recotizar** una reserva `ACTIVE` | Módulo 3 | 400 | `RECALCULATION_UNAVAILABLE` | "No se pudo calcular la nueva tarifa en este momento. Intente más tarde." |
 | Respuesta del Módulo 3 inválida (campos faltantes, `lodgingAmount` ≤ 0, más de 2 decimales, moneda inválida, fechas fuera del rango) | Módulo 3 | 400 | El de la fila anterior según el contexto | El de la fila anterior; el detalle va al log |
 | `categoryRoom` vacía o con caracteres no permitidos | M2, antes de llamar | 400 | `INVALID_CATEGORY` | "La categoría indicada no es válida." |
-| El Módulo 3 rechaza la categoría (no existe en su catálogo) | Módulo 3 | 400 | `INVALID_CATEGORY` | "La categoría indicada no es válida." |
+| El Módulo 3 rechaza la categoría (no existe en su catálogo): `404` `BASE_RATE_NOT_FOUND` | Módulo 3 | 400 | `INVALID_CATEGORY` | "La categoría indicada no es válida." |
 | Fechas mal formadas o `endDate` no posterior a `startDate` | M2, antes de llamar | 400 | `INVALID_STAY_DATES` | "Rango de fechas inválido. Verifique las fechas seleccionadas." |
-| Otro 4xx del Módulo 3 (`400` `INVALID_QUERY_PARAMS` o `INVALID_DATE_RANGE`, `404` `BASE_RATE_NOT_FOUND`) | Módulo 3 | 400 | `INVALID_STAY_DATES` | "Rango de fechas inválido. Verifique las fechas seleccionadas." |
+| Otro 4xx del Módulo 3 (`400` `INVALID_QUERY_PARAMS` o `INVALID_DATE_RANGE`) | Módulo 3 | 400 | `INVALID_STAY_DATES` | "Rango de fechas inválido. Verifique las fechas seleccionadas." |
 | La tarifa cambió entre la vista previa y la confirmación | M2 (`verifyQuotes`) | 400 | `RATE_CHANGED` | "La tarifa cambió, vuelva a cotizar." |
 | Habitaciones de una reserva con monedas distintas al sumar el total | M2 | 400 | `CURRENCY_MISMATCH` | "Las tarifas de la reserva no tienen la misma moneda." |
 
@@ -528,7 +528,7 @@ seguro ante un Módulo 3 caído.
 
 | # | Pendiente | Con quién |
 |---|---|---|
-| 1 | Formato del cuerpo de error del Módulo 3 (4xx): cómo distingue categoría inexistente, rango inválido y parámetros ausentes. Mientras tanto, la categoría rechazada es `INVALID_CATEGORY` y cualquier otro 4xx, `INVALID_STAY_DATES` (FR-008) | Módulo 3 |
+| 1 | Formato del cuerpo de error del Módulo 3 (4xx): cómo distingue categoría inexistente, rango inválido y parámetros ausentes. Mientras tanto, el `404` (`BASE_RATE_NOT_FOUND`, categoría sin tarifa base) es la categoría rechazada, `INVALID_CATEGORY`, y cualquier otro 4xx, `INVALID_STAY_DATES` (FR-008). Falta confirmar con el Módulo 3 que el `404` significa "categoría sin tarifa base" | Módulo 3 |
 | 2 | Escala de los importes (¿máximo dos decimales?) y tipo en el JSON (número o texto) | Módulo 3 |
 | 3 | **Vigencia del `quoteId`**: si una cotización caduca, el Módulo 3 cobraría contra una cotización vencida. Hoy se re-cotiza al confirmar (D1), pero falta saber si el `quoteId` guardado se puede usar días después en el Check-Out | Módulo 3 |
 | 4 | **Tarifas base** de la pantalla "Tarifas": una configuración local (`RATE_REFERENCE`), con sus propias categorías, porque el spec no permite pedirlas al Módulo 3. Mantenerla igual al catálogo del Módulo 1 es tarea de quien despliega | Equipo del Módulo 2 |
