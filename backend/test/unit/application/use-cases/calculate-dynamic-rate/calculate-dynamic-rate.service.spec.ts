@@ -267,3 +267,118 @@ describe('CalculateDynamicRate.quoteRooms (T008)', () => {
     },
   );
 });
+
+describe('CalculateDynamicRate.verifyQuotes (T013, punto 10 del plan)', () => {
+  /** El Módulo 3 cotiza cada vez con un quoteId nuevo y el monto del ejemplo de A1 (530000.00). */
+  function recotizing() {
+    let next = 0;
+    return serviceWith(() => Promise.resolve(aQuote(`Q-nueva-${++next}`)));
+  }
+  const seen = (key: string, amount: string, currency = 'COP') => ({
+    key,
+    lodgingAmount: Money.of(amount, currency),
+  });
+
+  it('con el mismo monto que vio el solicitante, devuelve las cotizaciones nuevas con su quoteId', async () => {
+    const { service, createQuote } = recotizing();
+
+    const quotes = await service.verifyQuotes(
+      [seen('1', '530000.00'), seen('2', '530000.00')],
+      [aRequest({ key: '1' }), aRequest({ key: '2' })],
+      'NEW_RESERVATION',
+    );
+
+    expect(createQuote).toHaveBeenCalledTimes(2);
+    expect(quotes.map(({ key, quoteId }) => [key, quoteId])).toEqual([
+      ['1', 'Q-nueva-1'],
+      ['2', 'Q-nueva-2'],
+    ]);
+  });
+
+  it('compara el valor, no el texto: 530000 es lo mismo que 530000.00', async () => {
+    const { service } = recotizing();
+
+    await expect(
+      service.verifyQuotes(
+        [seen('1', '530000')],
+        [aRequest({ key: '1' })],
+        'NEW_RESERVATION',
+      ),
+    ).resolves.toHaveLength(1);
+  });
+
+  it.each<[string, { key: string; lodgingAmount: Money }[]]>([
+    ['la tarifa cambió', [seen('1', '500000.00')]],
+    ['cambió en un centavo', [seen('1', '530000.01')]],
+    ['la moneda es otra', [seen('1', '530000.00', 'USD')]],
+    ['falta el monto visto de la habitación', []],
+    ['el monto visto es de otra habitación', [seen('2', '530000.00')]],
+  ])(
+    'si %s, da RATE_CHANGED con su mensaje literal',
+    async (_caso, seenAmounts) => {
+      const { service } = recotizing();
+
+      await expect(
+        service.verifyQuotes(
+          seenAmounts,
+          [aRequest({ key: '1' })],
+          'NEW_RESERVATION',
+        ),
+      ).rejects.toMatchObject({
+        errorCode: 'RATE_CHANGED',
+        message: 'La tarifa cambió, vuelva a cotizar.',
+      });
+    },
+  );
+
+  it('si una sola de varias habitaciones cambió, da RATE_CHANGED', async () => {
+    const { service } = recotizing();
+
+    await expect(
+      service.verifyQuotes(
+        [seen('1', '530000.00'), seen('2', '400000.00')],
+        [aRequest({ key: '1' }), aRequest({ key: '2' })],
+        'NEW_RESERVATION',
+      ),
+    ).rejects.toMatchObject({ errorCode: 'RATE_CHANGED' });
+  });
+
+  it('los montos vistos de habitaciones que no están en la solicitud no se usan', async () => {
+    const { service } = recotizing();
+
+    await expect(
+      service.verifyQuotes(
+        [seen('1', '530000.00'), seen('9', '1.00')],
+        [aRequest({ key: '1' })],
+        'NEW_RESERVATION',
+      ),
+    ).resolves.toHaveLength(1);
+  });
+
+  it('si el Módulo 3 no responde al recotizar, da el error de quoteRooms según el contexto', async () => {
+    const { service } = serviceWith(() =>
+      Promise.reject(new Module3UnavailableError('respondió 503')),
+    );
+
+    await expect(
+      service.verifyQuotes(
+        [seen('1', '530000.00')],
+        [aRequest({ key: '1' })],
+        'RECALCULATION',
+      ),
+    ).rejects.toMatchObject({ errorCode: 'RECALCULATION_UNAVAILABLE' });
+  });
+
+  it('valida la solicitud antes de recotizar', async () => {
+    const { service, createQuote } = recotizing();
+
+    await expect(
+      service.verifyQuotes(
+        [seen('1', '530000.00')],
+        [aRequest({ key: '1', categoryRoom: 'doble' })],
+        'NEW_RESERVATION',
+      ),
+    ).rejects.toMatchObject({ errorCode: 'INVALID_CATEGORY' });
+    expect(createQuote).not.toHaveBeenCalled();
+  });
+});

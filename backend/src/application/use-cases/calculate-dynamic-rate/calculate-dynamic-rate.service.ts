@@ -4,8 +4,10 @@ import {
   INVALID_CATEGORY,
   INVALID_STAY_DATES,
   PRICING_UNAVAILABLE,
+  RATE_CHANGED,
   RECALCULATION_UNAVAILABLE,
 } from '../../../domain/shared/error-codes.js';
+import type { Money } from '../../../domain/shared/money.js';
 import type {
   RoomQuote,
   RoomQuoteRequest,
@@ -64,6 +66,29 @@ export class CalculateDynamicRateService implements CalculateDynamicRate {
         throw this.translate(error, request, context);
       }
     });
+  }
+
+  async verifyQuotes(
+    seen: { key: string; lodgingAmount: Money }[],
+    requests: RoomQuoteRequest[],
+    context: QuoteContext,
+  ): Promise<RoomQuote[]> {
+    const quotes = await this.quoteRooms(requests, context);
+    const seenByKey = new Map(
+      seen.map(({ key, lodgingAmount }) => [key, lodgingAmount]),
+    );
+    // Si falta el monto visto de una habitación, el solicitante no vio esa tarifa (plan, punto 10).
+    const changed = quotes.some((quote) => {
+      const lodgingAmount = seenByKey.get(quote.key);
+      return (
+        lodgingAmount === undefined ||
+        !lodgingAmount.equals(quote.lodgingAmount)
+      );
+    });
+    if (changed) {
+      throw new BusinessError(RATE_CHANGED.code, RATE_CHANGED.message);
+    }
+    return quotes;
   }
 
   /** La tabla de errores del plan: el rechazo del Módulo 3 y su falta de respuesta, según el contexto. */
