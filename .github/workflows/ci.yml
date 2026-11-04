@@ -71,3 +71,19 @@ jobs:
         run: pnpm --filter frontend test
       - name: Compilación
         run: pnpm --filter frontend build
+
+  # Los simuladores del Módulo 1 y del Módulo 3 (plan base): sin dependencias, solo sus pruebas.
+  simulators:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+
+      - name: Pruebas
+        run: pnpm --filter simulators test

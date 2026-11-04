@@ -1,0 +1,14 @@
+{
+  "name": "simulators",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Simuladores del Módulo 1 y del Módulo 3 para la demo y el desarrollo del Módulo 2",
+  "type": "module",
+  "engines": {
+    "node": ">=22 <23"
+  },
+  "scripts": {
+    "start": "node src/main.js",
+    "test": "node --test \"test/**/*.test.js\""
+  }
+}
