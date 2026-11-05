@@ -13,6 +13,8 @@ const MAX_EMAIL = 254;
 const MAX_NOTES = 500;
 /** Lo más que cabe en `reservation_room.guest_count` (`smallint`). */
 const MAX_GUESTS_PER_ROOM = 32_767;
+/** Las habitaciones que admite una reserva (plan base: de 1 a 10). */
+const MAX_ROOMS = 10;
 
 /** Los caracteres de control (`\p{Cc}`), salvo el salto de línea y la tabulación (plan, punto 5). */
 const INVALID_NOTES_CHARACTERS = /[^\P{Cc}\n\t]/gu;
@@ -97,6 +99,9 @@ export function mapBookingRevision(
   }
   if (revision.rooms.length === 0) {
     return illegible('sin habitaciones');
+  }
+  if (revision.rooms.length > MAX_ROOMS) {
+    return illegible('más de 10 habitaciones');
   }
   if (
     revision.rooms.some(
