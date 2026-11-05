@@ -292,7 +292,8 @@ error: la Recepcionista escribe los datos completos.
 6. **Titular propio de la reserva**: se crea un `guest` nuevo ligado a esta reserva (el plan base no
    comparte titulares entre reservas).
 7. **Referencia**: `RSV-` más 8 caracteres hexadecimales en mayúsculas; si ya existe, se genera otra (hasta
-   5 intentos).
+   5 intentos). Si los 5 chocan, la solicitud responde 400 `REQUEST_NOT_PROCESSED` (excepción inesperada) y
+   no se guarda nada.
 8. **Aviso de la lista del día**: dentro de la transacción, `DailyListChangeRecorder.record(tx, null,
    reserva)`. Si la llegada es hoy y la lista ya se envió, genera `ADDED`; si aún no se envió, la reserva
    viaja en la lista; si la llegada es futura, no se avisa nada.
