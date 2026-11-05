@@ -279,6 +279,9 @@ interface OtaConnectionTracker {
 
 - Lo llaman `generate-ota-reservation` (cada lectura del feed) y `configure-ota` (si Channex rechaza un
   envío de tipos de habitación o de disponibilidad). Volver a `CONNECTED` no cambia `linkedAt`.
+- `markDisconnected` no cambia `lastSyncAt`: es la última lectura que terminó bien.
+- Solo guardan `connectionStatus` y `lastSyncAt`, sin reescribir el resto de la agencia: así no pisan el
+  porcentaje que guarda `setCommissionPercentage` en la transacción de una reserva.
 
 **Errores de B2** (los registra `configure-ota` en el log al iniciar, con los campos inválidos):
 
