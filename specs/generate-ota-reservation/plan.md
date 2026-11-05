@@ -494,6 +494,19 @@ revisión se confirma.
    capacidad**: si hay motivo, marca el conflicto con el primero de `NO_ROOM_AVAILABLE`,
    `CAPACITY_EXCEEDED` y `CHANGE_NOT_APPLICABLE`, con la hora de la revisión como `conflictDetectedAt`. La
    capacidad solo se compara en las habitaciones asignadas, porque una sin asignar no tiene `maxCapacity`.
+7. **Lectura del feed (T005).** `ReadBookingFeed` pide la página 1 y las siguientes mientras
+   `página × 100` sea menor que el `meta.total` de la última respuesta; si una página falla, no procesa
+   ninguna revisión de esa lectura.
+   - La agencia es la `Ota` Booking.com: la obtiene con `ManageOta.register({ name: 'Booking.com' })`, que
+     la devuelve sin cambiarla porque `configure-ota` ya la registró al iniciar.
+   - Si todas las páginas responden `200`, llama a `markSynced` con la hora de la lectura, traiga o no
+     revisiones (regla 8).
+   - Con `401` o `403`, llama a `markDisconnected`.
+   - Un `4xx` distinto de `401`, `403` y `429` se trata como un `5xx`: no procesa nada y lo intenta en la
+     siguiente lectura.
+
+   `ChannexSyncJob` corre cada `CHANNEX_SYNC_INTERVAL_SECONDS`, con el bloqueo asesor `channex-sync`, y no
+   hace nada mientras `ChannexSetupState.isReady()` sea `false`.
 
 ## Puntos abiertos
 
