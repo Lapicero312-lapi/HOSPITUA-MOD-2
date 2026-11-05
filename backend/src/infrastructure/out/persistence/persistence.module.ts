@@ -6,6 +6,7 @@ import { OTA_BOOKING_REVISION_REPOSITORY } from '../../../application/ports/out/
 import { OTA_REPOSITORY } from '../../../application/ports/out/ota.repository.js';
 import { PROCESSED_MESSAGE_REPOSITORY } from '../../../application/ports/out/processed-message.repository.js';
 import { RESERVATION_REPOSITORY } from '../../../application/ports/out/reservation.repository.js';
+import { SIRE_EXPORT_REPOSITORY } from '../../../application/ports/out/sire-export.repository.js';
 import { TRANSACTION_RUNNER } from '../../../application/ports/out/transaction.js';
 import type { EnvironmentVariables } from '../../config/env.validation.js';
 import { typeOrmOptions } from '../../config/typeorm.options.js';
@@ -14,6 +15,7 @@ import { TypeOrmGuestRepository } from './repositories/guest.repository.js';
 import { TypeOrmOtaBookingRevisionRepository } from './repositories/ota-booking-revision.repository.js';
 import { TypeOrmOtaRepository } from './repositories/ota.repository.js';
 import { TypeOrmReservationRepository } from './repositories/reservation.repository.js';
+import { TypeOrmSireExportRepository } from './repositories/sire-export.repository.js';
 import { TypeOrmTransactionRunner } from './typeorm-transaction.js';
 
 /**
@@ -48,6 +50,7 @@ import { TypeOrmTransactionRunner } from './typeorm-transaction.js';
       provide: PROCESSED_MESSAGE_REPOSITORY,
       useClass: TypeOrmProcessedMessageRepository,
     },
+    { provide: SIRE_EXPORT_REPOSITORY, useClass: TypeOrmSireExportRepository },
     { provide: TRANSACTION_RUNNER, useClass: TypeOrmTransactionRunner },
   ],
   exports: [
@@ -56,6 +59,7 @@ import { TypeOrmTransactionRunner } from './typeorm-transaction.js';
     OTA_REPOSITORY,
     OTA_BOOKING_REVISION_REPOSITORY,
     PROCESSED_MESSAGE_REPOSITORY,
+    SIRE_EXPORT_REPOSITORY,
     TRANSACTION_RUNNER,
   ],
 })
