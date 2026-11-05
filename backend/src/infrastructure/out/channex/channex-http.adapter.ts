@@ -4,6 +4,7 @@ import { ConfigService } from '@nestjs/config';
 import type { AxiosRequestConfig } from 'axios';
 import {
   type AvailabilityRange,
+  BOOKING_FEED_PAGE_SIZE,
   type BookingFeedPage,
   ChannexRateLimitedError,
   ChannexRejectedError,
@@ -20,9 +21,6 @@ import {
   readBookingRevision,
 } from './booking-revision.reader.js';
 import { ChannexPause } from './channex-pause.js';
-
-/** Revisiones por página del feed: el máximo que acepta Channex. */
-export const FEED_PAGE_LIMIT = 100;
 
 type ChannexSettings = { baseUrl: string; apiKey: string; propertyId: string };
 
@@ -127,7 +125,7 @@ export class ChannexHttpAdapter implements ChannexPort {
         'filter[property_id]': propertyId,
         'order[inserted_at]': 'asc',
         'pagination[page]': page,
-        'pagination[limit]': FEED_PAGE_LIMIT,
+        'pagination[limit]': BOOKING_FEED_PAGE_SIZE,
       },
     });
     const meta = isObject(body) ? body.meta : undefined;
