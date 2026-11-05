@@ -970,6 +970,22 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
     4. Lo que todavía sobra son las **agregadas** (se cotizan) y las **quitadas** (se van con su tarifa).
 
     El orden es fijo para que la misma solicitud dé siempre el mismo resultado.
+12. **Reglas de la reserva al modificar (T005)**, en `reservation-rules.ts`, en el orden de los pasos 3 a
+    5 de la regla 3; la primera que falla responde:
+    1. **Fechas:**
+       - vacías o inexistentes: `INVALID_RESERVATION_DATES`;
+       - entrada anterior al día operativo del `Clock`: `START_DATE_IN_PAST`;
+       - salida no posterior a la entrada: `INVALID_RESERVATION_DATES`.
+    2. **Habitaciones:**
+       - `rooms` vacía: `LAST_ROOM_CANNOT_BE_REMOVED`;
+       - más de 10: `INVALID_ROOM_COUNT`;
+       - un `roomId` repetido: `ROOM_ALREADY_IN_RESERVATION`.
+    3. **Personas de cada habitación:**
+       - menos de 1: `GUEST_COUNT_TOO_LOW`;
+       - más que su `maxCapacity`: `GUEST_COUNT_EXCEEDS_CAPACITY`.
+
+    `notes` de más de 500 caracteres es `NOTES_TOO_LONG` (paso 6). Como el dominio lanza estos códigos, sus
+    mensajes están en `domain/shared/error-codes.ts`.
 
 ## Puntos abiertos
 
