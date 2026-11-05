@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { canChangeConnectionStatus } from '../../../domain/ota/connection-status.js';
-import { Ota } from '../../../domain/ota/ota.js';
+import type { Ota } from '../../../domain/ota/ota.js';
 import { BusinessError } from '../../../domain/shared/business-error.js';
 import {
   OTA_REPOSITORY,
@@ -9,7 +9,10 @@ import {
 import { OTA_NOT_FOUND } from './error-codes.js';
 import type { OtaConnectionTracker } from './ports/in/ota-connection-tracker.port.js';
 
-/** Lleva el `connectionStatus` y el `lastSyncAt` de la agencia, según las respuestas de Channex (plan, B3). */
+/**
+ * Lleva el `connectionStatus` y el `lastSyncAt` de la agencia, según las respuestas de Channex (plan, B3).
+ * Solo guarda esas dos columnas: no pisa el porcentaje que guarda `setCommissionPercentage`.
+ */
 @Injectable()
 export class OtaConnectionTrackerService implements OtaConnectionTracker {
   constructor(
@@ -19,18 +22,13 @@ export class OtaConnectionTrackerService implements OtaConnectionTracker {
 
   async markSynced(otaId: string, at: Date): Promise<void> {
     const ota = await this.find(otaId);
-    await this.otas.update(
-      Ota.restore({
-        ...ota.snapshot(),
-        connectionStatus: canChangeConnectionStatus(
-          ota.connectionStatus,
-          'CONNECTED',
-        )
-          ? 'CONNECTED'
-          : ota.connectionStatus,
-        lastSyncAt: at,
-      }),
-    );
+    const connectionStatus = canChangeConnectionStatus(
+      ota.connectionStatus,
+      'CONNECTED',
+    )
+      ? 'CONNECTED'
+      : ota.connectionStatus;
+    await this.otas.updateConnection(otaId, connectionStatus, at);
   }
 
   // No usa el `at` del puerto: `lastSyncAt` es la última lectura que terminó bien, y esta no terminó bien.
@@ -39,9 +37,7 @@ export class OtaConnectionTrackerService implements OtaConnectionTracker {
     if (!canChangeConnectionStatus(ota.connectionStatus, 'DISCONNECTED')) {
       return;
     }
-    await this.otas.update(
-      Ota.restore({ ...ota.snapshot(), connectionStatus: 'DISCONNECTED' }),
-    );
+    await this.otas.updateConnection(otaId, 'DISCONNECTED');
   }
 
   private async find(otaId: string): Promise<Ota> {
