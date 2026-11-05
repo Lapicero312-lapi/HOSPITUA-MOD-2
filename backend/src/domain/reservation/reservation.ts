@@ -10,9 +10,11 @@ import type {
   StayStatus,
 } from '../shared/enums.js';
 import type { Money } from '../shared/money.js';
-import type { ReservationRoom } from './reservation-room.js';
+import { ReservationRoom } from './reservation-room.js';
 import {
   canChangeStatus,
+  INITIAL_RESERVATION_STATUS,
+  INITIAL_STAY_STATUS,
   invalidStatusTransition,
 } from './reservation-transitions.js';
 
@@ -249,6 +251,62 @@ export class Reservation {
     }
     return true;
   }
+
+  /**
+   * Una reserva de Booking nueva (plan de `generate-ota-reservation`, punto 6): en `ACTIVE`, con cada
+   * habitación en `EXPECTED` y sin tarifa por habitación. Nunca la rechaza por falta de lugar ni por
+   * capacidad (D13): si hay motivo, marca el conflicto con el primero de `NO_ROOM_AVAILABLE` (alguna
+   * habitación sin asignar), `CAPACITY_EXCEEDED` (alguna asignada supera su capacidad) y
+   * `CHANGE_NOT_APPLICABLE` (fechas distintas por habitación), con la hora de la revisión.
+   * @throws BusinessError con los códigos de `restore` (las fechas, la cantidad de habitaciones y `notes`).
+   */
+  static createOta(input: OtaReservationInput): Reservation {
+    const reason = conflictReasonOf(input);
+    return Reservation.restore({
+      id: crypto.randomUUID(),
+      reservationRef: input.reservationRef,
+      source: 'OTA',
+      startDate: input.startDate,
+      endDate: input.endDate,
+      rooms: input.rooms.map(({ categoryRoom, guestCount, assigned }) =>
+        ReservationRoom.restore({
+          id: crypto.randomUUID(),
+          roomId: assigned?.roomId ?? null,
+          roomNumber: assigned?.roomNumber ?? null,
+          categoryRoom,
+          guestCount,
+          rate: null,
+          stayStatus: INITIAL_STAY_STATUS,
+        }),
+      ),
+      guest: input.guest,
+      status: INITIAL_RESERVATION_STATUS,
+      statusReason: null,
+      notes: input.notes,
+      ota: input.ota,
+      conflict:
+        reason === null ? null : { reason, detectedAt: input.receivedAt },
+      createdAt: null,
+      updatedAt: null,
+    });
+  }
+}
+
+/** El primer motivo de conflicto de una reserva de Booking nueva, en el orden del paso 8 de B1. */
+function conflictReasonOf(input: OtaReservationInput): ConflictReason | null {
+  if (input.rooms.some(({ assigned }) => assigned === null)) {
+    return 'NO_ROOM_AVAILABLE';
+  }
+  // Una habitación sin asignar no tiene capacidad: solo se comparan las asignadas.
+  if (
+    input.rooms.some(
+      ({ assigned, guestCount }) =>
+        assigned !== null && guestCount > assigned.maxCapacity,
+    )
+  ) {
+    return 'CAPACITY_EXCEEDED';
+  }
+  return input.datesDifferPerRoom ? 'CHANGE_NOT_APPLICABLE' : null;
 }
 
 /**
@@ -283,3 +341,31 @@ function assertChannel(props: ReservationProps): void {
     fail('el valor y la comisión van en la misma moneda');
   }
 }
+
+/**
+ * Una habitación de una reserva de Booking nueva (plan de `generate-ota-reservation`, punto 6): su
+ * categoría, sus personas y la habitación asignada, o `null` si no hubo lugar. Son datos simples: el
+ * dominio no conoce los tipos de `application/`.
+ */
+export type OtaRoomInput = {
+  categoryRoom: string;
+  guestCount: number;
+  assigned: { roomId: string; roomNumber: string; maxCapacity: number } | null;
+};
+
+/** Lo que necesita `Reservation.createOta` (plan de `generate-ota-reservation`, punto 6). */
+export type OtaReservationInput = {
+  /** Ya generada (`newReservationRef`). */
+  reservationRef: string;
+  startDate: string;
+  endDate: string;
+  guest: Guest;
+  notes: string | null;
+  /** La agencia, el código de Booking, el valor y la comisión calculada. */
+  ota: OtaTerms;
+  /** La hora de la revisión: la del conflicto, si lo hay. */
+  receivedAt: Date;
+  rooms: OtaRoomInput[];
+  /** Si alguna habitación traía fechas distintas de las de la reserva (paso 4 de B1). */
+  datesDifferPerRoom: boolean;
+};
