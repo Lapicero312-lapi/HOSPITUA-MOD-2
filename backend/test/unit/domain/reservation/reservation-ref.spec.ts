@@ -24,6 +24,6 @@ describe('newReservationRef', () => {
       Array.from({ length: 1000 }, () => newReservationRef().slice(4)).join(''),
     );
 
-    expect([...'0123456789ABCDEF'].every((c) => seen.has(c))).toBe(true);
+    expect('0123456789ABCDEF'.split('').every((c) => seen.has(c))).toBe(true);
   });
 });
