@@ -312,6 +312,11 @@ describe('mapBookingRevision', () => {
       ],
       ['sin habitaciones', aRevision({ rooms: [] }), 'sin habitaciones'],
       [
+        'con 11 habitaciones',
+        aRevision({ rooms: Array.from({ length: 11 }, () => aRoom()) }),
+        'más de 10 habitaciones',
+      ],
+      [
         'con una habitación sin adultos ni niños',
         aRevision({
           rooms: [aRoom(), aRoom({ adults: 0, children: 0, infants: 1 })],
@@ -356,6 +361,10 @@ describe('mapBookingRevision', () => {
       [
         '32767 personas en una habitación',
         aRevision({ rooms: [aRoom({ adults: 32_766, children: 1 })] }),
+      ],
+      [
+        '10 habitaciones',
+        aRevision({ rooms: Array.from({ length: 10 }, () => aRoom()) }),
       ],
     ])('con %s, la revisión sí se puede guardar', (_caso, revision) => {
       expect(isIllegible(mapBookingRevision(revision))).toBe(false);

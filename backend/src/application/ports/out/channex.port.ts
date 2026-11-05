@@ -28,6 +28,9 @@ export type AvailabilityRange = {
   availability: number;
 };
 
+/** Revisiones por página del feed (`generate-ota-reservation`, A1): el máximo que acepta Channex. */
+export const BOOKING_FEED_PAGE_SIZE = 100;
+
 /** Una página del feed: sus revisiones legibles y el total de revisiones sin confirmar (`meta.total`). */
 export type BookingFeedPage = {
   revisions: BookingRevision[];
