@@ -2,6 +2,7 @@ import { MODULE_METADATA } from '@nestjs/common/constants.js';
 import { describe, expect, it } from 'vitest';
 import { AppModule } from '../../src/app.module.js';
 import { GenerateDirectReservationModule } from '../../src/application/use-cases/generate-direct-reservation/generate-direct-reservation.module.js';
+import { GenerateOtaReservationModule } from '../../src/application/use-cases/generate-ota-reservation/generate-ota-reservation.module.js';
 
 /**
  * `AppModule` importa los módulos de los casos de uso (plan base, regla 4). Se revisan sus imports y no
@@ -11,6 +12,7 @@ import { GenerateDirectReservationModule } from '../../src/application/use-cases
 describe('AppModule importa los módulos de los casos de uso', () => {
   it.each([
     ['GenerateDirectReservationModule', GenerateDirectReservationModule],
+    ['GenerateOtaReservationModule', GenerateOtaReservationModule],
   ])('%s', (_name, module) => {
     const imports: unknown[] =
       Reflect.getMetadata(MODULE_METADATA.IMPORTS, AppModule) ?? [];
