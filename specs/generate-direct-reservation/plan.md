@@ -577,6 +577,30 @@ y por caída del Módulo 3.
    faltan habitaciones, `ROOM_NOT_AVAILABLE` con el número cuando se pidió una habitación concreta, y
    `AVAILABILITY_TAKEN` cuando otra solicitud tomó la última; e `INVALID_RESERVATION_DATES` para el mensaje
    de fechas del spec.
+8. **Fábrica `Reservation.createDirect` (T002).** Recibe la referencia ya generada, las fechas, el titular
+   (`Guest`), las `notes` y, por habitación, la habitación asignada (`roomId`, `roomNumber`,
+   `categoryRoom` y `maxCapacity`), su `guestCount` y su tarifa (`roomGrossAmount` y `quoteId` de la
+   cotización). Crea la reserva en `ACTIVE`, con `source` `DIRECT`, cada habitación en `EXPECTED`, sin
+   agencia ni conflicto, y con comisión `0`. Además de las invariantes que ya comprueba `Reservation`
+   (fechas, de 1 a 10 habitaciones distintas y `notes`):
+   - un `guestCount` mayor que el `maxCapacity` de su habitación da `GUEST_COUNT_EXCEEDS_CAPACITY` ("La
+     cantidad de personas supera la capacidad de la habitación.");
+   - habitaciones de categorías distintas son un error del programa (`Error`), no del usuario: la
+     solicitud trae una sola `categoryRoom` (A), así que no pueden llegar mezcladas.
+
+   La fecha mínima de entrada (`START_DATE_IN_PAST`) no la comprueba la fábrica, porque depende del día
+   operativo (`Clock`); la comprueba el validador de la solicitud (T004), antes de consultar la
+   disponibilidad.
+9. **Precarga del titular (E, T018).** `documentType` y `documentNumber` se leen sin los espacios de los
+   extremos y se comprueban en este orden; el primero que falla da el error:
+   1. falta uno de los dos o llega vacío: `GUEST_DATA_REQUIRED`;
+   2. `documentType` no es exactamente `RC`, `TI`, `CC`, `CE`, `PAS` o `NIT`: `INVALID_DOCUMENT_TYPE`;
+   3. `documentNumber` trae algo distinto de letras, dígitos y guion (los caracteres de la búsqueda por
+      documento de `check-view-reservation`): `INVALID_CHARACTERS`.
+
+   Un parámetro repetido (`?documentType=CC&documentType=TI`) cuenta como valor no válido de ese
+   parámetro. El número se compara exacto, tal como se guardó. El validador de la solicitud (T004) aplica
+   la misma regla al `documentNumber` del titular, para que todo documento guardado se pueda buscar.
 
 ## Puntos abiertos
 
