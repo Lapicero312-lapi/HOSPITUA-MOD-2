@@ -69,13 +69,17 @@ describe('Reservation.createOta (T004)', () => {
     expect(reservation.guest).toBe(input.guest);
   });
 
-  it('cada habitación queda en EXPECTED y sin tarifa por habitación', () => {
+  it('cada habitación queda en EXPECTED, con la habitación asignada y sin tarifa por habitación', () => {
+    const room201 = aRoom('201');
+    const room202 = aRoom('202', { guestCount: 1 });
     const reservation = Reservation.createOta(
-      anInput({ rooms: [aRoom('201'), aRoom('202', { guestCount: 1 })] }),
+      anInput({ rooms: [room201, room202] }),
     );
 
+    // El roomId es el que bloquea el inventario en la base (D3): debe ser el de la habitación asignada.
     expect(
       reservation.rooms.map((room) => ({
+        roomId: room.roomId,
         roomNumber: room.roomNumber,
         categoryRoom: room.categoryRoom,
         guestCount: room.guestCount,
@@ -84,6 +88,7 @@ describe('Reservation.createOta (T004)', () => {
       })),
     ).toEqual([
       {
+        roomId: room201.assigned?.roomId,
         roomNumber: '201',
         categoryRoom: 'DOBLE',
         guestCount: 2,
@@ -91,6 +96,7 @@ describe('Reservation.createOta (T004)', () => {
         rate: null,
       },
       {
+        roomId: room202.assigned?.roomId,
         roomNumber: '202',
         categoryRoom: 'DOBLE',
         guestCount: 1,
@@ -108,6 +114,14 @@ describe('Reservation.createOta (T004)', () => {
     const ids = [reservation.id, ...reservation.rooms.map((room) => room.id)];
 
     expect(new Set(ids).size).toBe(3);
+  });
+
+  it('dos reservas creadas con los mismos datos tienen ids distintos', () => {
+    const first = Reservation.createOta(anInput());
+    const second = Reservation.createOta(anInput());
+
+    expect(second.id).not.toBe(first.id);
+    expect(second.rooms[0]?.id).not.toBe(first.rooms[0]?.id);
   });
 
   describe('nunca rechaza: marca el conflicto (D13)', () => {
