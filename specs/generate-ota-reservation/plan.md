@@ -480,10 +480,20 @@ revisión se confirma.
      recorta a 500 caracteres (contando caracteres, no bytes). Si queda vacía, `null`.
    - **Si falta un dato obligatorio o no cabe en su columna** (`ota_reservation_code` hasta 50
      caracteres; el valor (`amount`) con su moneda; nombre y apellido, obligatorios y de hasta 100;
-     teléfono hasta 30; correo hasta 254; al menos una habitación; los adultos y los niños de cada
-     habitación como enteros, sin pasar de 32 767 personas (`guest_count`, `smallint`), y al menos una
-     persona por habitación), la revisión se trata como **payload ilegible** (tabla de errores): no se
-     guarda ni se confirma, y queda en el log sin datos personales.
+     teléfono hasta 30; correo hasta 254; al menos una habitación y como máximo 10, las que admite una
+     reserva; los adultos y los niños de cada habitación como enteros, sin pasar de 32 767 personas
+     (`guest_count`, `smallint`), y al menos una persona por habitación), la revisión se trata como
+     **payload ilegible** (tabla de errores): no se guarda ni se confirma, y queda en el log sin datos
+     personales.
+6. **Fábrica `Reservation.createOta` (T004).** Recibe la referencia ya generada, las fechas, el titular
+   (`Guest`), las `notes`, los datos de la agencia (`OtaTerms`: agencia, código, valor y comisión), la hora
+   de la revisión y, por habitación, su `categoryRoom`, su `guestCount` y la habitación asignada (`roomId`,
+   `roomNumber` y `maxCapacity`) o ninguna si no hubo lugar. También recibe si alguna habitación traía
+   fechas distintas de las de la reserva (paso 4 de B1). Crea la reserva en `ACTIVE`, con `source` `OTA` y
+   cada habitación en `EXPECTED`, sin tarifa por habitación. **Nunca la rechaza por falta de lugar ni por
+   capacidad**: si hay motivo, marca el conflicto con el primero de `NO_ROOM_AVAILABLE`,
+   `CAPACITY_EXCEEDED` y `CHANGE_NOT_APPLICABLE`, con la hora de la revisión como `conflictDetectedAt`. La
+   capacidad solo se compara en las habitaciones asignadas, porque una sin asignar no tiene `maxCapacity`.
 
 ## Puntos abiertos
 
