@@ -577,6 +577,20 @@ y por caída del Módulo 3.
    faltan habitaciones, `ROOM_NOT_AVAILABLE` con el número cuando se pidió una habitación concreta, y
    `AVAILABILITY_TAKEN` cuando otra solicitud tomó la última; e `INVALID_RESERVATION_DATES` para el mensaje
    de fechas del spec.
+8. **Fábrica `Reservation.createDirect` (T002).** Recibe la referencia ya generada, las fechas, el titular
+   (`Guest`), las `notes` y, por habitación, la habitación asignada (`roomId`, `roomNumber`,
+   `categoryRoom` y `maxCapacity`), su `guestCount` y su tarifa (`roomGrossAmount` y `quoteId` de la
+   cotización). Crea la reserva en `ACTIVE`, con `source` `DIRECT`, cada habitación en `EXPECTED`, sin
+   agencia ni conflicto, y con comisión `0`. Además de las invariantes que ya comprueba `Reservation`
+   (fechas, de 1 a 10 habitaciones distintas y `notes`):
+   - un `guestCount` mayor que el `maxCapacity` de su habitación da `GUEST_COUNT_EXCEEDS_CAPACITY` ("La
+     cantidad de personas supera la capacidad de la habitación.");
+   - habitaciones de categorías distintas son un error del programa (`Error`), no del usuario: la
+     solicitud trae una sola `categoryRoom` (A), así que no pueden llegar mezcladas.
+
+   La fecha mínima de entrada (`START_DATE_IN_PAST`) no la comprueba la fábrica, porque depende del día
+   operativo (`Clock`); la comprueba el validador de la solicitud (T004), antes de consultar la
+   disponibilidad.
 
 ## Puntos abiertos
 
