@@ -526,6 +526,15 @@ solo movimiento.
       codificar, lanza `INVALID_GUEST_CHARACTERS`. En `utf-8`, un carácter que no se puede codificar es una
       mitad suelta de un par sustituto; en `latin1`, uno por encima de U+00FF.
     - Como lo lanza el dominio, `INVALID_GUEST_CHARACTERS` está en `domain/shared/error-codes.ts`.
+13. **`SireRateLimiter` (T005)** se aplica solo a `POST /api/sire/exports`. Revisa en este orden: `X-User`
+    (`USER_REQUIRED`), el límite por usuario y el de concurrencia.
+    - El límite por usuario es una ventana móvil: como mucho `SIRE_RATE_LIMIT_PER_MINUTE` solicitudes
+      admitidas en los últimos 60 s. Una solicitud rechazada con `429` no cuenta.
+    - El cupo simultáneo (`SIRE_MAX_CONCURRENT`) se toma al admitir la solicitud y se libera cuando la
+      exportación termina, bien o con error.
+    - `Retry-After` lleva, en segundos enteros y redondeando hacia arriba, lo que falta para que salga de la
+      ventana la solicitud más vieja del usuario. Si el límite es el de concurrencia, lleva `2`, porque una
+      exportación tarda menos de 2 s (NFR-001).
 
 ## Puntos abiertos
 
