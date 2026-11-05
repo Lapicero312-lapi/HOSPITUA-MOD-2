@@ -1,4 +1,5 @@
 import type { Ota } from '../../../domain/ota/ota.js';
+import type { ConnectionStatus } from '../../../domain/shared/enums.js';
 import type { Transaction } from './transaction.js';
 
 /** Símbolo con el que Nest inyecta el repositorio (plan base, regla 4). */
@@ -15,6 +16,16 @@ export interface OtaRepository {
 
   /** Guarda los datos nuevos de una agencia que ya existe. */
   update(ota: Ota, tx?: Transaction): Promise<Ota>;
+
+  /**
+   * Guarda solo el `connectionStatus` y, si viene, el `lastSyncAt` (plan, B3): no reescribe el resto de la
+   * agencia, así no pisa el porcentaje que otra transacción guarde a la vez.
+   */
+  updateConnection(
+    id: string,
+    connectionStatus: ConnectionStatus,
+    lastSyncAt?: Date,
+  ): Promise<void>;
 }
 
 /** Ya existe una agencia con ese nombre (único en `ota`). */

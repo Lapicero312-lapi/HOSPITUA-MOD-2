@@ -6,6 +6,7 @@ import {
 } from '../../../../application/ports/out/ota.repository.js';
 import type { Transaction } from '../../../../application/ports/out/transaction.js';
 import type { Ota } from '../../../../domain/ota/ota.js';
+import type { ConnectionStatus } from '../../../../domain/shared/enums.js';
 import { otaToDomain, otaToTable } from '../mappers/ota.mapper.js';
 import { OtaTable } from '../tables/ota.table.js';
 import { managerFor } from '../typeorm-transaction.js';
@@ -54,6 +55,25 @@ export class TypeOrmOtaRepository implements OtaRepository {
       throw translateDuplicate(error);
     }
     return findOrFail(manager, ota.id);
+  }
+
+  async updateConnection(
+    id: string,
+    connectionStatus: ConnectionStatus,
+    lastSyncAt?: Date,
+  ): Promise<void> {
+    if (lastSyncAt === undefined) {
+      await this.dataSource.query(
+        'UPDATE ota SET connection_status = $2, updated_at = now() WHERE id = $1',
+        [id, connectionStatus],
+      );
+      return;
+    }
+    await this.dataSource.query(
+      `UPDATE ota SET connection_status = $2, last_sync_at = $3, updated_at = now()
+       WHERE id = $1`,
+      [id, connectionStatus, lastSyncAt],
+    );
   }
 }
 

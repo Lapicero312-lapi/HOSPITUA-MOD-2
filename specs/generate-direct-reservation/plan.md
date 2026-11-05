@@ -591,6 +591,46 @@ y por caída del Módulo 3.
    La fecha mínima de entrada (`START_DATE_IN_PAST`) no la comprueba la fábrica, porque depende del día
    operativo (`Clock`); la comprueba el validador de la solicitud (T004), antes de consultar la
    disponibilidad.
+9. **Precarga del titular (E, T018).** `documentType` y `documentNumber` se leen sin los espacios de los
+   extremos y se comprueban en este orden; el primero que falla da el error:
+   1. falta uno de los dos o llega vacío: `GUEST_DATA_REQUIRED`;
+   2. `documentType` no es exactamente `RC`, `TI`, `CC`, `CE`, `PAS` o `NIT`: `INVALID_DOCUMENT_TYPE`;
+   3. `documentNumber` trae algo distinto de letras, dígitos y guion (los caracteres de la búsqueda por
+      documento de `check-view-reservation`): `INVALID_CHARACTERS`.
+
+   Un parámetro repetido (`?documentType=CC&documentType=TI`) cuenta como valor no válido de ese
+   parámetro. El número se compara exacto, tal como se guardó. El validador de la solicitud (T004) aplica
+   la misma regla al `documentNumber` del titular, para que todo documento guardado se pueda buscar.
+10. **Validador de la solicitud (T004).** Revisa los pasos 1 a 4 de la regla 2 en este orden; el primero
+    que falla da el error. Un campo con otro tipo (por ejemplo `"2"` en vez de `2`) cuenta como valor no
+    válido de ese campo.
+    1. **Formatos:**
+       - `categoryRoom`, con el validador de `consult-room-inventory` (`INVALID_CATEGORY`);
+       - cada `roomId` que venga debe ser un UUID (`INVALID_ROOM_ID`);
+       - solo en B, `expectedRates` debe traer una entrada por habitación, con `position` de 1 a n sin
+         repetir y `lodgingAmount` como decimal positivo de dos decimales. Si no, `RATE_CHANGED`: la
+         pantalla vuelve a cotizar.
+    2. **Habitaciones:**
+       - `rooms` que no es una lista, o con 0 o más de 10 entradas: `INVALID_ROOM_COUNT`;
+       - un `roomId` repetido: `ROOM_ALREADY_IN_RESERVATION`;
+       - `guestCount` igual a `0`: `GUEST_COUNT_TOO_LOW`;
+       - `guestCount` no entero o negativo: `INVALID_GUEST_COUNT`.
+    3. **Fechas:**
+       - vacías o que no son una `AAAA-MM-DD` real: `INVALID_RESERVATION_DATES`;
+       - entrada anterior al día operativo del `Clock`: `START_DATE_IN_PAST`;
+       - salida no posterior a la entrada: `INVALID_RESERVATION_DATES`.
+    4. **`notes` y titular:**
+       - `notes` es opcional (`null` o ausente); con más de 500 caracteres da `NOTES_TOO_LONG`.
+       - En la creación, falta o llega vacío `firstName`, `lastName`, `documentType`, `documentNumber` o
+         `nationality`: `GUEST_DATA_REQUIRED`.
+       - Después, el tipo y el número de documento según el punto 9.
+       - `INVALID_CHARACTERS` cuando un texto (`notes` o un dato del titular) trae caracteres de control
+         (`\p{Cc}`), salvo el salto de línea y la tabulación en `notes`, o cuando no cabe en su columna.
+         Los límites son: nombre y apellido 100, nacionalidad 60, teléfono 30 y correo 254.
+       - `contactEmail` que no tiene la forma `algo@dominio.ext`, sin espacios: `INVALID_EMAIL`.
+
+       Los textos del titular se guardan sin los espacios de los extremos, y un teléfono o un correo vacío
+       queda en `null`.
 
 ## Puntos abiertos
 
