@@ -358,8 +358,8 @@ backend/src/
 │   ├── verify-availability.service.ts
 │   └── availability-query.validator.ts
 └── infrastructure/
-    ├── out/persistence/repositories/reservation.query.ts   # TypeOrmReservationQuery (findBlockingRooms)
-    └── in/rest/availability.dto.ts                          # DTO compartido availability
+    ├── out/persistence/repositories/reservation-query.repository.ts   # TypeOrmReservationQuery (findBlockingRooms)
+    └── in/rest/availability.dto.ts                                     # DTO compartido availability
 backend/test/
 ├── unit/                                  # espejo de src/: B2, B3, validadores
 ├── integration/check-room-availability/   # servicio con Testcontainers (PostgreSQL) y puertos del Módulo 1 simulados
