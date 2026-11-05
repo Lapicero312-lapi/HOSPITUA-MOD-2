@@ -1,5 +1,6 @@
 import { EsquemaBase1792461934191 } from './1792461934191-EsquemaBase.js';
 import { OtaSinHotelYPorcentajeOpcional1793368536386 } from './1793368536386-OtaSinHotelYPorcentajeOpcional.js';
+import { ProcessedMessageColaYSecuencia1793840682769 } from './1793840682769-ProcessedMessageColaYSecuencia.js';
 
 /**
  * Todas las migraciones, en orden. Al crear una nueva, agrégala al final de esta lista.
@@ -8,4 +9,5 @@ import { OtaSinHotelYPorcentajeOpcional1793368536386 } from './1793368536386-Ota
 export const MIGRATIONS = [
   EsquemaBase1792461934191,
   OtaSinHotelYPorcentajeOpcional1793368536386,
+  ProcessedMessageColaYSecuencia1793840682769,
 ];

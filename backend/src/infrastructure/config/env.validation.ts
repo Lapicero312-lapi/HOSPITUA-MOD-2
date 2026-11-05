@@ -131,6 +131,12 @@ export class EnvironmentVariables extends SireEnvironmentVariables {
   @IsInt()
   @Min(1)
   QUOTE_CONCURRENCY!: number;
+
+  // Cierre del día: cuántas reservas se procesan en cada lote
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  CLOSE_DAY_BATCH_SIZE!: number;
 }
 
 /** Valores que se usan si la variable no está definida, en cualquier entorno. */
@@ -148,6 +154,7 @@ const DEFAULTS = {
   ASSIGNMENT_MAX_RETRIES: 3,
   RECONCILIATION_MAX_ITEMS: 500,
   QUOTE_CONCURRENCY: 5,
+  CLOSE_DAY_BATCH_SIZE: 100,
   ...SIRE_DEFAULTS,
 };
 
