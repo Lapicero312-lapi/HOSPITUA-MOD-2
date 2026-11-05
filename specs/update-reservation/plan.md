@@ -959,6 +959,17 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
    conflicto que ya no se podría resolver.
 10. **`ApplyOtaChange` se divide en `prepare` y `apply`**, porque las llamadas a otros módulos van antes de
     la transacción (regla 6 del plan base).
+11. **Cómo empareja `diffRooms` (T004).** Recibe las habitaciones actuales (con su categoría y su tarifa)
+    y las pedidas (con la categoría que da el Módulo 1), y decide en este orden:
+    1. **Conservadas:** las que tienen el mismo `roomId` en las dos listas.
+    2. **Cambiadas de la misma categoría:** cada quitada se empareja con una agregada de su misma categoría.
+       Las quitadas van por `roomNumber` ascendente y las agregadas en el orden de la solicitud. La nueva
+       hereda la tarifa de la quitada con la que se emparejó.
+    3. **Cambiadas de categoría:** las quitadas y agregadas que sobran se emparejan entre sí, en el mismo
+       orden, aunque sean de categorías distintas. La nueva se cotiza.
+    4. Lo que todavía sobra son las **agregadas** (se cotizan) y las **quitadas** (se van con su tarifa).
+
+    El orden es fijo para que la misma solicitud dé siempre el mismo resultado.
 
 ## Puntos abiertos
 
