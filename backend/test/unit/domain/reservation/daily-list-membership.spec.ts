@@ -134,6 +134,19 @@ describe('DailyListMembership (plan, "Cuándo una reserva entra, cambia o sale d
         'las personas de la habitación',
         { rooms: [aDirectRoom({ ...ROOM_201.snapshot(), guestCount: 1 })] },
       ],
+      // Solo la habitación, con las mismas personas: el total de la reserva no cambia.
+      [
+        'la habitación (de la 201 a la 202)',
+        {
+          rooms: [
+            aDirectRoom({
+              ...ROOM_201.snapshot(),
+              roomId: randomUUID(),
+              roomNumber: '202',
+            }),
+          ],
+        },
+      ],
       [
         'la versión (updatedAt)',
         { updatedAt: '2026-10-09 09:15:00.000000-05' },

@@ -155,8 +155,9 @@ export class Reservation {
    * Una reserva directa nueva (plan de `generate-direct-reservation`, punto 8): en `ACTIVE`, con cada
    * habitación en `EXPECTED`, sin agencia ni conflicto y con comisión `0`. Comprueba las invariantes de
    * `restore` (fechas, de 1 a 10 habitaciones distintas, al menos una persona por habitación y `notes`) y,
-   * después, que ninguna habitación supere su capacidad, en el orden de la regla 2. La fecha mínima de
-   * entrada no la comprueba: depende del día operativo y la revisa el validador de la solicitud.
+   * después, que ninguna habitación supere su capacidad. El orden de la regla 2 lo da el validador de la
+   * solicitud (T004), que revisa antes; tampoco comprueba aquí la fecha mínima de entrada, que depende del
+   * día operativo.
    * @throws BusinessError con los códigos de `restore` o `GUEST_COUNT_EXCEEDS_CAPACITY`.
    */
   static createDirect(input: DirectReservationInput): Reservation {
@@ -335,6 +336,62 @@ export class Reservation {
     }
     return true;
   }
+
+  /**
+   * Una reserva de Booking nueva (plan de `generate-ota-reservation`, punto 6): en `ACTIVE`, con cada
+   * habitación en `EXPECTED` y sin tarifa por habitación. Nunca la rechaza por falta de lugar ni por
+   * capacidad (D13): si hay motivo, marca el conflicto con el primero de `NO_ROOM_AVAILABLE` (alguna
+   * habitación sin asignar), `CAPACITY_EXCEEDED` (alguna asignada supera su capacidad) y
+   * `CHANGE_NOT_APPLICABLE` (fechas distintas por habitación), con la hora de la revisión.
+   * @throws BusinessError con los códigos de `restore` (las fechas, la cantidad de habitaciones y `notes`).
+   */
+  static createOta(input: OtaReservationInput): Reservation {
+    const reason = conflictReasonOf(input);
+    return Reservation.restore({
+      id: crypto.randomUUID(),
+      reservationRef: input.reservationRef,
+      source: 'OTA',
+      startDate: input.startDate,
+      endDate: input.endDate,
+      rooms: input.rooms.map(({ categoryRoom, guestCount, assigned }) =>
+        ReservationRoom.restore({
+          id: crypto.randomUUID(),
+          roomId: assigned?.roomId ?? null,
+          roomNumber: assigned?.roomNumber ?? null,
+          categoryRoom,
+          guestCount,
+          rate: null,
+          stayStatus: INITIAL_STAY_STATUS,
+        }),
+      ),
+      guest: input.guest,
+      status: INITIAL_RESERVATION_STATUS,
+      statusReason: null,
+      notes: input.notes,
+      ota: input.ota,
+      conflict:
+        reason === null ? null : { reason, detectedAt: input.receivedAt },
+      createdAt: null,
+      updatedAt: null,
+    });
+  }
+}
+
+/** El primer motivo de conflicto de una reserva de Booking nueva, en el orden del paso 8 de B1. */
+function conflictReasonOf(input: OtaReservationInput): ConflictReason | null {
+  if (input.rooms.some(({ assigned }) => assigned === null)) {
+    return 'NO_ROOM_AVAILABLE';
+  }
+  // Una habitación sin asignar no tiene capacidad: solo se comparan las asignadas.
+  if (
+    input.rooms.some(
+      ({ assigned, guestCount }) =>
+        assigned !== null && guestCount > assigned.maxCapacity,
+    )
+  ) {
+    return 'CAPACITY_EXCEEDED';
+  }
+  return input.datesDifferPerRoom ? 'CHANGE_NOT_APPLICABLE' : null;
 }
 
 /**
@@ -369,3 +426,31 @@ function assertChannel(props: ReservationProps): void {
     fail('el valor y la comisión van en la misma moneda');
   }
 }
+
+/**
+ * Una habitación de una reserva de Booking nueva (plan de `generate-ota-reservation`, punto 6): su
+ * categoría, sus personas y la habitación asignada, o `null` si no hubo lugar. Son datos simples: el
+ * dominio no conoce los tipos de `application/`.
+ */
+export type OtaRoomInput = {
+  categoryRoom: string;
+  guestCount: number;
+  assigned: { roomId: string; roomNumber: string; maxCapacity: number } | null;
+};
+
+/** Lo que necesita `Reservation.createOta` (plan de `generate-ota-reservation`, punto 6). */
+export type OtaReservationInput = {
+  /** Ya generada (`newReservationRef`). */
+  reservationRef: string;
+  startDate: string;
+  endDate: string;
+  guest: Guest;
+  notes: string | null;
+  /** La agencia, el código de Booking, el valor y la comisión calculada. */
+  ota: OtaTerms;
+  /** La hora de la revisión: la del conflicto, si lo hay. */
+  receivedAt: Date;
+  rooms: OtaRoomInput[];
+  /** Si alguna habitación traía fechas distintas de las de la reserva (paso 4 de B1). */
+  datesDifferPerRoom: boolean;
+};

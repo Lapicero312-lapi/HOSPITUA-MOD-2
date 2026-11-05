@@ -6,6 +6,7 @@ import { CheckViewReservationModule } from './application/use-cases/check-view-r
 import { ConfigureOtaModule } from './application/use-cases/configure-ota/configure-ota.module.js';
 import { ConsultMaintenanceCalendarModule } from './application/use-cases/consult-maintenance-calendar/consult-maintenance-calendar.module.js';
 import { ConsultRoomInventoryModule } from './application/use-cases/consult-room-inventory/consult-room-inventory.module.js';
+import { GenerateOtaReservationModule } from './application/use-cases/generate-ota-reservation/generate-ota-reservation.module.js';
 import { RegisterOtaInformationCommissionModule } from './application/use-cases/register-ota-information-commission/register-ota-information-commission.module.js';
 import { AppConfigModule } from './infrastructure/config/app-config.module.js';
 import { JobsModule } from './infrastructure/in/jobs/jobs.module.js';
@@ -39,6 +40,7 @@ import { LoggingModule } from './infrastructure/shared/logging.module.js';
     CheckViewReservationModule,
     CheckRoomAvailabilityModule,
     CalculateDynamicRateModule,
+    GenerateOtaReservationModule,
     JobsModule,
     RestModule,
   ],
