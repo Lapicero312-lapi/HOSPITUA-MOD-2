@@ -141,3 +141,9 @@ export const ROOM_NOT_AVAILABLE = {
   message: (roomNumber: string) =>
     `La habitación ${roomNumber} no está disponible para el rango de fechas solicitado.`,
 } as const;
+
+/** Falta un dato obligatorio del titular, o su tipo y su número de documento no van juntos. */
+export const GUEST_DATA_REQUIRED = {
+  code: 'GUEST_DATA_REQUIRED',
+  message: 'Los datos del titular son obligatorios.',
+} as const;
