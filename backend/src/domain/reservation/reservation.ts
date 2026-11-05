@@ -9,6 +9,7 @@ import type {
   StatusReason,
   StayStatus,
 } from '../shared/enums.js';
+import { GUEST_COUNT_EXCEEDS_CAPACITY } from '../shared/error-codes.js';
 import type { Money } from '../shared/money.js';
 import { ReservationRoom, type RoomRate } from './reservation-room.js';
 import {
@@ -17,15 +18,6 @@ import {
   INITIAL_STAY_STATUS,
   invalidStatusTransition,
 } from './reservation-transitions.js';
-
-/**
- * Una habitación con más personas que su capacidad (plan de `generate-direct-reservation`, tabla C). Lo
- * lanza el dominio, así que se declara aquí y no en `application/`.
- */
-export const GUEST_COUNT_EXCEEDS_CAPACITY = {
-  code: 'GUEST_COUNT_EXCEEDS_CAPACITY',
-  message: 'La cantidad de personas supera la capacidad de la habitación.',
-} as const;
 
 /**
  * Una habitación de una reserva directa nueva: la asignada, sus personas y su tarifa (plan de
