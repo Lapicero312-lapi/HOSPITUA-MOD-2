@@ -11,7 +11,7 @@ import type { Money } from '../../../domain/shared/money.js';
 import type {
   RoomQuote,
   RoomQuoteRequest,
-} from '../../integration/rate-quote.js';
+} from '../../integration/room-quote.js';
 import {
   MODULE3_PORT,
   Module3RejectedError,

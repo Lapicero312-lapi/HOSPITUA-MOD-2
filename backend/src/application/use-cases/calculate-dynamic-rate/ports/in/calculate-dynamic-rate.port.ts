@@ -2,7 +2,7 @@ import type { Money } from '../../../../../domain/shared/money.js';
 import type {
   RoomQuote,
   RoomQuoteRequest,
-} from '../../../../integration/rate-quote.js';
+} from '../../../../integration/room-quote.js';
 
 /** Símbolo con el que Nest inyecta el servicio en los flujos de reserva (plan base, regla 4). */
 export const CALCULATE_DYNAMIC_RATE = Symbol('CALCULATE_DYNAMIC_RATE');

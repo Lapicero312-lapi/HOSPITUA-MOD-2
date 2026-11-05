@@ -33,7 +33,8 @@ describe('Validadores de la cotización (T005)', () => {
     it.each([
       ['la salida antes de la llegada', '2026-10-12', '2026-10-10'],
       ['la salida el mismo día de la llegada', '2026-10-10', '2026-10-10'],
-      ['una fecha que no existe', '2026-02-30', '2026-03-02'],
+      ['una llegada que no existe', '2026-02-30', '2026-03-02'],
+      ['una salida que no existe', '2026-02-28', '2026-02-30'],
       ['una fecha con otra forma', '10/10/2026', '2026-10-12'],
       ['una fecha sin el día', '2026-10', '2026-10-12'],
     ])('%s no es válido', (_caso, startDate, endDate) => {

@@ -17,20 +17,3 @@ export type RateQuote = {
   /** Mayor que cero. */
   lodgingAmount: Money;
 };
-
-/** Lo que se cotiza de una habitación de la reserva (`calculate-dynamic-rate`, B). */
-export type RoomQuoteRequest = {
-  /** Identifica la habitación en la reserva; la cotización lo devuelve igual. */
-  key: string;
-  categoryRoom: string;
-  /** `AAAA-MM-DD`. */
-  startDate: string;
-  /** `AAAA-MM-DD`, posterior a `startDate`: es la salida. */
-  endDate: string;
-};
-
-/** La cotización de una habitación de la reserva (`calculate-dynamic-rate`, B): un `RateQuote` con su `key`. */
-export type RoomQuote = RateQuote & {
-  /** El mismo de la solicitud. */
-  key: string;
-};

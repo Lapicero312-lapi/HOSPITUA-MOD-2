@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type {
   RoomQuote,
   RoomQuoteRequest,
-} from '../../../../../src/application/integration/rate-quote.js';
+} from '../../../../../src/application/integration/room-quote.js';
 import { BusinessError } from '../../../../../src/domain/shared/business-error.js';
 import { Money } from '../../../../../src/domain/shared/money.js';
 import { toQuotesDto } from '../../../../../src/infrastructure/in/rest/quotes.dto.js';

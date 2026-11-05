@@ -1,7 +1,7 @@
 import type {
   RoomQuote,
   RoomQuoteRequest,
-} from '../../../application/integration/rate-quote.js';
+} from '../../../application/integration/room-quote.js';
 import { reservationTotal } from '../../../domain/reservation/reservation-total.js';
 import type { Money } from '../../../domain/shared/money.js';
 

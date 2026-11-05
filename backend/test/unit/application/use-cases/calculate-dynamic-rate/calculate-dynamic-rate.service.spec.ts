@@ -1,9 +1,7 @@
 import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type {
-  RateQuote,
-  RoomQuoteRequest,
-} from '../../../../../src/application/integration/rate-quote.js';
+import type { RateQuote } from '../../../../../src/application/integration/rate-quote.js';
+import type { RoomQuoteRequest } from '../../../../../src/application/integration/room-quote.js';
 import {
   Module3RejectedError,
   Module3UnavailableError,
