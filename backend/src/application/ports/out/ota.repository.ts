@@ -10,16 +10,16 @@ export interface OtaRepository {
 
   findByName(name: string, tx?: Transaction): Promise<Ota | null>;
 
-  /** @throws DuplicateOtaError si ya hay una agencia con ese nombre o esa cuenta del hotel. */
+  /** @throws DuplicateOtaError si ya hay una agencia con ese nombre. */
   insert(ota: Ota, tx?: Transaction): Promise<Ota>;
 
   /** Guarda los datos nuevos de una agencia que ya existe. */
   update(ota: Ota, tx?: Transaction): Promise<Ota>;
 }
 
-/** Ya existe una agencia con ese nombre o esa cuenta del hotel (únicos en `ota`). */
+/** Ya existe una agencia con ese nombre (único en `ota`). */
 export class DuplicateOtaError extends Error {
-  constructor(readonly field: 'name' | 'hotelAccountId') {
+  constructor(readonly field: 'name') {
     super(`Ya existe una agencia con ese ${field}.`);
   }
 }

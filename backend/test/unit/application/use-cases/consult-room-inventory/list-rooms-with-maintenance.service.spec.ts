@@ -286,6 +286,43 @@ describe('ListRoomsWithMaintenanceService.execute', () => {
     },
   );
 
+  it('devuelve las habitaciones ordenadas por categoría y luego por número, con los dígitos como número (plan, C1)', async () => {
+    // Datos de las pruebas del plan (T012): la 1001 y la 101 de `SUITE_JUNIOR` muestran el orden por número y por categoría.
+    const room1001: Room = {
+      id: randomUUID(),
+      roomNumber: '1001',
+      categoryRoom: 'DOBLE',
+      maxCapacity: 2,
+    };
+    const suite101: Room = {
+      id: randomUUID(),
+      roomNumber: '101',
+      categoryRoom: 'SUITE_JUNIOR',
+      maxCapacity: 2,
+    };
+    const { inventory } = fakeInventory([
+      suite101,
+      room1001,
+      ROOM_202,
+      ROOM_201,
+    ]);
+    const { calendar } = fakeCalendar(new Map());
+
+    const rooms = await new ListRoomsWithMaintenanceService(
+      inventory,
+      calendar,
+      fakeClock(TODAY),
+      5,
+    ).execute();
+
+    expect(rooms.map((room) => [room.categoryRoom, room.roomNumber])).toEqual([
+      ['DOBLE', '201'],
+      ['DOBLE', '202'],
+      ['DOBLE', '1001'],
+      ['SUITE_JUNIOR', '101'],
+    ]);
+  });
+
   it('la ventana pasa bien de un año al otro: con el reloj en el 2026-12-15 se pide hasta el 2027-01-14', async () => {
     const { inventory } = fakeInventory([ROOM_201]);
     const { nextMaintenance, calendar } = fakeCalendar(new Map());

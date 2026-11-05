@@ -13,6 +13,7 @@ import {
   ChannexUnauthorizedError,
   ChannexUnavailableError,
 } from '../../../application/ports/out/channex.port.js';
+import { CHANNEX_DEFAULTS } from '../../config/channex.config.js';
 import { isNonEmptyString, isObject, send } from '../http-call.js';
 import {
   isUnreadable,
@@ -239,10 +240,12 @@ export class ChannexHttpAdapter implements ChannexPort {
   }
 
   private settings(): ChannexSettings {
-    const baseUrl = this.text('CHANNEX_BASE_URL');
+    // El mismo valor por defecto que la configuración validada (`configure-ota`, B0).
+    const baseUrl =
+      this.text('CHANNEX_BASE_URL') ?? CHANNEX_DEFAULTS.CHANNEX_BASE_URL;
     const apiKey = this.text('CHANNEX_API_KEY');
     const propertyId = this.text('CHANNEX_PROPERTY_ID');
-    if (baseUrl === null || apiKey === null || propertyId === null) {
+    if (apiKey === null || propertyId === null) {
       throw new ChannexUnavailableError('configuración incompleta');
     }
     return { baseUrl: baseUrl.replace(/\/+$/, ''), apiKey, propertyId };

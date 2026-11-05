@@ -5,25 +5,28 @@ import type { ConnectionStatus } from '../shared/enums.js';
 export type OtaProps = {
   id: string;
   name: string;
-  /** El id del hotel en Booking (`BOOKING_HOTEL_ID`). */
-  hotelAccountId: string;
-  /** De 0 a 100, como texto decimal (`15.00` es el 15 %). */
-  commissionPercentage: string;
+  /**
+   * Porcentaje de comisión fijo de la agencia, de 0 a 100, como texto decimal (`15.00` es el 15 %). Lo
+   * calcula el sistema con su primera reserva; `null` hasta entonces (plan base, "Ota").
+   */
+  commissionPercentage: string | null;
   connectionStatus: ConnectionStatus;
   linkedAt: Date;
   /** Última lectura del feed de Channex que terminó bien. */
   lastSyncAt: Date;
 };
 
-/** Agencia (plan base, "Ota"). Se registra por configuración (`configure-ota`); nunca se borra. */
+/** Agencia (plan base, "Ota"). Se registra al iniciar (`configure-ota`); nunca se borra. */
 export class Ota {
   private constructor(private readonly props: OtaProps) {}
 
   static restore(props: OtaProps): Ota {
     const invalid = [
       props.name.trim() === '' ? 'name' : null,
-      props.hotelAccountId.trim() === '' ? 'hotelAccountId' : null,
-      isPercentage(props.commissionPercentage) ? null : 'commissionPercentage',
+      props.commissionPercentage === null ||
+      isPercentage(props.commissionPercentage)
+        ? null
+        : 'commissionPercentage',
     ].filter((field) => field !== null);
     if (invalid.length > 0) {
       throw new BusinessError(
@@ -42,11 +45,8 @@ export class Ota {
     return this.props.name;
   }
 
-  get hotelAccountId(): string {
-    return this.props.hotelAccountId;
-  }
-
-  get commissionPercentage(): string {
+  /** `null` mientras la agencia no tenga su primera reserva. */
+  get commissionPercentage(): string | null {
     return this.props.commissionPercentage;
   }
 

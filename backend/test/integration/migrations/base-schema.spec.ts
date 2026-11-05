@@ -158,4 +158,27 @@ describe('Esquema base (migración de T007) contra PostgreSQL real', () => {
       },
     });
   });
+
+  it('la agencia no tiene id del hotel y su porcentaje puede quedar vacío, pero nunca fuera de 0 a 100', async () => {
+    const columns: { column_name: string; is_nullable: string }[] =
+      await dataSource.query(
+        `SELECT column_name, is_nullable FROM information_schema.columns WHERE table_name = 'ota'`,
+      );
+    expect(columns.map((c) => c.column_name)).not.toContain('hotel_account_id');
+    expect(
+      columns.find((c) => c.column_name === 'commission_percentage')
+        ?.is_nullable,
+    ).toBe('YES');
+
+    const insertOta = (name: string, percentage: string | null) =>
+      dataSource.query(
+        `INSERT INTO ota (name, commission_percentage, connection_status, linked_at, last_sync_at)
+         VALUES ($1, $2, 'CONNECTED', now(), now())`,
+        [name, percentage],
+      );
+    await expect(insertOta('Booking.com', null)).resolves.toBeDefined();
+    await expect(insertOta('Expedia', '100.50')).rejects.toMatchObject({
+      driverError: { constraint: 'ck_ota_commission_percentage' },
+    });
+  });
 });

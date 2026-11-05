@@ -38,13 +38,12 @@ export class TypeOrmOtaRepository implements OtaRepository {
     try {
       await manager.query(
         `UPDATE ota SET
-           name = $2, hotel_account_id = $3, commission_percentage = $4, connection_status = $5,
-           linked_at = $6, last_sync_at = $7, updated_at = now()
+           name = $2, commission_percentage = $3, connection_status = $4,
+           linked_at = $5, last_sync_at = $6, updated_at = now()
          WHERE id = $1`,
         [
           row.id,
           row.name,
-          row.hotelAccountId,
           row.commissionPercentage,
           row.connectionStatus,
           row.linkedAt,
@@ -74,7 +73,7 @@ async function findOrFail(manager: EntityManager, id: string): Promise<Ota> {
   return ota;
 }
 
-/** Los únicos de `ota` (`name` y `hotel_account_id`) como `DuplicateOtaError`. */
+/** El único de `ota` (`name`) como `DuplicateOtaError`. */
 function translateDuplicate(error: unknown): unknown {
   if (error instanceof QueryFailedError) {
     const { code, constraint } = error.driverError as {
@@ -83,9 +82,6 @@ function translateDuplicate(error: unknown): unknown {
     };
     if (code === '23505' && constraint === 'uq_ota_name') {
       return new DuplicateOtaError('name');
-    }
-    if (code === '23505' && constraint === 'uq_ota_hotel_account_id') {
-      return new DuplicateOtaError('hotelAccountId');
     }
   }
   return error;

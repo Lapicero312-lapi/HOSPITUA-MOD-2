@@ -21,6 +21,23 @@ export function calculateCommission(
 }
 
 /**
+ * El porcentaje que representa una comisión sobre el valor bruto (plan de
+ * `register-ota-information-commission`, regla 1a): `commission ÷ grossAmount × 100`, con dos decimales y
+ * redondeo `ROUND_HALF_UP`, como texto (`15.00`). El `grossAmount` debe ser mayor que 0. No revisa que el
+ * resultado esté entre 0 y 100: eso lo decide quien llama.
+ */
+export function commissionPercentageOf(
+  commission: Money,
+  grossAmount: Money,
+): string {
+  return new Decimal(commission.amount)
+    .dividedBy(grossAmount.amount)
+    .times(100)
+    .toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
+    .toFixed(2);
+}
+
+/**
  * Transiciones de `commissionStatus` (plan de `register-ota-information-commission`, A2 y punto 5:
  * `CALCULATED → RECONCILED`, `CALCULATED → PAID` y `RECONCILED → PAID`). Cualquier otra se rechaza.
  */

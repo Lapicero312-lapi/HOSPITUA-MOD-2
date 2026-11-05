@@ -794,7 +794,27 @@ describe('ChannexHttpAdapter contra respuestas simuladas de Channex', () => {
       await expect(ack()).rejects.toBeInstanceOf(ChannexUnavailableError);
     });
 
-    it.each(['CHANNEX_BASE_URL', 'CHANNEX_API_KEY', 'CHANNEX_PROPERTY_ID'])(
+    it.each([undefined, '  '])(
+      'sin CHANNEX_BASE_URL (%j) llama a Channex staging, el mismo valor por defecto de la configuración',
+      async (baseUrl) => {
+        let called = false;
+        server.use(
+          http.post(
+            `https://staging.channex.io/api/v1/booking_revisions/${REVISION_ID}/ack`,
+            () => {
+              called = true;
+              return HttpResponse.json({ meta: { message: 'Success' } });
+            },
+          ),
+        );
+
+        await ack(newAdapter({ ...SETTINGS, CHANNEX_BASE_URL: baseUrl }));
+
+        expect(called).toBe(true);
+      },
+    );
+
+    it.each(['CHANNEX_API_KEY', 'CHANNEX_PROPERTY_ID'])(
       'sin %s falla con ChannexUnavailableError sin llamar a Channex',
       async (missing) => {
         // Sin manejadores: msw falla la prueba si sale alguna solicitud.

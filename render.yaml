@@ -1,0 +1,95 @@
+# Blueprint de Render para la demo del Módulo 2 (plan base, "Despliegue de la demo (Render)").
+# Se crea desde el panel de Render: New → Blueprint → este repositorio. Las variables con `sync: false`
+# son secretas: Render las pide al crear el Blueprint y solo quedan en su panel, nunca aquí.
+#
+# Las URL de los servicios (https://<nombre>.onrender.com) salen del nombre. Si Render le da a alguno otra
+# URL porque el nombre ya estaba ocupado, cámbiala abajo: en el frontend (/api/*) y en MODULE1_BASE_URL y
+# MODULE3_BASE_URL del backend.
+
+databases:
+  - name: hospitua-m2-db
+    plan: free
+    region: oregon
+    databaseName: hospitua
+    user: hospitua
+
+services:
+  # El backend: aplica las migraciones pendientes y arranca (backend/Dockerfile).
+  - type: web
+    name: hospitua-m2-backend
+    runtime: docker
+    plan: free
+    region: oregon
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/docs
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DB_HOST
+        fromDatabase:
+          name: hospitua-m2-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: hospitua-m2-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: hospitua-m2-db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: hospitua-m2-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: hospitua-m2-db
+          property: password
+      # Los Módulos 1 y 3 son los simuladores, los dos en la misma URL.
+      - key: MODULE1_BASE_URL
+        value: https://hospitua-m2-simulators.onrender.com
+      - key: MODULE3_BASE_URL
+        value: https://hospitua-m2-simulators.onrender.com
+      # El hotel todavía no tiene sus códigos de SIRE: valores de demo.
+      - key: SIRE_HOTEL_CODE
+        value: DEMO-HOTEL
+      - key: SIRE_CITY_CODE
+        value: DEMO-CIUDAD
+      # Secretos: la URL de CloudAMQP (todavía no se usa, pero producción la exige) y Channex.
+      - key: RABBITMQ_URL
+        sync: false
+      - key: CHANNEX_API_KEY
+        sync: false
+      - key: CHANNEX_PROPERTY_ID
+        sync: false
+
+  # Los simuladores del Módulo 1 y del Módulo 3, los dos en el PORT que da Render. No tienen dependencias.
+  - type: web
+    name: hospitua-m2-simulators
+    runtime: node
+    plan: free
+    region: oregon
+    buildCommand: node --version
+    startCommand: node simulators/src/main.js
+    healthCheckPath: /api/rooms
+    envVars:
+      - key: NODE_VERSION
+        value: '22'
+
+  # El frontend: un sitio estático. /api/* va al backend, como el proxy de Vite en desarrollo (sin CORS).
+  - type: web
+    name: hospitua-m2-frontend
+    runtime: static
+    buildCommand: npx --yes pnpm@12.14.0 install --frozen-lockfile --filter frontend && npx --yes pnpm@12.14.0 --filter frontend build
+    staticPublishPath: ./frontend/dist
+    envVars:
+      - key: NODE_VERSION
+        value: '22'
+    routes:
+      - type: rewrite
+        source: /api/*
+        destination: https://hospitua-m2-backend.onrender.com/api/*
+      - type: rewrite
+        source: /*
+        destination: /index.html

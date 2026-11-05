@@ -74,16 +74,29 @@ describe('Repositorios de titulares y agencias contra PostgreSQL real', () => {
       );
     });
 
-    it('un nombre o una cuenta del hotel repetidos son DuplicateOtaError', async () => {
+    it('un nombre repetido es DuplicateOtaError', async () => {
       const otas = new TypeOrmOtaRepository(dataSource);
       await otas.insert(anOta());
 
-      await expect(
-        otas.insert(anOta({ hotelAccountId: 'otra-cuenta' })),
-      ).rejects.toEqual(new DuplicateOtaError('name'));
-      await expect(otas.insert(anOta({ name: 'Expedia' }))).rejects.toEqual(
-        new DuplicateOtaError('hotelAccountId'),
+      await expect(otas.insert(anOta())).rejects.toEqual(
+        new DuplicateOtaError('name'),
       );
+      await expect(
+        otas.insert(anOta({ name: 'Expedia' })),
+      ).resolves.toBeDefined();
+    });
+
+    it('guarda la agencia sin porcentaje y después el que se calcula con su primera reserva', async () => {
+      const otas = new TypeOrmOtaRepository(dataSource);
+      const ota = anOta({ commissionPercentage: null });
+
+      expect((await otas.insert(ota)).commissionPercentage).toBeNull();
+      const updated = await otas.update(
+        Ota.restore({ ...ota.snapshot(), commissionPercentage: '15.00' }),
+      );
+
+      expect(updated.commissionPercentage).toBe('15');
+      expect((await otas.findById(ota.id))?.commissionPercentage).toBe('15');
     });
 
     it('una agencia que no existe es null', async () => {

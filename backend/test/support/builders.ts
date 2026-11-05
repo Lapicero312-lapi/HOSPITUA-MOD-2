@@ -112,7 +112,6 @@ export function anOta(changes: Partial<OtaProps> = {}): Ota {
   return Ota.restore({
     id: randomUUID(),
     name: 'Booking.com',
-    hotelAccountId: '10485037',
     commissionPercentage: '15',
     connectionStatus: 'CONNECTED',
     linkedAt: new Date('2026-03-02T14:14:00.000Z'),

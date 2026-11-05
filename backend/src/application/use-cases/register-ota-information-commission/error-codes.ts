@@ -35,22 +35,20 @@ export const OTA_NOT_FOUND = {
   message: 'La agencia no existe.',
 } as const;
 
-/** B2: el `name` coincide con el de otra `Ota`. */
-export const OTA_NAME_ALREADY_EXISTS = {
-  code: 'OTA_NAME_ALREADY_EXISTS',
-  message: 'Ya existe una agencia con ese nombre.',
-} as const;
-
-/** B2: el `hotelAccountId` ya está registrado. */
-export const OTA_ACCOUNT_ALREADY_EXISTS = {
-  code: 'OTA_ACCOUNT_ALREADY_EXISTS',
-  message: 'Ya existe una agencia con esa cuenta del hotel.',
-} as const;
-
-/** B1: el porcentaje de la agencia es menor que 0 o mayor que 100. */
+/** B1: el porcentaje de la agencia, o el calculado con la primera reserva, es menor que 0 o mayor que 100. */
 export const INVALID_COMMISSION_PERCENTAGE = {
   code: 'INVALID_COMMISSION_PERCENTAGE',
   message: 'El porcentaje de comisión no es válido.',
+} as const;
+
+/**
+ * B1: la agencia no tiene porcentaje y la revisión no trae `ota_commission`, o trae un `grossAmount` de 0:
+ * no se puede calcular el porcentaje con la primera reserva.
+ */
+export const COMMISSION_NOT_REPORTED = {
+  code: 'COMMISSION_NOT_REPORTED',
+  message:
+    'Booking no informó la comisión de la primera reserva de la agencia.',
 } as const;
 
 /** B1: el `externalConfirmationCode` ya existe para esa `Ota`. */

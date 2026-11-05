@@ -17,6 +17,17 @@ export interface ReservationRepository {
   ): Promise<Reservation | null>;
 
   /**
+   * Si ya hay una reserva de la agencia con ese código de confirmación (FR-005 de
+   * `register-ota-information-commission`). La restricción única `(ota_id, external_confirmation_code)`
+   * sigue siendo el respaldo.
+   */
+  existsOtaConfirmationCode(
+    otaId: string,
+    externalConfirmationCode: string,
+    tx?: Transaction,
+  ): Promise<boolean>;
+
+  /**
    * Lee la reserva y la bloquea (`SELECT … FOR UPDATE`) hasta que termine la transacción, para
    * serializar dos cambios de la misma reserva.
    */
