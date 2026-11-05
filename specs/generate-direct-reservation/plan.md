@@ -591,6 +591,16 @@ y por caída del Módulo 3.
    La fecha mínima de entrada (`START_DATE_IN_PAST`) no la comprueba la fábrica, porque depende del día
    operativo (`Clock`); la comprueba el validador de la solicitud (T004), antes de consultar la
    disponibilidad.
+9. **Precarga del titular (E, T018).** `documentType` y `documentNumber` se leen sin los espacios de los
+   extremos y se comprueban en este orden; el primero que falla da el error:
+   1. falta uno de los dos o llega vacío: `GUEST_DATA_REQUIRED`;
+   2. `documentType` no es exactamente `RC`, `TI`, `CC`, `CE`, `PAS` o `NIT`: `INVALID_DOCUMENT_TYPE`;
+   3. `documentNumber` trae algo distinto de letras, dígitos y guion (los caracteres de la búsqueda por
+      documento de `check-view-reservation`): `INVALID_CHARACTERS`.
+
+   Un parámetro repetido (`?documentType=CC&documentType=TI`) cuenta como valor no válido de ese
+   parámetro. El número se compara exacto, tal como se guardó. El validador de la solicitud (T004) aplica
+   la misma regla al `documentNumber` del titular, para que todo documento guardado se pueda buscar.
 
 ## Puntos abiertos
 
