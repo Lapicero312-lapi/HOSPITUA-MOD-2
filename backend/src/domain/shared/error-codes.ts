@@ -119,6 +119,15 @@ export const INVALID_CHARACTERS = {
   message: 'El formato de los datos contiene caracteres no válidos.',
 } as const;
 
+/**
+ * Un dato del huésped no se puede codificar en el archivo SIRE, o contiene el separador o un salto de línea
+ * (plan de `export-sire-file`, punto 12). Lo lanza `formatSireLine`.
+ */
+export const INVALID_GUEST_CHARACTERS = {
+  code: 'INVALID_GUEST_CHARACTERS',
+  message: 'Caracteres no válidos en el registro del huésped.',
+} as const;
+
 /** La fecha de entrada es anterior al día operativo en curso. */
 export const START_DATE_IN_PAST = {
   code: 'START_DATE_IN_PAST',
