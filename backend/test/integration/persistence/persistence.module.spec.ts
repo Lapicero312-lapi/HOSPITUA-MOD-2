@@ -23,7 +23,7 @@ import {
 } from '../../../src/application/ports/out/transaction.js';
 import { TypeOrmProcessedMessageRepository } from '../../../src/infrastructure/out/messaging/processed-message.repository.js';
 import { TypeOrmOtaBookingRevisionRepository } from '../../../src/infrastructure/out/persistence/repositories/ota-booking-revision.repository.js';
-import { TypeOrmReservationQuery } from '../../../src/infrastructure/out/persistence/repositories/reservation.query.js';
+import { TypeOrmReservationQuery } from '../../../src/infrastructure/out/persistence/repositories/reservation-query.repository.js';
 import { aDirectReservation } from '../../support/builders.js';
 import { integrationEnv } from '../support/database.js';
 

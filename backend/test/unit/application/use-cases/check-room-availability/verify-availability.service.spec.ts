@@ -169,6 +169,47 @@ describe('VerifyAvailability.check por categoría (T006)', () => {
     });
   });
 
+  it('con dos mantenimientos en la misma estadía, devuelve los dos periodos del cruce', async () => {
+    // Una estadía de cuatro noches con un mantenimiento al principio y otro al final.
+    const twoMaintenances: MaintenanceCheck = {
+      roomId: ROOM_201.id,
+      available: false,
+      conflicts: [
+        {
+          maintenanceStart: '2026-10-09',
+          maintenanceEnd: '2026-10-10',
+          overlapStart: '2026-10-10',
+          overlapEnd: '2026-10-10',
+        },
+        {
+          maintenanceStart: '2026-10-13',
+          maintenanceEnd: '2026-10-15',
+          overlapStart: '2026-10-13',
+          overlapEnd: '2026-10-13',
+        },
+      ],
+    };
+    const { service } = serviceWith({
+      rooms: [ROOM_201],
+      blocked: [],
+      maintenance: () => Promise.resolve(twoMaintenances),
+    });
+
+    const { rooms } = await service.check(
+      byCategory({ startDate: START, endDate: '2026-10-14' }),
+    );
+
+    expect(rooms[0]).toEqual({
+      room: ROOM_201,
+      available: false,
+      reason: 'MAINTENANCE',
+      maintenance: [
+        { overlapStart: '2026-10-10', overlapEnd: '2026-10-10' },
+        { overlapStart: '2026-10-13', overlapEnd: '2026-10-13' },
+      ],
+    });
+  });
+
   it('consulta el calendario de cada candidata con las fechas pedidas', async () => {
     const { service, check } = serviceWith({ blocked: [] });
 

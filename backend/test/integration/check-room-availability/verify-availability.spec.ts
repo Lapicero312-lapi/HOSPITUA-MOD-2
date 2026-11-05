@@ -35,6 +35,9 @@ import { integrationEnv, truncateAllTables } from '../support/database.js';
 const START = '2026-10-10';
 const END = '2026-10-12';
 
+/** El símbolo del proveedor de prueba que inyecta `VERIFY_AVAILABILITY` desde fuera de su módulo. */
+const INJECTED_AVAILABILITY = Symbol('INJECTED_AVAILABILITY');
+
 /** Las habitaciones de los ejemplos de `consult-room-inventory` (A2), con un `id` fijo. */
 const ROOM_201: Room = {
   id: '3f6c1e2a-8b4d-4c7e-9a1f-2b3c4d5e6f70',
@@ -162,11 +165,20 @@ describe('VerifyAvailability contra PostgreSQL real y el Módulo 1 simulado (T01
         Module1ClientModule,
         CheckRoomAvailabilityModule,
       ],
+      // Un proveedor de fuera del módulo que lo inyecta, como un flujo de reserva: `moduleRef.get` lo
+      // encontraría aunque el módulo no lo exportara; inyectarlo, no.
+      providers: [
+        {
+          provide: INJECTED_AVAILABILITY,
+          inject: [VERIFY_AVAILABILITY],
+          useFactory: (verify: VerifyAvailability) => verify,
+        },
+      ],
     })
       .overrideProvider(MODULE1_PORT)
       .useValue(module1)
       .compile();
-    availability = moduleRef.get<VerifyAvailability>(VERIFY_AVAILABILITY);
+    availability = moduleRef.get<VerifyAvailability>(INJECTED_AVAILABILITY);
     dataSource = moduleRef.get(DataSource);
     reservations = new TypeOrmReservationRepository(dataSource);
   });

@@ -14,7 +14,7 @@ import { TypeOrmProcessedMessageRepository } from '../messaging/processed-messag
 import { TypeOrmGuestRepository } from './repositories/guest.repository.js';
 import { TypeOrmOtaBookingRevisionRepository } from './repositories/ota-booking-revision.repository.js';
 import { TypeOrmOtaRepository } from './repositories/ota.repository.js';
-import { TypeOrmReservationQuery } from './repositories/reservation.query.js';
+import { TypeOrmReservationQuery } from './repositories/reservation-query.repository.js';
 import { TypeOrmReservationRepository } from './repositories/reservation.repository.js';
 import { TypeOrmTransactionRunner } from './typeorm-transaction.js';
 

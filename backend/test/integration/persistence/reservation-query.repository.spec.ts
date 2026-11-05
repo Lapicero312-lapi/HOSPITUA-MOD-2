@@ -5,7 +5,7 @@ import type {
   ReservationStatus,
   StayStatus,
 } from '../../../src/domain/shared/enums.js';
-import { TypeOrmReservationQuery } from '../../../src/infrastructure/out/persistence/repositories/reservation.query.js';
+import { TypeOrmReservationQuery } from '../../../src/infrastructure/out/persistence/repositories/reservation-query.repository.js';
 import { TypeOrmReservationRepository } from '../../../src/infrastructure/out/persistence/repositories/reservation.repository.js';
 import { aDirectReservation, aDirectRoom } from '../../support/builders.js';
 import { openTestDataSource, truncateAllTables } from '../support/database.js';

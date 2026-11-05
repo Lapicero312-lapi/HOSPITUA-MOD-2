@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { BusinessError } from '../../../domain/shared/business-error.js';
 import type { Room } from '../../integration/room.js';
 import { CLOCK, type Clock } from '../../ports/out/clock.js';
+import { MAINTENANCE_CONCURRENCY } from '../../shared/maintenance-concurrency.js';
 import { mapWithLimit } from '../../shared/map-with-limit.js';
 import {
   CONSULT_MAINTENANCE_CALENDAR,
@@ -11,10 +12,9 @@ import {
   CONSULT_ROOM_INVENTORY,
   type ConsultRoomInventory,
 } from './ports/in/consult-room-inventory.port.js';
-import {
-  type ListRoomsWithMaintenance,
-  MAINTENANCE_CONCURRENCY,
-  type RoomWithMaintenance,
+import type {
+  ListRoomsWithMaintenance,
+  RoomWithMaintenance,
 } from './ports/in/list-rooms-with-maintenance.port.js';
 
 /** Días de la ventana del mantenimiento próximo, contando hoy (plan, punto 4: "los siguientes 30 días"). */

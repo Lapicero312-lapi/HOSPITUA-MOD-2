@@ -18,7 +18,7 @@ import {
   CONSULT_ROOM_INVENTORY,
   type ConsultRoomInventory,
 } from '../consult-room-inventory/ports/in/consult-room-inventory.port.js';
-import { MAINTENANCE_CONCURRENCY } from '../consult-room-inventory/ports/in/list-rooms-with-maintenance.port.js';
+import { MAINTENANCE_CONCURRENCY } from '../../shared/maintenance-concurrency.js';
 import {
   hasExactlyCategoryOrRoomId,
   isValidExcludeReservationRef,
