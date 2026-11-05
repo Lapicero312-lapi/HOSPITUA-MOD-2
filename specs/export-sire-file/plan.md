@@ -471,6 +471,7 @@ solo movimiento.
 | FR-008 | Respuesta | Solo el archivo y la cabecera `Export-Id`; sin advertencias mezcladas |
 | NFR-002 | Registro | Cada descarga queda en `sire_export` con el `X-User`; ningún log con datos personales |
 | NFR-001 | Tiempo | 500 movimientos en menos de 2 s |
+| Validador | Datos de las pruebas (T003) | Con `SIRE_MAX_PERIOD_DAYS` en `366`, y contando la primera y la última fecha: son válidos del 2026-10-01 al 2026-10-31 (ejemplo de A), del 2026-10-01 al 2026-10-01 (un día), del 2026-01-01 al 2026-12-31 (365 días) y del 2026-01-01 al 2027-01-01 (366 días). `PERIOD_TOO_LARGE`: del 2026-01-01 al 2027-01-02 (367 días). `INVALID_DATE`: `2026-02-30`, `2026-13-01`, `2027-02-29` y `01/10/2026`. `INVALID_DATE_RANGE`: del 2026-10-31 al 2026-10-01. `INCOMPLETE_DATE_RANGE`: falta una fecha o llega vacía |
 
 ## Dependencies & Execution Order
 
