@@ -118,3 +118,26 @@ export const INVALID_CHARACTERS = {
   code: 'INVALID_CHARACTERS',
   message: 'El formato de los datos contiene caracteres no válidos.',
 } as const;
+
+/** La fecha de entrada es anterior al día operativo en curso. */
+export const START_DATE_IN_PAST = {
+  code: 'START_DATE_IN_PAST',
+  message: 'La fecha de entrada no puede ser anterior a hoy.',
+} as const;
+
+/** El `guestCount` de una habitación es mayor que su `maxCapacity`. */
+export const GUEST_COUNT_EXCEEDS_CAPACITY = {
+  code: 'GUEST_COUNT_EXCEEDS_CAPACITY',
+  message: 'La cantidad de personas supera la capacidad de la habitación.',
+} as const;
+
+/**
+ * Una habitación concreta no está disponible. Su mensaje lleva el número de la habitación (plan base, regla
+ * 5: "puede llevar datos, como `{roomNumber}`"), así que es una función: se lanza con
+ * `new BusinessError(ROOM_NOT_AVAILABLE.code, ROOM_NOT_AVAILABLE.message('201'))`.
+ */
+export const ROOM_NOT_AVAILABLE = {
+  code: 'ROOM_NOT_AVAILABLE',
+  message: (roomNumber: string) =>
+    `La habitación ${roomNumber} no está disponible para el rango de fechas solicitado.`,
+} as const;
