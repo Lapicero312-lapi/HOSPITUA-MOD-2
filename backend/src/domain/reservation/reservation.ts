@@ -155,8 +155,9 @@ export class Reservation {
    * Una reserva directa nueva (plan de `generate-direct-reservation`, punto 8): en `ACTIVE`, con cada
    * habitación en `EXPECTED`, sin agencia ni conflicto y con comisión `0`. Comprueba las invariantes de
    * `restore` (fechas, de 1 a 10 habitaciones distintas, al menos una persona por habitación y `notes`) y,
-   * después, que ninguna habitación supere su capacidad, en el orden de la regla 2. La fecha mínima de
-   * entrada no la comprueba: depende del día operativo y la revisa el validador de la solicitud.
+   * después, que ninguna habitación supere su capacidad. El orden de la regla 2 lo da el validador de la
+   * solicitud (T004), que revisa antes; tampoco comprueba aquí la fecha mínima de entrada, que depende del
+   * día operativo.
    * @throws BusinessError con los códigos de `restore` o `GUEST_COUNT_EXCEEDS_CAPACITY`.
    */
   static createDirect(input: DirectReservationInput): Reservation {

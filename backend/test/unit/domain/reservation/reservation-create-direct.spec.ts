@@ -161,7 +161,7 @@ describe('Reservation.createDirect (T002)', () => {
     });
   });
 
-  describe('las invariantes de Reservation, en el orden de la regla 2', () => {
+  describe('las invariantes de Reservation', () => {
     it.each<[string, Partial<DirectReservationInput>, string]>([
       ['sin habitaciones', { rooms: [] }, 'INVALID_ROOM_COUNT'],
       [
