@@ -9,12 +9,43 @@ import type {
   StatusReason,
   StayStatus,
 } from '../shared/enums.js';
+import { GUEST_COUNT_EXCEEDS_CAPACITY } from '../shared/error-codes.js';
 import type { Money } from '../shared/money.js';
-import type { ReservationRoom } from './reservation-room.js';
+import { ReservationRoom, type RoomRate } from './reservation-room.js';
 import {
   canChangeStatus,
+  INITIAL_RESERVATION_STATUS,
+  INITIAL_STAY_STATUS,
   invalidStatusTransition,
 } from './reservation-transitions.js';
+
+/**
+ * Una habitación de una reserva directa nueva: la asignada, sus personas y su tarifa (plan de
+ * `generate-direct-reservation`, punto 8). Son datos simples: el dominio no conoce los tipos de
+ * `application/` (`Room`, `RoomQuote`).
+ */
+export type DirectRoomInput = {
+  room: {
+    roomId: string;
+    roomNumber: string;
+    categoryRoom: string;
+    maxCapacity: number;
+  };
+  guestCount: number;
+  /** El `lodgingAmount` y el `quoteId` de su cotización. */
+  rate: RoomRate;
+};
+
+/** Lo que necesita `Reservation.createDirect` (plan de `generate-direct-reservation`, punto 8). */
+export type DirectReservationInput = {
+  /** Ya generada (`newReservationRef`). */
+  reservationRef: string;
+  startDate: string;
+  endDate: string;
+  guest: Guest;
+  notes: string | null;
+  rooms: DirectRoomInput[];
+};
 
 /** Datos de una reserva de canal `OTA`: la agencia, su código y la comisión. */
 export type OtaTerms = {
@@ -118,6 +149,61 @@ export class Reservation {
     }
     assertChannel(props);
     return new Reservation({ ...props, rooms: [...props.rooms] });
+  }
+
+  /**
+   * Una reserva directa nueva (plan de `generate-direct-reservation`, punto 8): en `ACTIVE`, con cada
+   * habitación en `EXPECTED`, sin agencia ni conflicto y con comisión `0`. Comprueba las invariantes de
+   * `restore` (fechas, de 1 a 10 habitaciones distintas, al menos una persona por habitación y `notes`) y,
+   * después, que ninguna habitación supere su capacidad, en el orden de la regla 2. La fecha mínima de
+   * entrada no la comprueba: depende del día operativo y la revisa el validador de la solicitud.
+   * @throws BusinessError con los códigos de `restore` o `GUEST_COUNT_EXCEEDS_CAPACITY`.
+   */
+  static createDirect(input: DirectReservationInput): Reservation {
+    const categories = new Set(
+      input.rooms.map(({ room }) => room.categoryRoom),
+    );
+    // La solicitud trae una sola categoría: si llegan mezcladas, es un error del programa.
+    if (categories.size > 1) {
+      throw new Error(
+        `Reserva directa inconsistente: habitaciones de varias categorías (${[...categories].join(', ')}).`,
+      );
+    }
+    const reservation = Reservation.restore({
+      id: crypto.randomUUID(),
+      reservationRef: input.reservationRef,
+      source: 'DIRECT',
+      startDate: input.startDate,
+      endDate: input.endDate,
+      rooms: input.rooms.map(({ room, guestCount, rate }) =>
+        ReservationRoom.restore({
+          id: crypto.randomUUID(),
+          roomId: room.roomId,
+          roomNumber: room.roomNumber,
+          categoryRoom: room.categoryRoom,
+          guestCount,
+          rate,
+          stayStatus: INITIAL_STAY_STATUS,
+        }),
+      ),
+      guest: input.guest,
+      status: INITIAL_RESERVATION_STATUS,
+      statusReason: null,
+      notes: input.notes,
+      ota: null,
+      conflict: null,
+      createdAt: null,
+      updatedAt: null,
+    });
+    if (
+      input.rooms.some(({ room, guestCount }) => guestCount > room.maxCapacity)
+    ) {
+      throw new BusinessError(
+        GUEST_COUNT_EXCEEDS_CAPACITY.code,
+        GUEST_COUNT_EXCEEDS_CAPACITY.message,
+      );
+    }
+    return reservation;
   }
 
   get id(): string {

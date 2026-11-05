@@ -92,6 +92,20 @@ describe('RegisterOtaConfirmationAndCommission.calculate', () => {
     expect(result.learnedPercentage).toBe(false);
   });
 
+  // Por habitación, 15.045 se redondearía dos veces a 15.05 y la suma daría 30.10 (plan, regla 1).
+  it('se calcula una sola vez sobre el total: dos habitaciones de 100.30 al 15 % dan 30.09', async () => {
+    const ota = anOta({ commissionPercentage: '15' });
+
+    const result = await serviceWith(ota).calculate(
+      anInput(ota, {
+        grossAmount: usd('200.60'),
+        reportedCommission: usd('30.09'),
+      }),
+    );
+
+    expect(result.commissionAmount.amount).toBe('30.09');
+  });
+
   it('el porcentaje calculado se redondea a dos decimales: 10 de 153 da 6.54', async () => {
     const ota = anOta({ commissionPercentage: null });
 

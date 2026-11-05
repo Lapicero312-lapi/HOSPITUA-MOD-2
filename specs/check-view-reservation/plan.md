@@ -887,7 +887,7 @@ backend/src/
 ├── infrastructure/in/rest/reservations.controller.ts
 ├── infrastructure/in/jobs/daily-list.job.ts
 ├── infrastructure/in/jobs/publish-pending.job.ts
-├── infrastructure/out/persistence/reservation-query.repository.ts
+├── infrastructure/out/persistence/repositories/reservation-query.repository.ts
 ├── infrastructure/out/persistence/daily-message.repository.ts
 ├── infrastructure/out/messaging/rabbit-daily-list.publisher.ts
 └── migrations/                      # índice del código de la OTA y next_attempt_at
