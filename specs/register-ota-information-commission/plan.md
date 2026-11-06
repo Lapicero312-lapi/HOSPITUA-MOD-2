@@ -243,6 +243,15 @@ interface RegisterOtaConfirmationAndCommission {
   (`reportedCommission ÷ grossAmount × 100`, dos decimales, `ROUND_HALF_UP`) y se compara con el fijo.
 - `recalculate` tampoco persiste: quien llama (`ApplyOtaChange`) guarda los importes nuevos y llama a
   `recordAudit`, que deja la fila `CALCULATED` con ellos.
+- **`recordAudit` (T007)** inserta la fila con `CommissionAuditRepository.record`, en la transacción `tx`
+  de quien llama, con:
+  - acción `CALCULATED`, canal `OTA_API` y el `performedBy` que recibe;
+  - el porcentaje y el importe de `result`;
+  - el `grossAmount` de la reserva ya guardada, que lee con `ReservationRepository.findById(reservationId,
+    tx)`, porque `CommissionResult` no lo trae;
+  - el estado anterior vacío en la primera comisión de la reserva (la de `calculate`) y `CALCULATED` si ya
+    tenía una (la de `recalculate`). Para saberlo, `CommissionAuditRepository.existsFor(reservationId, tx)`
+    revisa si la reserva ya tiene alguna fila.
 - La reserva guarda **su propia copia** del porcentaje y del importe.
 
 **B2. Registrar la agencia y guardar su porcentaje** (`ManageOta`; `register` lo usa `configure-ota` al
