@@ -10,6 +10,8 @@ import {
   OTA_REPOSITORY,
   type OtaRepository,
 } from '../../../src/application/ports/out/ota.repository.js';
+import { ARI_PENDING_CHANGE_REPOSITORY } from '../../../src/application/ports/out/ari-pending-change.repository.js';
+import { OTA_ROOM_TYPE_MAPPING_REPOSITORY } from '../../../src/application/ports/out/ota-room-type-mapping.repository.js';
 import { OTA_BOOKING_REVISION_REPOSITORY } from '../../../src/application/ports/out/ota-booking-revision.repository.js';
 import { PROCESSED_MESSAGE_REPOSITORY } from '../../../src/application/ports/out/processed-message.repository.js';
 import {
@@ -22,8 +24,14 @@ import {
 } from '../../../src/application/ports/out/transaction.js';
 import { TypeOrmProcessedMessageRepository } from '../../../src/infrastructure/out/messaging/processed-message.repository.js';
 import { TypeOrmOtaBookingRevisionRepository } from '../../../src/infrastructure/out/persistence/repositories/ota-booking-revision.repository.js';
+import { TypeOrmAriPendingChangeRepository } from '../../../src/infrastructure/out/persistence/repositories/ari-pending-change.repository.js';
+import { TypeOrmOtaRoomTypeMappingRepository } from '../../../src/infrastructure/out/persistence/repositories/ota-room-type-mapping.repository.js';
 import { aDirectReservation } from '../../support/builders.js';
 import { integrationEnv } from '../support/database.js';
+
+/** Los repositorios de `configure-ota` (T002), inyectados desde fuera del módulo como los demás. */
+const INJECTED_MAPPINGS = Symbol('INJECTED_MAPPINGS');
+const INJECTED_ARI_CHANGES = Symbol('INJECTED_ARI_CHANGES');
 
 /**
  * Un proveedor de fuera de `PersistenceModule` que inyecta el repositorio, como lo hará un caso de uso.
@@ -47,6 +55,16 @@ describe('PersistenceModule', () => {
       imports: [AppConfigModule, PersistenceModule],
       providers: [
         {
+          provide: INJECTED_MAPPINGS,
+          inject: [OTA_ROOM_TYPE_MAPPING_REPOSITORY],
+          useFactory: (repository: unknown) => repository,
+        },
+        {
+          provide: INJECTED_ARI_CHANGES,
+          inject: [ARI_PENDING_CHANGE_REPOSITORY],
+          useFactory: (repository: unknown) => repository,
+        },
+        {
           provide: INJECTED_REVISIONS,
           inject: [OTA_BOOKING_REVISION_REPOSITORY],
           useFactory: (repository: unknown) => repository,
@@ -57,6 +75,18 @@ describe('PersistenceModule', () => {
 
   afterAll(async () => {
     await moduleRef?.close();
+  });
+
+  it('une y exporta los repositorios de los tipos de habitación y de las marcas de disponibilidad', () => {
+    if (!moduleRef) {
+      throw new Error('El módulo no arrancó');
+    }
+    expect(moduleRef.get(INJECTED_MAPPINGS)).toBeInstanceOf(
+      TypeOrmOtaRoomTypeMappingRepository,
+    );
+    expect(moduleRef.get(INJECTED_ARI_CHANGES)).toBeInstanceOf(
+      TypeOrmAriPendingChangeRepository,
+    );
   });
 
   it('une cada puerto con su adaptador y guarda en la misma transacción', async () => {
