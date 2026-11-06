@@ -19,6 +19,7 @@ describe('TypeOrmMigratoryMovementRepository contra PostgreSQL real', () => {
   let transactions: TypeOrmTransactionRunner;
   let anaId: string;
   let johnId: string;
+  let reservationRef: string;
 
   /** Por defecto, la entrada de Ana del 2026-10-09 (mensaje de Check-In del plan de `update-reservation`). */
   const aMovement = (
@@ -59,7 +60,12 @@ describe('TypeOrmMigratoryMovementRepository contra PostgreSQL real', () => {
     const reservation = await new TypeOrmReservationRepository(
       dataSource,
     ).insert(aDirectReservation());
-    const guest = (documentNumber: string, nationality: string) =>
+    reservationRef = reservation.reservationRef;
+    const guest = (
+      documentNumber: string,
+      nationality: string,
+      places: { originPlace: string; destinationPlace: string } | null = null,
+    ) =>
       GuestData.restore({
         id: randomUUID(),
         reservationRef: reservation.reservationRef,
@@ -69,12 +75,18 @@ describe('TypeOrmMigratoryMovementRepository contra PostgreSQL real', () => {
         documentNumber,
         birthDate: '1990-05-12',
         nationality,
-        originPlace: null,
-        destinationPlace: null,
+        originPlace: places?.originPlace ?? null,
+        destinationPlace: places?.destinationPlace ?? null,
       });
     const [ana, john] = await transactions.run((tx) =>
       new TypeOrmGuestDataRepository(dataSource).insertMissing(
-        [guest('123', 'Colombia'), guest('X99', 'Estados Unidos')],
+        [
+          guest('123', 'Colombia'),
+          guest('X99', 'Estados Unidos', {
+            originPlace: 'Miami, Estados Unidos',
+            destinationPlace: 'Cartagena, Colombia',
+          }),
+        ],
         tx,
       ),
     );
@@ -163,5 +175,97 @@ describe('TypeOrmMigratoryMovementRepository contra PostgreSQL real', () => {
 
   it('con una lista vacía no guarda nada', async () => {
     await expect(insertMissing([])).resolves.toBe(0);
+  });
+
+  describe('lecturas con el huésped (T012)', () => {
+    /** La entrada de Ana y de John el 2026-10-09 y la salida de John el 2026-10-12. */
+    async function insertStay(): Promise<{
+      anaEntry: MigratoryMovement;
+      johnEntry: MigratoryMovement;
+      johnDeparture: MigratoryMovement;
+    }> {
+      const anaEntry = aMovement();
+      const johnEntry = aMovement({ guestDataId: johnId });
+      const johnDeparture = aMovement({
+        guestDataId: johnId,
+        movementType: 'DEPARTURE',
+        movementDate: '2026-10-12',
+      });
+      await insertMissing([anaEntry, johnEntry, johnDeparture]);
+      return { anaEntry, johnEntry, johnDeparture };
+    }
+
+    it('findWithGuestById devuelve el movimiento con su reserva y todos los datos del huésped, tal como se guardaron', async () => {
+      const { johnDeparture } = await insertStay();
+
+      await expect(
+        movements.findWithGuestById(johnDeparture.id),
+      ).resolves.toEqual({
+        movementId: johnDeparture.id,
+        reservationRef,
+        movementType: 'DEPARTURE',
+        movementDate: '2026-10-12',
+        guest: {
+          firstName: 'Huésped',
+          lastName: 'X99',
+          documentType: 'CC',
+          documentNumber: 'X99',
+          birthDate: '1990-05-12',
+          nationality: 'Estados Unidos',
+          originPlace: 'Miami, Estados Unidos',
+          destinationPlace: 'Cartagena, Colombia',
+        },
+      });
+    });
+
+    it('findWithGuestById con un id que no existe es null', async () => {
+      await insertStay();
+
+      await expect(
+        movements.findWithGuestById(randomUUID()),
+      ).resolves.toBeNull();
+    });
+
+    it('findWithGuestByPeriod trae los movimientos del periodo de cualquier nacionalidad, con los vacíos como null', async () => {
+      const { anaEntry, johnEntry, johnDeparture } = await insertStay();
+
+      const found = await movements.findWithGuestByPeriod(
+        '2026-10-09',
+        '2026-10-12',
+      );
+
+      expect(found.map((movement) => movement.movementId).sort()).toEqual(
+        [anaEntry.id, johnEntry.id, johnDeparture.id].sort(),
+      );
+      const ana = found.find((movement) => movement.movementId === anaEntry.id);
+      expect(ana?.guest).toMatchObject({
+        nationality: 'Colombia',
+        originPlace: null,
+        destinationPlace: null,
+      });
+    });
+
+    it.each([
+      [
+        'los dos extremos incluidos: un solo día al principio',
+        '2026-10-09',
+        '2026-10-09',
+        2,
+      ],
+      [
+        'los dos extremos incluidos: un solo día al final',
+        '2026-10-12',
+        '2026-10-12',
+        1,
+      ],
+      ['un periodo entre los dos movimientos', '2026-10-10', '2026-10-11', 0],
+      ['un periodo que empieza después', '2026-10-13', '2026-10-31', 0],
+    ])('findWithGuestByPeriod: %s', async (_caso, from, to, count) => {
+      await insertStay();
+
+      await expect(
+        movements.findWithGuestByPeriod(from, to),
+      ).resolves.toHaveLength(count);
+    });
   });
 });
