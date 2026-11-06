@@ -10,6 +10,7 @@ import { GenerateDirectReservationModule } from './application/use-cases/generat
 import { GenerateOtaReservationModule } from './application/use-cases/generate-ota-reservation/generate-ota-reservation.module.js';
 import { RegisterOtaInformationCommissionModule } from './application/use-cases/register-ota-information-commission/register-ota-information-commission.module.js';
 import { AppConfigModule } from './infrastructure/config/app-config.module.js';
+import { RateReferenceConfigModule } from './infrastructure/config/rate-reference.config.js';
 import { JobsModule } from './infrastructure/in/jobs/jobs.module.js';
 import { RestModule } from './infrastructure/in/rest/rest.module.js';
 import { ChannexClientModule } from './infrastructure/out/channex/channex-client.module.js';
@@ -31,6 +32,7 @@ import { LoggingModule } from './infrastructure/shared/logging.module.js';
     LoggingModule,
     PersistenceModule,
     ClockModule,
+    RateReferenceConfigModule,
     Module1ClientModule,
     Module3ClientModule,
     ChannexClientModule,

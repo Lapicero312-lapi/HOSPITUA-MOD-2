@@ -4,6 +4,7 @@ import {
   IsIn,
   IsInt,
   IsNotEmpty,
+  IsOptional,
   IsString,
   IsUrl,
   Matches,
@@ -11,6 +12,7 @@ import {
   Min,
   validateSync,
 } from 'class-validator';
+import { IsRateReference } from './rate-reference.config.js';
 import {
   SIRE_DEFAULTS,
   SIRE_NON_PRODUCTION_DEFAULTS,
@@ -58,6 +60,11 @@ export class EnvironmentVariables extends SireEnvironmentVariables {
 
   @IsIn(LOG_LEVELS)
   LOG_LEVEL!: (typeof LOG_LEVELS)[number];
+
+  // Pantalla "Tarifas" (plan de calculate-dynamic-rate, C1 y punto 12): opcional; si viene, un JSON válido
+  @IsOptional()
+  @IsRateReference()
+  RATE_REFERENCE?: string;
 
   // PostgreSQL
   @IsString()
