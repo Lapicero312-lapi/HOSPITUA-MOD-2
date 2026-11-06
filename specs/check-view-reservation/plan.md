@@ -548,7 +548,7 @@ interface DailyListChangeRecorder {
 }
 
 interface DailySequenceRepository {   // application/ports/out/
-  // SELECT … FOR UPDATE de la fila del día; null si no existe (no la crea: eso lo hace GenerateDailyList, T023).
+  // SELECT … FOR UPDATE de la fila del día; null si no existe.
   lockDay(operationalDate: string, tx: Transaction): Promise<{ lastSequence: number; listGenerated: boolean } | null>;
   setLastSequence(operationalDate: string, lastSequence: number, tx: Transaction): Promise<void>;
 }
@@ -565,8 +565,9 @@ interface DailyMessageRepository {    // application/ports/out/
 
 Pasos de `record`, todos en la transacción de quien llama:
 
-1. Bloquea la fila del día con `lockDay`. Si no existe o `listGenerated` es `false`, no hace nada: la
-   lista incluirá el cambio.
+1. Bloquea la fila del día con `lockOrCreateDay`, que la crea si no existe: así un cambio y la lista de las
+   00:00 siempre se ponen en fila sobre la misma fila, aunque todavía no exista ninguna. Si `listGenerated`
+   es `false`, no hace nada: la lista incluirá el cambio.
 2. Evalúa el cambio con `DailyListMembership.evaluate(before, after, operationalDate)`. Si da `null`, no
    hace nada.
 3. Con `ADDED` o `UPDATED`, proyecta `after` con `projectReservation`. En una reserva `OTA` usa el `name`
