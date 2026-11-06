@@ -481,7 +481,7 @@ frontend/src/pages/reservations/new/         # pantalla "Nueva reserva directa"
 - [ ] T002 [P] Fábrica `Reservation.createDirect` con sus invariantes y pruebas unitarias (habitaciones, capacidad, fechas, estado inicial, comisión `0`)
 - [ ] T003 [P] Generador de `reservationRef` con reintento ante duplicado
 - [ ] T004 [P] Validador de la solicitud (formatos, enteros, `notes`, caracteres, titular) con los mensajes literales
-- [ ] T005 `ReservationRepository.insertDirect` en una transacción, con traducción del error `23P01` y de la unicidad de `reservation_ref`
+- [ ] T005 `ReservationRepository.insert` en una transacción, con traducción del error `23P01` y de la unicidad de `reservation_ref` (ya la hace el `insert` de la base; la tarea es usarlo desde `CreateDirectReservation`)
 - [ ] T006 Códigos de error y mensajes de la tabla C
 
 ## Phase 3: User Story 1 - Creación de reserva directa (P1)
