@@ -8,6 +8,12 @@ import {
   CHANNEX_SETUP_STATE,
   type ChannexSetupState,
 } from '../../src/application/ports/out/channex-setup-state.js';
+import { CalculateDynamicRateService } from '../../src/application/use-cases/calculate-dynamic-rate/calculate-dynamic-rate.service.js';
+import { CALCULATE_DYNAMIC_RATE } from '../../src/application/use-cases/calculate-dynamic-rate/ports/in/calculate-dynamic-rate.port.js';
+import { VERIFY_AVAILABILITY } from '../../src/application/use-cases/check-room-availability/ports/in/verify-availability.port.js';
+import { VerifyAvailabilityService } from '../../src/application/use-cases/check-room-availability/verify-availability.service.js';
+import { RESERVATION_LOOKUP } from '../../src/application/use-cases/check-view-reservation/ports/in/reservation-lookup.port.js';
+import { ReservationLookupService } from '../../src/application/use-cases/check-view-reservation/reservation-lookup.service.js';
 import { configureApp } from '../../src/configure-app.js';
 
 describe('Módulo 2 (e2e)', () => {
@@ -32,6 +38,23 @@ describe('Módulo 2 (e2e)', () => {
     expect(state.isDisabled()).toBe(true);
     expect(state.isReady()).toBe(false);
   });
+
+  // Si AppModule dejara de importar el módulo de un caso de uso, su servicio no existiría en la aplicación
+  // y los flujos de reserva no podrían usarlo (plan base, regla 4).
+  it.each([
+    ['VerifyAvailability', VERIFY_AVAILABILITY, VerifyAvailabilityService],
+    [
+      'CalculateDynamicRate',
+      CALCULATE_DYNAMIC_RATE,
+      CalculateDynamicRateService,
+    ],
+    ['ReservationLookup', RESERVATION_LOOKUP, ReservationLookupService],
+  ] as const)(
+    'AppModule conecta %s: la aplicación lo puede entregar',
+    (_name, token, service) => {
+      expect(app.get(token)).toBeInstanceOf(service);
+    },
+  );
 
   it('una ruta que no existe responde 400 REQUEST_NOT_PROCESSED con el cuerpo de error del plan base', async () => {
     const res = await request(app.getHttpServer())
