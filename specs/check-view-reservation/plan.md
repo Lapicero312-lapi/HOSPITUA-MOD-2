@@ -835,7 +835,8 @@ interface ReservationQueryPort {
 - Las tres consultas son las de "Consulta del listado": totales, ids de la página y carga de esas
   reservas.
 - `hasForeignMovement` se resuelve con un solo `EXISTS` para las 10 reservas de la página, sobre
-  `migratory_movement` unido a `guest_data`, con nacionalidad distinta de `Colombia`.
+  `migratory_movement` unido a `guest_data`, con la regla de `isForeign`: nacionalidad que no es
+  `Colombia` ni vacía.
 
 ### `migrationStatus` (FR-005b)
 
