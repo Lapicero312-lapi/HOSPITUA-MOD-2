@@ -1,9 +1,14 @@
 import { Injectable } from '@nestjs/common';
-import { DataSource } from 'typeorm';
-import type {
-  BlockingRoom,
-  ReservationQueryPort,
+import { DataSource, In } from 'typeorm';
+import {
+  RESERVATION_PAGE_SIZE,
+  type BlockingRoom,
+  type ReservationListFilters,
+  type ReservationListPage,
+  type ReservationQueryPort,
 } from '../../../../application/ports/out/reservation-query.port.js';
+import { reservationToDomain } from '../mappers/reservation.mapper.js';
+import { ReservationTable } from '../tables/reservation.tables.js';
 
 /**
  * `ReservationQueryPort` sobre PostgreSQL (`check-view-reservation`, `TypeOrmReservationQuery`): solo
@@ -38,4 +43,119 @@ export class TypeOrmReservationQuery implements ReservationQueryPort {
       reservationRef: row.reservation_ref,
     }));
   }
+
+  async listReservations(
+    filters: ReservationListFilters,
+    page: number,
+  ): Promise<ReservationListPage> {
+    if (!Number.isInteger(page) || page < 1) {
+      throw new Error(`La página ${page} no es un entero de 1 en adelante.`);
+    }
+    const { where, params } = whereOf(filters);
+    // "Consulta del listado", paso 1: los totales con los mismos filtros.
+    const [{ total }]: { total: number }[] = await this.dataSource.query(
+      `SELECT count(*)::int AS total FROM reservation r ${where}`,
+      params,
+    );
+    // Paso 2: los ids de la página. El sentido viene de un tipo cerrado, nunca del cliente tal cual.
+    const direction = filters.order === 'asc' ? 'ASC' : 'DESC';
+    const pageRows: { id: string }[] = await this.dataSource.query(
+      `SELECT r.id FROM reservation r ${where}
+       ORDER BY r.start_date ${direction}, r.reservation_ref ${direction}
+       LIMIT ${RESERVATION_PAGE_SIZE} OFFSET $${params.length + 1}`,
+      [...params, (page - 1) * RESERVATION_PAGE_SIZE],
+    );
+    const ids = pageRows.map((row) => row.id);
+    if (ids.length === 0) {
+      return { totalItems: total, items: [] };
+    }
+    // Paso 3: esas reservas con su titular, sus habitaciones, su agencia y sus movimientos.
+    const [loaded, otaNames, foreign] = await Promise.all([
+      this.dataSource.manager.find(ReservationTable, {
+        where: { id: In(ids) },
+        relations: { rooms: true, guest: true },
+        order: { rooms: { roomNumber: 'ASC', id: 'ASC' } },
+      }),
+      this.otaNamesOf(ids),
+      this.foreignMovementsOf(ids),
+    ]);
+    const byId = new Map(loaded.map((row) => [row.id, row]));
+    return {
+      totalItems: total,
+      // En el orden del paso 2: `find` no conserva el de la lista de ids.
+      items: ids.map((id) => {
+        const row = byId.get(id);
+        if (row === undefined) {
+          throw new Error(`La reserva ${id} desapareció entre las consultas.`);
+        }
+        return {
+          reservation: reservationToDomain(row),
+          otaName: otaNames.get(id) ?? null,
+          hasForeignMovement: foreign.has(id),
+        };
+      }),
+    };
+  }
+
+  /** El nombre de la agencia de cada reserva `OTA` de la página. */
+  private async otaNamesOf(ids: string[]): Promise<Map<string, string>> {
+    const rows: { id: string; name: string }[] = await this.dataSource.query(
+      `SELECT r.id, o.name FROM reservation r JOIN ota o ON o.id = r.ota_id
+       WHERE r.id = ANY($1::uuid[])`,
+      [ids],
+    );
+    return new Map(rows.map((row) => [row.id, row.name]));
+  }
+
+  /**
+   * Las reservas de la página con movimientos migratorios de huéspedes extranjeros (FR-005b), con un solo
+   * `EXISTS`. La nacionalidad es la regla de `isForeign`: ni `Colombia` ni vacía.
+   */
+  private async foreignMovementsOf(ids: string[]): Promise<Set<string>> {
+    const rows: { id: string }[] = await this.dataSource.query(
+      `SELECT page.id FROM unnest($1::uuid[]) AS page(id)
+       WHERE EXISTS (
+         SELECT 1 FROM guest_data gd
+         JOIN migratory_movement mm ON mm.guest_data_id = gd.id
+         WHERE gd.reservation_id = page.id
+           AND gd.nationality <> '' AND gd.nationality <> 'Colombia'
+       )`,
+      [ids],
+    );
+    return new Set(rows.map((row) => row.id));
+  }
+}
+
+/** El `WHERE` de los filtros de C1 y sus parámetros, en orden. */
+function whereOf(filters: ReservationListFilters): {
+  where: string;
+  params: unknown[];
+} {
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+  const add = (condition: (placeholder: string) => string, value: unknown) => {
+    params.push(value);
+    conditions.push(condition(`$${params.length}`));
+  };
+  if (filters.status !== null) {
+    add((p) => `r.status = ${p}`, filters.status);
+  }
+  if (filters.source !== null) {
+    add((p) => `r.source = ${p}`, filters.source);
+  }
+  if (filters.otaId !== null) {
+    add((p) => `r.ota_id = ${p}::uuid`, filters.otaId);
+  }
+  if (filters.inConflict) {
+    conditions.push('r.conflict_reason IS NOT NULL');
+  }
+  if (filters.stayRange !== null) {
+    // C1: rango inclusivo; la estadía se cruza si llega a más tardar el último día y sale después del primero.
+    add((p) => `r.start_date <= ${p}::date`, filters.stayRange.dateTo);
+    add((p) => `r.end_date > ${p}::date`, filters.stayRange.dateFrom);
+  }
+  return {
+    where: conditions.length === 0 ? '' : `WHERE ${conditions.join(' AND ')}`,
+    params,
+  };
 }
