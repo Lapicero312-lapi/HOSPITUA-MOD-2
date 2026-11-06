@@ -13,6 +13,7 @@ import {
 } from '../../../src/application/ports/out/ota.repository.js';
 import { OTA_BOOKING_REVISION_REPOSITORY } from '../../../src/application/ports/out/ota-booking-revision.repository.js';
 import { PROCESSED_MESSAGE_REPOSITORY } from '../../../src/application/ports/out/processed-message.repository.js';
+import { RESERVATION_QUERY_PORT } from '../../../src/application/ports/out/reservation-query.port.js';
 import {
   RESERVATION_REPOSITORY,
   type ReservationRepository,
@@ -24,6 +25,7 @@ import {
 import { TypeOrmProcessedMessageRepository } from '../../../src/infrastructure/out/messaging/processed-message.repository.js';
 import { TypeOrmCommissionAuditRepository } from '../../../src/infrastructure/out/persistence/repositories/commission-audit.repository.js';
 import { TypeOrmOtaBookingRevisionRepository } from '../../../src/infrastructure/out/persistence/repositories/ota-booking-revision.repository.js';
+import { TypeOrmReservationQuery } from '../../../src/infrastructure/out/persistence/repositories/reservation-query.repository.js';
 import { aDirectReservation } from '../../support/builders.js';
 import { integrationEnv } from '../support/database.js';
 
@@ -95,6 +97,9 @@ describe('PersistenceModule', () => {
     );
     expect(moduleRef.get(PROCESSED_MESSAGE_REPOSITORY)).toBeInstanceOf(
       TypeOrmProcessedMessageRepository,
+    );
+    expect(moduleRef.get(RESERVATION_QUERY_PORT)).toBeInstanceOf(
+      TypeOrmReservationQuery,
     );
     expect(moduleRef.get(OTA_BOOKING_REVISION_REPOSITORY)).toBeInstanceOf(
       TypeOrmOtaBookingRevisionRepository,

@@ -2,7 +2,7 @@ import { HttpModule } from '@nestjs/axios';
 import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { MODULE1_PORT } from '../../../application/ports/out/module1.port.js';
-import { MAINTENANCE_CONCURRENCY } from '../../../application/use-cases/consult-room-inventory/ports/in/list-rooms-with-maintenance.port.js';
+import { MAINTENANCE_CONCURRENCY } from '../../../application/shared/maintenance-concurrency.js';
 import type { EnvironmentVariables } from '../../config/env.validation.js';
 import { Module1HttpAdapter } from './module1-http.adapter.js';
 
