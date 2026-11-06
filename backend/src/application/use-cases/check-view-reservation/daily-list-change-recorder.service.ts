@@ -4,10 +4,7 @@ import {
   DailyListMembership,
   type DailyListChange,
 } from '../../../domain/reservation/daily-list-membership.js';
-import {
-  projectReservation,
-  type ReservationProjection,
-} from '../../../domain/reservation/reservation-projection.js';
+import type { ReservationProjection } from '../../../domain/reservation/reservation-projection.js';
 import type { Reservation } from '../../../domain/reservation/reservation.js';
 import { CLOCK, type Clock } from '../../ports/out/clock.js';
 import {
@@ -23,7 +20,8 @@ import {
   type OtaRepository,
 } from '../../ports/out/ota.repository.js';
 import type { Transaction } from '../../ports/out/transaction.js';
-import { colombiaTime, colombiaTimeWithMicroseconds } from './message-time.js';
+import { messageProjection } from './message-projection.js';
+import { colombiaTime } from './message-time.js';
 import type { DailyListChangeRecorder } from './ports/in/daily-list-change-recorder.port.js';
 
 /**
@@ -50,9 +48,10 @@ export class DailyListChangeRecorderService implements DailyListChangeRecorder {
     after: Reservation,
     operationalDate: string = this.clock.today(),
   ): Promise<void> {
-    // El bloqueo va primero: un cambio simultáneo espera aquí y toma la secuencia siguiente.
-    const day = await this.sequences.lockDay(operationalDate, tx);
-    if (day === null || !day.listGenerated) {
+    // El bloqueo va primero: un cambio simultáneo espera aquí y toma la secuencia siguiente. La fila se crea
+    // si no existe, para que la lista de las 00:00 y un cambio se pongan en fila aunque no haya ninguna.
+    const day = await this.sequences.lockOrCreateDay(operationalDate, tx);
+    if (!day.listGenerated) {
       // La lista todavía no sale: la incluirá con los datos vigentes.
       return;
     }
@@ -107,11 +106,7 @@ export class DailyListChangeRecorderService implements DailyListChangeRecorder {
       }
       otaName = ota.name;
     }
-    const projection = projectReservation(reservation, otaName);
-    return {
-      ...projection,
-      updatedAt: colombiaTimeWithMicroseconds(projection.updatedAt),
-    };
+    return messageProjection(reservation, otaName);
   }
 }
 

@@ -18,7 +18,7 @@ export type DailySequence = {
 export interface DailySequenceRepository {
   /**
    * `SELECT … FOR UPDATE` de la fila del día (`AAAA-MM-DD`), que queda bloqueada hasta que termine `tx`.
-   * `null` si no existe: no la crea, eso lo hace `GenerateDailyList` (T023).
+   * `null` si no existe: no la crea. Para crearla si falta está `lockOrCreateDay`.
    */
   lockDay(
     operationalDate: string,
@@ -31,4 +31,17 @@ export interface DailySequenceRepository {
     lastSequence: number,
     tx: Transaction,
   ): Promise<void>;
+
+  /**
+   * Crea la fila del día si no existe (`lastSequence` `0` y `listGenerated` `false`) y la bloquea con
+   * `SELECT … FOR UPDATE` hasta que termine `tx` (`GenerateDailyList`, T023). Si dos lo hacen a la vez, la
+   * crea uno solo y el otro espera el bloqueo.
+   */
+  lockOrCreateDay(
+    operationalDate: string,
+    tx: Transaction,
+  ): Promise<DailySequence>;
+
+  /** La lista del día ya quedó guardada: `lastSequence` `1` y `listGenerated` `true` (T023). */
+  markListGenerated(operationalDate: string, tx: Transaction): Promise<void>;
 }

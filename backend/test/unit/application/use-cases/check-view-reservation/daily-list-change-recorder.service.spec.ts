@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Clock } from '../../../../../src/application/ports/out/clock.js';
 import type { DailyMessage } from '../../../../../src/application/ports/out/daily-message.repository.js';
-import type { DailySequence } from '../../../../../src/application/ports/out/daily-sequence.repository.js';
+import type {
+  DailySequence,
+  DailySequenceRepository,
+} from '../../../../../src/application/ports/out/daily-sequence.repository.js';
 import type { OtaRepository } from '../../../../../src/application/ports/out/ota.repository.js';
 import type { Transaction } from '../../../../../src/application/ports/out/transaction.js';
 import { DailyListChangeRecorderService } from '../../../../../src/application/use-cases/check-view-reservation/daily-list-change-recorder.service.js';
@@ -94,16 +97,18 @@ const planDetail = {
 };
 
 /**
- * El recorder con la fila del día que devuelve `lockDay` (por defecto, la lista ya salió y la última
- * secuencia es la 1) y las agencias guardadas. Devuelve también los dobles.
+ * El recorder con la fila del día que devuelve `lockOrCreateDay` (por defecto, la lista ya salió y la
+ * última secuencia es la 1) y las agencias guardadas. Devuelve también los dobles.
  */
 function recorderWith(
-  day: DailySequence | null = { lastSequence: 1, listGenerated: true },
+  day: DailySequence = { lastSequence: 1, listGenerated: true },
   otas: Ota[] = [],
   clock: Clock = { today: () => TODAY, now: () => NOW },
 ) {
   const sequences = {
-    lockDay: vi.fn((_date: string, _tx: Transaction) => Promise.resolve(day)),
+    lockOrCreateDay: vi.fn((_date: string, _tx: Transaction) =>
+      Promise.resolve(day),
+    ),
     setLastSequence: vi.fn((_date: string, _last: number, _tx: Transaction) =>
       Promise.resolve(),
     ),
@@ -119,7 +124,7 @@ function recorderWith(
     ),
   };
   const recorder = new DailyListChangeRecorderService(
-    sequences,
+    sequences as unknown as DailySequenceRepository,
     messages,
     otaRepository as unknown as OtaRepository,
     clock,
@@ -138,7 +143,6 @@ function onlyMessage(messages: {
 describe('DailyListChangeRecorder (plan, "Anotar un cambio" y D3)', () => {
   describe('cuándo no deja nada', () => {
     it.each([
-      ['la fila del día no existe', null],
       [
         'la lista del día no ha salido',
         { lastSequence: 0, listGenerated: false },
@@ -350,7 +354,7 @@ describe('DailyListChangeRecorder (plan, "Anotar un cambio" y D3)', () => {
         TODAY,
       );
 
-      expect(sequences.lockDay).toHaveBeenCalledWith(TODAY, TX);
+      expect(sequences.lockOrCreateDay).toHaveBeenCalledWith(TODAY, TX);
       expect(sequences.setLastSequence).toHaveBeenCalledWith(TODAY, 3, TX);
       const message = onlyMessage(messages);
       expect(message.operationalDate).toBe(TODAY);
@@ -394,7 +398,7 @@ describe('DailyListChangeRecorder (plan, "Anotar un cambio" y D3)', () => {
 
     await recorder.record(TX, null, planReservation());
 
-    expect(sequences.lockDay).toHaveBeenCalledWith(TODAY, TX);
+    expect(sequences.lockOrCreateDay).toHaveBeenCalledWith(TODAY, TX);
   });
 
   it('todo va en la transacción de quien llama', async () => {
@@ -402,7 +406,7 @@ describe('DailyListChangeRecorder (plan, "Anotar un cambio" y D3)', () => {
 
     await recorder.record(TX, null, planReservation());
 
-    expect(sequences.lockDay.mock.calls[0][1]).toBe(TX);
+    expect(sequences.lockOrCreateDay.mock.calls[0][1]).toBe(TX);
     expect(sequences.setLastSequence.mock.calls[0][2]).toBe(TX);
     expect(messages.insert.mock.calls[0][1]).toBe(TX);
   });
