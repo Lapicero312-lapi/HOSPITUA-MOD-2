@@ -582,6 +582,47 @@ Pasos de `record`, todos en la transacción de quien llama:
 
 Publicar el mensaje después del commit es la T029.
 
+### Generar la lista del día (`GenerateDailyList`, T023)
+
+El puerto de entrada está en `application/use-cases/check-view-reservation/ports/in/generate-daily-list.port.ts`,
+con su símbolo `GENERATE_DAILY_LIST`. `CheckViewReservationModule` lo registra y lo exporta (regla 4).
+
+```typescript
+interface GenerateDailyList {
+  // operationalDate: AAAA-MM-DD; por defecto, Clock.today().
+  // true si generó la lista; false si ya estaba generada (idempotente).
+  execute(operationalDate?: string): Promise<boolean>;
+}
+
+interface DailySequenceRepository {   // se agregan dos métodos
+  // Crea la fila del día si no existe (last_sequence = 0, list_generated = false) y la bloquea con SELECT … FOR UPDATE.
+  lockOrCreateDay(operationalDate: string, tx: Transaction): Promise<{ lastSequence: number; listGenerated: boolean }>;
+  // last_sequence = 1 y list_generated = true.
+  markListGenerated(operationalDate: string, tx: Transaction): Promise<void>;
+}
+
+interface ReservationQueryPort {      // se agrega un método
+  // Las reservas ACTIVE con startDate = operationalDate, completas y con el nombre de su agencia, ordenadas por reservationRef.
+  findArrivals(operationalDate: string, tx: Transaction): Promise<{ reservation: Reservation; otaName: string | null }[]>;
+}
+```
+
+Pasos de `execute`, en una sola transacción (`TransactionRunner`):
+
+1. Bloquea la fila del día con `lockOrCreateDay`. Si `listGenerated` ya es `true`, no hace nada y devuelve
+   `false`.
+2. Lee las llegadas con `findArrivals` **después** del bloqueo: un cambio que se confirmó antes ya se ve, y
+   uno que llega después espera el bloqueo y genera su `ADDED` o `UPDATED`.
+3. Se queda con las que pertenecen a la lista (`DailyListMembership.belongs`: ninguna habitación sin
+   asignar).
+4. Arma el `payload` de "Lista del día":
+   - `generatedAt` es `Clock.now()` en hora de Colombia;
+   - cada reserva va con `projectReservation` y su `updatedAt` con seis decimales;
+   - `totalReservations`, `totalRooms` y `totalGuests` se calculan de esas reservas.
+5. Inserta el mensaje `LIST`, con secuencia 1 y en `PENDING`, y llama a `markListGenerated`.
+
+La publicación es de T025, T026 y T029.
+
 ### Publicación en orden
 
 1. **Después de confirmar** la transacción (hook de confirmación), un publicador intenta enviar los
