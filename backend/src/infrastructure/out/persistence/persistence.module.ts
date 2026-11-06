@@ -3,6 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { COMMISSION_AUDIT_REPOSITORY } from '../../../application/ports/out/commission-audit.repository.js';
 import { GUEST_REPOSITORY } from '../../../application/ports/out/guest.repository.js';
+import { DAILY_MESSAGE_REPOSITORY } from '../../../application/ports/out/daily-message.repository.js';
+import { DAILY_SEQUENCE_REPOSITORY } from '../../../application/ports/out/daily-sequence.repository.js';
 import { OTA_BOOKING_REVISION_REPOSITORY } from '../../../application/ports/out/ota-booking-revision.repository.js';
 import { OTA_REPOSITORY } from '../../../application/ports/out/ota.repository.js';
 import { PROCESSED_MESSAGE_REPOSITORY } from '../../../application/ports/out/processed-message.repository.js';
@@ -11,6 +13,8 @@ import { TRANSACTION_RUNNER } from '../../../application/ports/out/transaction.j
 import type { EnvironmentVariables } from '../../config/env.validation.js';
 import { typeOrmOptions } from '../../config/typeorm.options.js';
 import { TypeOrmProcessedMessageRepository } from '../messaging/processed-message.repository.js';
+import { TypeOrmDailyMessageRepository } from './repositories/daily-message.repository.js';
+import { TypeOrmDailySequenceRepository } from './repositories/daily-sequence.repository.js';
 import { TypeOrmCommissionAuditRepository } from './repositories/commission-audit.repository.js';
 import { TypeOrmGuestRepository } from './repositories/guest.repository.js';
 import { TypeOrmOtaBookingRevisionRepository } from './repositories/ota-booking-revision.repository.js';
@@ -43,6 +47,14 @@ import { TypeOrmTransactionRunner } from './typeorm-transaction.js';
     { provide: GUEST_REPOSITORY, useClass: TypeOrmGuestRepository },
     { provide: OTA_REPOSITORY, useClass: TypeOrmOtaRepository },
     {
+      provide: DAILY_SEQUENCE_REPOSITORY,
+      useClass: TypeOrmDailySequenceRepository,
+    },
+    {
+      provide: DAILY_MESSAGE_REPOSITORY,
+      useClass: TypeOrmDailyMessageRepository,
+    },
+    {
       provide: COMMISSION_AUDIT_REPOSITORY,
       useClass: TypeOrmCommissionAuditRepository,
     },
@@ -60,6 +72,8 @@ import { TypeOrmTransactionRunner } from './typeorm-transaction.js';
     RESERVATION_REPOSITORY,
     GUEST_REPOSITORY,
     OTA_REPOSITORY,
+    DAILY_SEQUENCE_REPOSITORY,
+    DAILY_MESSAGE_REPOSITORY,
     COMMISSION_AUDIT_REPOSITORY,
     OTA_BOOKING_REVISION_REPOSITORY,
     PROCESSED_MESSAGE_REPOSITORY,
