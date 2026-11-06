@@ -56,6 +56,7 @@ export class VerifyAvailabilityService implements VerifyAvailability {
 
   async check(query: AvailabilityQuery): Promise<AvailabilityResult> {
     validate(query);
+    await this.requireExistingReservation(query.excludeReservationRef);
     const { startDate, endDate } = query;
     const rooms = await this.roomsOf(query);
     const blocked = new Set(
@@ -128,6 +129,25 @@ export class VerifyAvailabilityService implements VerifyAvailability {
         })
         .sort((a, b) => byRoomNumber(a.room, b.room)),
     };
+  }
+
+  /**
+   * La reserva que se modifica tiene que existir (plan, punto 7 y tabla de errores): si no, 400
+   * `RESERVATION_NOT_FOUND`, antes de consultar el inventario. Sin `excludeReservationRef`, no hay nada que
+   * revisar.
+   */
+  private async requireExistingReservation(
+    excludeReservationRef: string | undefined,
+  ): Promise<void> {
+    if (excludeReservationRef === undefined) {
+      return;
+    }
+    if ((await this.reservations.findByRef(excludeReservationRef)) === null) {
+      throw new BusinessError(
+        RESERVATION_NOT_FOUND.code,
+        RESERVATION_NOT_FOUND.message,
+      );
+    }
   }
 
   /** Por categoría, todas sus habitaciones; por `roomId`, esa sola (`INVALID_ROOM_ID` si no existe). */

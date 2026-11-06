@@ -6,6 +6,7 @@ import type { AvailabilityQuery } from '../../../../../src/application/use-cases
 import { VerifyAvailabilityService } from '../../../../../src/application/use-cases/check-room-availability/verify-availability.service.js';
 import type { ConsultMaintenanceCalendar } from '../../../../../src/application/use-cases/consult-maintenance-calendar/ports/in/consult-maintenance-calendar.port.js';
 import type { ConsultRoomInventory } from '../../../../../src/application/use-cases/consult-room-inventory/ports/in/consult-room-inventory.port.js';
+import type { Reservation } from '../../../../../src/domain/reservation/reservation.js';
 import { BusinessError } from '../../../../../src/domain/shared/business-error.js';
 
 /** Las habitaciones y las fechas del ejemplo del DTO del plan (B). */
@@ -52,11 +53,14 @@ function serviceWith({
   maintenance = (roomId: string) =>
     Promise.resolve(roomId === ROOM_203.id ? MAINTENANCE_203 : free(roomId)),
   concurrency = 5,
+  existing = [OWN_RESERVATION],
 }: {
   rooms?: Room[];
   blocked?: string[];
   maintenance?: (roomId: string) => Promise<MaintenanceCheck>;
   concurrency?: number;
+  /** Las `reservationRef` que existen: las demás no las encuentra `findByRef`. */
+  existing?: string[];
 } = {}) {
   const calls: string[] = [];
   const byCategory = vi.fn((categoryRoom: string) => {
@@ -83,17 +87,32 @@ function serviceWith({
         .map((roomId) => ({ roomId, reservationRef: 'RSV-9F8E7D6C' })),
     );
   });
+  const findByRef = vi.fn((reservationRef: string) => {
+    calls.push(`findByRef ${reservationRef}`);
+    // El servicio solo pregunta si existe: basta con una reserva cualquiera.
+    return Promise.resolve(
+      existing.includes(reservationRef) ? ({} as Reservation) : null,
+    );
+  });
   const check = vi.fn((roomId: string) => {
     calls.push(`maintenance ${roomId}`);
     return maintenance(roomId);
   });
   const service = new VerifyAvailabilityService(
     { byCategory, byRoomId } as unknown as ConsultRoomInventory,
-    { findBlockingRooms } as ReservationLookup,
+    { findBlockingRooms, findByRef } as ReservationLookup,
     { check } as unknown as ConsultMaintenanceCalendar,
     concurrency,
   );
-  return { service, calls, byCategory, byRoomId, findBlockingRooms, check };
+  return {
+    service,
+    calls,
+    byCategory,
+    byRoomId,
+    findBlockingRooms,
+    findByRef,
+    check,
+  };
 }
 
 const byCategory = (changes: Partial<AvailabilityQuery> = {}) => ({
@@ -589,4 +608,75 @@ describe('VerifyAvailability.check con limit (T010, punto 5 del plan)', () => {
       expect(calls).toEqual([]);
     },
   );
+});
+
+describe('VerifyAvailability.check: la reserva que se modifica (T008, FR-003 y punto 7)', () => {
+  it('si existe, la busca antes del inventario y la excluye del cruce', async () => {
+    const { service, calls, findBlockingRooms } = serviceWith();
+
+    await service.check(byCategory({ excludeReservationRef: OWN_RESERVATION }));
+
+    expect(calls[0]).toBe(`findByRef ${OWN_RESERVATION}`);
+    expect(calls[1]).toBe('byCategory DOBLE');
+    expect(findBlockingRooms).toHaveBeenCalledWith(
+      expect.any(Array),
+      START,
+      END,
+      OWN_RESERVATION,
+    );
+  });
+
+  it('si no existe, responde RESERVATION_NOT_FOUND con el mensaje del plan, sin consultar el inventario', async () => {
+    const { service, calls } = serviceWith({ existing: [] });
+
+    await expect(
+      service.check(byCategory({ excludeReservationRef: 'RSV-8D02E5A4' })),
+    ).rejects.toMatchObject({
+      errorCode: 'RESERVATION_NOT_FOUND',
+      message: 'La reserva no existe.',
+    });
+    expect(calls).toEqual(['findByRef RSV-8D02E5A4']);
+  });
+
+  it('también por roomId (la modificación de una habitación, D2)', async () => {
+    const { service, byRoomId } = serviceWith({ existing: [] });
+
+    await expect(
+      service.check({
+        startDate: START,
+        endDate: END,
+        roomId: ROOM_201.id,
+        excludeReservationRef: 'RSV-8D02E5A4',
+      }),
+    ).rejects.toMatchObject({ errorCode: 'RESERVATION_NOT_FOUND' });
+    expect(byRoomId).not.toHaveBeenCalled();
+  });
+
+  it('con otro formato responde sin buscarla: el formato se revisa antes', async () => {
+    const { service, findByRef } = serviceWith();
+
+    await expect(
+      service.check(byCategory({ excludeReservationRef: 'RSV-1' })),
+    ).rejects.toMatchObject({ errorCode: 'RESERVATION_NOT_FOUND' });
+    expect(findByRef).not.toHaveBeenCalled();
+  });
+
+  it('con fechas inválidas responde sin buscarla', async () => {
+    const { service, findByRef } = serviceWith();
+
+    await expect(
+      service.check(
+        byCategory({ endDate: START, excludeReservationRef: OWN_RESERVATION }),
+      ),
+    ).rejects.toMatchObject({ errorCode: 'INVALID_STAY_DATES' });
+    expect(findByRef).not.toHaveBeenCalled();
+  });
+
+  it('sin reserva que excluir, no busca ninguna', async () => {
+    const { service, findByRef } = serviceWith();
+
+    await service.check(byCategory());
+
+    expect(findByRef).not.toHaveBeenCalled();
+  });
 });
