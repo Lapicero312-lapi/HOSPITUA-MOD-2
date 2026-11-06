@@ -146,6 +146,28 @@ interface CalculateDynamicRate {
 | Se quita una habitación | **Ninguna**: se va con su tarifa, sin llamar al Módulo 3 |
 | Cambia solo `guestCount`, datos del titular o `notes` | **Ninguna** |
 
+**`roomsNeedingQuote` (T004)**, en `domain/reservation/rooms-needing-quote.ts`. Recibe las fechas de antes,
+las de después con la lista de habitaciones pedidas, y lo que devolvió `diffRooms` (plan de
+`update-reservation`, punto 11):
+
+```typescript
+function roomsNeedingQuote<TCurrent, TRequested>(
+  before: { startDate: string; endDate: string },
+  after: { startDate: string; endDate: string; rooms: readonly TRequested[] },
+  diff: RoomsDiff<TCurrent, TRequested>,
+): TRequested[];
+```
+
+Devuelve las habitaciones pedidas que hay que cotizar, en el orden de la solicitud:
+
+- si cambian `startDate` o `endDate`, todas las de `after.rooms`;
+- si no, solo las agregadas (`diff.added`) y las nuevas de las cambiadas de categoría
+  (`diff.swappedCategory`).
+
+No se cotizan las conservadas, porque conservan su tarifa, ni las cambiadas de la misma categoría, porque
+heredan la tarifa de la que sale. Las quitadas nunca se cotizan: se van con su tarifa. Si la lista sale
+vacía, no se llama al Módulo 3.
+
 **B3. Total de la reserva** (función pura del dominio, `reservationTotal`): la suma de los
 `lodgingAmount` de las habitaciones. **No se guarda**; se calcula al mostrarlo (FR-002). Exige que todas
 las habitaciones tengan la misma `currency`; si no, `CURRENCY_MISMATCH` (400).
