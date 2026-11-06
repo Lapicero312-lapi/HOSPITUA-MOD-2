@@ -7,6 +7,8 @@ import { GUEST_REPOSITORY } from '../../../application/ports/out/guest.repositor
 import { MIGRATORY_MOVEMENT_REPOSITORY } from '../../../application/ports/out/migratory-movement.repository.js';
 import { OTA_BOOKING_REVISION_REPOSITORY } from '../../../application/ports/out/ota-booking-revision.repository.js';
 import { OTA_REPOSITORY } from '../../../application/ports/out/ota.repository.js';
+import { ARI_PENDING_CHANGE_REPOSITORY } from '../../../application/ports/out/ari-pending-change.repository.js';
+import { OTA_ROOM_TYPE_MAPPING_REPOSITORY } from '../../../application/ports/out/ota-room-type-mapping.repository.js';
 import { PROCESSED_MESSAGE_REPOSITORY } from '../../../application/ports/out/processed-message.repository.js';
 import { RESERVATION_QUERY_PORT } from '../../../application/ports/out/reservation-query.port.js';
 import { RESERVATION_REPOSITORY } from '../../../application/ports/out/reservation.repository.js';
@@ -18,6 +20,8 @@ import { TypeOrmProcessedMessageRepository } from '../messaging/processed-messag
 import { TypeOrmCommissionAuditRepository } from './repositories/commission-audit.repository.js';
 import { TypeOrmGuestDataRepository } from './repositories/guest-data.repository.js';
 import { TypeOrmGuestRepository } from './repositories/guest.repository.js';
+import { TypeOrmAriPendingChangeRepository } from './repositories/ari-pending-change.repository.js';
+import { TypeOrmOtaRoomTypeMappingRepository } from './repositories/ota-room-type-mapping.repository.js';
 import { TypeOrmMigratoryMovementRepository } from './repositories/migratory-movement.repository.js';
 import { TypeOrmOtaBookingRevisionRepository } from './repositories/ota-booking-revision.repository.js';
 import { TypeOrmOtaRepository } from './repositories/ota.repository.js';
@@ -65,6 +69,14 @@ import { TypeOrmTransactionRunner } from './typeorm-transaction.js';
       useClass: TypeOrmOtaBookingRevisionRepository,
     },
     {
+      provide: OTA_ROOM_TYPE_MAPPING_REPOSITORY,
+      useClass: TypeOrmOtaRoomTypeMappingRepository,
+    },
+    {
+      provide: ARI_PENDING_CHANGE_REPOSITORY,
+      useClass: TypeOrmAriPendingChangeRepository,
+    },
+    {
       provide: PROCESSED_MESSAGE_REPOSITORY,
       useClass: TypeOrmProcessedMessageRepository,
     },
@@ -80,6 +92,8 @@ import { TypeOrmTransactionRunner } from './typeorm-transaction.js';
     OTA_REPOSITORY,
     COMMISSION_AUDIT_REPOSITORY,
     OTA_BOOKING_REVISION_REPOSITORY,
+    OTA_ROOM_TYPE_MAPPING_REPOSITORY,
+    ARI_PENDING_CHANGE_REPOSITORY,
     PROCESSED_MESSAGE_REPOSITORY,
     SIRE_EXPORT_REPOSITORY,
     TRANSACTION_RUNNER,
