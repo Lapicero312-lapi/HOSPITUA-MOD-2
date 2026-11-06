@@ -516,6 +516,25 @@ solo movimiento.
    `INVALID_DATE_RANGE`, `INVALID_EXPORT_KIND`, `MOVEMENT_NOT_FOUND`, `TOO_MANY_REQUESTS`.
 10. **Huésped con varias estadías**: aparece con las líneas de cada una, porque cada movimiento es real.
 11. **Las `SireExport` no se borran**: son un registro auditable, sin borrado automático.
+12. **`formatSireLine` (T002)** recibe el movimiento (con los datos de su huésped, la forma de
+    `SireMovement`) y el formato (`SIRE_HOTEL_CODE`, `SIRE_CITY_CODE`, `SIRE_FIELD_SEPARATOR`,
+    `SIRE_DATE_FORMAT` y `SIRE_FILE_ENCODING`). Devuelve los 12 campos de C, con su posición, su nombre y
+    su valor, y la línea sin el fin de línea, que lo agrega quien arma el archivo.
+    - Las fechas se escriben reemplazando `dd`, `MM` y `yyyy` de `SIRE_DATE_FORMAT` por el día, el mes y
+      el año, con ceros a la izquierda.
+    - Si un campo contiene el separador, un salto de línea (`\r` o `\n`) o un carácter que no se puede
+      codificar, lanza `INVALID_GUEST_CHARACTERS`. En `utf-8`, un carácter que no se puede codificar es una
+      mitad suelta de un par sustituto; en `latin1`, uno por encima de U+00FF.
+    - Como lo lanza el dominio, `INVALID_GUEST_CHARACTERS` está en `domain/shared/error-codes.ts`.
+13. **`SireRateLimiter` (T005)** se aplica solo a `POST /api/sire/exports`. Revisa en este orden: `X-User`
+    (`USER_REQUIRED`), el límite por usuario y el de concurrencia.
+    - El límite por usuario es una ventana móvil: como mucho `SIRE_RATE_LIMIT_PER_MINUTE` solicitudes
+      admitidas en los últimos 60 s. Una solicitud rechazada con `429` no cuenta.
+    - El cupo simultáneo (`SIRE_MAX_CONCURRENT`) se toma al admitir la solicitud y se libera cuando la
+      exportación termina, bien o con error.
+    - `Retry-After` lleva, en segundos enteros y redondeando hacia arriba, lo que falta para que salga de la
+      ventana la solicitud más vieja del usuario. Si el límite es el de concurrencia, lleva `2`, porque una
+      exportación tarda menos de 2 s (NFR-001).
 
 ## Puntos abiertos
 
