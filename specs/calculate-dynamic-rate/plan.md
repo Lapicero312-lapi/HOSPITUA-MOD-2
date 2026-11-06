@@ -560,6 +560,21 @@ seguro ante un Módulo 3 caído.
 
     Los montos salen como texto con dos decimales y su moneda (`{ "amount": "250000.00", "currency":
     "COP" }`). El `quoteId` no sale.
+12. **Configuración y cálculo de la pantalla "Tarifas" (T017 y T018).**
+    - `RATE_REFERENCE` es **opcional**. Si no viene, la aplicación arranca y C1 responde `items: []` con la
+      misma `note`: es una referencia ilustrativa y no debe impedir el resto del Módulo 2.
+    - Si viene, se valida al arrancar en `infrastructure/config/rate-reference.config.ts`. Si algo falla,
+      la aplicación no arranca, y el mensaje nombra `RATE_REFERENCE` sin escribir su valor, como las demás
+      variables. Se valida que:
+      - sea un JSON con `seasonAdjustmentPercentage`, `currency` y `baseRates`;
+      - el porcentaje sea un decimal de hasta dos decimales, mayor que `-100` y menor o igual que `100`
+        (un ajuste negativo es temporada baja);
+      - `currency` tenga 3 letras mayúsculas;
+      - `baseRates` tenga al menos una categoría con la forma de `categoryRoom`, y cada tarifa sea un
+        decimal positivo de hasta dos decimales.
+    - `effectiveRate` se redondea a **dos decimales con `ROUND_HALF_UP`**, como la comisión. Los importes y
+      el porcentaje salen siempre con dos decimales (`"253000.00"`, `"15.00"`).
+    - `items` va **ordenado por `categoryRoom`**.
 
 ## Puntos abiertos
 
