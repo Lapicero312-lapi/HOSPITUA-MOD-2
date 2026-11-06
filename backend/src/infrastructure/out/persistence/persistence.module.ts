@@ -2,7 +2,9 @@ import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { COMMISSION_AUDIT_REPOSITORY } from '../../../application/ports/out/commission-audit.repository.js';
+import { GUEST_DATA_REPOSITORY } from '../../../application/ports/out/guest-data.repository.js';
 import { GUEST_REPOSITORY } from '../../../application/ports/out/guest.repository.js';
+import { MIGRATORY_MOVEMENT_REPOSITORY } from '../../../application/ports/out/migratory-movement.repository.js';
 import { OTA_BOOKING_REVISION_REPOSITORY } from '../../../application/ports/out/ota-booking-revision.repository.js';
 import { OTA_REPOSITORY } from '../../../application/ports/out/ota.repository.js';
 import { PROCESSED_MESSAGE_REPOSITORY } from '../../../application/ports/out/processed-message.repository.js';
@@ -14,7 +16,9 @@ import type { EnvironmentVariables } from '../../config/env.validation.js';
 import { typeOrmOptions } from '../../config/typeorm.options.js';
 import { TypeOrmProcessedMessageRepository } from '../messaging/processed-message.repository.js';
 import { TypeOrmCommissionAuditRepository } from './repositories/commission-audit.repository.js';
+import { TypeOrmGuestDataRepository } from './repositories/guest-data.repository.js';
 import { TypeOrmGuestRepository } from './repositories/guest.repository.js';
+import { TypeOrmMigratoryMovementRepository } from './repositories/migratory-movement.repository.js';
 import { TypeOrmOtaBookingRevisionRepository } from './repositories/ota-booking-revision.repository.js';
 import { TypeOrmOtaRepository } from './repositories/ota.repository.js';
 import { TypeOrmReservationQuery } from './repositories/reservation-query.repository.js';
@@ -46,6 +50,11 @@ import { TypeOrmTransactionRunner } from './typeorm-transaction.js';
     { provide: RESERVATION_REPOSITORY, useClass: TypeOrmReservationRepository },
     { provide: RESERVATION_QUERY_PORT, useClass: TypeOrmReservationQuery },
     { provide: GUEST_REPOSITORY, useClass: TypeOrmGuestRepository },
+    { provide: GUEST_DATA_REPOSITORY, useClass: TypeOrmGuestDataRepository },
+    {
+      provide: MIGRATORY_MOVEMENT_REPOSITORY,
+      useClass: TypeOrmMigratoryMovementRepository,
+    },
     { provide: OTA_REPOSITORY, useClass: TypeOrmOtaRepository },
     {
       provide: COMMISSION_AUDIT_REPOSITORY,
@@ -66,6 +75,8 @@ import { TypeOrmTransactionRunner } from './typeorm-transaction.js';
     RESERVATION_REPOSITORY,
     RESERVATION_QUERY_PORT,
     GUEST_REPOSITORY,
+    GUEST_DATA_REPOSITORY,
+    MIGRATORY_MOVEMENT_REPOSITORY,
     OTA_REPOSITORY,
     COMMISSION_AUDIT_REPOSITORY,
     OTA_BOOKING_REVISION_REPOSITORY,

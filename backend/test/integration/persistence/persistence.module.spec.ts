@@ -3,10 +3,12 @@ import { Test } from '@nestjs/testing';
 import { DataSource } from 'typeorm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { COMMISSION_AUDIT_REPOSITORY } from '../../../src/application/ports/out/commission-audit.repository.js';
+import { GUEST_DATA_REPOSITORY } from '../../../src/application/ports/out/guest-data.repository.js';
 import {
   GUEST_REPOSITORY,
   type GuestRepository,
 } from '../../../src/application/ports/out/guest.repository.js';
+import { MIGRATORY_MOVEMENT_REPOSITORY } from '../../../src/application/ports/out/migratory-movement.repository.js';
 import {
   OTA_REPOSITORY,
   type OtaRepository,
@@ -24,6 +26,8 @@ import {
 } from '../../../src/application/ports/out/transaction.js';
 import { TypeOrmProcessedMessageRepository } from '../../../src/infrastructure/out/messaging/processed-message.repository.js';
 import { TypeOrmCommissionAuditRepository } from '../../../src/infrastructure/out/persistence/repositories/commission-audit.repository.js';
+import { TypeOrmGuestDataRepository } from '../../../src/infrastructure/out/persistence/repositories/guest-data.repository.js';
+import { TypeOrmMigratoryMovementRepository } from '../../../src/infrastructure/out/persistence/repositories/migratory-movement.repository.js';
 import { TypeOrmOtaBookingRevisionRepository } from '../../../src/infrastructure/out/persistence/repositories/ota-booking-revision.repository.js';
 import { TypeOrmReservationQuery } from '../../../src/infrastructure/out/persistence/repositories/reservation-query.repository.js';
 import { aDirectReservation } from '../../support/builders.js';
@@ -34,6 +38,10 @@ import { integrationEnv } from '../support/database.js';
  * `moduleRef.get` encuentra un proveedor aunque el módulo no lo exporte; inyectarlo, no.
  */
 const INJECTED_REVISIONS = Symbol('INJECTED_REVISIONS');
+
+/** Lo mismo con los repositorios de `process-guest-data`, que inyectará `RegisterGuestMovements`. */
+const INJECTED_GUEST_DATA = Symbol('INJECTED_GUEST_DATA');
+const INJECTED_MOVEMENTS = Symbol('INJECTED_MOVEMENTS');
 
 /** Lo mismo con el registro de las comisiones, que inyectará `register-ota-information-commission`. */
 const INJECTED_AUDITS = Symbol('INJECTED_AUDITS');
@@ -56,6 +64,16 @@ describe('PersistenceModule', () => {
         {
           provide: INJECTED_REVISIONS,
           inject: [OTA_BOOKING_REVISION_REPOSITORY],
+          useFactory: (repository: unknown) => repository,
+        },
+        {
+          provide: INJECTED_GUEST_DATA,
+          inject: [GUEST_DATA_REPOSITORY],
+          useFactory: (repository: unknown) => repository,
+        },
+        {
+          provide: INJECTED_MOVEMENTS,
+          inject: [MIGRATORY_MOVEMENT_REPOSITORY],
           useFactory: (repository: unknown) => repository,
         },
         {
@@ -91,6 +109,12 @@ describe('PersistenceModule', () => {
       reservation.id,
     );
     expect(moduleRef.get<GuestRepository>(GUEST_REPOSITORY)).toBeDefined();
+    expect(moduleRef.get(INJECTED_GUEST_DATA)).toBeInstanceOf(
+      TypeOrmGuestDataRepository,
+    );
+    expect(moduleRef.get(INJECTED_MOVEMENTS)).toBeInstanceOf(
+      TypeOrmMigratoryMovementRepository,
+    );
     expect(moduleRef.get<OtaRepository>(OTA_REPOSITORY)).toBeDefined();
     expect(moduleRef.get(COMMISSION_AUDIT_REPOSITORY)).toBeInstanceOf(
       TypeOrmCommissionAuditRepository,
