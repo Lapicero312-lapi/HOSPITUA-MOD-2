@@ -803,6 +803,40 @@ PENDING --10 intentos fallidos--> FAILED --reencolado a mano--> PENDING
 
 Así se evita duplicar filas por habitación (SC-003) y se mantiene el costo de la página, no el de la tabla.
 
+**`ReservationQueryPort.listReservations` (T005).** Lo agrega la T005 al puerto que ya tiene
+`findBlockingRooms`. La búsqueda por código, documento o nombre la agregan T015 y T020.
+
+```typescript
+type ReservationListFilters = {
+  status: ReservationStatus | null;     // null: todos los estados
+  source: 'DIRECT' | 'OTA' | null;
+  otaId: string | null;                 // solo llega con source = OTA (lo valida T007)
+  inConflict: boolean;                  // true: solo las que tienen conflict_reason (FR-002a)
+  stayRange: { dateFrom: string; dateTo: string } | null;  // cruce: start_date <= dateTo y end_date > dateFrom
+  order: 'asc' | 'desc';                // por start_date y, si empatan, por reservation_ref, en el mismo sentido
+};
+
+type ReservationListPage = {
+  totalItems: number;                   // con los mismos filtros (paso 1)
+  items: {
+    reservation: Reservation;           // con su titular y todas sus habitaciones (paso 3)
+    otaName: string | null;             // el nombre de la agencia en las reservas OTA
+    hasForeignMovement: boolean;        // para deriveMigrationStatus (FR-005b)
+  }[];
+};
+
+interface ReservationQueryPort {
+  // Una página de 10 (RESERVATION_PAGE_SIZE), con page desde 1. Si page pasa de la última,
+  // devuelve items vacío con el totalItems real: el ajuste a la última página válida es de T011.
+  listReservations(filters: ReservationListFilters, page: number): Promise<ReservationListPage>;
+}
+```
+
+- Las tres consultas son las de "Consulta del listado": totales, ids de la página y carga de esas
+  reservas.
+- `hasForeignMovement` se resuelve con un solo `EXISTS` para las 10 reservas de la página, sobre
+  `migratory_movement` unido a `guest_data`, con nacionalidad distinta de `Colombia`.
+
 ### `migrationStatus` (FR-005b)
 
 Función pura en el dominio: `deriveMigrationStatus(status, hasForeignMovement)`.
