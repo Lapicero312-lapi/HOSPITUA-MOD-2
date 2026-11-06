@@ -289,6 +289,20 @@ describe('Validador de la solicitud de la reserva directa (plan, punto 10)', () 
         ).toEqual(expected('RATE_CHANGED'));
       });
 
+      it('van después de la categoría y del roomId, los otros formatos del paso 1', () => {
+        expect(
+          creationError(creation({ expectedRates: [], categoryRoom: 'doble' })),
+        ).toEqual(expected('INVALID_CATEGORY'));
+        expect(
+          creationError(
+            creation({
+              expectedRates: [],
+              rooms: [{ guestCount: 2, roomId: '201' }],
+            }),
+          ),
+        ).toEqual(expected('INVALID_ROOM_ID'));
+      });
+
       it('si rooms no es una lista, su cantidad la responde el paso 2', () => {
         expect(
           creationError(
@@ -554,7 +568,8 @@ describe('Validador de la solicitud de la reserva directa (plan, punto 10)', () 
       ['un teléfono de 31 caracteres', { contactPhone: '3'.repeat(31) }],
       [
         'un correo de 255 caracteres',
-        { contactEmail: `${'a'.repeat(245)}@correo.com` },
+        // 244 + los 11 de "@correo.com" = 255: uno más que la columna.
+        { contactEmail: `${'a'.repeat(244)}@correo.com` },
       ],
       ['un documento de 31 caracteres', { documentNumber: '1'.repeat(31) }],
       ['un carácter de control en el nombre', { firstName: 'Valen\u0000tina' }],
