@@ -1,4 +1,5 @@
 import type { Money } from '../../../../../domain/shared/money.js';
+import type { Transaction } from '../../../../ports/out/transaction.js';
 
 /** Símbolo con el que Nest inyecta el servicio en los demás casos de uso. */
 export const REGISTER_OTA_CONFIRMATION_AND_COMMISSION = Symbol(
@@ -27,7 +28,7 @@ export type CommissionResult = {
 
 /**
  * Cálculo de la comisión de una reserva OTA nueva (plan, B1). Lo usa `generate-ota-reservation` dentro de
- * su transacción. `recalculate` y `recordAudit` los agregan sus tareas del plan.
+ * su transacción. `recalculate` lo agrega su tarea del plan.
  */
 export interface RegisterOtaConfirmationAndCommission {
   /**
@@ -36,4 +37,18 @@ export interface RegisterOtaConfirmationAndCommission {
    * `DUPLICATE_CONFIRMATION_CODE`.
    */
   calculate(input: CommissionInput): Promise<CommissionResult>;
+
+  /**
+   * T007: deja la fila `CALCULATED` de `commission_audit` en la transacción de quien llama, después de que
+   * guardó la reserva con su comisión. El valor bruto lo lee de esa reserva; el estado anterior es vacío
+   * en su primera comisión y `CALCULATED` en una recalculación.
+   * @param performedBy `Booking.com` en el cálculo (regla 6).
+   * @throws Error si la reserva no existe o no es de OTA: es un error del programa.
+   */
+  recordAudit(
+    tx: Transaction,
+    reservationId: string,
+    result: CommissionResult,
+    performedBy: string,
+  ): Promise<void>;
 }

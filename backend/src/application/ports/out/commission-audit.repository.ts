@@ -31,8 +31,8 @@ export type CommissionAuditEntry = {
 };
 
 /**
- * El registro auditable de las comisiones (`register-ota-information-commission`, FR-010 y T004). Solo
- * inserta: cada fila es inmutable y nunca se cambia ni se borra.
+ * El registro auditable de las comisiones (`register-ota-information-commission`, FR-010 y T004). Cada
+ * fila es inmutable: nunca se cambia ni se borra.
  */
 export interface CommissionAuditRepository {
   /**
@@ -40,4 +40,10 @@ export interface CommissionAuditRepository {
    * revierte, la fila no queda.
    */
   record(entry: CommissionAuditEntry, tx: Transaction): Promise<void>;
+
+  /**
+   * T007: si la reserva ya tiene alguna fila, para que `recordAudit` sepa si es su primera comisión (estado
+   * anterior vacío) o una recalculación (`CALCULATED`). Ve las filas aún sin confirmar de `tx`.
+   */
+  existsFor(reservationId: string, tx: Transaction): Promise<boolean>;
 }

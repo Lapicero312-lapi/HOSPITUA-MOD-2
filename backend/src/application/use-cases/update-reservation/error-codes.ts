@@ -1,7 +1,7 @@
 /**
  * Códigos de error que solo usa `update-reservation`, con los mensajes literales de las tablas de B de su
  * plan. Los que comparte con otros casos de uso están en `domain/shared/error-codes.ts`, y los que ya lanzan
- * el dominio (`INVALID_STATUS_TRANSITION`, `INVALID_ROOM_COUNT`, `NOTES_TOO_LONG`…) y el repositorio de
+ * el dominio (`INVALID_STATUS_TRANSITION`, `INVALID_ROOM_COUNT`, `LAST_ROOM_CANNOT_BE_REMOVED`, `NOTES_TOO_LONG`…) y el repositorio de
  * reservas (`CONCURRENT_UPDATE`) se quedan donde están.
  * Se lanzan con `new BusinessError(STATUS_NOT_EDITABLE.code, STATUS_NOT_EDITABLE.message)`.
  */
@@ -17,12 +17,6 @@ export const OTA_RESERVATION_READ_ONLY = {
 export const STATUS_NOT_EDITABLE = {
   code: 'STATUS_NOT_EDITABLE',
   message: 'El estado actual de la reserva no admite modificaciones.',
-} as const;
-
-/** El cambio dejaría la reserva sin habitaciones. */
-export const LAST_ROOM_CANNOT_BE_REMOVED = {
-  code: 'LAST_ROOM_CANNOT_BE_REMOVED',
-  message: 'La reserva debe conservar al menos una habitación.',
 } as const;
 
 /** El cuerpo del cambio trae `guest.nationality`. */

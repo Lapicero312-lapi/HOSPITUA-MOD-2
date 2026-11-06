@@ -1,12 +1,26 @@
 import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type {
+  CommissionAuditEntry,
+  CommissionAuditRepository,
+} from '../../../../../src/application/ports/out/commission-audit.repository.js';
 import type { OtaRepository } from '../../../../../src/application/ports/out/ota.repository.js';
 import type { ReservationRepository } from '../../../../../src/application/ports/out/reservation.repository.js';
-import type { CommissionInput } from '../../../../../src/application/use-cases/register-ota-information-commission/ports/in/register-ota-confirmation-and-commission.port.js';
+import type { Transaction } from '../../../../../src/application/ports/out/transaction.js';
+import type {
+  CommissionInput,
+  CommissionResult,
+} from '../../../../../src/application/use-cases/register-ota-information-commission/ports/in/register-ota-confirmation-and-commission.port.js';
 import { RegisterOtaConfirmationAndCommissionService } from '../../../../../src/application/use-cases/register-ota-information-commission/register-ota-confirmation-and-commission.service.js';
 import type { Ota } from '../../../../../src/domain/ota/ota.js';
+import type { Reservation } from '../../../../../src/domain/reservation/reservation.js';
 import { Money } from '../../../../../src/domain/shared/money.js';
-import { anOta } from '../../../../support/builders.js';
+import {
+  aDirectReservation,
+  anOta,
+  anOtaReservation,
+  otaTerms,
+} from '../../../../support/builders.js';
 
 const usd = (amount: string) => Money.of(amount, 'USD');
 
@@ -22,7 +36,12 @@ function serviceWith(ota: Ota | null, existingCode: string | null = null) {
       Promise.resolve(code === existingCode),
     ),
   } as unknown as ReservationRepository;
-  return new RegisterOtaConfirmationAndCommissionService(otas, reservations);
+  // calculate no audita: el registro de auditoría no se usa.
+  return new RegisterOtaConfirmationAndCommissionService(
+    otas,
+    reservations,
+    {} as CommissionAuditRepository,
+  );
 }
 
 const anInput = (
@@ -238,5 +257,171 @@ describe('RegisterOtaConfirmationAndCommission.calculate', () => {
       message:
         'El código de confirmación ya está registrado para esta agencia.',
     });
+  });
+});
+
+/** La transacción de quien llama: el servicio solo la pasa a los repositorios. */
+const TX = { id: 'tx' } as unknown as Transaction;
+
+/**
+ * El servicio con la reserva guardada que devuelve el repositorio y, si se pide, filas de auditoría ya
+ * registradas para ella. Devuelve también los dobles, para ver qué intentó registrar.
+ */
+function auditingServiceWith(
+  saved: Reservation | null,
+  alreadyAudited = false,
+) {
+  const reservations = {
+    findById: vi.fn((id: string, _tx?: Transaction) =>
+      Promise.resolve(saved !== null && saved.id === id ? saved : null),
+    ),
+  };
+  const audits = {
+    record: vi.fn((_entry: CommissionAuditEntry, _tx: Transaction) =>
+      Promise.resolve(),
+    ),
+    existsFor: vi.fn((_reservationId: string, _tx: Transaction) =>
+      Promise.resolve(alreadyAudited),
+    ),
+  };
+  const service = new RegisterOtaConfirmationAndCommissionService(
+    {} as OtaRepository,
+    reservations as unknown as ReservationRepository,
+    audits,
+  );
+  return { service, reservations, audits };
+}
+
+/** El resultado del escenario 1: 400 al 15 % da 60. */
+const aResult = (
+  otaId: string,
+  changes: Partial<CommissionResult> = {},
+): CommissionResult => ({
+  otaId,
+  commissionPercentage: '15',
+  learnedPercentage: false,
+  commissionAmount: usd('60'),
+  commissionStatus: 'CALCULATED',
+  ...changes,
+});
+
+describe('RegisterOtaConfirmationAndCommission.recordAudit (T007)', () => {
+  it('la primera comisión de la reserva deja la fila CALCULATED, sin estado anterior, con OTA_API y quien la hizo', async () => {
+    const ota = anOta();
+    const reservation = anOtaReservation(ota.id);
+    const { service, audits } = auditingServiceWith(reservation);
+
+    await service.recordAudit(
+      TX,
+      reservation.id,
+      aResult(ota.id),
+      'Booking.com',
+    );
+
+    expect(audits.record).toHaveBeenCalledTimes(1);
+    const [entry, tx] = audits.record.mock.calls[0];
+    expect(tx).toBe(TX);
+    expect(entry).toEqual({
+      reservationId: reservation.id,
+      otaId: ota.id,
+      action: 'CALCULATED',
+      previousStatus: null,
+      grossAmount: usd('400'),
+      commissionPercentage: '15',
+      commissionAmount: usd('60'),
+      channel: 'OTA_API',
+      performedBy: 'Booking.com',
+    });
+  });
+
+  it('una recalculación deja el estado anterior CALCULATED y el valor bruto nuevo de la reserva guardada', async () => {
+    const ota = anOta();
+    // Booking cambió el valor a 500: ApplyOtaChange ya guardó la reserva con él.
+    const reservation = anOtaReservation(ota.id, {
+      ota: otaTerms(ota.id, {
+        grossAmount: usd('500'),
+        commissionAmount: usd('75'),
+      }),
+    });
+    const { service, audits } = auditingServiceWith(reservation, true);
+
+    await service.recordAudit(
+      TX,
+      reservation.id,
+      aResult(ota.id, { commissionAmount: usd('75') }),
+      'Booking.com',
+    );
+
+    expect(audits.record.mock.calls[0][0]).toMatchObject({
+      action: 'CALCULATED',
+      previousStatus: 'CALCULATED',
+      grossAmount: usd('500'),
+      commissionAmount: usd('75'),
+    });
+  });
+
+  it('lee la reserva y las filas anteriores en la transacción de quien llama, que aún no confirma la reserva', async () => {
+    const ota = anOta();
+    const reservation = anOtaReservation(ota.id);
+    const { service, reservations, audits } = auditingServiceWith(reservation);
+
+    await service.recordAudit(
+      TX,
+      reservation.id,
+      aResult(ota.id),
+      'Booking.com',
+    );
+
+    expect(reservations.findById).toHaveBeenCalledWith(reservation.id, TX);
+    expect(audits.existsFor).toHaveBeenCalledWith(reservation.id, TX);
+  });
+
+  it('el porcentaje, el importe y la agencia salen del resultado del cálculo', async () => {
+    const ota = anOta({ commissionPercentage: null });
+    const reservation = anOtaReservation(ota.id);
+    const { service, audits } = auditingServiceWith(reservation);
+
+    await service.recordAudit(
+      TX,
+      reservation.id,
+      aResult(ota.id, {
+        commissionPercentage: '6.54',
+        learnedPercentage: true,
+        commissionAmount: usd('26.16'),
+      }),
+      'Booking.com',
+    );
+
+    expect(audits.record.mock.calls[0][0]).toMatchObject({
+      otaId: ota.id,
+      commissionPercentage: '6.54',
+      commissionAmount: usd('26.16'),
+    });
+  });
+
+  it('una reserva que no existe es un error del programa y no deja ninguna fila', async () => {
+    const ota = anOta();
+    const { service, audits } = auditingServiceWith(null);
+
+    await expect(
+      service.recordAudit(
+        TX,
+        'reserva-inexistente',
+        aResult(ota.id),
+        'Booking.com',
+      ),
+    ).rejects.toThrow('no existe o no es de OTA');
+    expect(audits.record).not.toHaveBeenCalled();
+  });
+
+  it('una reserva directa no tiene comisión: es un error del programa y no deja ninguna fila', async () => {
+    const ota = anOta();
+    const reservation = aDirectReservation();
+    const { service, audits } = auditingServiceWith(reservation);
+
+    await expect(
+      service.recordAudit(TX, reservation.id, aResult(ota.id), 'Booking.com'),
+    ).rejects.toThrow('no existe o no es de OTA');
+    expect(audits.record).not.toHaveBeenCalled();
   });
 });

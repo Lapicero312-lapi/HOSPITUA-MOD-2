@@ -1,5 +1,6 @@
 import { BusinessError } from '../shared/business-error.js';
 import type { DocumentType } from '../shared/enums.js';
+import { GUEST_DATA_REQUIRED } from '../shared/error-codes.js';
 
 export type GuestProps = {
   /** El `guestRef`. */
@@ -32,8 +33,8 @@ export class Guest {
       hasDocumentType !== hasDocumentNumber
     ) {
       throw new BusinessError(
-        'GUEST_DATA_REQUIRED',
-        'Los datos del titular son obligatorios.',
+        GUEST_DATA_REQUIRED.code,
+        GUEST_DATA_REQUIRED.message,
       );
     }
     return new Guest({ ...props });

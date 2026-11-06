@@ -1,7 +1,8 @@
 /**
  * Códigos de error que solo usa `export-sire-file`, con los mensajes literales de la tabla D de su plan
  * (los del spec cuando existen). Los que comparte con otros casos de uso (fechas y página) están en
- * `domain/shared/error-codes.ts`, y `USER_REQUIRED` ya lo lanza la lectura de `X-User`.
+ * `domain/shared/error-codes.ts`, igual que `INVALID_GUEST_CHARACTERS`, que lo lanza `formatSireLine` (punto 12),
+ * y `USER_REQUIRED` ya lo lanza la lectura de `X-User`.
  * Se lanzan con `new BusinessError(PERIOD_TOO_LARGE.code, PERIOD_TOO_LARGE.message)`, salvo
  * `TOO_MANY_REQUESTS` (ver su comentario).
  */
@@ -17,12 +18,6 @@ export const PERIOD_TOO_LARGE = {
 export const NO_MIGRATORY_MOVEMENTS = {
   code: 'NO_MIGRATORY_MOVEMENTS',
   message: 'No hay movimientos migratorios que reportar en ese periodo.',
-} as const;
-
-/** Un dato del huésped no se puede codificar en el archivo. */
-export const INVALID_GUEST_CHARACTERS = {
-  code: 'INVALID_GUEST_CHARACTERS',
-  message: 'Caracteres no válidos en el registro del huésped.',
 } as const;
 
 /** `exportKind` distinto de `PERIOD` o `SINGLE_MOVEMENT`. */

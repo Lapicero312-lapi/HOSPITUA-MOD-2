@@ -1,5 +1,6 @@
 import { BusinessError } from '../shared/business-error.js';
 import type { ReservationStatus, StayStatus } from '../shared/enums.js';
+import { GUEST_COUNT_TOO_LOW } from '../shared/error-codes.js';
 import type { Money } from '../shared/money.js';
 import {
   canChangeStayStatus,
@@ -52,8 +53,8 @@ export class ReservationRoom {
     }
     if (!Number.isInteger(props.guestCount) || props.guestCount < 1) {
       throw new BusinessError(
-        'GUEST_COUNT_TOO_LOW',
-        'Cada habitación debe tener al menos una persona.',
+        GUEST_COUNT_TOO_LOW.code,
+        GUEST_COUNT_TOO_LOW.message,
       );
     }
     return new ReservationRoom({ ...props });

@@ -394,6 +394,15 @@ canal y `REMOVED`); una con llegada futura (sin aviso); y los intentos sobre `IN
 7. **`status_reason`**: `CANCELLED_BY_RECEPTION` y `CANCELLED_BY_OTA`.
 8. **Códigos y mensajes** que el spec no da: `OTA_RESERVATION_CANCEL_VIA_API`, `STATUS_NOT_CANCELLABLE`,
    `CANCELLATION_NOT_CONFIRMED`, `REASON_TOO_LONG` e `INVALID_RESERVATION_CODE`.
+9. **Validador de la solicitud (T003).** Son funciones que el flujo llama en su paso de la regla 3:
+   - **Paso 1, antes de consultar la base:**
+     - la referencia vacía, solo con espacios o nula da `RESERVATION_REF_REQUIRED`;
+     - si no es exactamente `RSV-` más 8 hexadecimales en mayúscula, da `INVALID_RESERVATION_CODE`;
+     - después, `reason`, que es opcional (`null` o ausente): con más de 500 caracteres da
+       `REASON_TOO_LONG`, y con caracteres de control (`\p{Cc}`) salvo el salto de línea y la tabulación da
+       `INVALID_CHARACTERS`. Es la misma regla que `notes` en `generate-direct-reservation`.
+   - **Paso 3, solo en A:** `acknowledged` tiene que ser exactamente `true` (ni `"true"` ni ausente); si no,
+     `CANCELLATION_NOT_CONFIRMED`.
 
 ## Puntos abiertos
 

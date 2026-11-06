@@ -34,4 +34,15 @@ export class TypeOrmCommissionAuditRepository implements CommissionAuditReposito
       ],
     );
   }
+
+  async existsFor(reservationId: string, tx: Transaction): Promise<boolean> {
+    const [{ exists }]: { exists: boolean }[] = await managerFor(
+      this.dataSource,
+      tx,
+    ).query(
+      'SELECT EXISTS (SELECT 1 FROM commission_audit WHERE reservation_id = $1) AS exists',
+      [reservationId],
+    );
+    return exists;
+  }
 }

@@ -8,7 +8,8 @@ import { RegisterOtaConfirmationAndCommissionService } from './register-ota-conf
 
 /**
  * Los servicios de `register-ota-information-commission` (plan base, regla 4 de la arquitectura). Usa
- * `OTA_REPOSITORY` y `RESERVATION_REPOSITORY` de `PersistenceModule`, que es global.
+ * `OTA_REPOSITORY`, `RESERVATION_REPOSITORY` y `COMMISSION_AUDIT_REPOSITORY` de `PersistenceModule`, que
+ * es global.
  */
 @Module({
   providers: [
