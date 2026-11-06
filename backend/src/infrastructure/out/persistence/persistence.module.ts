@@ -15,6 +15,7 @@ import { PROCESSED_MESSAGE_REPOSITORY } from '../../../application/ports/out/pro
 import { RESERVATION_QUERY_PORT } from '../../../application/ports/out/reservation-query.port.js';
 import { RESERVATION_REPOSITORY } from '../../../application/ports/out/reservation.repository.js';
 import { SIRE_EXPORT_REPOSITORY } from '../../../application/ports/out/sire-export.repository.js';
+import { CANCELLATION_REPOSITORY } from '../../../application/ports/out/cancellation.repository.js';
 import { TRANSACTION_RUNNER } from '../../../application/ports/out/transaction.js';
 import type { EnvironmentVariables } from '../../config/env.validation.js';
 import { typeOrmOptions } from '../../config/typeorm.options.js';
@@ -32,6 +33,7 @@ import { TypeOrmOtaRepository } from './repositories/ota.repository.js';
 import { TypeOrmReservationQuery } from './repositories/reservation-query.repository.js';
 import { TypeOrmReservationRepository } from './repositories/reservation.repository.js';
 import { TypeOrmSireExportRepository } from './repositories/sire-export.repository.js';
+import { TypeOrmCancellationRepository } from './repositories/cancellation.repository.js';
 import { TypeOrmTransactionRunner } from './typeorm-transaction.js';
 
 /**
@@ -93,6 +95,10 @@ import { TypeOrmTransactionRunner } from './typeorm-transaction.js';
       useClass: TypeOrmProcessedMessageRepository,
     },
     { provide: SIRE_EXPORT_REPOSITORY, useClass: TypeOrmSireExportRepository },
+    {
+      provide: CANCELLATION_REPOSITORY,
+      useClass: TypeOrmCancellationRepository,
+    },
     { provide: TRANSACTION_RUNNER, useClass: TypeOrmTransactionRunner },
   ],
   exports: [
@@ -110,6 +116,7 @@ import { TypeOrmTransactionRunner } from './typeorm-transaction.js';
     ARI_PENDING_CHANGE_REPOSITORY,
     PROCESSED_MESSAGE_REPOSITORY,
     SIRE_EXPORT_REPOSITORY,
+    CANCELLATION_REPOSITORY,
     TRANSACTION_RUNNER,
   ],
 })
