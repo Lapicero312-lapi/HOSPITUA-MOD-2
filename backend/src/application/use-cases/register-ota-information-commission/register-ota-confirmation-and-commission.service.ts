@@ -8,6 +8,10 @@ import { isPercentage } from '../../../domain/ota/ota.js';
 import { BusinessError } from '../../../domain/shared/business-error.js';
 import type { Money } from '../../../domain/shared/money.js';
 import {
+  COMMISSION_AUDIT_REPOSITORY,
+  type CommissionAuditRepository,
+} from '../../ports/out/commission-audit.repository.js';
+import {
   OTA_REPOSITORY,
   type OtaRepository,
 } from '../../ports/out/ota.repository.js';
@@ -15,6 +19,7 @@ import {
   RESERVATION_REPOSITORY,
   type ReservationRepository,
 } from '../../ports/out/reservation.repository.js';
+import type { Transaction } from '../../ports/out/transaction.js';
 import {
   COMMISSION_NOT_REPORTED,
   DUPLICATE_CONFIRMATION_CODE,
@@ -46,6 +51,8 @@ export class RegisterOtaConfirmationAndCommissionService implements RegisterOtaC
     private readonly otas: OtaRepository,
     @Inject(RESERVATION_REPOSITORY)
     private readonly reservations: ReservationRepository,
+    @Inject(COMMISSION_AUDIT_REPOSITORY)
+    private readonly audits: CommissionAuditRepository,
   ) {}
 
   async calculate(input: CommissionInput): Promise<CommissionResult> {
@@ -99,6 +106,36 @@ export class RegisterOtaConfirmationAndCommissionService implements RegisterOtaC
       ),
       commissionStatus: 'CALCULATED',
     };
+  }
+
+  async recordAudit(
+    tx: Transaction,
+    reservationId: string,
+    result: CommissionResult,
+    performedBy: string,
+  ): Promise<void> {
+    // La reserva ya guardada trae el valor bruto vigente, que CommissionResult no trae (plan, B1).
+    const reservation = await this.reservations.findById(reservationId, tx);
+    if (reservation === null || reservation.ota === null) {
+      throw new Error(
+        `La reserva ${reservationId} no existe o no es de OTA: no tiene comisión que auditar.`,
+      );
+    }
+    const recalculation = await this.audits.existsFor(reservationId, tx);
+    await this.audits.record(
+      {
+        reservationId,
+        otaId: result.otaId,
+        action: 'CALCULATED',
+        previousStatus: recalculation ? 'CALCULATED' : null,
+        grossAmount: reservation.ota.grossAmount,
+        commissionPercentage: result.commissionPercentage,
+        commissionAmount: result.commissionAmount,
+        channel: 'OTA_API',
+        performedBy,
+      },
+      tx,
+    );
   }
 
   /** FR-004a: la comisión informada da otro porcentaje; se usa igual el fijo. */
