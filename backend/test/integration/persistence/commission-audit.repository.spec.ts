@@ -11,7 +11,7 @@ import {
   managerFor,
   TypeOrmTransactionRunner,
 } from '../../../src/infrastructure/out/persistence/typeorm-transaction.js';
-import { anOta, anOtaReservation } from '../../support/builders.js';
+import { anOta, anOtaReservation, otaTerms } from '../../support/builders.js';
 import { openTestDataSource, truncateAllTables } from '../support/database.js';
 
 /** Una fila de `commission_audit` tal como la guardó la base, sin pasar por `number` ni `Date`. */
@@ -213,5 +213,40 @@ describe('TypeOrmCommissionAuditRepository contra PostgreSQL real', () => {
     ).rejects.toThrow('falló el registro de la reserva');
 
     expect(await rows()).toHaveLength(0);
+  });
+
+  describe('existsFor (T007)', () => {
+    const existsFor = (reservationId: string) =>
+      transactions.run((tx) => audits.existsFor(reservationId, tx));
+
+    it('una reserva sin filas no tiene comisión registrada', async () => {
+      expect(await existsFor(reservation.id)).toBe(false);
+    });
+
+    it('con su cálculo registrado, la reserva ya tiene comisión', async () => {
+      await record(aCalculation());
+
+      expect(await existsFor(reservation.id)).toBe(true);
+    });
+
+    it('las filas de otra reserva no cuentan', async () => {
+      const other = await new TypeOrmReservationRepository(dataSource).insert(
+        anOtaReservation(ota.id, {
+          ota: otaTerms(ota.id, { externalConfirmationCode: '5528930124' }),
+        }),
+      );
+      await record(aCalculation({ reservationId: other.id }));
+
+      expect(await existsFor(reservation.id)).toBe(false);
+    });
+
+    it('ve la fila que su transacción todavía no confirma', async () => {
+      const seen = await transactions.run(async (tx) => {
+        await audits.record(aCalculation(), tx);
+        return audits.existsFor(reservation.id, tx);
+      });
+
+      expect(seen).toBe(true);
+    });
   });
 });
