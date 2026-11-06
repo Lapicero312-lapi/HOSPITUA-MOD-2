@@ -172,7 +172,8 @@ sincronización. Mientras tanto, una reserva con más personas que la capacidad 
 ### B. Puertos internos
 
 `AriChangeRecorder` es un puerto de entrada; `OtaRoomTypeMappingRepository` es un puerto de salida
-(`application/ports/out/`) que también usa `generate-ota-reservation`.
+(`application/ports/out/`) que también usa `generate-ota-reservation`. `AriPendingChangeRepository` es el
+puerto de salida de `ari_pending_change` (T002).
 
 ```typescript
 interface AriChangeRecorder {
@@ -180,9 +181,30 @@ interface AriChangeRecorder {
   record(tx: Transaction, changes: { categoryRoom: string; dateFrom: string; dateTo: string }[]): Promise<void>;
 }
 
+type OtaRoomTypeMapping = {      // domain/ota/
+  channexRoomTypeId: string;
+  categoryRoom: string;
+  countOfRooms: number;          // la cantidad y la capacidad enviadas a Channex la última vez
+  occupancy: number;
+};
+
 interface OtaRoomTypeMappingRepository {
   findByChannexRoomType(channexRoomTypeId: string): Promise<OtaRoomTypeMapping | null>;  // generate-ota-reservation
-  findAll(): Promise<OtaRoomTypeMapping[]>;
+  findAll(): Promise<OtaRoomTypeMapping[]>;  // por categoría
+  // C1: guarda la relación; si el tipo ya tenía una, cambia solo su cantidad y su capacidad
+  // (la categoría no cambia: renombrarla crea un tipo nuevo, punto 4).
+  upsert(mapping: OtaRoomTypeMapping): Promise<void>;
+}
+
+type AriPendingChange = { id: string; categoryRoom: string; dateFrom: string; dateTo: string };
+
+interface AriPendingChangeRepository {
+  // B2: una fila por cambio, en la transacción del cambio de la reserva.
+  insert(changes: { categoryRoom: string; dateFrom: string; dateTo: string }[], tx: Transaction): Promise<void>;
+  // T010: todas las marcas pendientes, de la más antigua a la más reciente.
+  findAll(): Promise<AriPendingChange[]>;
+  // T010: después del 200 de A4 borra solo las marcas enviadas; las que llegaron durante el envío se conservan.
+  deleteByIds(ids: string[]): Promise<void>;
 }
 ```
 
