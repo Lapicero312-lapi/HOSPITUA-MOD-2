@@ -2,6 +2,7 @@ import type { TestingModule } from '@nestjs/testing';
 import { Test } from '@nestjs/testing';
 import { DataSource } from 'typeorm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { COMMISSION_AUDIT_REPOSITORY } from '../../../src/application/ports/out/commission-audit.repository.js';
 import {
   GUEST_REPOSITORY,
   type GuestRepository,
@@ -14,6 +15,7 @@ import { ARI_PENDING_CHANGE_REPOSITORY } from '../../../src/application/ports/ou
 import { OTA_ROOM_TYPE_MAPPING_REPOSITORY } from '../../../src/application/ports/out/ota-room-type-mapping.repository.js';
 import { OTA_BOOKING_REVISION_REPOSITORY } from '../../../src/application/ports/out/ota-booking-revision.repository.js';
 import { PROCESSED_MESSAGE_REPOSITORY } from '../../../src/application/ports/out/processed-message.repository.js';
+import { RESERVATION_QUERY_PORT } from '../../../src/application/ports/out/reservation-query.port.js';
 import {
   RESERVATION_REPOSITORY,
   type ReservationRepository,
@@ -23,9 +25,11 @@ import {
   type TransactionRunner,
 } from '../../../src/application/ports/out/transaction.js';
 import { TypeOrmProcessedMessageRepository } from '../../../src/infrastructure/out/messaging/processed-message.repository.js';
+import { TypeOrmCommissionAuditRepository } from '../../../src/infrastructure/out/persistence/repositories/commission-audit.repository.js';
 import { TypeOrmOtaBookingRevisionRepository } from '../../../src/infrastructure/out/persistence/repositories/ota-booking-revision.repository.js';
 import { TypeOrmAriPendingChangeRepository } from '../../../src/infrastructure/out/persistence/repositories/ari-pending-change.repository.js';
 import { TypeOrmOtaRoomTypeMappingRepository } from '../../../src/infrastructure/out/persistence/repositories/ota-room-type-mapping.repository.js';
+import { TypeOrmReservationQuery } from '../../../src/infrastructure/out/persistence/repositories/reservation-query.repository.js';
 import { aDirectReservation } from '../../support/builders.js';
 import { integrationEnv } from '../support/database.js';
 
@@ -38,6 +42,9 @@ const INJECTED_ARI_CHANGES = Symbol('INJECTED_ARI_CHANGES');
  * `moduleRef.get` encuentra un proveedor aunque el módulo no lo exporte; inyectarlo, no.
  */
 const INJECTED_REVISIONS = Symbol('INJECTED_REVISIONS');
+
+/** Lo mismo con el registro de las comisiones, que inyectará `register-ota-information-commission`. */
+const INJECTED_AUDITS = Symbol('INJECTED_AUDITS');
 
 describe('PersistenceModule', () => {
   let moduleRef: TestingModule | undefined;
@@ -67,6 +74,11 @@ describe('PersistenceModule', () => {
         {
           provide: INJECTED_REVISIONS,
           inject: [OTA_BOOKING_REVISION_REPOSITORY],
+          useFactory: (repository: unknown) => repository,
+        },
+        {
+          provide: INJECTED_AUDITS,
+          inject: [COMMISSION_AUDIT_REPOSITORY],
           useFactory: (repository: unknown) => repository,
         },
       ],
@@ -110,8 +122,14 @@ describe('PersistenceModule', () => {
     );
     expect(moduleRef.get<GuestRepository>(GUEST_REPOSITORY)).toBeDefined();
     expect(moduleRef.get<OtaRepository>(OTA_REPOSITORY)).toBeDefined();
+    expect(moduleRef.get(COMMISSION_AUDIT_REPOSITORY)).toBeInstanceOf(
+      TypeOrmCommissionAuditRepository,
+    );
     expect(moduleRef.get(PROCESSED_MESSAGE_REPOSITORY)).toBeInstanceOf(
       TypeOrmProcessedMessageRepository,
+    );
+    expect(moduleRef.get(RESERVATION_QUERY_PORT)).toBeInstanceOf(
+      TypeOrmReservationQuery,
     );
     expect(moduleRef.get(OTA_BOOKING_REVISION_REPOSITORY)).toBeInstanceOf(
       TypeOrmOtaBookingRevisionRepository,
@@ -119,6 +137,9 @@ describe('PersistenceModule', () => {
     // El módulo lo exporta: un caso de uso lo puede inyectar.
     expect(moduleRef.get(INJECTED_REVISIONS)).toBeInstanceOf(
       TypeOrmOtaBookingRevisionRepository,
+    );
+    expect(moduleRef.get(INJECTED_AUDITS)).toBeInstanceOf(
+      TypeOrmCommissionAuditRepository,
     );
   });
 });

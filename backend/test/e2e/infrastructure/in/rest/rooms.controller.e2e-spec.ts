@@ -9,7 +9,7 @@ import {
   MODULE1_PORT,
   type Module1Port,
 } from '../../../../../src/application/ports/out/module1.port.js';
-import { MAINTENANCE_CONCURRENCY } from '../../../../../src/application/use-cases/consult-room-inventory/ports/in/list-rooms-with-maintenance.port.js';
+import { MAINTENANCE_CONCURRENCY } from '../../../../../src/application/shared/maintenance-concurrency.js';
 import { AppModule } from '../../../../../src/app.module.js';
 import { configureApp } from '../../../../../src/configure-app.js';
 
