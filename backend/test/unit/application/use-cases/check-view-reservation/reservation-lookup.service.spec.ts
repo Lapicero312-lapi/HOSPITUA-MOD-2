@@ -9,7 +9,8 @@ const ROOM_201 = '3f6c1e2a-8b4d-4c7e-9a1f-2b3c4d5e6f70';
 
 function lookupAnswering(blocking: BlockingRoom[]) {
   const findBlockingRooms = vi.fn(() => Promise.resolve(blocking));
-  const query = { findBlockingRooms } as ReservationQueryPort;
+  // El servicio solo usa findBlockingRooms.
+  const query = { findBlockingRooms } as unknown as ReservationQueryPort;
   return { lookup: new ReservationLookupService(query), findBlockingRooms };
 }
 
