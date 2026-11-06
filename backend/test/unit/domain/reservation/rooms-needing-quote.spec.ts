@@ -35,6 +35,19 @@ describe('roomsNeedingQuote (plan de calculate-dynamic-rate, B2)', () => {
       ['cambia startDate', { startDate: '2026-10-13', endDate: '2026-10-15' }],
       ['cambia endDate', { startDate: '2026-10-12', endDate: '2026-10-16' }],
       ['cambian las dos', { startDate: '2026-10-20', endDate: '2026-10-22' }],
+      // También hacia atrás: cualquier cambio de fecha recotiza, no solo correrlas hacia adelante.
+      [
+        'se adelanta la llegada',
+        { startDate: '2026-10-11', endDate: '2026-10-15' },
+      ],
+      [
+        'se adelanta la salida',
+        { startDate: '2026-10-12', endDate: '2026-10-14' },
+      ],
+      [
+        'se adelantan las dos',
+        { startDate: '2026-10-05', endDate: '2026-10-07' },
+      ],
     ])('%s: todas las de la reserva', (_, dates) => {
       expect(
         quotedFor(
