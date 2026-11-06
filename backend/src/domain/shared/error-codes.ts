@@ -119,10 +119,55 @@ export const INVALID_CHARACTERS = {
   message: 'El formato de los datos contiene caracteres no válidos.',
 } as const;
 
+/**
+ * Un dato del huésped no se puede codificar en el archivo SIRE, o contiene el separador o un salto de línea
+ * (plan de `export-sire-file`, punto 12). Lo lanza `formatSireLine`.
+ */
+export const INVALID_GUEST_CHARACTERS = {
+  code: 'INVALID_GUEST_CHARACTERS',
+  message: 'Caracteres no válidos en el registro del huésped.',
+} as const;
+
 /** La fecha de entrada es anterior al día operativo en curso. */
 export const START_DATE_IN_PAST = {
   code: 'START_DATE_IN_PAST',
   message: 'La fecha de entrada no puede ser anterior a hoy.',
+} as const;
+
+/** Fechas vacías o inexistentes, o salida no posterior a la entrada. Lo lanza `Reservation`. */
+export const INVALID_RESERVATION_DATES = {
+  code: 'INVALID_RESERVATION_DATES',
+  message: 'La fecha de salida debe ser posterior a la de entrada.',
+} as const;
+
+/** Menos de 1 o más de 10 habitaciones. Lo lanza `Reservation`. */
+export const INVALID_ROOM_COUNT = {
+  code: 'INVALID_ROOM_COUNT',
+  message: 'Una reserva debe tener entre 1 y 10 habitaciones.',
+} as const;
+
+/** El cambio dejaría la reserva sin habitaciones (plan de `update-reservation`, punto 12). */
+export const LAST_ROOM_CANNOT_BE_REMOVED = {
+  code: 'LAST_ROOM_CANNOT_BE_REMOVED',
+  message: 'La reserva debe conservar al menos una habitación.',
+} as const;
+
+/** La misma habitación dos veces. Lo lanza `Reservation`. */
+export const ROOM_ALREADY_IN_RESERVATION = {
+  code: 'ROOM_ALREADY_IN_RESERVATION',
+  message: 'La habitación ya forma parte de la reserva.',
+} as const;
+
+/** Una habitación con menos de una persona. Lo lanza `ReservationRoom`. */
+export const GUEST_COUNT_TOO_LOW = {
+  code: 'GUEST_COUNT_TOO_LOW',
+  message: 'Cada habitación debe tener al menos una persona.',
+} as const;
+
+/** `notes` de más de 500 caracteres. Lo lanza `Reservation`. */
+export const NOTES_TOO_LONG = {
+  code: 'NOTES_TOO_LONG',
+  message: 'Las observaciones no pueden superar 500 caracteres.',
 } as const;
 
 /** El `guestCount` de una habitación es mayor que su `maxCapacity`. */
@@ -140,4 +185,10 @@ export const ROOM_NOT_AVAILABLE = {
   code: 'ROOM_NOT_AVAILABLE',
   message: (roomNumber: string) =>
     `La habitación ${roomNumber} no está disponible para el rango de fechas solicitado.`,
+} as const;
+
+/** Falta un dato obligatorio del titular, o su tipo y su número de documento no van juntos. */
+export const GUEST_DATA_REQUIRED = {
+  code: 'GUEST_DATA_REQUIRED',
+  message: 'Los datos del titular son obligatorios.',
 } as const;

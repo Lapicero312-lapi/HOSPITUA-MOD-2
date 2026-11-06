@@ -2,14 +2,17 @@ import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { COMMISSION_AUDIT_REPOSITORY } from '../../../application/ports/out/commission-audit.repository.js';
+import { GUEST_DATA_REPOSITORY } from '../../../application/ports/out/guest-data.repository.js';
 import { GUEST_REPOSITORY } from '../../../application/ports/out/guest.repository.js';
 import { DAILY_MESSAGE_REPOSITORY } from '../../../application/ports/out/daily-message.repository.js';
 import { DAILY_SEQUENCE_REPOSITORY } from '../../../application/ports/out/daily-sequence.repository.js';
+import { MIGRATORY_MOVEMENT_REPOSITORY } from '../../../application/ports/out/migratory-movement.repository.js';
 import { OTA_BOOKING_REVISION_REPOSITORY } from '../../../application/ports/out/ota-booking-revision.repository.js';
 import { OTA_REPOSITORY } from '../../../application/ports/out/ota.repository.js';
 import { PROCESSED_MESSAGE_REPOSITORY } from '../../../application/ports/out/processed-message.repository.js';
 import { RESERVATION_QUERY_PORT } from '../../../application/ports/out/reservation-query.port.js';
 import { RESERVATION_REPOSITORY } from '../../../application/ports/out/reservation.repository.js';
+import { SIRE_EXPORT_REPOSITORY } from '../../../application/ports/out/sire-export.repository.js';
 import { TRANSACTION_RUNNER } from '../../../application/ports/out/transaction.js';
 import type { EnvironmentVariables } from '../../config/env.validation.js';
 import { typeOrmOptions } from '../../config/typeorm.options.js';
@@ -17,11 +20,14 @@ import { TypeOrmProcessedMessageRepository } from '../messaging/processed-messag
 import { TypeOrmDailyMessageRepository } from './repositories/daily-message.repository.js';
 import { TypeOrmDailySequenceRepository } from './repositories/daily-sequence.repository.js';
 import { TypeOrmCommissionAuditRepository } from './repositories/commission-audit.repository.js';
+import { TypeOrmGuestDataRepository } from './repositories/guest-data.repository.js';
 import { TypeOrmGuestRepository } from './repositories/guest.repository.js';
+import { TypeOrmMigratoryMovementRepository } from './repositories/migratory-movement.repository.js';
 import { TypeOrmOtaBookingRevisionRepository } from './repositories/ota-booking-revision.repository.js';
 import { TypeOrmOtaRepository } from './repositories/ota.repository.js';
 import { TypeOrmReservationQuery } from './repositories/reservation-query.repository.js';
 import { TypeOrmReservationRepository } from './repositories/reservation.repository.js';
+import { TypeOrmSireExportRepository } from './repositories/sire-export.repository.js';
 import { TypeOrmTransactionRunner } from './typeorm-transaction.js';
 
 /**
@@ -48,6 +54,11 @@ import { TypeOrmTransactionRunner } from './typeorm-transaction.js';
     { provide: RESERVATION_REPOSITORY, useClass: TypeOrmReservationRepository },
     { provide: RESERVATION_QUERY_PORT, useClass: TypeOrmReservationQuery },
     { provide: GUEST_REPOSITORY, useClass: TypeOrmGuestRepository },
+    { provide: GUEST_DATA_REPOSITORY, useClass: TypeOrmGuestDataRepository },
+    {
+      provide: MIGRATORY_MOVEMENT_REPOSITORY,
+      useClass: TypeOrmMigratoryMovementRepository,
+    },
     { provide: OTA_REPOSITORY, useClass: TypeOrmOtaRepository },
     {
       provide: DAILY_SEQUENCE_REPOSITORY,
@@ -69,18 +80,22 @@ import { TypeOrmTransactionRunner } from './typeorm-transaction.js';
       provide: PROCESSED_MESSAGE_REPOSITORY,
       useClass: TypeOrmProcessedMessageRepository,
     },
+    { provide: SIRE_EXPORT_REPOSITORY, useClass: TypeOrmSireExportRepository },
     { provide: TRANSACTION_RUNNER, useClass: TypeOrmTransactionRunner },
   ],
   exports: [
     RESERVATION_REPOSITORY,
     RESERVATION_QUERY_PORT,
     GUEST_REPOSITORY,
+    GUEST_DATA_REPOSITORY,
+    MIGRATORY_MOVEMENT_REPOSITORY,
     OTA_REPOSITORY,
     DAILY_SEQUENCE_REPOSITORY,
     DAILY_MESSAGE_REPOSITORY,
     COMMISSION_AUDIT_REPOSITORY,
     OTA_BOOKING_REVISION_REPOSITORY,
     PROCESSED_MESSAGE_REPOSITORY,
+    SIRE_EXPORT_REPOSITORY,
     TRANSACTION_RUNNER,
   ],
 })

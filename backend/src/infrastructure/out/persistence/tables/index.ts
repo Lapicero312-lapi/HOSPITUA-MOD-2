@@ -5,6 +5,7 @@ import {
   ReservationRoomTable,
   ReservationTable,
 } from './reservation.tables.js';
+import { SireExportTable } from './sire-export.table.js';
 
 /** Las clases de tabla de TypeORM. Al crear una nueva, agrégala a esta lista. */
 export const TABLES = [
@@ -13,4 +14,5 @@ export const TABLES = [
   GuestTable,
   OtaTable,
   OtaBookingRevisionTable,
+  SireExportTable,
 ];

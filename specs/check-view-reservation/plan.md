@@ -534,6 +534,54 @@ a las 00:00 podría perderse entre la lista y la primera actualización. La fila
 Como ambos pasan por el mismo bloqueo, ningún cambio queda "entre medio": o entra en la lista o genera su
 `ADDED`/`UPDATED`.
 
+### Anotar un cambio (`DailyListChangeRecorder`, T028)
+
+El puerto de entrada está en `application/use-cases/check-view-reservation/ports/in/daily-list-change-recorder.port.ts`,
+con su símbolo `DAILY_LIST_CHANGE_RECORDER`. `CheckViewReservationModule` lo registra y lo exporta (regla 4).
+
+```typescript
+interface DailyListChangeRecorder {
+  // before: la reserva antes del cambio, o null si se acaba de crear.
+  // after: la reserva ya guardada (la que devuelve insert o update del repositorio), con su updatedAt nuevo.
+  // operationalDate: AAAA-MM-DD; por defecto, Clock.today().
+  record(tx: Transaction, before: Reservation | null, after: Reservation, operationalDate?: string): Promise<void>;
+}
+
+interface DailySequenceRepository {   // application/ports/out/
+  // SELECT … FOR UPDATE de la fila del día; null si no existe (no la crea: eso lo hace GenerateDailyList, T023).
+  lockDay(operationalDate: string, tx: Transaction): Promise<{ lastSequence: number; listGenerated: boolean } | null>;
+  setLastSequence(operationalDate: string, lastSequence: number, tx: Transaction): Promise<void>;
+}
+
+interface DailyMessageRepository {    // application/ports/out/
+  // Lo inserta en PENDING, con attempts = 0.
+  insert(message: {
+    messageId: string; operationalDate: string; sequenceNumber: number;
+    kind: 'LIST' | 'UPDATE'; updateType: 'ADDED' | 'UPDATED' | 'REMOVED' | null;
+    reservationId: string | null; removalReason: RemovalReason | null; payload: object;
+  }, tx: Transaction): Promise<void>;
+}
+```
+
+Pasos de `record`, todos en la transacción de quien llama:
+
+1. Bloquea la fila del día con `lockDay`. Si no existe o `listGenerated` es `false`, no hace nada: la
+   lista incluirá el cambio.
+2. Evalúa el cambio con `DailyListMembership.evaluate(before, after, operationalDate)`. Si da `null`, no
+   hace nada.
+3. Con `ADDED` o `UPDATED`, proyecta `after` con `projectReservation`. En una reserva `OTA` usa el `name`
+   de su agencia, que lee con `OtaRepository.findById` en la misma transacción.
+4. Toma `lastSequence + 1` y lo guarda con `setLastSequence`. Luego inserta el mensaje con un `messageId`
+   UUIDv4 nuevo y el `payload` de "Actualización `ADDED` o `UPDATED`" o de "Actualización `REMOVED`".
+
+**Horas del `payload`:** en hora de Colombia, `-05:00` (no tiene horario de verano).
+
+- `occurredAt` es `Clock.now()`, con segundos (`2026-10-09T09:15:00-05:00`).
+- `updatedAt` es el de `after`, con sus seis decimales (`2026-10-09T09:15:00.000000-05:00`).
+- La lista (T023) usa el mismo formato en `generatedAt` y en cada `updatedAt`.
+
+Publicar el mensaje después del commit es la T029.
+
 ### Publicación en orden
 
 1. **Después de confirmar** la transacción (hook de confirmación), un publicador intenta enviar los
