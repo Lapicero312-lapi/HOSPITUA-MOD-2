@@ -9,7 +9,13 @@ import type {
   StatusReason,
   StayStatus,
 } from '../shared/enums.js';
-import { GUEST_COUNT_EXCEEDS_CAPACITY } from '../shared/error-codes.js';
+import {
+  GUEST_COUNT_EXCEEDS_CAPACITY,
+  INVALID_RESERVATION_DATES,
+  INVALID_ROOM_COUNT,
+  NOTES_TOO_LONG,
+  ROOM_ALREADY_IN_RESERVATION,
+} from '../shared/error-codes.js';
 import type { Money } from '../shared/money.js';
 import { ReservationRoom, type RoomRate } from './reservation-room.js';
 import {
@@ -122,14 +128,14 @@ export class Reservation {
       props.endDate <= props.startDate
     ) {
       throw new BusinessError(
-        'INVALID_RESERVATION_DATES',
-        'La fecha de salida debe ser posterior a la de entrada.',
+        INVALID_RESERVATION_DATES.code,
+        INVALID_RESERVATION_DATES.message,
       );
     }
     if (props.rooms.length < 1 || props.rooms.length > MAX_ROOMS) {
       throw new BusinessError(
-        'INVALID_ROOM_COUNT',
-        'Una reserva debe tener entre 1 y 10 habitaciones.',
+        INVALID_ROOM_COUNT.code,
+        INVALID_ROOM_COUNT.message,
       );
     }
     const roomIds = props.rooms
@@ -137,15 +143,12 @@ export class Reservation {
       .filter((roomId) => roomId !== null);
     if (new Set(roomIds).size !== roomIds.length) {
       throw new BusinessError(
-        'ROOM_ALREADY_IN_RESERVATION',
-        'La habitación ya forma parte de la reserva.',
+        ROOM_ALREADY_IN_RESERVATION.code,
+        ROOM_ALREADY_IN_RESERVATION.message,
       );
     }
     if (props.notes !== null && props.notes.length > MAX_NOTES_LENGTH) {
-      throw new BusinessError(
-        'NOTES_TOO_LONG',
-        'Las observaciones no pueden superar 500 caracteres.',
-      );
+      throw new BusinessError(NOTES_TOO_LONG.code, NOTES_TOO_LONG.message);
     }
     assertChannel(props);
     return new Reservation({ ...props, rooms: [...props.rooms] });
