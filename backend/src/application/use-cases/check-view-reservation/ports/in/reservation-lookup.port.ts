@@ -1,3 +1,4 @@
+import type { Reservation } from '../../../../../domain/reservation/reservation.js';
 import type { BlockingRoom } from '../../../../ports/out/reservation-query.port.js';
 
 export type { BlockingRoom };
@@ -22,4 +23,11 @@ export interface ReservationLookup {
     endDate: string,
     excludeReservationRef?: string,
   ): Promise<BlockingRoom[]>;
+
+  /**
+   * La reserva completa con esa `reservationRef` (con su `updatedAt` y su comisión), o `null` si no existe
+   * (plan, "Servicio interno (FR-007)"). La usa `check-room-availability` para saber si existe la reserva
+   * que se modifica (punto 7).
+   */
+  findByRef(reservationRef: string): Promise<Reservation | null>;
 }

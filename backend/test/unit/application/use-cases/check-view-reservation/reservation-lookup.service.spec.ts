@@ -3,15 +3,21 @@ import type {
   BlockingRoom,
   ReservationQueryPort,
 } from '../../../../../src/application/ports/out/reservation-query.port.js';
+import type { ReservationRepository } from '../../../../../src/application/ports/out/reservation.repository.js';
+import { aDirectReservation } from '../../../../support/builders.js';
 import { ReservationLookupService } from '../../../../../src/application/use-cases/check-view-reservation/reservation-lookup.service.js';
 
 const ROOM_201 = '3f6c1e2a-8b4d-4c7e-9a1f-2b3c4d5e6f70';
 
 function lookupAnswering(blocking: BlockingRoom[]) {
   const findBlockingRooms = vi.fn(() => Promise.resolve(blocking));
-  // El servicio solo usa findBlockingRooms.
+  // findBlockingRooms solo usa la consulta; findByRef, el repositorio.
   const query = { findBlockingRooms } as unknown as ReservationQueryPort;
-  return { lookup: new ReservationLookupService(query), findBlockingRooms };
+  const reservations = {} as ReservationRepository;
+  return {
+    lookup: new ReservationLookupService(query, reservations),
+    findBlockingRooms,
+  };
 }
 
 describe('ReservationLookup.findBlockingRooms', () => {
@@ -57,5 +63,26 @@ describe('ReservationLookup.findBlockingRooms', () => {
       lookup.findBlockingRooms([], '2026-11-10', '2026-11-12'),
     ).resolves.toEqual([]);
     expect(findBlockingRooms).not.toHaveBeenCalled();
+  });
+});
+
+describe('ReservationLookup.findByRef (T008 de check-room-availability)', () => {
+  it('pide la reserva a ReservationRepository y devuelve lo que responde, también null', async () => {
+    const reservation = aDirectReservation();
+    const findByRef = vi.fn((reservationRef: string) =>
+      Promise.resolve(
+        reservationRef === reservation.reservationRef ? reservation : null,
+      ),
+    );
+    const lookup = new ReservationLookupService(
+      {} as ReservationQueryPort,
+      { findByRef } as unknown as ReservationRepository,
+    );
+
+    await expect(lookup.findByRef(reservation.reservationRef)).resolves.toBe(
+      reservation,
+    );
+    await expect(lookup.findByRef('RSV-00000000')).resolves.toBeNull();
+    expect(findByRef).toHaveBeenCalledWith(reservation.reservationRef);
   });
 });
