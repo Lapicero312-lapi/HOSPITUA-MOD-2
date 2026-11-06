@@ -1,4 +1,5 @@
 import type { MigratoryMovement } from '../../../domain/migration/migratory-movement.js';
+import type { MovementType } from '../../../domain/shared/enums.js';
 import type { Transaction } from './transaction.js';
 
 /** Símbolo con el que Nest inyecta el repositorio (plan base, regla 4). */
@@ -7,8 +8,30 @@ export const MIGRATORY_MOVEMENT_REPOSITORY = Symbol(
 );
 
 /**
+ * Un movimiento con los datos de su huésped y la referencia de su reserva, tal como están guardados. Las
+ * fechas son `AAAA-MM-DD`.
+ */
+export type MovementWithGuest = {
+  movementId: string;
+  reservationRef: string;
+  movementType: MovementType;
+  movementDate: string;
+  guest: {
+    firstName: string;
+    lastName: string;
+    documentType: string;
+    documentNumber: string;
+    birthDate: string;
+    nationality: string;
+    originPlace: string | null;
+    destinationPlace: string | null;
+  };
+};
+
+/**
  * Los movimientos migratorios (`process-guest-data`, T004): un `ENTRY` y un `DEPARTURE` por huésped y
- * reserva. Se escriben una vez y no se modifican ni se borran (plan, "Modelo de datos").
+ * reserva. Se escriben una vez y no se modifican ni se borran (plan, "Modelo de datos": escritura una vez
+ * y lectura).
  */
 export interface MigratoryMovementRepository {
   /**
@@ -22,4 +45,13 @@ export interface MigratoryMovementRepository {
     movements: MigratoryMovement[],
     tx: Transaction,
   ): Promise<number>;
+
+  /**
+   * T012: los movimientos con `movementDate` entre `from` y `to` (`AAAA-MM-DD`, los dos incluidos), de
+   * cualquier nacionalidad, con su huésped.
+   */
+  findWithGuestByPeriod(from: string, to: string): Promise<MovementWithGuest[]>;
+
+  /** T012: el movimiento con ese id (UUID), con su huésped, o `null` si no existe. */
+  findWithGuestById(movementId: string): Promise<MovementWithGuest | null>;
 }
