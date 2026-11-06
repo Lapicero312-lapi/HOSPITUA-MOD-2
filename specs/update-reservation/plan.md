@@ -18,8 +18,9 @@ Tiene cinco capacidades:
    `process-guest-data`).
 3. **Cerrar el día** (No-Show): una tarea programada marca `NO_SHOW` las reservas que no se presentaron
    y `NOT_ARRIVED` las habitaciones que no ingresaron.
-4. **Aplicar las transiciones de estado** que piden otros casos de uso (cancelación y creación) con las
-   mismas reglas de transición y de concurrencia, mediante `ReservationStatusService`.
+4. **Aplicar las transiciones de estado** que pide `cancel-reservation`, con las mismas reglas de
+   transición y de concurrencia, mediante `ReservationStatusService`. Las reservas nuevas no pasan por
+   aquí: su estado inicial lo ponen las fábricas `Reservation.createDirect` y `Reservation.createOta`.
 5. **Aplicar los cambios que envía Booking** (`ApplyOtaChange`, lo llama `generate-ota-reservation`) sin
    rechazarlos, y dejar que la Recepcionista **asigne la habitación** de una reserva de Booking en
    conflicto (decisión D13 del plan base).
@@ -318,8 +319,9 @@ habitaciones sin asignar de una reserva de Booking en conflicto. Cabecera `X-Use
 
 ### C. Puertos de entrada internos
 
-**C1. `ReservationStatusService`** (único lugar con las transiciones; lo usan este caso de uso,
-`generate-direct-reservation`, `generate-ota-reservation` y `cancel-reservation`):
+**C1. `ReservationStatusService`** (único lugar con las transiciones; lo usan este caso de uso y
+`cancel-reservation`. `generate-ota-reservation` cambia estados solo a través de `ApplyOtaChange` y
+`CancelReservation`):
 
 ```typescript
 interface ReservationStatusService {
@@ -854,7 +856,7 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
 
 ## Phase 6: Estados para otros casos de uso
 
-- [ ] T025 Exponer `ReservationStatusService` a `generate-direct-reservation`, `generate-ota-reservation` y `cancel-reservation`, y coordinar con sus planes
+- [ ] T025 Exponer `ReservationStatusService` a `cancel-reservation`: `UpdateReservationModule` lo registra y lo exporta con `RESERVATION_STATUS` (regla 4), y `AppModule` lo importa
 
 ## Phase 7: Reservas de Booking (FR-024 y FR-025)
 
@@ -905,8 +907,8 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
 - **Depende de**: el plan base (esquema, mensajería, `processed_message`, bloqueo asesor),
   `check-view-reservation` (`ReservationLookup`, `DailyListChangeRecorder`), `check-room-availability`,
   `calculate-dynamic-rate`, `consult-room-inventory` y `process-guest-data`.
-- **Necesitan de este caso de uso** (`ReservationStatusService`): `generate-direct-reservation`,
-  `generate-ota-reservation` y `cancel-reservation`.
+- **Necesitan de este caso de uso** (`ReservationStatusService`): `cancel-reservation`;
+  `generate-ota-reservation`, a través de `ApplyOtaChange` y `CancelReservation`.
 - **Orden**: T001–T007 → US1 (T008–T014) → US2 (T015–T020) → US3 (T021–T024) → T025 → reservas de Booking (T026–T029) → Polish (T030–T032). Va antes
   de las reservas y de la cancelación porque ellas usan sus transiciones.
 
