@@ -42,6 +42,20 @@ describe('GetReferenceRates (plan de calculate-dynamic-rate, C1 y D4)', () => {
     ]);
   });
 
+  it('arma las tarifas en la moneda de RATE_REFERENCE, no en una fija', () => {
+    const service = new GetReferenceRatesService({
+      seasonAdjustmentPercentage: '10.00',
+      currency: 'USD',
+      baseRates: { DOBLE: '80.00' },
+    });
+
+    const [rate] = service.execute();
+
+    expect(rate.baseRate.currency).toBe('USD');
+    expect(rate.effectiveRate.currency).toBe('USD');
+    expect(rate.effectiveRate.amountWithCents).toBe('88.00');
+  });
+
   it('sin configuración, ninguna tarifa', () => {
     expect(new GetReferenceRatesService(null).execute()).toEqual([]);
   });
