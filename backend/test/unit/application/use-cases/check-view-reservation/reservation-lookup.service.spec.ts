@@ -4,6 +4,7 @@ import type {
   ReservationQueryPort,
 } from '../../../../../src/application/ports/out/reservation-query.port.js';
 import type { ReservationRepository } from '../../../../../src/application/ports/out/reservation.repository.js';
+import type { Transaction } from '../../../../../src/application/ports/out/transaction.js';
 import { aDirectReservation } from '../../../../support/builders.js';
 import { ReservationLookupService } from '../../../../../src/application/use-cases/check-view-reservation/reservation-lookup.service.js';
 
@@ -84,5 +85,27 @@ describe('ReservationLookup.findByRef (T008 de check-room-availability)', () => 
     );
     await expect(lookup.findByRef('RSV-00000000')).resolves.toBeNull();
     expect(findByRef).toHaveBeenCalledWith(reservation.reservationRef);
+  });
+});
+
+describe('ReservationLookup.findForUpdate (T005 de cancel-reservation)', () => {
+  it('pide a ReservationRepository la reserva bloqueada en la transacción de quien llama, y devuelve lo que responde, también null', async () => {
+    const reservation = aDirectReservation();
+    const tx = { tx: 'la de la cancelación' } as unknown as Transaction;
+    const lockByRef = vi.fn((reservationRef: string) =>
+      Promise.resolve(
+        reservationRef === reservation.reservationRef ? reservation : null,
+      ),
+    );
+    const lookup = new ReservationLookupService(
+      {} as ReservationQueryPort,
+      { lockByRef } as unknown as ReservationRepository,
+    );
+
+    await expect(
+      lookup.findForUpdate(tx, reservation.reservationRef),
+    ).resolves.toBe(reservation);
+    await expect(lookup.findForUpdate(tx, 'RSV-00000000')).resolves.toBeNull();
+    expect(lockByRef).toHaveBeenCalledWith(reservation.reservationRef, tx);
   });
 });
