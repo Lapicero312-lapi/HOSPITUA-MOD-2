@@ -69,6 +69,35 @@ describe('isSameInstant (plan de cancel-reservation, punto 10, paso 4)', () => {
       ),
     ).toBe(true);
   });
+  it.each([
+    ['el año', '2025-10-08T15:42:10.123456-05:00'],
+    ['el mes', '2026-09-08T15:42:10.123456-05:00'],
+    ['el día', '2026-10-09T15:42:10.123456-05:00'],
+    ['la hora', '2026-10-08T16:42:10.123456-05:00'],
+    ['los minutos', '2026-10-08T15:43:10.123456-05:00'],
+    ['los segundos', '2026-10-08T15:42:11.123456-05:00'],
+  ])(
+    'con los mismos decimales, si solo cambia %s no es el mismo instante',
+    (_part, other) => {
+      expect(isSameInstant(other, FROM_DATABASE)).toBe(false);
+    },
+  );
+
+  it('los minutos de la zona cuentan: +05:30 no es +05:00', () => {
+    expect(
+      isSameInstant(
+        '2026-10-08T15:42:10.123456+05:30',
+        '2026-10-08 15:42:10.123456+05',
+      ),
+    ).toBe(false);
+    // 15:12 en +05:00 y 15:42 en +05:30 son las 10:12 UTC.
+    expect(
+      isSameInstant(
+        '2026-10-08T15:12:10.123456+05:00',
+        '2026-10-08T15:42:10.123456+05:30',
+      ),
+    ).toBe(true);
+  });
 
   it('un texto que no es una fecha con hora y zona no coincide con nada, ni consigo mismo', () => {
     expect(isSameInstant('ayer', FROM_DATABASE)).toBe(false);
