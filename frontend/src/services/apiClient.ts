@@ -1,10 +1,19 @@
 // Cliente único de la API. Plan base, regla 10: sin seguridad; X-Client dice quién llama y X-User quién actúa.
 export class ApiError extends Error {
-  constructor(public errorCode: string, message: string, public status: number) { super(message); }
+  public errorCode: string;
+  public status: number;
+
+  constructor(errorCode: string, message: string, status: number) {
+    super(message);
+    this.errorCode = errorCode;
+    this.status = status;
+  }
 }
 
 let currentUser = '';
-export const setApiUser = (name: string) => { currentUser = name; };
+export const setApiUser = (name: string) => {
+  currentUser = name;
+};
 
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   const hasBody = typeof init.body === 'string';
@@ -14,11 +23,22 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
   headers.set('X-Client', 'RECEPTIONIST');
   headers.set('X-User', encodeURIComponent(currentUser));
   let res: Response;
-  try { res = await fetch(`/api${path}`, { ...init, headers }); }
-  catch { throw new ApiError('NETWORK_ERROR', 'No hay conexión con el servidor. Intente de nuevo.', 0); }
+  try {
+    res = await fetch(`/api${path}`, { ...init, headers });
+  } catch {
+    throw new ApiError(
+      'NETWORK_ERROR',
+      'No hay conexión con el servidor. Intente de nuevo.',
+      0,
+    );
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => null);
-    throw new ApiError(body?.errorCode ?? 'UNKNOWN', body?.message ?? 'Ocurrió un error inesperado.', res.status);
+    throw new ApiError(
+      body?.errorCode ?? 'UNKNOWN',
+      body?.message ?? 'Ocurrió un error inesperado.',
+      res.status,
+    );
   }
   return res.json() as Promise<T>;
 }

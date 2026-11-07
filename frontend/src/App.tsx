@@ -17,14 +17,32 @@ export default function App() {
         <Route path="/reservas" element={<ReservationsListPage />} />
         <Route path="/reservas/nueva" element={<NewDirectReservationPage />} />
         <Route path="/reservas/:ref" element={<ReservationDetailPage />} />
-        <Route path="/reservas/:ref/modificar" element={<ModifyReservationPage />} />
-        <Route path="/reservas/:ref/cancelar" element={<CancelReservationPage />} />
-        <Route path="/reservas/:ref/habitacion" element={<PendingPage title="Asignar habitación" />} />
-        <Route path="/huespedes" element={<PendingPage title="Huéspedes alojados" />} />
+        <Route
+          path="/reservas/:ref/modificar"
+          element={<ModifyReservationPage />}
+        />
+        <Route
+          path="/reservas/:ref/cancelar"
+          element={<CancelReservationPage />}
+        />
+        <Route
+          path="/reservas/:ref/habitacion"
+          element={<PendingPage title="Asignar habitación" />}
+        />
+        <Route
+          path="/huespedes"
+          element={<PendingPage title="Huéspedes alojados" />}
+        />
         <Route path="/sire" element={<PendingPage title="Exportar SIRE" />} />
-        <Route path="/habitaciones" element={<PendingPage title="Habitaciones" />} />
+        <Route
+          path="/habitaciones"
+          element={<PendingPage title="Habitaciones" />}
+        />
         <Route path="/tarifas" element={<PendingPage title="Tarifas" />} />
-        <Route path="/agencias" element={<PendingPage title="Agencias OTA" />} />
+        <Route
+          path="/agencias"
+          element={<PendingPage title="Agencias OTA" />}
+        />
       </Route>
     </Routes>
   );
