@@ -284,6 +284,26 @@ describe('VerifyAvailability contra PostgreSQL real y el Módulo 1 simulado (T01
     });
   });
 
+  it('T008: una reserva que se modifica y no existe responde RESERVATION_NOT_FOUND (punto 7)', async () => {
+    await reserve({ roomId: ROOM_201.id });
+
+    await expect(checkCategory('RSV-00000000')).rejects.toMatchObject({
+      errorCode: 'RESERVATION_NOT_FOUND',
+      message: 'La reserva no existe.',
+    });
+  });
+
+  it('T008: una reserva cancelada sigue existiendo: se acepta y se excluye', async () => {
+    const cancelled = await reserve({
+      roomId: ROOM_202.id,
+      status: 'CANCELLED',
+    });
+
+    await expect(resultFor(ROOM_201.id, cancelled)).resolves.toMatchObject({
+      available: true,
+    });
+  });
+
   it.each(['COMPLETED', 'CANCELLED', 'NO_SHOW'] as const)(
     'escenario 6: una reserva solapada en %s no bloquea',
     async (status) => {

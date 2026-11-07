@@ -6,6 +6,7 @@ import { CheckRoomAvailabilityModule } from '../../src/application/use-cases/che
 import { CheckViewReservationModule } from '../../src/application/use-cases/check-view-reservation/check-view-reservation.module.js';
 import { GenerateDirectReservationModule } from '../../src/application/use-cases/generate-direct-reservation/generate-direct-reservation.module.js';
 import { GenerateOtaReservationModule } from '../../src/application/use-cases/generate-ota-reservation/generate-ota-reservation.module.js';
+import { ProcessGuestDataModule } from '../../src/application/use-cases/process-guest-data/process-guest-data.module.js';
 import { UpdateReservationModule } from '../../src/application/use-cases/update-reservation/update-reservation.module.js';
 
 /**
@@ -20,6 +21,7 @@ describe('AppModule importa los módulos de los casos de uso', () => {
     ['CalculateDynamicRateModule', CalculateDynamicRateModule],
     ['GenerateDirectReservationModule', GenerateDirectReservationModule],
     ['GenerateOtaReservationModule', GenerateOtaReservationModule],
+    ['ProcessGuestDataModule', ProcessGuestDataModule],
     ['UpdateReservationModule', UpdateReservationModule],
   ])('%s', (_name, module) => {
     const imports: unknown[] =

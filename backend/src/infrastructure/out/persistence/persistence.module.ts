@@ -2,6 +2,7 @@ import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { COMMISSION_AUDIT_REPOSITORY } from '../../../application/ports/out/commission-audit.repository.js';
+import { GUEST_STAY_QUERY } from '../../../application/ports/out/guest-stay.query.js';
 import { GUEST_DATA_REPOSITORY } from '../../../application/ports/out/guest-data.repository.js';
 import { GUEST_REPOSITORY } from '../../../application/ports/out/guest.repository.js';
 import { DAILY_MESSAGE_REPOSITORY } from '../../../application/ports/out/daily-message.repository.js';
@@ -24,6 +25,7 @@ import { TypeOrmDailyMessageRepository } from './repositories/daily-message.repo
 import { TypeOrmDailySequenceRepository } from './repositories/daily-sequence.repository.js';
 import { TypeOrmCommissionAuditRepository } from './repositories/commission-audit.repository.js';
 import { TypeOrmGuestDataRepository } from './repositories/guest-data.repository.js';
+import { TypeOrmGuestStayQuery } from './repositories/guest-stay.query.js';
 import { TypeOrmGuestRepository } from './repositories/guest.repository.js';
 import { TypeOrmAriPendingChangeRepository } from './repositories/ari-pending-change.repository.js';
 import { TypeOrmOtaRoomTypeMappingRepository } from './repositories/ota-room-type-mapping.repository.js';
@@ -61,6 +63,7 @@ import { TypeOrmTransactionRunner } from './typeorm-transaction.js';
     { provide: RESERVATION_QUERY_PORT, useClass: TypeOrmReservationQuery },
     { provide: GUEST_REPOSITORY, useClass: TypeOrmGuestRepository },
     { provide: GUEST_DATA_REPOSITORY, useClass: TypeOrmGuestDataRepository },
+    { provide: GUEST_STAY_QUERY, useClass: TypeOrmGuestStayQuery },
     {
       provide: MIGRATORY_MOVEMENT_REPOSITORY,
       useClass: TypeOrmMigratoryMovementRepository,
@@ -106,6 +109,7 @@ import { TypeOrmTransactionRunner } from './typeorm-transaction.js';
     RESERVATION_QUERY_PORT,
     GUEST_REPOSITORY,
     GUEST_DATA_REPOSITORY,
+    GUEST_STAY_QUERY,
     MIGRATORY_MOVEMENT_REPOSITORY,
     OTA_REPOSITORY,
     DAILY_SEQUENCE_REPOSITORY,
