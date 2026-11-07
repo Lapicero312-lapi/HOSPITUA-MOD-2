@@ -70,6 +70,12 @@ describe('Module3HttpAdapter contra respuestas simuladas del Módulo 3', () => {
     ]);
   });
 
+  it('un 201 también es una cotización', async () => {
+    server.use(http.post(URL_QUOTES, () => json(quoteBody(), 201)));
+
+    expect((await quote()).quoteId).toBe(QUOTE_ID);
+  });
+
   it('conserva exacto el mayor importe de una columna numeric(14,2)', async () => {
     server.use(
       http.post(URL_QUOTES, () => json(quoteBody('999999999999.99', '0.10'))),
@@ -105,6 +111,38 @@ describe('Module3HttpAdapter contra respuestas simuladas del Módulo 3', () => {
     [
       'con una noche fuera de la estadía',
       quoteBody().replace('2026-10-11', '2026-10-12'),
+    ],
+    // T011: respuestas mal formadas.
+    ['que no es JSON', 'Servicio en mantenimiento'],
+    ['vacía', ''],
+    ['que no es un objeto', '[]'],
+    ['null', 'null'],
+    // Convertida en texto sería "COP": la moneda tiene que ser un texto.
+    [
+      'con la moneda dentro de una lista',
+      quoteBody().replace('"COP"', '["COP"]'),
+    ],
+    ['con quoteId vacío', quoteBody().replace(QUOTE_ID, '')],
+    [
+      'sin nightlyRates',
+      `{"quoteId":"${QUOTE_ID}","currency":"COP","lodgingAmount":530000.10}`,
+    ],
+    [
+      'sin lodgingAmount',
+      quoteBody().replace(',"lodgingAmount":530000.10', ''),
+    ],
+    ['sin moneda', quoteBody().replace('"currency":"COP",', '')],
+    [
+      'con una tarifa por noche de más de dos decimales',
+      quoteBody('530000.10', '250000.055'),
+    ],
+    [
+      'con una noche antes de la llegada',
+      quoteBody().replace('2026-10-10', '2026-10-09'),
+    ],
+    [
+      'con una fecha que no existe',
+      quoteBody().replace('2026-10-11', '2026-10-100'),
     ],
   ])(
     'una cotización %s es Module3UnavailableError y no se redondea',
