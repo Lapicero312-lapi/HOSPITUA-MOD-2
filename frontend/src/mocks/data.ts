@@ -1,0 +1,469 @@
+import type { ReservationDetail } from '../types';
+
+// Generado a partir del wireframe «HOSPITUA - Recepcionista (Módulo 2)». Las fechas se desplazaron 35 días
+// para que el día operativo del wireframe (2026-09-28) caiga en OPERATIONAL_DATE.
+export const OPERATIONAL_DATE = '2026-11-02';
+export const OTAS = [
+  {
+    "id": "bookingcom",
+    "name": "Booking.com",
+    "commissionPercentage": 15,
+    "connectionStatus": "CONNECTED"
+  },
+  {
+    "id": "expedia",
+    "name": "Expedia",
+    "commissionPercentage": 18,
+    "connectionStatus": "CONNECTED"
+  },
+  {
+    "id": "airbnb",
+    "name": "Airbnb",
+    "commissionPercentage": 12,
+    "connectionStatus": "DISCONNECTED"
+  }
+];
+export const RESERVATIONS: ReservationDetail[] = [
+  {
+    "reservationRef": "RSV-7B2E41A0",
+    "status": "ACTIVE",
+    "source": "DIRECT",
+    "externalConfirmationCode": null,
+    "otaName": null,
+    "startDate": "2026-11-02",
+    "endDate": "2026-11-03",
+    "nights": 1,
+    "guestCount": 1,
+    "notes": "Llega en el último vuelo, 23:30.",
+    "createdAt": "2026-10-30T09:14:00-05:00",
+    "conflict": null,
+    "rooms": [
+      {
+        "roomNumber": "102",
+        "categoryRoom": "ESTANDAR",
+        "guestCount": 1,
+        "roomGrossAmount": {
+          "amount": "220000.00",
+          "currency": "COP"
+        },
+        "stayStatus": "EXPECTED"
+      }
+    ],
+    "guest": {
+      "firstName": "Andrés",
+      "lastName": "Molina",
+      "documentType": "CC",
+      "documentNumber": "80221334",
+      "nationality": "Colombia",
+      "contactPhone": "+57 310 220 4471",
+      "contactEmail": "andres.molina@correo.com"
+    },
+    "cancellation": null
+  },
+  {
+    "reservationRef": "RSV-5C19D3E8",
+    "status": "ACTIVE",
+    "source": "DIRECT",
+    "externalConfirmationCode": null,
+    "otaName": null,
+    "startDate": "2026-11-02",
+    "endDate": "2026-11-05",
+    "nights": 3,
+    "guestCount": 2,
+    "notes": "",
+    "createdAt": "2026-10-29T11:02:00-05:00",
+    "conflict": null,
+    "rooms": [
+      {
+        "roomNumber": "104",
+        "categoryRoom": "ESTANDAR",
+        "guestCount": 2,
+        "roomGrossAmount": {
+          "amount": "660000.00",
+          "currency": "COP"
+        },
+        "stayStatus": "EXPECTED"
+      }
+    ],
+    "guest": {
+      "firstName": "Camila",
+      "lastName": "Restrepo",
+      "documentType": "CC",
+      "documentNumber": "1020456789",
+      "nationality": "Colombia",
+      "contactPhone": null,
+      "contactEmail": null
+    },
+    "cancellation": null
+  },
+  {
+    "reservationRef": "RSV-3F9A1C7B",
+    "status": "ACTIVE",
+    "source": "DIRECT",
+    "externalConfirmationCode": null,
+    "otaName": null,
+    "startDate": "2026-11-19",
+    "endDate": "2026-11-21",
+    "nights": 2,
+    "guestCount": 3,
+    "notes": "Aniversario, solicita decoración.",
+    "createdAt": "2026-11-14T14:37:00-05:00",
+    "conflict": null,
+    "rooms": [
+      {
+        "roomNumber": "204",
+        "categoryRoom": "SUPERIOR",
+        "guestCount": 3,
+        "roomGrossAmount": {
+          "amount": "620000.00",
+          "currency": "COP"
+        },
+        "stayStatus": "EXPECTED"
+      }
+    ],
+    "guest": {
+      "firstName": "Valentina",
+      "lastName": "Ospina",
+      "documentType": "CC",
+      "documentNumber": "1144093552",
+      "nationality": "Colombia",
+      "contactPhone": "+57 300 118 5520",
+      "contactEmail": "valentina.ospina@correo.com"
+    },
+    "cancellation": null
+  },
+  {
+    "reservationRef": "RSV-A41F82D6",
+    "status": "ACTIVE",
+    "source": "OTA",
+    "externalConfirmationCode": "HMX4Q8Z2TA",
+    "otaName": "Airbnb",
+    "startDate": "2026-11-09",
+    "endDate": "2026-11-12",
+    "nights": 3,
+    "guestCount": 2,
+    "notes": "",
+    "createdAt": "2026-11-03T16:48:00-05:00",
+    "conflict": null,
+    "rooms": [
+      {
+        "roomNumber": "303",
+        "categoryRoom": "SUITE",
+        "guestCount": 2,
+        "roomGrossAmount": null,
+        "stayStatus": "EXPECTED"
+      }
+    ],
+    "guest": {
+      "firstName": "Marta",
+      "lastName": "Kowalski",
+      "documentType": "PAS",
+      "documentNumber": "PL7730215",
+      "nationality": "Polonia",
+      "contactPhone": null,
+      "contactEmail": null
+    },
+    "cancellation": null
+  },
+  {
+    "reservationRef": "RSV-8D02E5A4",
+    "status": "PENDING",
+    "source": "OTA",
+    "externalConfirmationCode": "4417829013",
+    "otaName": "Booking.com",
+    "startDate": "2026-11-16",
+    "endDate": "2026-11-18",
+    "nights": 2,
+    "guestCount": 1,
+    "notes": "",
+    "createdAt": "2026-11-09T08:55:00-05:00",
+    "conflict": {
+      "reason": "NO_ROOM_AVAILABLE",
+      "detectedAt": "2026-11-15T03:00:12-05:00"
+    },
+    "rooms": [
+      {
+        "roomNumber": null,
+        "categoryRoom": "ESTANDAR",
+        "guestCount": 1,
+        "roomGrossAmount": null,
+        "stayStatus": "EXPECTED"
+      }
+    ],
+    "guest": {
+      "firstName": "John",
+      "lastName": "Miller",
+      "documentType": "PAS",
+      "documentNumber": "US5519302",
+      "nationality": "Estados Unidos",
+      "contactPhone": null,
+      "contactEmail": null
+    },
+    "cancellation": null
+  },
+  {
+    "reservationRef": "RSV-1E6B9C35",
+    "status": "IN_PROGRESS",
+    "source": "OTA",
+    "externalConfirmationCode": "4409921557",
+    "otaName": "Booking.com",
+    "startDate": "2026-10-31",
+    "endDate": "2026-11-04",
+    "nights": 4,
+    "guestCount": 1,
+    "notes": "",
+    "createdAt": "2026-10-28T09:14:00-05:00",
+    "conflict": null,
+    "rooms": [
+      {
+        "roomNumber": "201",
+        "categoryRoom": "SUPERIOR",
+        "guestCount": 1,
+        "roomGrossAmount": null,
+        "stayStatus": "CHECKED_IN"
+      }
+    ],
+    "guest": {
+      "firstName": "Lukas",
+      "lastName": "Becker",
+      "documentType": "PAS",
+      "documentNumber": "C4X8R21K",
+      "nationality": "Alemania",
+      "contactPhone": null,
+      "contactEmail": null
+    },
+    "cancellation": null
+  },
+  {
+    "reservationRef": "RSV-C07A52F9",
+    "status": "IN_PROGRESS",
+    "source": "DIRECT",
+    "externalConfirmationCode": null,
+    "otaName": null,
+    "startDate": "2026-10-31",
+    "endDate": "2026-11-04",
+    "nights": 4,
+    "guestCount": 3,
+    "notes": "Grupo familiar: titular y dos acompañantes.",
+    "createdAt": "2026-10-27T11:02:00-05:00",
+    "conflict": null,
+    "rooms": [
+      {
+        "roomNumber": "202",
+        "categoryRoom": "SUPERIOR",
+        "guestCount": 2,
+        "roomGrossAmount": {
+          "amount": "1240000.00",
+          "currency": "COP"
+        },
+        "stayStatus": "CHECKED_IN"
+      },
+      {
+        "roomNumber": "301",
+        "categoryRoom": "SUITE",
+        "guestCount": 1,
+        "roomGrossAmount": {
+          "amount": "1920000.00",
+          "currency": "COP"
+        },
+        "stayStatus": "CHECKED_IN"
+      }
+    ],
+    "guest": {
+      "firstName": "Isabela",
+      "lastName": "Santos Rocha",
+      "documentType": "PAS",
+      "documentNumber": "BR552104",
+      "nationality": "Brasil",
+      "contactPhone": null,
+      "contactEmail": null
+    },
+    "cancellation": null
+  },
+  {
+    "reservationRef": "RSV-92D4E1B7",
+    "status": "IN_PROGRESS",
+    "source": "OTA",
+    "externalConfirmationCode": "4410038871",
+    "otaName": "Booking.com",
+    "startDate": "2026-11-01",
+    "endDate": "2026-11-05",
+    "nights": 4,
+    "guestCount": 1,
+    "notes": "",
+    "createdAt": "2026-10-27T14:37:00-05:00",
+    "conflict": null,
+    "rooms": [
+      {
+        "roomNumber": "101",
+        "categoryRoom": "ESTANDAR",
+        "guestCount": 1,
+        "roomGrossAmount": null,
+        "stayStatus": "CHECKED_IN"
+      }
+    ],
+    "guest": {
+      "firstName": "Lucía",
+      "lastName": "Fernández Gil",
+      "documentType": "PAS",
+      "documentNumber": "ES4471230",
+      "nationality": "España",
+      "contactPhone": null,
+      "contactEmail": null
+    },
+    "cancellation": null
+  },
+  {
+    "reservationRef": "RSV-4A8F60C2",
+    "status": "COMPLETED",
+    "source": "OTA",
+    "externalConfirmationCode": "EXP-72201934",
+    "otaName": "Expedia",
+    "startDate": "2026-10-25",
+    "endDate": "2026-10-29",
+    "nights": 4,
+    "guestCount": 1,
+    "notes": "",
+    "createdAt": "2026-10-19T16:48:00-05:00",
+    "conflict": null,
+    "rooms": [
+      {
+        "roomNumber": "302",
+        "categoryRoom": "SUITE",
+        "guestCount": 1,
+        "roomGrossAmount": null,
+        "stayStatus": "CHECKED_OUT"
+      }
+    ],
+    "guest": {
+      "firstName": "Hiroshi",
+      "lastName": "Tanaka",
+      "documentType": "PAS",
+      "documentNumber": "JP0098231",
+      "nationality": "Japón",
+      "contactPhone": null,
+      "contactEmail": null
+    },
+    "cancellation": null
+  },
+  {
+    "reservationRef": "RSV-E5B31D08",
+    "status": "NO_SHOW",
+    "source": "OTA",
+    "externalConfirmationCode": "HMB77PQ1RD",
+    "otaName": "Airbnb",
+    "startDate": "2026-10-27",
+    "endDate": "2026-10-29",
+    "nights": 2,
+    "guestCount": 2,
+    "notes": "",
+    "createdAt": "2026-10-20T08:55:00-05:00",
+    "conflict": null,
+    "rooms": [
+      {
+        "roomNumber": "203",
+        "categoryRoom": "SUPERIOR",
+        "guestCount": 2,
+        "roomGrossAmount": null,
+        "stayStatus": "NOT_ARRIVED"
+      }
+    ],
+    "guest": {
+      "firstName": "Emma",
+      "lastName": "Dubois",
+      "documentType": "PAS",
+      "documentNumber": "FR19XK442",
+      "nationality": "Francia",
+      "contactPhone": null,
+      "contactEmail": null
+    },
+    "cancellation": null
+  },
+  {
+    "reservationRef": "RSV-B83D07E2",
+    "status": "IN_PROGRESS",
+    "source": "DIRECT",
+    "externalConfirmationCode": null,
+    "otaName": null,
+    "startDate": "2026-11-01",
+    "endDate": "2026-11-05",
+    "nights": 4,
+    "guestCount": 2,
+    "notes": "Viaja con su pareja.",
+    "createdAt": "2026-10-29T09:14:00-05:00",
+    "conflict": null,
+    "rooms": [
+      {
+        "roomNumber": "103",
+        "categoryRoom": "ESTANDAR",
+        "guestCount": 2,
+        "roomGrossAmount": {
+          "amount": "880000.00",
+          "currency": "COP"
+        },
+        "stayStatus": "CHECKED_IN"
+      }
+    ],
+    "guest": {
+      "firstName": "Daniela",
+      "lastName": "Cárdenas",
+      "documentType": "CC",
+      "documentNumber": "52118904",
+      "nationality": "Colombia",
+      "contactPhone": "+57 315 480 2290",
+      "contactEmail": "daniela.cardenas@correo.com"
+    },
+    "cancellation": null
+  },
+  {
+    "reservationRef": "RSV-6D90A7F3",
+    "status": "NO_SHOW",
+    "source": "DIRECT",
+    "externalConfirmationCode": null,
+    "otaName": null,
+    "startDate": "2026-10-20",
+    "endDate": "2026-10-21",
+    "nights": 1,
+    "guestCount": 1,
+    "notes": "",
+    "createdAt": "2026-10-16T11:02:00-05:00",
+    "conflict": null,
+    "rooms": [
+      {
+        "roomNumber": "103",
+        "categoryRoom": "ESTANDAR",
+        "guestCount": 1,
+        "roomGrossAmount": {
+          "amount": "220000.00",
+          "currency": "COP"
+        },
+        "stayStatus": "NOT_ARRIVED"
+      }
+    ],
+    "guest": {
+      "firstName": "Ricardo",
+      "lastName": "Peña Salas",
+      "documentType": "CC",
+      "documentNumber": "79554120",
+      "nationality": "Colombia",
+      "contactPhone": null,
+      "contactEmail": null
+    },
+    "cancellation": null
+  }
+] as ReservationDetail[];
+
+// Inventario de ejemplo del wireframe (habitaciones y capacidades) y sus mantenimientos (fechas desplazadas 35 días).
+const mk = (cat: string, max: number, nums: string[]) => nums.map((n) => ({ id: `room-${n}`, roomNumber: n, categoryRoom: cat, maxCapacity: max }));
+export const ROOMS = [...mk('ESTANDAR', 2, ['101', '102', '103', '104', '105']), ...mk('SUPERIOR', 3, ['201', '202', '203', '204']), ...mk('SUITE', 4, ['301', '302', '303'])];
+export const MAINTENANCE: Record<string, { maintenanceStart: string; maintenanceEnd: string }> = {
+  '203': { maintenanceStart: '2026-11-04', maintenanceEnd: '2026-11-06' }, '105': { maintenanceStart: '2026-11-12', maintenanceEnd: '2026-11-14' },
+};
+export const RATES: Record<string, number> = { ESTANDAR: 220000, SUPERIOR: 310000, SUITE: 480000 };
+
+
+// updatedAt (con microsegundos, como en el plan) y roomId de cada habitación asignada.
+RESERVATIONS.forEach((r) => {
+  r.updatedAt = `${r.createdAt.slice(0, 19)}.000000-05:00`;
+  r.rooms.forEach((x) => { if (x.roomNumber) x.roomId = `room-${x.roomNumber}`; });
+});

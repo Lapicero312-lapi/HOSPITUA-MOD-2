@@ -1,57 +1,19 @@
 import { useState, type FormEvent } from 'react';
-import { Navigate, useLocation, useNavigate } from 'react-router';
-import { currentUser, nameError, signIn } from '../services/session.ts';
+import { Navigate, useNavigate } from 'react-router';
+import { useAuth } from '../auth/AuthContext';
 
-/** De dónde venía la Recepcionista antes de que se le pidiera el nombre. */
-type LoginState = { from?: string } | null;
-
-/** Login simulado: solo pide el nombre de la Recepcionista (plan base, regla 10). */
-export function LoginPage() {
-  const navigate = useNavigate();
-  const location = useLocation();
+export default function LoginPage() {
+  const { user, login } = useAuth();
+  const nav = useNavigate();
   const [name, setName] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const from = (location.state as LoginState)?.from ?? '/';
-
-  if (currentUser()) {
-    return <Navigate to={from} replace />;
-  }
-
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
-    const problem = nameError(name);
-    if (problem) {
-      setError(problem);
-      return;
-    }
-    signIn(name);
-    navigate(from, { replace: true });
-  };
-
+  if (user) return <Navigate to="/reservas" replace />;
+  const submit = (e: FormEvent) => { e.preventDefault(); if (name.trim()) { login(name.trim()); nav('/reservas'); } };
   return (
-    <main className="layout-main">
-      <h1>HOSPITUA · Recepción</h1>
-      <form className="login-form" onSubmit={submit} noValidate>
-        <label htmlFor="receptionist-name">Nombre de la Recepcionista</label>
-        <input
-          id="receptionist-name"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          aria-invalid={error !== null}
-          aria-describedby={error ? 'receptionist-name-error' : undefined}
-          autoComplete="name"
-        />
-        {error && (
-          <p
-            id="receptionist-name-error"
-            role="alert"
-            className="error-message"
-          >
-            {error}
-          </p>
-        )}
-        <button type="submit">Ingresar</button>
-      </form>
-    </main>
+    <form className="panel login" onSubmit={submit}>
+      <h2>HOSPITUA · Recepción</h2>
+      <p>Ingrese su nombre para registrar las acciones del turno.</p>
+      <div className="field"><label htmlFor="n">Nombre de la recepcionista</label><input id="n" value={name} onChange={(e) => setName(e.target.value)} autoFocus /></div>
+      <button className="btn primary" disabled={!name.trim()}>Entrar</button>
+    </form>
   );
 }
