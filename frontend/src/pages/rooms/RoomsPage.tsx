@@ -5,6 +5,7 @@ import {
   type Room,
   type RoomMaintenance,
 } from '../../services/rooms.ts';
+import './RoomsPage.css';
 
 /**
  * Pantalla "Habitaciones" (FR-006): todas las habitaciones vendibles con su número, categoría,
@@ -13,9 +14,11 @@ import {
  */
 export function RoomsPage() {
   return (
-    <section>
-      <h1>Habitaciones</h1>
-      <RoomsContent />
+    <section className="rooms">
+      <h1 className="rooms-title">Habitaciones</h1>
+      <div className="rooms-panel">
+        <RoomsContent />
+      </div>
     </section>
   );
 }
@@ -27,40 +30,54 @@ function RoomsContent() {
   });
 
   if (rooms.isPending) {
-    return <p>Cargando habitaciones…</p>;
+    return (
+      <p className="rooms-state rooms-state--loading">Cargando habitaciones…</p>
+    );
   }
   // Si falla el inventario, solo el error: nunca una lista parcial (plan, "Pruebas por escenario").
   if (rooms.isError) {
     return <ErrorMessage error={rooms.error} />;
   }
   if (rooms.data.items.length === 0) {
-    return <p>No hay habitaciones registradas.</p>;
+    return <p className="rooms-state">No hay habitaciones registradas.</p>;
   }
   return <RoomsTable rooms={rooms.data.items} />;
 }
 
 function RoomsTable({ rooms }: { rooms: Room[] }) {
   return (
-    <table>
-      <thead>
-        <tr>
-          <th scope="col">N.º</th>
-          <th scope="col">Categoría</th>
-          <th scope="col">Capacidad</th>
-          <th scope="col">Mantenimiento próximo</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rooms.map((room) => (
-          <tr key={room.id}>
-            <td>{`Hab. ${room.roomNumber}`}</td>
-            <td>{room.categoryRoom}</td>
-            <td>{capacityText(room.maxCapacity)}</td>
-            <td>{maintenanceText(room.maintenance)}</td>
+    <div className="rooms-table-wrap">
+      <table className="rooms-table">
+        <thead>
+          <tr>
+            <th scope="col">N.º</th>
+            <th scope="col">Categoría</th>
+            <th scope="col">Capacidad</th>
+            <th scope="col">Mantenimiento próximo</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {rooms.map((room) => (
+            <tr key={room.id}>
+              <td className="rooms-number">{`Hab. ${room.roomNumber}`}</td>
+              <td>
+                <span className="rooms-category">{room.categoryRoom}</span>
+              </td>
+              <td className="rooms-capacity">
+                {capacityText(room.maxCapacity)}
+              </td>
+              <td>
+                <span
+                  className={`rooms-maintenance rooms-maintenance--${room.maintenance.status.toLowerCase()}`}
+                >
+                  {maintenanceText(room.maintenance)}
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
