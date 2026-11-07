@@ -3,12 +3,15 @@ import { DataSource, In } from 'typeorm';
 import {
   RESERVATION_PAGE_SIZE,
   type BlockingRoom,
+  type DailyListArrival,
   type ReservationListFilters,
   type ReservationListPage,
   type ReservationQueryPort,
 } from '../../../../application/ports/out/reservation-query.port.js';
+import type { Transaction } from '../../../../application/ports/out/transaction.js';
 import { reservationToDomain } from '../mappers/reservation.mapper.js';
 import { ReservationTable } from '../tables/reservation.tables.js';
+import { managerFor } from '../typeorm-transaction.js';
 
 /**
  * `ReservationQueryPort` sobre PostgreSQL (`check-view-reservation`, `TypeOrmReservationQuery`): solo
@@ -95,6 +98,28 @@ export class TypeOrmReservationQuery implements ReservationQueryPort {
         };
       }),
     };
+  }
+
+  async findArrivals(
+    operationalDate: string,
+    tx: Transaction,
+  ): Promise<DailyListArrival[]> {
+    const manager = managerFor(this.dataSource, tx);
+    const rows = await manager.find(ReservationTable, {
+      where: { status: 'ACTIVE', startDate: operationalDate },
+      relations: { rooms: true, guest: true },
+      order: { reservationRef: 'ASC', rooms: { roomNumber: 'ASC', id: 'ASC' } },
+    });
+    const otaRows: { id: string; name: string }[] = await manager.query(
+      `SELECT r.id, o.name FROM reservation r JOIN ota o ON o.id = r.ota_id
+       WHERE r.status = 'ACTIVE' AND r.start_date = $1::date`,
+      [operationalDate],
+    );
+    const otaNames = new Map(otaRows.map((row) => [row.id, row.name]));
+    return rows.map((row) => ({
+      reservation: reservationToDomain(row),
+      otaName: otaNames.get(row.id) ?? null,
+    }));
   }
 
   /** El nombre de la agencia de cada reserva `OTA` de la página. */

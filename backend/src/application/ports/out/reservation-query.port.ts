@@ -3,6 +3,7 @@ import type {
   ReservationSource,
   ReservationStatus,
 } from '../../../domain/shared/enums.js';
+import type { Transaction } from './transaction.js';
 
 /** Símbolo con el que Nest inyecta el puerto (plan base, regla 4). */
 export const RESERVATION_QUERY_PORT = Symbol('RESERVATION_QUERY_PORT');
@@ -72,4 +73,23 @@ export interface ReservationQueryPort {
     filters: ReservationListFilters,
     page: number,
   ): Promise<ReservationListPage>;
+
+  /**
+   * T023: las reservas `ACTIVE` con `startDate` igual a `operationalDate` (`AAAA-MM-DD`), completas y con
+   * el nombre de su agencia, ordenadas por `reservationRef`. Lee en `tx`, después del bloqueo de la fila
+   * del día (`GenerateDailyList`, paso 2). Quién de ellas entra a la lista lo decide el dominio
+   * (`DailyListMembership.belongs`).
+   */
+  findArrivals(
+    operationalDate: string,
+    tx: Transaction,
+  ): Promise<DailyListArrival[]>;
 }
+
+/** Una llegada del día, con lo que hace falta para proyectarla en la lista (T023). */
+export type DailyListArrival = {
+  /** Con su titular y todas sus habitaciones. */
+  reservation: Reservation;
+  /** El nombre de la agencia en las reservas `OTA`; `null` en las directas. */
+  otaName: string | null;
+};

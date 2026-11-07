@@ -41,4 +41,34 @@ export class TypeOrmDailySequenceRepository implements DailySequenceRepository {
       [operationalDate, lastSequence],
     );
   }
+
+  async lockOrCreateDay(
+    operationalDate: string,
+    tx: Transaction,
+  ): Promise<DailySequence> {
+    // Si otra transacción la está creando, este INSERT espera a que termine y luego no hace nada.
+    await managerFor(this.dataSource, tx).query(
+      `INSERT INTO daily_sequence (operational_date) VALUES ($1)
+       ON CONFLICT (operational_date) DO NOTHING`,
+      [operationalDate],
+    );
+    const day = await this.lockDay(operationalDate, tx);
+    if (day === null) {
+      throw new Error(
+        `La fila de daily_sequence del ${operationalDate} no existe después de crearla.`,
+      );
+    }
+    return day;
+  }
+
+  async markListGenerated(
+    operationalDate: string,
+    tx: Transaction,
+  ): Promise<void> {
+    await managerFor(this.dataSource, tx).query(
+      `UPDATE daily_sequence SET last_sequence = 1, list_generated = true
+       WHERE operational_date = $1`,
+      [operationalDate],
+    );
+  }
 }

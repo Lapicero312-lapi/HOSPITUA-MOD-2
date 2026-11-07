@@ -127,6 +127,38 @@ describe('Repositorios de la lista del día contra PostgreSQL real', () => {
 
       expect(await second).toEqual({ lastSequence: 2, listGenerated: true });
     });
+
+    it('lockOrCreateDay con la fila ya creada también bloquea: un cambio confirmado antes de la lista la creó, y la lista y el siguiente cambio no leen listGenerated a la vez (T023)', async () => {
+      // La fila existe porque un cambio de antes de las 00:00 la creó: el INSERT … ON CONFLICT no espera,
+      // y el único bloqueo es el SELECT … FOR UPDATE.
+      await aDay(0, false);
+      let releaseFirst!: () => void;
+      const firstMayCommit = new Promise<void>((resolve) => {
+        releaseFirst = resolve;
+      });
+      let firstLocked!: () => void;
+      const firstHasLock = new Promise<void>((resolve) => {
+        firstLocked = resolve;
+      });
+
+      // La lista: bloquea, la arma y marca el día.
+      const list = transactions.run(async (tx) => {
+        await sequences.lockOrCreateDay(TODAY, tx);
+        firstLocked();
+        await firstMayCommit;
+        await sequences.markListGenerated(TODAY, tx);
+      });
+      await firstHasLock;
+      // Un cambio que llega mientras tanto espera y ve la lista ya generada.
+      const change = transactions.run((tx) =>
+        sequences.lockOrCreateDay(TODAY, tx),
+      );
+      await waitForBlockedLock();
+      releaseFirst();
+      await list;
+
+      expect(await change).toEqual({ lastSequence: 1, listGenerated: true });
+    });
   });
 
   describe('DailyMessageRepository', () => {

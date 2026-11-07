@@ -192,3 +192,12 @@ export const GUEST_DATA_REQUIRED = {
   code: 'GUEST_DATA_REQUIRED',
   message: 'Los datos del titular son obligatorios.',
 } as const;
+
+/**
+ * Otro cambio de la reserva ganó: su `updatedAt` ya no es el que se leyó (plan base, control de
+ * concurrencia). Lo lanzan el repositorio de reservas y `cancel-reservation` (regla 3, paso 4).
+ */
+export const CONCURRENT_UPDATE = {
+  code: 'CONCURRENT_UPDATE',
+  message: 'Esta reserva ya fue actualizada o cancelada recientemente',
+} as const;
