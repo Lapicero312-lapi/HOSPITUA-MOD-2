@@ -548,7 +548,7 @@ interface DailyListChangeRecorder {
 }
 
 interface DailySequenceRepository {   // application/ports/out/
-  // SELECT … FOR UPDATE de la fila del día; null si no existe (no la crea: eso lo hace GenerateDailyList, T023).
+  // SELECT … FOR UPDATE de la fila del día; null si no existe.
   lockDay(operationalDate: string, tx: Transaction): Promise<{ lastSequence: number; listGenerated: boolean } | null>;
   setLastSequence(operationalDate: string, lastSequence: number, tx: Transaction): Promise<void>;
 }
@@ -565,8 +565,9 @@ interface DailyMessageRepository {    // application/ports/out/
 
 Pasos de `record`, todos en la transacción de quien llama:
 
-1. Bloquea la fila del día con `lockDay`. Si no existe o `listGenerated` es `false`, no hace nada: la
-   lista incluirá el cambio.
+1. Bloquea la fila del día con `lockOrCreateDay`, que la crea si no existe: así un cambio y la lista de las
+   00:00 siempre se ponen en fila sobre la misma fila, aunque todavía no exista ninguna. Si `listGenerated`
+   es `false`, no hace nada: la lista incluirá el cambio.
 2. Evalúa el cambio con `DailyListMembership.evaluate(before, after, operationalDate)`. Si da `null`, no
    hace nada.
 3. Con `ADDED` o `UPDATED`, proyecta `after` con `projectReservation`. En una reserva `OTA` usa el `name`
@@ -581,6 +582,47 @@ Pasos de `record`, todos en la transacción de quien llama:
 - La lista (T023) usa el mismo formato en `generatedAt` y en cada `updatedAt`.
 
 Publicar el mensaje después del commit es la T029.
+
+### Generar la lista del día (`GenerateDailyList`, T023)
+
+El puerto de entrada está en `application/use-cases/check-view-reservation/ports/in/generate-daily-list.port.ts`,
+con su símbolo `GENERATE_DAILY_LIST`. `CheckViewReservationModule` lo registra y lo exporta (regla 4).
+
+```typescript
+interface GenerateDailyList {
+  // operationalDate: AAAA-MM-DD; por defecto, Clock.today().
+  // true si generó la lista; false si ya estaba generada (idempotente).
+  execute(operationalDate?: string): Promise<boolean>;
+}
+
+interface DailySequenceRepository {   // se agregan dos métodos
+  // Crea la fila del día si no existe (last_sequence = 0, list_generated = false) y la bloquea con SELECT … FOR UPDATE.
+  lockOrCreateDay(operationalDate: string, tx: Transaction): Promise<{ lastSequence: number; listGenerated: boolean }>;
+  // last_sequence = 1 y list_generated = true.
+  markListGenerated(operationalDate: string, tx: Transaction): Promise<void>;
+}
+
+interface ReservationQueryPort {      // se agrega un método
+  // Las reservas ACTIVE con startDate = operationalDate, completas y con el nombre de su agencia, ordenadas por reservationRef.
+  findArrivals(operationalDate: string, tx: Transaction): Promise<{ reservation: Reservation; otaName: string | null }[]>;
+}
+```
+
+Pasos de `execute`, en una sola transacción (`TransactionRunner`):
+
+1. Bloquea la fila del día con `lockOrCreateDay`. Si `listGenerated` ya es `true`, no hace nada y devuelve
+   `false`.
+2. Lee las llegadas con `findArrivals` **después** del bloqueo: un cambio que se confirmó antes ya se ve, y
+   uno que llega después espera el bloqueo y genera su `ADDED` o `UPDATED`.
+3. Se queda con las que pertenecen a la lista (`DailyListMembership.belongs`: ninguna habitación sin
+   asignar).
+4. Arma el `payload` de "Lista del día":
+   - `generatedAt` es `Clock.now()` en hora de Colombia;
+   - cada reserva va con `projectReservation` y su `updatedAt` con seis decimales;
+   - `totalReservations`, `totalRooms` y `totalGuests` se calculan de esas reservas.
+5. Inserta el mensaje `LIST`, con secuencia 1 y en `PENDING`, y llama a `markListGenerated`.
+
+La publicación es de T025, T026 y T029.
 
 ### Publicación en orden
 
@@ -938,6 +980,11 @@ A1 de `check-room-availability`, en `TypeOrmReservationQuery`. Con `roomIds` vac
 consultar la base. `CheckViewReservationModule` registra el servicio y lo exporta (regla 4). Los demás
 métodos del puerto (`findByRef`, `findByCode`, `findForUpdate` y `blockingRoomsByCategory`) los agrega cada
 tarea cuando le toca.
+
+**`ReservationLookup.findForUpdate(tx, reservationRef)` (la usan `cancel-reservation`, T005, y
+`update-reservation`).** Devuelve la reserva completa, como `findByRef`, y la deja bloqueada
+(`SELECT … FOR UPDATE`) hasta que termine `tx`; `null` si no existe. `ReservationLookupService` delega en
+`ReservationRepository.lockByRef`.
 
 **Integración con otros casos de uso**: `cancel-reservation`, `update-reservation`,
 `generate-direct-reservation` y `generate-ota-reservation` llaman a `DailyListChangeRecorder.record(tx,

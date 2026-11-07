@@ -403,6 +403,19 @@ canal y `REMOVED`); una con llegada futura (sin aviso); y los intentos sobre `IN
        `INVALID_CHARACTERS`. Es la misma regla que `notes` en `generate-direct-reservation`.
    - **Paso 3, solo en A:** `acknowledged` tiene que ser exactamente `true` (ni `"true"` ni ausente); si no,
      `CANCELLATION_NOT_CONFIRMED`.
+10. **`CancelReservation` (T005 a T007).** El puerto de entrada está en
+    `application/use-cases/cancel-reservation/ports/in/cancel-reservation.port.ts`, con su símbolo
+    `CANCEL_RESERVATION`, y lo exporta `CancelReservationModule`. `cancel(tx, command)` sigue la regla 3:
+    - **Paso 1:** `checkCancelRequest` (punto 9).
+    - **Paso 2:** `ReservationLookup.findForUpdate`. Si la Recepcionista intenta cancelar una reserva de
+      OTA, recibe `OTA_RESERVATION_CANCEL_VIA_API`. Una cancelación de Booking sobre una reserva directa no
+      debería ocurrir, porque `generate-ota-reservation` la busca por su código: es un error del programa y
+      responde `REQUEST_NOT_PROCESSED`.
+    - **Paso 4:** `expectedUpdatedAt` se compara como instante, con sus microsegundos, no como texto.
+    - **La `Cancellation`:** toma su `cancellationDate` de `Clock.now()`. Si la restricción única la
+      rechaza, la respuesta es `CONCURRENT_UPDATE`.
+
+    Devuelve la reserva ya cancelada.
 
 ## Puntos abiertos
 
