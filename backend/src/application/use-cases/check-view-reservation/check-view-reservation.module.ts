@@ -1,15 +1,17 @@
 import { Module } from '@nestjs/common';
 import { DailyListChangeRecorderService } from './daily-list-change-recorder.service.js';
+import { GenerateDailyListService } from './generate-daily-list.service.js';
 import { ListReservationsService } from './list-reservations.service.js';
 import { DAILY_LIST_CHANGE_RECORDER } from './ports/in/daily-list-change-recorder.port.js';
+import { GENERATE_DAILY_LIST } from './ports/in/generate-daily-list.port.js';
 import { LIST_RESERVATIONS } from './ports/in/list-reservations.port.js';
 import { RESERVATION_LOOKUP } from './ports/in/reservation-lookup.port.js';
 import { ReservationLookupService } from './reservation-lookup.service.js';
 
 /**
  * Los servicios de `check-view-reservation` (plan base, regla 4 de la arquitectura). Usa
- * `RESERVATION_QUERY_PORT`, `DAILY_SEQUENCE_REPOSITORY`, `DAILY_MESSAGE_REPOSITORY` y `OTA_REPOSITORY` de
- * `PersistenceModule` y `CLOCK` de `ClockModule`, que son globales.
+ * `RESERVATION_QUERY_PORT`, `TRANSACTION_RUNNER`, `DAILY_SEQUENCE_REPOSITORY`, `DAILY_MESSAGE_REPOSITORY`
+ * y `OTA_REPOSITORY` de `PersistenceModule` y `CLOCK` de `ClockModule`, que son globales.
  */
 @Module({
   providers: [
@@ -19,7 +21,13 @@ import { ReservationLookupService } from './reservation-lookup.service.js';
       useClass: DailyListChangeRecorderService,
     },
     { provide: LIST_RESERVATIONS, useClass: ListReservationsService },
+    { provide: GENERATE_DAILY_LIST, useClass: GenerateDailyListService },
   ],
-  exports: [RESERVATION_LOOKUP, DAILY_LIST_CHANGE_RECORDER, LIST_RESERVATIONS],
+  exports: [
+    RESERVATION_LOOKUP,
+    DAILY_LIST_CHANGE_RECORDER,
+    LIST_RESERVATIONS,
+    GENERATE_DAILY_LIST,
+  ],
 })
 export class CheckViewReservationModule {}
