@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { APP_FILTER } from '@nestjs/core';
+import { CancelReservationModule } from './application/use-cases/cancel-reservation/cancel-reservation.module.js';
 import { CalculateDynamicRateModule } from './application/use-cases/calculate-dynamic-rate/calculate-dynamic-rate.module.js';
 import { CheckRoomAvailabilityModule } from './application/use-cases/check-room-availability/check-room-availability.module.js';
 import { CheckViewReservationModule } from './application/use-cases/check-view-reservation/check-view-reservation.module.js';
@@ -49,6 +50,7 @@ import { LoggingModule } from './infrastructure/shared/logging.module.js';
     GenerateOtaReservationModule,
     ProcessGuestDataModule,
     UpdateReservationModule,
+    CancelReservationModule,
     JobsModule,
     RestModule,
   ],

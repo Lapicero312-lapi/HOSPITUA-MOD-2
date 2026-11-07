@@ -8,6 +8,7 @@ import {
   RESERVATION_REPOSITORY,
   type ReservationRepository,
 } from '../../ports/out/reservation.repository.js';
+import type { Transaction } from '../../ports/out/transaction.js';
 import type {
   BlockingRoom,
   ReservationLookup,
@@ -15,8 +16,8 @@ import type {
 
 /**
  * `ReservationLookup` (plan, "`ReservationLookup.findBlockingRooms`"): delega cada búsqueda en el puerto de
- * lectura `ReservationQueryPort`, y `findByRef` en `ReservationRepository`, que devuelve la reserva
- * completa.
+ * lectura `ReservationQueryPort`, y `findByRef` y `findForUpdate` en `ReservationRepository`, que devuelve
+ * la reserva completa.
  */
 @Injectable()
 export class ReservationLookupService implements ReservationLookup {
@@ -29,6 +30,13 @@ export class ReservationLookupService implements ReservationLookup {
 
   findByRef(reservationRef: string): Promise<Reservation | null> {
     return this.reservations.findByRef(reservationRef);
+  }
+
+  findForUpdate(
+    tx: Transaction,
+    reservationRef: string,
+  ): Promise<Reservation | null> {
+    return this.reservations.lockByRef(reservationRef, tx);
   }
 
   async findBlockingRooms(
