@@ -11,6 +11,7 @@ import {
 } from '../../../src/application/use-cases/calculate-dynamic-rate/ports/in/calculate-dynamic-rate.port.js';
 import { AppConfigModule } from '../../../src/infrastructure/config/app-config.module.js';
 import type { EnvironmentVariables } from '../../../src/infrastructure/config/env.validation.js';
+import { RateReferenceConfigModule } from '../../../src/infrastructure/config/rate-reference.config.js';
 import { Module3ClientModule } from '../../../src/infrastructure/out/module3/module3-client.module.js';
 
 /**
@@ -51,6 +52,8 @@ describe('CalculateDynamicRate.quoteRooms: tiempo de respuesta (T021, NFR-001)',
     moduleRef = await Test.createTestingModule({
       imports: [
         AppConfigModule,
+        // Lo pone AppModule: CalculateDynamicRateModule también arma GetReferenceRates (#486).
+        RateReferenceConfigModule,
         Module3ClientModule,
         CalculateDynamicRateModule,
       ],
