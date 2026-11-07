@@ -125,6 +125,19 @@ describe('Pantalla "Habitaciones"', () => {
     ).toEqual(['N.º', 'Categoría', 'Capacidad', 'Mantenimiento próximo']);
   });
 
+  it('es de solo lectura: no tiene botones ni campos (FR-006, "sin opción de editar")', async () => {
+    fetchMock.mockResolvedValue(roomsResponse([ROOM_201, ROOM_202, ROOM_101]));
+    renderAt('/habitaciones');
+
+    await screen.findByRole('table');
+    // `main` es la pantalla: el botón "Salir" del encabezado no cuenta.
+    expect(
+      screen
+        .getByRole('main')
+        .querySelectorAll('button, input, select, textarea, [contenteditable]'),
+    ).toHaveLength(0);
+  });
+
   it('una habitación de capacidad 1 se muestra "1 persona"', async () => {
     fetchMock.mockResolvedValue(
       roomsResponse([{ ...ROOM_201, maxCapacity: 1 }]),
