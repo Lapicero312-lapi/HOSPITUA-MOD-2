@@ -27,6 +27,9 @@ function RoomsContent() {
   const rooms = useQuery({
     queryKey: ['rooms'],
     queryFn: ({ signal }) => listRooms(signal),
+    // Sin caché (plan, punto 7: el spec pide tiempo real): al salir de la pantalla se descarta la
+    // respuesta, y al volver se consulta de nuevo en lugar de mostrar la lista anterior.
+    gcTime: 0,
   });
 
   if (rooms.isPending) {

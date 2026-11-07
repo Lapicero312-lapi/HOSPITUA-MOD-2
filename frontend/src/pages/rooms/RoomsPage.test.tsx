@@ -195,6 +195,41 @@ describe('Pantalla "Habitaciones"', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
+  it('sin caché: al salir y volver consulta de nuevo y, mientras responde, nunca muestra la lista anterior', async () => {
+    const navigation = () =>
+      within(screen.getByRole('navigation', { name: 'Principal' }));
+    fetchMock.mockResolvedValueOnce(roomsResponse([ROOM_201]));
+    renderAt('/habitaciones');
+    await screen.findByRole('table');
+    expect(tableRows()).toEqual([
+      ['Hab. 201', 'DOBLE', '2 personas', '20/10/2026 → 22/10/2026'],
+    ]);
+
+    await userEvent.click(navigation().getByRole('link', { name: 'Inicio' }));
+    await screen.findByRole('heading', { name: 'Recepción' });
+    let respond: (response: Response) => void = () => undefined;
+    fetchMock.mockReturnValueOnce(
+      new Promise<Response>((resolve) => {
+        respond = resolve;
+      }),
+    );
+    await userEvent.click(
+      navigation().getByRole('link', { name: 'Habitaciones' }),
+    );
+
+    expect(
+      await screen.findByText('Cargando habitaciones…'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+
+    respond(roomsResponse([ROOM_202]));
+    await screen.findByRole('table');
+    expect(tableRows()).toEqual([
+      ['Hab. 202', 'DOBLE', '3 personas', 'Sin mantenimiento próximo'],
+    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it('la navegación lleva a la pantalla', async () => {
     fetchMock.mockResolvedValue(roomsResponse([ROOM_201]));
     const router = renderAt('/');
