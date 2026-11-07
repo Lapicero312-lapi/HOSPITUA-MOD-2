@@ -939,6 +939,11 @@ consultar la base. `CheckViewReservationModule` registra el servicio y lo export
 métodos del puerto (`findByRef`, `findByCode`, `findForUpdate` y `blockingRoomsByCategory`) los agrega cada
 tarea cuando le toca.
 
+**`ReservationLookup.findForUpdate(tx, reservationRef)` (la usan `cancel-reservation`, T005, y
+`update-reservation`).** Devuelve la reserva completa, como `findByRef`, y la deja bloqueada
+(`SELECT … FOR UPDATE`) hasta que termine `tx`; `null` si no existe. `ReservationLookupService` delega en
+`ReservationRepository.lockByRef`.
+
 **Integración con otros casos de uso**: `cancel-reservation`, `update-reservation`,
 `generate-direct-reservation` y `generate-ota-reservation` llaman a `DailyListChangeRecorder.record(tx,
 before, after, operationalDate?)` dentro de su transacción (`operationalDate` es opcional y por defecto
