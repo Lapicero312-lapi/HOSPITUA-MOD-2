@@ -21,13 +21,17 @@ export class TypeOrmMigratoryMovementRepository implements MigratoryMovementRepo
     if (movements.length === 0) {
       return 0;
     }
-    // RETURNING solo devuelve las filas creadas: las que chocan con el único no cuentan.
+    // Las filas entran en el orden del único (`guest_data_id`, `movement_type`): dos transacciones con los
+    // mismos huéspedes en distinto orden se esperan en fila y no en cruz (T010). RETURNING solo devuelve
+    // las filas creadas: las que chocan con el único no cuentan.
     const created: { id: string }[] = await managerFor(
       this.dataSource,
       tx,
     ).query(
       `INSERT INTO migratory_movement (id, guest_data_id, movement_type, movement_date)
        SELECT * FROM unnest($1::uuid[], $2::uuid[], $3::text[], $4::date[])
+         AS m(id, guest_data_id, movement_type, movement_date)
+       ORDER BY m.guest_data_id, m.movement_type
        ON CONFLICT (guest_data_id, movement_type) DO NOTHING
        RETURNING id`,
       [
