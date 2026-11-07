@@ -1,0 +1,86 @@
+import { useQuery } from '@tanstack/react-query';
+import { ErrorMessage } from '../../components/ErrorMessage.tsx';
+import {
+  listRooms,
+  type Room,
+  type RoomMaintenance,
+} from '../../services/rooms.ts';
+
+/**
+ * Pantalla "Habitaciones" (FR-006): todas las habitaciones vendibles con su número, categoría,
+ * capacidad y mantenimiento próximo, en el orden en que las manda el backend. Es solo de lectura y no
+ * muestra el estado de la habitación.
+ */
+export function RoomsPage() {
+  return (
+    <section>
+      <h1>Habitaciones</h1>
+      <RoomsContent />
+    </section>
+  );
+}
+
+function RoomsContent() {
+  const rooms = useQuery({
+    queryKey: ['rooms'],
+    queryFn: ({ signal }) => listRooms(signal),
+  });
+
+  if (rooms.isPending) {
+    return <p>Cargando habitaciones…</p>;
+  }
+  // Si falla el inventario, solo el error: nunca una lista parcial (plan, "Pruebas por escenario").
+  if (rooms.isError) {
+    return <ErrorMessage error={rooms.error} />;
+  }
+  if (rooms.data.items.length === 0) {
+    return <p>No hay habitaciones registradas.</p>;
+  }
+  return <RoomsTable rooms={rooms.data.items} />;
+}
+
+function RoomsTable({ rooms }: { rooms: Room[] }) {
+  return (
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">N.º</th>
+          <th scope="col">Categoría</th>
+          <th scope="col">Capacidad</th>
+          <th scope="col">Mantenimiento próximo</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rooms.map((room) => (
+          <tr key={room.id}>
+            <td>{`Hab. ${room.roomNumber}`}</td>
+            <td>{room.categoryRoom}</td>
+            <td>{capacityText(room.maxCapacity)}</td>
+            <td>{maintenanceText(room.maintenance)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+function capacityText(maxCapacity: number): string {
+  return `${maxCapacity} ${maxCapacity === 1 ? 'persona' : 'personas'}`;
+}
+
+function maintenanceText(maintenance: RoomMaintenance): string {
+  switch (maintenance.status) {
+    case 'SCHEDULED':
+      return `${formatDate(maintenance.maintenanceStart)} → ${formatDate(maintenance.maintenanceEnd)}`;
+    case 'NONE':
+      return 'Sin mantenimiento próximo';
+    case 'UNAVAILABLE':
+      return 'No se pudo consultar el mantenimiento';
+  }
+}
+
+/** `AAAA-MM-DD` como `dd/mm/aaaa` (plan base, "Fechas"), sin pasar por `Date` ni por la zona horaria. */
+function formatDate(date: string): string {
+  const [year, month, day] = date.split('-');
+  return `${day}/${month}/${year}`;
+}
