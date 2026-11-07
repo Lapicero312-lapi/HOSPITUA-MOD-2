@@ -1,7 +1,9 @@
 import { Global, Module } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { describe, expect, it } from 'vitest';
+import { CLOCK } from '../../../../../src/application/ports/out/clock.js';
 import { GUEST_DATA_REPOSITORY } from '../../../../../src/application/ports/out/guest-data.repository.js';
+import { GUEST_STAY_QUERY } from '../../../../../src/application/ports/out/guest-stay.query.js';
 import { MIGRATORY_MOVEMENT_REPOSITORY } from '../../../../../src/application/ports/out/migratory-movement.repository.js';
 import { PROCESSED_MESSAGE_REPOSITORY } from '../../../../../src/application/ports/out/processed-message.repository.js';
 import { RESERVATION_REPOSITORY } from '../../../../../src/application/ports/out/reservation.repository.js';
@@ -12,13 +14,18 @@ import { ProcessCheckInService } from '../../../../../src/application/use-cases/
 import { ReservationStatusService } from '../../../../../src/application/use-cases/update-reservation/reservation-status.service.js';
 import { UpdateReservationModule } from '../../../../../src/application/use-cases/update-reservation/update-reservation.module.js';
 
-/** Lo que pone `PersistenceModule`, que es global: la base no se usa en esta prueba. */
+/**
+ * Lo que ponen `PersistenceModule` y `ClockModule`, que son globales: no se usan en esta prueba. Los de
+ * huéspedes los necesita `ProcessGuestDataModule`, que este módulo importa por `REGISTER_GUEST_MOVEMENTS`.
+ */
 const GLOBALS = [
   RESERVATION_REPOSITORY,
   PROCESSED_MESSAGE_REPOSITORY,
   TRANSACTION_RUNNER,
   GUEST_DATA_REPOSITORY,
   MIGRATORY_MOVEMENT_REPOSITORY,
+  GUEST_STAY_QUERY,
+  CLOCK,
 ];
 
 @Global()
