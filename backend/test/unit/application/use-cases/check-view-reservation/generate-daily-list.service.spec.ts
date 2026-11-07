@@ -335,6 +335,28 @@ describe('GenerateDailyList (T023)', () => {
     expect(saved().payload).toMatchObject({ operationalDate: '2026-10-10' });
   });
 
+  it('con otro día operativo, sus llegadas entran: la pertenencia se decide con ese día, no con el de hoy', async () => {
+    const arrivingThatDay = aDirectReservation({
+      reservationRef: 'RSV-0000000A',
+      startDate: '2026-10-10',
+      updatedAt: '2026-10-08 15:42:10-05',
+    });
+    const { service, saved } = serviceWith([
+      { reservation: arrivingThatDay, otaName: null },
+    ]);
+
+    await service.execute('2026-10-10');
+
+    const payload = saved().payload as {
+      totalReservations: number;
+      reservations: { reservationRef: string }[];
+    };
+    expect(payload.reservations.map((r) => r.reservationRef)).toEqual([
+      'RSV-0000000A',
+    ]);
+    expect(payload.totalReservations).toBe(1);
+  });
+
   it('una llegada de otro día que llegara de la consulta no entra: la pertenencia es por el día operativo', async () => {
     const tomorrow = aDirectReservation({
       startDate: '2026-10-10',
