@@ -33,11 +33,6 @@
   box-shadow: var(--rooms-shadow);
 }
 
-/* En una pantalla angosta, la tabla se desplaza de lado en vez de apretar las columnas. */
-.rooms-table-wrap {
-  overflow-x: auto;
-}
-
 .rooms-table {
   width: 100%;
   border-collapse: collapse;
@@ -185,12 +180,4 @@
   padding: 1rem 1.25rem;
   background-color: var(--rooms-error-background);
   border-left: 4px solid var(--color-error);
-}
-
-@media (max-width: 40rem) {
-  .rooms-table th,
-  .rooms-table td {
-    padding-right: 0.75rem;
-    padding-left: 0.75rem;
-  }
 }

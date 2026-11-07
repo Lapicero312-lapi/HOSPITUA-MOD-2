@@ -46,38 +46,34 @@ function RoomsContent() {
 
 function RoomsTable({ rooms }: { rooms: Room[] }) {
   return (
-    <div className="rooms-table-wrap">
-      <table className="rooms-table">
-        <thead>
-          <tr>
-            <th scope="col">N.º</th>
-            <th scope="col">Categoría</th>
-            <th scope="col">Capacidad</th>
-            <th scope="col">Mantenimiento próximo</th>
+    <table className="rooms-table">
+      <thead>
+        <tr>
+          <th scope="col">N.º</th>
+          <th scope="col">Categoría</th>
+          <th scope="col">Capacidad</th>
+          <th scope="col">Mantenimiento próximo</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rooms.map((room) => (
+          <tr key={room.id}>
+            <td className="rooms-number">{`Hab. ${room.roomNumber}`}</td>
+            <td>
+              <span className="rooms-category">{room.categoryRoom}</span>
+            </td>
+            <td className="rooms-capacity">{capacityText(room.maxCapacity)}</td>
+            <td>
+              <span
+                className={`rooms-maintenance rooms-maintenance--${room.maintenance.status.toLowerCase()}`}
+              >
+                {maintenanceText(room.maintenance)}
+              </span>
+            </td>
           </tr>
-        </thead>
-        <tbody>
-          {rooms.map((room) => (
-            <tr key={room.id}>
-              <td className="rooms-number">{`Hab. ${room.roomNumber}`}</td>
-              <td>
-                <span className="rooms-category">{room.categoryRoom}</span>
-              </td>
-              <td className="rooms-capacity">
-                {capacityText(room.maxCapacity)}
-              </td>
-              <td>
-                <span
-                  className={`rooms-maintenance rooms-maintenance--${room.maintenance.status.toLowerCase()}`}
-                >
-                  {maintenanceText(room.maintenance)}
-                </span>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+        ))}
+      </tbody>
+    </table>
   );
 }
 
