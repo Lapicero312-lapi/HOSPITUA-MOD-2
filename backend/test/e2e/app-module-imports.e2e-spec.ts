@@ -2,6 +2,7 @@ import { MODULE_METADATA } from '@nestjs/common/constants.js';
 import { describe, expect, it } from 'vitest';
 import { AppModule } from '../../src/app.module.js';
 import { CalculateDynamicRateModule } from '../../src/application/use-cases/calculate-dynamic-rate/calculate-dynamic-rate.module.js';
+import { CancelReservationModule } from '../../src/application/use-cases/cancel-reservation/cancel-reservation.module.js';
 import { CheckRoomAvailabilityModule } from '../../src/application/use-cases/check-room-availability/check-room-availability.module.js';
 import { CheckViewReservationModule } from '../../src/application/use-cases/check-view-reservation/check-view-reservation.module.js';
 import { GenerateDirectReservationModule } from '../../src/application/use-cases/generate-direct-reservation/generate-direct-reservation.module.js';
@@ -23,6 +24,7 @@ describe('AppModule importa los módulos de los casos de uso', () => {
     ['GenerateOtaReservationModule', GenerateOtaReservationModule],
     ['ProcessGuestDataModule', ProcessGuestDataModule],
     ['UpdateReservationModule', UpdateReservationModule],
+    ['CancelReservationModule', CancelReservationModule],
   ])('%s', (_name, module) => {
     const imports: unknown[] =
       Reflect.getMetadata(MODULE_METADATA.IMPORTS, AppModule) ?? [];

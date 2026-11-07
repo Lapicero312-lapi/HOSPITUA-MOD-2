@@ -36,6 +36,8 @@ export class TypeOrmGuestDataRepository implements GuestDataRepository {
       return [];
     }
     const manager = managerFor(this.dataSource, tx);
+    // Las filas entran en el orden del único: dos transacciones con los mismos huéspedes en distinto
+    // orden (dos habitaciones de la misma reserva a la vez) se esperan en fila y no en cruz (T010).
     await manager.query(
       `INSERT INTO guest_data
          (id, reservation_id, document_type, document_number, first_name, last_name,
@@ -47,6 +49,7 @@ export class TypeOrmGuestDataRepository implements GuestDataRepository {
          AS g(id, reservation_ref, document_type, document_number, first_name, last_name,
               birth_date, nationality, origin_place, destination_place)
        JOIN reservation r ON r.reservation_ref = g.reservation_ref
+       ORDER BY r.id, g.document_number
        ON CONFLICT (reservation_id, document_number) DO NOTHING`,
       [
         guests.map((guest) => guest.id),

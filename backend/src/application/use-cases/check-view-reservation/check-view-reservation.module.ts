@@ -1,8 +1,10 @@
 import { Module } from '@nestjs/common';
 import { DailyListChangeRecorderService } from './daily-list-change-recorder.service.js';
 import { GenerateDailyListService } from './generate-daily-list.service.js';
-import { GENERATE_DAILY_LIST } from './ports/in/generate-daily-list.port.js';
+import { ListReservationsService } from './list-reservations.service.js';
 import { DAILY_LIST_CHANGE_RECORDER } from './ports/in/daily-list-change-recorder.port.js';
+import { GENERATE_DAILY_LIST } from './ports/in/generate-daily-list.port.js';
+import { LIST_RESERVATIONS } from './ports/in/list-reservations.port.js';
 import { RESERVATION_LOOKUP } from './ports/in/reservation-lookup.port.js';
 import { ReservationLookupService } from './reservation-lookup.service.js';
 
@@ -18,11 +20,13 @@ import { ReservationLookupService } from './reservation-lookup.service.js';
       provide: DAILY_LIST_CHANGE_RECORDER,
       useClass: DailyListChangeRecorderService,
     },
+    { provide: LIST_RESERVATIONS, useClass: ListReservationsService },
     { provide: GENERATE_DAILY_LIST, useClass: GenerateDailyListService },
   ],
   exports: [
     RESERVATION_LOOKUP,
     DAILY_LIST_CHANGE_RECORDER,
+    LIST_RESERVATIONS,
     GENERATE_DAILY_LIST,
   ],
 })

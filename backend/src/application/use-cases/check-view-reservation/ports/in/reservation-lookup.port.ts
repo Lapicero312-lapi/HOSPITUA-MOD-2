@@ -1,5 +1,6 @@
 import type { Reservation } from '../../../../../domain/reservation/reservation.js';
 import type { BlockingRoom } from '../../../../ports/out/reservation-query.port.js';
+import type { Transaction } from '../../../../ports/out/transaction.js';
 
 export type { BlockingRoom };
 
@@ -30,4 +31,14 @@ export interface ReservationLookup {
    * que se modifica (punto 7).
    */
   findByRef(reservationRef: string): Promise<Reservation | null>;
+
+  /**
+   * La reserva completa con esa `reservationRef`, como `findByRef`, bloqueada (`SELECT … FOR UPDATE`) hasta
+   * que termine `tx`, o `null` si no existe (plan, "`ReservationLookup.findForUpdate`"). La usan
+   * `cancel-reservation` (T005) y `update-reservation` para serializar dos cambios de la misma reserva.
+   */
+  findForUpdate(
+    tx: Transaction,
+    reservationRef: string,
+  ): Promise<Reservation | null>;
 }
