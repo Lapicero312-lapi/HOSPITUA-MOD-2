@@ -89,9 +89,15 @@ function toRateQuote(
     throw invalidQuote('campos faltantes o de otro tipo');
   }
   const currency = value.currency;
-  const lodgingAmount = toAmount(value.lodgingAmount, currency);
+  const lodgingAmount = toAmount(
+    value.lodgingAmount,
+    currency,
+    'lodgingAmount',
+  );
   if (!/[1-9]/.test(lodgingAmount.amount)) {
-    throw invalidQuote('lodgingAmount en cero');
+    throw invalidQuote(
+      `lodgingAmount en cero (${asReceived(value.lodgingAmount)})`,
+    );
   }
   return {
     quoteId: value.quoteId,
@@ -118,13 +124,38 @@ function toNightlyRate(
   ) {
     throw invalidQuote('una noche fuera de la estadía');
   }
-  return { date: value.date, rate: toAmount(value.rate, currency) };
+  return {
+    date: value.date,
+    rate: toAmount(value.rate, currency, `la tarifa del ${value.date}`),
+  };
 }
 
-/** Acepta el importe como número o como texto, pero siempre con el formato de dos decimales. */
-function toAmount(value: unknown, currency: string): Money {
+/**
+ * Acepta el importe como número o como texto, pero siempre con el formato de dos decimales. Si no lo
+ * cumple, el detalle lleva el importe tal como llegó, sin redondear (plan, "Precisión del dinero"): es un
+ * dato de la cotización, no de una persona.
+ */
+function toAmount(value: unknown, currency: string, field: string): Money {
   if (typeof value !== 'string' || !AMOUNT_FORMAT.test(value)) {
-    throw invalidQuote('importe con otro formato o con más de dos decimales');
+    throw invalidQuote(
+      `${field} con otro formato o con más de dos decimales (${asReceived(value)})`,
+    );
   }
   return Money.of(value, currency);
+}
+
+/** Hasta cuántos caracteres de un valor van al log: un importe real cabe de sobra. */
+const MAX_LOGGED_LENGTH = 200;
+
+/**
+ * Un valor de la respuesta como llegó, para el log. `lossless-json` deja los números como texto, con
+ * todos sus dígitos; lo demás se escribe en JSON. Un valor más largo que `MAX_LOGGED_LENGTH` se corta y
+ * se marca, para que una respuesta enorme no llene el log.
+ */
+function asReceived(value: unknown): string {
+  const text =
+    typeof value === 'string' ? value : String(JSON.stringify(value));
+  return text.length > MAX_LOGGED_LENGTH
+    ? `${text.slice(0, MAX_LOGGED_LENGTH)}… (${text.length} caracteres)`
+    : text;
 }
