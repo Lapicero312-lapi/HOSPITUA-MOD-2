@@ -140,6 +140,11 @@ describe('GET /api/guest-stays (e2e)', () => {
       'nationality=EXTRANJERO',
       'INVALID_NATIONALITY_FILTER',
     ],
+    [
+      'una situación que no existe',
+      'presence=HOSPEDADO',
+      'INVALID_PRESENCE_FILTER',
+    ],
     ['una sola fecha', 'dateFrom=2026-10-01', 'INCOMPLETE_DATE_RANGE'],
     [
       'un rango invertido',

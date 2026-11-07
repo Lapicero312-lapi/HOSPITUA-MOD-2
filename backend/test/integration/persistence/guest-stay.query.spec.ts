@@ -127,15 +127,43 @@ describe('TypeOrmGuestStayQuery contra PostgreSQL real (plan de process-guest-da
     await expect(query.count(ALL)).resolves.toBe(1);
   });
 
-  it('el mismo huésped en dos reservas aparece dos veces', async () => {
-    await seed({
+  it('el mismo huésped en dos reservas aparece dos veces, cada una con su entrada y su salida', async () => {
+    const first = await seed({
+      firstName: 'John',
+      lastName: 'Smith',
       documentNumber: 'X99',
       entry: '2026-09-01',
       exit: '2026-09-03',
     });
-    await seed({ documentNumber: 'X99', entry: '2026-10-09' });
+    const second = await seed({
+      firstName: 'John',
+      lastName: 'Smith',
+      documentNumber: 'X99',
+      entry: '2026-10-09',
+    });
+    const john = {
+      firstName: 'John',
+      lastName: 'Smith',
+      documentType: 'PAS',
+      documentNumber: 'X99',
+      nationality: 'Estados Unidos',
+    };
 
-    await expect(documentsOf(ALL)).resolves.toEqual(['X99', 'X99']);
+    // La estadía que ya terminó trae su salida de la base; la actual, ninguna.
+    await expect(query.findPage(ALL, 0, 10)).resolves.toEqual([
+      {
+        reservationRef: second,
+        ...john,
+        entryDate: '2026-10-09',
+        exitDate: null,
+      },
+      {
+        reservationRef: first,
+        ...john,
+        entryDate: '2026-09-01',
+        exitDate: '2026-09-03',
+      },
+    ]);
   });
 
   it('FR-016: un huésped sin movimientos no aparece ni cuenta', async () => {
