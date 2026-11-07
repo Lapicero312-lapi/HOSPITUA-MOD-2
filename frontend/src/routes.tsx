@@ -1,8 +1,8 @@
 import type { RouteObject } from 'react-router';
-import { Layout } from './components/Layout.tsx';
+import Layout from './components/Layout.tsx';
 import { RequireUser } from './components/RequireUser.tsx';
 import { HomePage } from './pages/HomePage.tsx';
-import { LoginPage } from './pages/LoginPage.tsx';
+import LoginPage from './pages/LoginPage.tsx';
 import { NotFoundPage } from './pages/NotFoundPage.tsx';
 import { RouteErrorPage } from './pages/RouteErrorPage.tsx';
 

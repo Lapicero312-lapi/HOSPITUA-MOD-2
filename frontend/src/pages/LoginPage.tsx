@@ -1,57 +1,42 @@
 import { useState, type FormEvent } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router';
-import { currentUser, nameError, signIn } from '../services/session.ts';
+import { useAuth } from '../auth/AuthContext';
+import { nameError } from '../services/session';
 
-/** De dónde venía la Recepcionista antes de que se le pidiera el nombre. */
-type LoginState = { from?: string } | null;
-
-/** Login simulado: solo pide el nombre de la Recepcionista (plan base, regla 10). */
-export function LoginPage() {
-  const navigate = useNavigate();
+export default function LoginPage() {
+  const { user, login } = useAuth();
+  const nav = useNavigate();
   const location = useLocation();
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const from = (location.state as LoginState)?.from ?? '/';
-
-  if (currentUser()) {
-    return <Navigate to={from} replace />;
-  }
-
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
-    const problem = nameError(name);
-    if (problem) {
-      setError(problem);
+  const state = location.state as { from?: string } | null;
+  const requestedPath = state?.from ?? '/';
+  if (user) return <Navigate to={requestedPath} replace />;
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    const validationError = nameError(name);
+    if (validationError) {
+      setError(validationError);
       return;
     }
-    signIn(name);
-    navigate(from, { replace: true });
+    login(name.trim());
+    nav(requestedPath, { replace: true });
   };
-
   return (
-    <main className="layout-main">
-      <h1>HOSPITUA · Recepción</h1>
-      <form className="login-form" onSubmit={submit} noValidate>
-        <label htmlFor="receptionist-name">Nombre de la Recepcionista</label>
+    <form className="panel login" onSubmit={submit}>
+      <h2>HOSPITUA · Recepción</h2>
+      <p>Ingrese su nombre para registrar las acciones del turno.</p>
+      <div className="field">
+        <label htmlFor="n">Nombre de la Recepcionista</label>
         <input
-          id="receptionist-name"
+          id="n"
           value={name}
-          onChange={(event) => setName(event.target.value)}
-          aria-invalid={error !== null}
-          aria-describedby={error ? 'receptionist-name-error' : undefined}
-          autoComplete="name"
+          onChange={(e) => setName(e.target.value)}
+          autoFocus
         />
-        {error && (
-          <p
-            id="receptionist-name-error"
-            role="alert"
-            className="error-message"
-          >
-            {error}
-          </p>
-        )}
-        <button type="submit">Ingresar</button>
-      </form>
-    </main>
+      </div>
+      {error && <div role="alert">{error}</div>}
+      <button className="btn primary">Ingresar</button>
+    </form>
   );
 }
