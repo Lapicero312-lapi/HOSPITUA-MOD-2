@@ -1,6 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
 import type { MaintenanceStatus } from '../../../application/use-cases/consult-room-inventory/ports/in/list-rooms-with-maintenance.port.js';
-import { INVENTORY_UNAVAILABLE } from '../../../domain/shared/error-codes.js';
 import {
   type ApiErrorBody,
   REQUEST_NOT_PROCESSED,
@@ -118,14 +117,15 @@ const errorExample = (errorCode: string, message: string): ApiErrorBody => ({
 
 /**
  * Los errores que puede responder `GET /api/rooms`, los dos con `400` (plan de `consult-room-inventory`,
- * C1 y "Reglas de validación y manejo de errores").
+ * C1 y "Reglas de validación y manejo de errores"). El de `INVENTORY_UNAVAILABLE` va con el literal de esa
+ * tabla: la capa de entrada solo importa `application/` (plan base, tabla de capas), no `domain/`.
  */
 export const ROOMS_ERROR_EXAMPLES = {
-  [INVENTORY_UNAVAILABLE.code]: {
+  INVENTORY_UNAVAILABLE: {
     summary: 'Falló el inventario del Módulo 1',
     value: errorExample(
-      INVENTORY_UNAVAILABLE.code,
-      INVENTORY_UNAVAILABLE.message,
+      'INVENTORY_UNAVAILABLE',
+      'No se pudo consultar el inventario de habitaciones en este momento. Intente de nuevo.',
     ),
   },
   [REQUEST_NOT_PROCESSED]: {
