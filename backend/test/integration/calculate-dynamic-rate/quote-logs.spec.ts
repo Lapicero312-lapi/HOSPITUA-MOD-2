@@ -22,6 +22,7 @@ import { BusinessError } from '../../../src/domain/shared/business-error.js';
 import { PRICING_UNAVAILABLE } from '../../../src/domain/shared/error-codes.js';
 import { AppConfigModule } from '../../../src/infrastructure/config/app-config.module.js';
 import type { EnvironmentVariables } from '../../../src/infrastructure/config/env.validation.js';
+import { RateReferenceConfigModule } from '../../../src/infrastructure/config/rate-reference.config.js';
 import { Module3ClientModule } from '../../../src/infrastructure/out/module3/module3-client.module.js';
 import { captureLogs } from '../support/capture-logs.js';
 
@@ -41,9 +42,13 @@ const REQUEST: RoomQuoteRequest = {
 };
 
 /** La respuesta de A1, escrita como texto para no tocar los decimales. */
-const quoteBody = (lodgingAmount: string, firstNightRate = '250000.00') =>
+const quoteBody = (
+  lodgingAmount: string,
+  firstNightRate = '250000.00',
+  secondNightRate = '280000.00',
+) =>
   `{"quoteId":"a1f2c3d4-e5b6-4789-8a9b-0c1d2e3f4a5b","currency":"COP","nightlyRates":` +
-  `[{"date":"2026-10-10","rate":${firstNightRate}},{"date":"2026-10-11","rate":280000.00}],` +
+  `[{"date":"2026-10-10","rate":${firstNightRate}},{"date":"2026-10-11","rate":${secondNightRate}}],` +
   `"lodgingAmount":${lodgingAmount}}`;
 
 const server = setupServer();
@@ -84,6 +89,8 @@ describe('CalculateDynamicRate: lo que escribe en el log (T022)', () => {
     moduleRef = await Test.createTestingModule({
       imports: [
         AppConfigModule,
+        // Lo pone AppModule: CalculateDynamicRateModule también arma GetReferenceRates (#486).
+        RateReferenceConfigModule,
         Module3ClientModule,
         CalculateDynamicRateModule,
       ],
@@ -151,6 +158,36 @@ describe('CalculateDynamicRate: lo que escribe en el log (T022)', () => {
     expect(logs).toHaveLength(1);
     expect(logs[0]).toContain('la tarifa del 2026-10-10');
     expect(logs[0]).toContain('(250000.055)');
+  });
+
+  it('la tarifa mala de la segunda noche se escribe con su fecha, no con la de llegada', async () => {
+    module3Answers(quoteBody('530000.00', '250000.00', '280000.055'));
+
+    await quoteFailing();
+
+    expect(logs).toHaveLength(1);
+    expect(logs[0]).toContain('la tarifa del 2026-10-11');
+    expect(logs[0]).not.toContain('2026-10-10 con otro formato');
+    expect(logs[0]).toContain('(280000.055)');
+  });
+
+  it('un valor de más de 200 caracteres se corta en el log y dice cuánto medía', async () => {
+    const huge = '"' + '1'.repeat(250) + '"';
+    module3Answers(quoteBody(huge));
+
+    await quoteFailing();
+
+    expect(logs[0]).toContain('(' + '1'.repeat(200) + '… (250 caracteres))');
+    expect(logs[0]).not.toContain('1'.repeat(201));
+  });
+
+  it('un valor de 200 caracteres justos va entero', async () => {
+    const exact = '"' + '1'.repeat(200) + '"';
+    module3Answers(quoteBody(exact));
+
+    await quoteFailing();
+
+    expect(logs[0]).toContain('(' + '1'.repeat(200) + ').');
   });
 
   it('un importe con otro tipo se escribe en JSON', async () => {

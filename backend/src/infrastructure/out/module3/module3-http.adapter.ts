@@ -144,10 +144,18 @@ function toAmount(value: unknown, currency: string, field: string): Money {
   return Money.of(value, currency);
 }
 
+/** Hasta cuántos caracteres de un valor van al log: un importe real cabe de sobra. */
+const MAX_LOGGED_LENGTH = 200;
+
 /**
  * Un valor de la respuesta como llegó, para el log. `lossless-json` deja los números como texto, con
- * todos sus dígitos; lo demás se escribe en JSON.
+ * todos sus dígitos; lo demás se escribe en JSON. Un valor más largo que `MAX_LOGGED_LENGTH` se corta y
+ * se marca, para que una respuesta enorme no llene el log.
  */
 function asReceived(value: unknown): string {
-  return typeof value === 'string' ? value : String(JSON.stringify(value));
+  const text =
+    typeof value === 'string' ? value : String(JSON.stringify(value));
+  return text.length > MAX_LOGGED_LENGTH
+    ? `${text.slice(0, MAX_LOGGED_LENGTH)}… (${text.length} caracteres)`
+    : text;
 }
