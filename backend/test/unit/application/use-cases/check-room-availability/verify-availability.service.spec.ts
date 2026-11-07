@@ -100,7 +100,7 @@ function serviceWith({
   });
   const service = new VerifyAvailabilityService(
     { byCategory, byRoomId } as unknown as ConsultRoomInventory,
-    { findBlockingRooms, findByRef } as ReservationLookup,
+    { findBlockingRooms, findByRef } as unknown as ReservationLookup,
     { check } as unknown as ConsultMaintenanceCalendar,
     concurrency,
   );
