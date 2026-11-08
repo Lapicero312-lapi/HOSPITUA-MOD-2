@@ -986,6 +986,24 @@ tarea cuando le toca.
 (`SELECT … FOR UPDATE`) hasta que termine `tx`; `null` si no existe. `ReservationLookupService` delega en
 `ReservationRepository.lockByRef`.
 
+**`ReservationLookup.blockingRoomsByCategory(categoryRoom, dateFrom, dateTo)` (T016c; es también la T004 de
+`configure-ota`).** Devuelve una entrada por cada noche de `[dateFrom, dateTo)`, en orden de fecha, con los
+`roomId` de esa categoría que esa noche ocupan inventario. El día de salida no se ocupa, igual que en
+`ari_pending_change`. `ReservationLookupService` delega en `ReservationQueryPort.blockingRoomsByCategory`, y
+la consulta va en `TypeOrmReservationQuery`, sobre `reservation_room`.
+
+```typescript
+// Una entrada por noche, también las que no tienen ninguna ocupada (roomIds vacío).
+blockingRoomsByCategory(categoryRoom: string, dateFrom: string, dateTo: string): Promise<{ date: string; roomIds: string[] }[]>;
+```
+
+- Cuenta las habitaciones con `blocks_inventory = true` y `category_room = categoryRoom` cuya estadía
+  `[start_date, end_date)` incluye esa noche. Es el mismo criterio de `findBlockingRooms`. Las
+  habitaciones sin asignar no aparecen, porque no bloquean inventario.
+- Cada `roomId` aparece una sola vez por noche, en orden.
+- Con `dateFrom` igual o posterior a `dateTo`, devuelve `[]` sin consultar la base.
+- No recibe transacción: es solo lectura y la usa la tarea de Channex fuera de una.
+
 **Integración con otros casos de uso**: `cancel-reservation`, `update-reservation`,
 `generate-direct-reservation` y `generate-ota-reservation` llaman a `DailyListChangeRecorder.record(tx,
 before, after, operationalDate?)` dentro de su transacción (`operationalDate` es opcional y por defecto
