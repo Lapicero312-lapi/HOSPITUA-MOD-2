@@ -103,7 +103,7 @@ function serviceWith(
   const service = new CancelReservationService(
     { findForUpdate } as unknown as ReservationLookup,
     { transition } as unknown as ReservationStatusPort,
-    { insert: insertCancellation } as CancellationRepository,
+    { insert: insertCancellation } as unknown as CancellationRepository,
     { record } as DailyListChangeRecorder,
     CLOCK,
   );
