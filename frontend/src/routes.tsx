@@ -4,6 +4,7 @@ import { RequireUser } from './components/RequireUser.tsx';
 import { HomePage } from './pages/HomePage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
 import { NotFoundPage } from './pages/NotFoundPage.tsx';
+import { AgenciasOtaPage } from './pages/otas/AgenciasOtaPage.tsx';
 import { RouteErrorPage } from './pages/RouteErrorPage.tsx';
 
 /**
@@ -22,6 +23,7 @@ export const routes: RouteObject[] = [
     errorElement: <RouteErrorPage />,
     children: [
       { index: true, element: <HomePage /> },
+      { path: 'otas', element: <AgenciasOtaPage /> },
       { path: '*', element: <NotFoundPage /> },
     ],
   },
