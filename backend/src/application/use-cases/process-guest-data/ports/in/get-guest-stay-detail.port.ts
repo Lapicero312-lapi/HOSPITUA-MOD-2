@@ -6,7 +6,11 @@ import type {
 /** Símbolo con el que Nest inyecta el servicio en el controlador de la vista (plan base, regla 4). */
 export const GET_GUEST_STAY_DETAIL = Symbol('GET_GUEST_STAY_DETAIL');
 
-/** El detalle de un huésped en una reserva (plan de `process-guest-data`, C2). Las fechas son `AAAA-MM-DD`. */
+/**
+ * El detalle de un huésped en una reserva (plan de `process-guest-data`, C2). Las fechas son `AAAA-MM-DD`.
+ * "Lo vacío … viaja `null`" en cualquier dato que pueda llegar vacío; la pantalla muestra una raya "—"
+ * (historia 3, escenario 6).
+ */
 export type GuestStayDetail = {
   reservationRef: string;
   /** El detalle de la reserva en "Consultar y buscar reservas" (FR-014). */
@@ -14,11 +18,14 @@ export type GuestStayDetail = {
   guest: {
     documentType: DocumentType;
     documentNumber: string;
-    firstName: string;
-    lastName: string;
+    /** `null` si está vacío. */
+    firstName: string | null;
+    /** `null` si está vacío. */
+    lastName: string | null;
     birthDate: string;
-    nationality: string;
-    /** Nacionalidad distinta de `Colombia` y no vacía (punto 8). */
+    /** `null` si está vacía (el spec lo contempla en sus casos borde). */
+    nationality: string | null;
+    /** Nacionalidad distinta de `Colombia` y no vacía (punto 8), con la guardada. */
     isForeign: boolean;
     /** `null` si está vacío: la pantalla muestra una raya. */
     originPlace: string | null;

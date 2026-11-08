@@ -87,12 +87,27 @@ describe('GetGuestStayDetailService (plan de process-guest-data, C2)', () => {
     });
   });
 
-  it('una nacionalidad vacía no es extranjera (punto 8)', async () => {
+  it('una nacionalidad vacía viaja null y no es extranjera (punto 8 y caso borde del spec)', async () => {
     const { service } = serviceWith(aRow({ nationality: '' }));
 
     const { guest } = await service.execute('RSV-3F9A1C7B', 'X99');
 
+    expect(guest.nationality).toBeNull();
     expect(guest.isForeign).toBe(false);
+  });
+
+  it('un nombre o un apellido vacíos también viajan null (escenario 6: la raya para cualquier dato vacío)', async () => {
+    const { service } = serviceWith(aRow({ firstName: '', lastName: '' }));
+
+    const { guest } = await service.execute('RSV-3F9A1C7B', 'X99');
+
+    expect(guest).toMatchObject({ firstName: null, lastName: null });
+    // Lo demás sale tal como se guardó.
+    expect(guest).toMatchObject({
+      documentNumber: 'X99',
+      nationality: 'Estados Unidos',
+      isForeign: true,
+    });
   });
 
   it.each([

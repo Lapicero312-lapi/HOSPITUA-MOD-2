@@ -36,10 +36,10 @@ export class GetGuestStayDetailService implements GetGuestStayDetail {
       guest: {
         documentType: row.documentType,
         documentNumber: row.documentNumber,
-        firstName: row.firstName,
-        lastName: row.lastName,
+        firstName: emptyAsNull(row.firstName),
+        lastName: emptyAsNull(row.lastName),
         birthDate: row.birthDate,
-        nationality: row.nationality,
+        nationality: emptyAsNull(row.nationality),
         isForeign: isForeign(row.nationality),
         originPlace: emptyAsNull(row.originPlace),
         destinationPlace: emptyAsNull(row.destinationPlace),
@@ -49,7 +49,11 @@ export class GetGuestStayDetailService implements GetGuestStayDetail {
   }
 }
 
-/** "Lo vacío … viaja `null`" (C2): sin dato o con un texto vacío. */
+/**
+ * "Lo vacío … viaja `null`" (C2): sin dato o con un texto vacío. Lo guardado no cambia (FR-004); solo cómo
+ * viaja en la respuesta. Un texto vacío puede llegar también a los datos obligatorios: el validador de la
+ * notificación lo acepta y `register` solo omite al huésped cuando el dato no viene.
+ */
 function emptyAsNull(value: string | null): string | null {
   return value === null || value === '' ? null : value;
 }

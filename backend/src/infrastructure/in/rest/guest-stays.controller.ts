@@ -52,12 +52,9 @@ export class GuestStaysController {
   }
 
   /**
-   * C2, `GET /api/reservations/{reservationRef}/guests/{documentNumber}`: revisa los dos antes de
-   * consultar. Con un formato inválido o un huésped que no está, el filtro global responde 400.
-   */
-  /**
-   * C2 con el `documentNumber` vacío (`…/guests` o `…/guests/`): sin esta ruta, Nest respondería que la
-   * ruta no existe. Pasa por la misma revisión: `INVALID_RESERVATION_CODE` o `INVALID_DOCUMENT_NUMBER`.
+   * C2 con el `documentNumber` vacío (`…/guests` o `…/guests/`): sin esta ruta, el filtro global la
+   * respondería como una ruta que no existe (`400 REQUEST_NOT_PROCESSED`). Pasa por la misma revisión que
+   * `detail`: `INVALID_RESERVATION_CODE` o `INVALID_DOCUMENT_NUMBER`.
    */
   @Get('reservations/:reservationRef/guests')
   async detailWithoutDocument(
@@ -66,6 +63,10 @@ export class GuestStaysController {
     return this.detail(reservationRef, '');
   }
 
+  /**
+   * C2, `GET /api/reservations/{reservationRef}/guests/{documentNumber}`: revisa los dos antes de
+   * consultar. Con un formato inválido o un huésped que no está, el filtro global responde 400.
+   */
   @Get('reservations/:reservationRef/guests/:documentNumber')
   async detail(
     @Param('reservationRef') reservationRef: string,
