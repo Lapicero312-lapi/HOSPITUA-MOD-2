@@ -11,6 +11,7 @@ import { ProcessGuestDataModule } from '../../src/application/use-cases/process-
 import { UpdateReservationModule } from '../../src/application/use-cases/update-reservation/update-reservation.module.js';
 import { MessagingModule } from '../../src/infrastructure/config/messaging.module.js';
 import { CheckInConsumer } from '../../src/infrastructure/in/messaging/check-in.consumer.js';
+import { CheckOutConsumer } from '../../src/infrastructure/in/messaging/check-out.consumer.js';
 import { ConsumersModule } from '../../src/infrastructure/in/messaging/consumers.module.js';
 
 /**
@@ -39,8 +40,8 @@ describe('AppModule importa los módulos de los casos de uso', () => {
 /**
  * La app escucha sus colas de entrada: `AppModule` importa la conexión con RabbitMQ (`MessagingModule`,
  * que registra los consumidores) y `ConsumersModule`, que declara cada consumidor. Sin cualquiera de los
- * dos, la app arranca igual pero deja de escuchar `m2.habitacion.checkin.queue` (T015 de
- * `update-reservation`).
+ * dos, la app arranca igual pero deja de escuchar `m2.habitacion.checkin.queue` y
+ * `m2.habitacion.checkout.queue` (T015 y T016 de `update-reservation`).
  */
 describe('AppModule escucha las colas de entrada', () => {
   it.each([
@@ -53,10 +54,13 @@ describe('AppModule escucha las colas de entrada', () => {
     expect(imports).toContain(module);
   });
 
-  it('ConsumersModule declara CheckInConsumer', () => {
+  it.each([
+    ['CheckInConsumer', CheckInConsumer],
+    ['CheckOutConsumer', CheckOutConsumer],
+  ])('ConsumersModule declara %s', (_name, consumer) => {
     const providers: unknown[] =
       Reflect.getMetadata(MODULE_METADATA.PROVIDERS, ConsumersModule) ?? [];
 
-    expect(providers).toContain(CheckInConsumer);
+    expect(providers).toContain(consumer);
   });
 });
