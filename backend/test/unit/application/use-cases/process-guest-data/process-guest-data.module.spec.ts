@@ -6,7 +6,9 @@ import { GUEST_DATA_REPOSITORY } from '../../../../../src/application/ports/out/
 import { GUEST_STAY_QUERY } from '../../../../../src/application/ports/out/guest-stay.query.js';
 import { MIGRATORY_MOVEMENT_REPOSITORY } from '../../../../../src/application/ports/out/migratory-movement.repository.js';
 import { RESERVATION_REPOSITORY } from '../../../../../src/application/ports/out/reservation.repository.js';
+import { GetGuestStayDetailService } from '../../../../../src/application/use-cases/process-guest-data/get-guest-stay-detail.service.js';
 import { ListGuestStaysService } from '../../../../../src/application/use-cases/process-guest-data/list-guest-stays.service.js';
+import { GET_GUEST_STAY_DETAIL } from '../../../../../src/application/use-cases/process-guest-data/ports/in/get-guest-stay-detail.port.js';
 import { LIST_GUEST_STAYS } from '../../../../../src/application/use-cases/process-guest-data/ports/in/list-guest-stays.port.js';
 import { REGISTER_GUEST_MOVEMENTS } from '../../../../../src/application/use-cases/process-guest-data/ports/in/register-guest-movements.port.js';
 import { SELECT_FOREIGN_MOVEMENTS } from '../../../../../src/application/use-cases/process-guest-data/ports/in/select-foreign-movements.port.js';
@@ -52,6 +54,11 @@ describe('ProcessGuestDataModule (plan base, regla 4)', () => {
       token: LIST_GUEST_STAYS,
       service: ListGuestStaysService,
       who: 'el controlador de la vista',
+    },
+    {
+      token: GET_GUEST_STAY_DETAIL,
+      service: GetGuestStayDetailService,
+      who: 'el controlador de la vista (C2)',
     },
   ])(
     'exporta $token.description: $who lo puede inyectar',
