@@ -84,7 +84,23 @@ export interface ReservationQueryPort {
     operationalDate: string,
     tx: Transaction,
   ): Promise<DailyListArrival[]>;
+
+  /**
+   * T012: cuántas reservas se esperan ese día (C2, FR-005a), contadas por reserva y no por habitación.
+   * `operationalDate` es `AAAA-MM-DD`.
+   */
+  countExpectedArrivalsAndDepartures(
+    operationalDate: string,
+  ): Promise<ExpectedArrivalsAndDepartures>;
 }
+
+/** Las dos cifras del resumen del día (C2). */
+export type ExpectedArrivalsAndDepartures = {
+  /** Reservas `ACTIVE` o `PENDING` con `startDate` igual al día. */
+  expectedArrivals: number;
+  /** Reservas `IN_PROGRESS` con `endDate` igual al día. */
+  expectedDepartures: number;
+};
 
 /** Una llegada del día, con lo que hace falta para proyectarla en la lista (T023). */
 export type DailyListArrival = {
