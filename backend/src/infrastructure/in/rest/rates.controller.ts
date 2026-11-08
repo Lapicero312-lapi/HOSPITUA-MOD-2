@@ -38,7 +38,7 @@ export class RatesController {
   @Get('reference')
   @ApiOperation({
     summary:
-      'La tarifa base, el ajuste de temporada y la tarifa vigente de cada categoría de `RATE_REFERENCE`, con la nota de que es ilustrativa. No llama al Módulo 3 ni guarda nada (FR-009).',
+      'La tarifa base, el ajuste de temporada ilustrativo y la tarifa efectiva resultante de cada categoría de `RATE_REFERENCE`, sin la capacidad de las habitaciones. No llama al Módulo 3 ni guarda nada (FR-009).',
   })
   @ApiOkResponse({
     type: ReferenceRatesDto,
