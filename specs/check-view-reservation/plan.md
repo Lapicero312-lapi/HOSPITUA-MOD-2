@@ -225,6 +225,48 @@ Un único cuadro de búsqueda (`search`) cubre código de reserva, código de la
   los recursos inexistentes son 400). Si `reservationRef` no cumple el formato permitido:
   `400` `INVALID_RESERVATION_CODE`.
 
+**`GetReservationDetail` (T016 y T017).** El puerto de entrada está en
+`application/use-cases/check-view-reservation/ports/in/get-reservation-detail.port.ts`, con su símbolo
+`GET_RESERVATION_DETAIL`. `CheckViewReservationModule` lo registra.
+
+```typescript
+interface GetReservationDetail {
+  // C3 para la Recepcionista.
+  // @throws BusinessError INVALID_RESERVATION_CODE si reservationRef no es "RSV-" y 8 hexadecimales en mayúscula
+  //   (sin consultar la base, T017), o RESERVATION_NOT_FOUND si no existe.
+  execute(reservationRef: string): Promise<ReservationDetail>;
+}
+
+type ReservationDetail = {
+  reservation: Reservation;        // completa, con habitaciones, titular y conflicto
+  nights: number;                  // noches entre startDate y endDate
+  otaName: string | null;          // solo en reservas OTA
+  cancellation: Cancellation | null;
+};
+
+interface CancellationRepository {   // se agrega un método
+  // La cancelación de la reserva, o null si no tiene.
+  findByReservationId(reservationId: string): Promise<Cancellation | null>;
+}
+```
+
+Pasos de `execute`:
+
+1. Revisa el formato de `reservationRef` antes de tocar la base.
+2. Busca la reserva con `ReservationRepository.findByRef`. Si no existe, lanza `RESERVATION_NOT_FOUND`.
+3. En una reserva `OTA`, lee el nombre de la agencia con `OtaRepository.findById`.
+4. En una reserva `CANCELLED`, lee su `Cancellation` con `findByReservationId`. En los demás estados,
+   `cancellation` es `null`; el No-Show no tiene `Cancellation`.
+
+El cuerpo de C3 lo arma un DTO en `infrastructure/in/rest/`, sin reglas de negocio:
+
+- el dinero va como texto con dos decimales;
+- `createdAt` y `cancellationDate` van en hora de Colombia con segundos (`colombiaTime`);
+- una habitación sin asignar trae `roomId` y `roomNumber` en `null`;
+- `notes` va tal cual: `null` cuando la reserva no tiene observaciones.
+
+La ruta admite `RECEPTIONIST`. Con `MODULE3` responde `400` `INVALID_CLIENT` hasta que llegue C4 (T032).
+
 ### C4. `GET /api/reservations/{reservationRef}` (Módulo 3): consulta para liquidar (FR-022)
 
 **Misma ruta que C3, respuesta distinta según `X-Client`.** Con `X-Client: MODULE3` el controlador llama al caso
