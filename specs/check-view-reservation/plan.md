@@ -639,6 +639,77 @@ La publicación es de T025, T026 y T029.
    ruta REST para eso.
 6. Si la publicación falla, la operación que originó el cambio **no se revierte** (FR-020).
 
+### Publicar los mensajes (`DailyListPublisher` y `PublishPendingDailyMessages`, T025 y T026)
+
+El puerto de salida está en `application/ports/out/daily-list-publisher.ts`, con su símbolo
+`DAILY_LIST_PUBLISHER`. Lo implementa `RabbitDailyListPublisher` (`infrastructure/out/messaging/`), que
+provee `MessagingModule` (global). El puerto de entrada está en
+`application/use-cases/check-view-reservation/ports/in/publish-pending-daily-messages.port.ts`, con su
+símbolo `PUBLISH_PENDING_DAILY_MESSAGES`. `CheckViewReservationModule` lo registra y lo exporta (regla 4).
+
+```typescript
+interface DailyListPublisher {        // application/ports/out/
+  // Publica un mensaje y espera la confirmación de RabbitMQ.
+  // Lanza un error si no hay conexión, si RabbitMQ lo rechaza o si no confirma en 5 s.
+  publish(message: { messageId: string; kind: 'LIST' | 'UPDATE'; payload: object }): Promise<void>;
+}
+
+interface PublishPendingDailyMessages {
+  // Publica en orden los mensajes pendientes que ya pueden salir.
+  // Devuelve cuántos publicó.
+  execute(): Promise<number>;
+}
+
+interface DailyMessageRepository {    // se agregan tres métodos
+  // Los mensajes PENDING y FAILED, por operational_date y sequence_number ascendentes, hasta `limit`.
+  findUnpublished(limit: number): Promise<UnpublishedDailyMessage[]>;
+  // publish_status = PUBLISHED y published_at.
+  markPublished(messageId: string, publishedAt: Date): Promise<void>;
+  // Guarda attempts y next_attempt_at; con status FAILED, next_attempt_at queda vacío.
+  recordFailure(messageId: string, attempts: number, status: 'PENDING' | 'FAILED', nextAttemptAt: Date | null): Promise<void>;
+}
+
+// UnpublishedDailyMessage: messageId, kind, payload, publishStatus ('PENDING' | 'FAILED'), attempts y nextAttemptAt.
+```
+
+**`RabbitDailyListPublisher` (T025).**
+
+- Publica el `payload` tal como está guardado. El exchange es `hospitua.events` y la routing key depende
+  del tipo:
+  - `LIST` va con `reserva.lista-del-dia`;
+  - `UPDATE` va con `reserva.lista-del-dia.actualizacion`.
+- El mensaje sale persistente, con `content_type` `application/json` y `message_id` igual al
+  `messageId` del cuerpo.
+- Espera la confirmación de publicación. Si RabbitMQ no confirma en 5 s, cuenta como fallo (plan base,
+  "Conexión").
+- Publica de a un mensaje y por el mismo canal, así que nunca hay dos en vuelo. El orden lo decide
+  `PublishPendingDailyMessages`.
+
+**`execute` de `PublishPendingDailyMessages` (T026).** No abre una transacción: cada mensaje se marca
+por separado, apenas RabbitMQ lo confirma.
+
+1. Lee los no publicados con `findUnpublished(100)`. Si no hay ninguno, devuelve el total publicado.
+2. Los recorre en orden y se detiene en el primero que no puede salir:
+   - uno `FAILED`, porque los siguientes esperan detrás (punto 4 de "Publicación en orden");
+   - uno con `nextAttemptAt` posterior a `Clock.now()`.
+3. Publica cada uno con `DailyListPublisher.publish`:
+   - **Si sale bien**, lo marca con `markPublished(messageId, Clock.now())` y sigue con el siguiente.
+   - **Si falla**, suma un intento.
+     - Con menos de 10 intentos, guarda `PENDING` y el `nextAttemptAt`: `Clock.now()` más la espera de
+       ese intento (5 s, 15 s, 45 s, 2 min y, del quinto en adelante, 5 min).
+     - En el décimo, guarda `FAILED` y registra la alerta: un log de nivel `error` con el `messageId`,
+       la `operationalDate` y el `sequenceNumber`, sin el `payload` (tiene datos personales).
+     - En los dos casos se detiene ahí.
+4. Si publicó los 100, vuelve al paso 1.
+
+El error de la publicación no se propaga: queda en el log (sin datos personales) y en los intentos. Así
+nunca revierte la operación que originó el mensaje (FR-020).
+
+**Quién lo llama (T029).** La tarea de cada 10 s (`PublishPendingJob`), con el bloqueo asesor
+`daily-list-publish`, y la publicación inmediata después de confirmar la transacción y después de
+generar la lista. Las dos pasan por el mismo bloqueo, para que dos ejecuciones no publiquen a la vez y
+se desordenen.
+
 ### Tareas programadas (zona horaria `America/Bogota`, con bloqueo asesor)
 
 | Tarea | Horario | Qué hace |
