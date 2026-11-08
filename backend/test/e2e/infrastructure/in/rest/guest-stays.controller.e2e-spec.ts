@@ -161,4 +161,80 @@ describe('GET /api/guest-stays (e2e)', () => {
     expect(res.body).toMatchObject({ errorCode, path: '/api/guest-stays' });
     expect(res.body).toHaveProperty('message');
   });
+
+  describe('C2: GET /api/reservations/{reservationRef}/guests/{documentNumber}', () => {
+    it('responde 200 con la forma de C2: John con su enlace a la reserva y su entrada', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/api/reservations/${reservationRef}/guests/${DOCUMENT_NUMBER}`)
+        .expect(200)
+        .expect('Content-Type', /application\/json/);
+
+      expect(res.body).toEqual({
+        reservationRef,
+        reservationLink: `/api/reservations/${reservationRef}`,
+        guest: {
+          documentType: 'PAS',
+          documentNumber: DOCUMENT_NUMBER,
+          firstName: 'John',
+          lastName: 'Smith',
+          birthDate: '1990-05-12',
+          nationality: 'Estados Unidos',
+          isForeign: true,
+          originPlace: 'Miami, Estados Unidos',
+          destinationPlace: 'Cartagena, Colombia',
+        },
+        movements: [{ movementType: 'ENTRY', movementDate: '2026-10-09' }],
+      });
+    });
+
+    it.each([
+      [
+        'un huésped que no está en la reserva',
+        () => `/api/reservations/${reservationRef}/guests/NOEXISTE1`,
+        'GUEST_NOT_FOUND',
+      ],
+      [
+        'una reserva que no existe',
+        () => `/api/reservations/RSV-00000000/guests/${DOCUMENT_NUMBER}`,
+        'GUEST_NOT_FOUND',
+      ],
+      [
+        'una referencia con otro formato',
+        () => `/api/reservations/RSV-123/guests/${DOCUMENT_NUMBER}`,
+        'INVALID_RESERVATION_CODE',
+      ],
+      [
+        'un documento con caracteres no permitidos',
+        () => `/api/reservations/${reservationRef}/guests/X99%3B`,
+        'INVALID_DOCUMENT_NUMBER',
+      ],
+      [
+        'un documento en blanco',
+        () => `/api/reservations/${reservationRef}/guests/%20`,
+        'INVALID_DOCUMENT_NUMBER',
+      ],
+      [
+        'el documento vacío',
+        () => `/api/reservations/${reservationRef}/guests/`,
+        'INVALID_DOCUMENT_NUMBER',
+      ],
+      [
+        'sin documento',
+        () => `/api/reservations/${reservationRef}/guests`,
+        'INVALID_DOCUMENT_NUMBER',
+      ],
+      [
+        'sin documento y con la referencia mala: primero la referencia',
+        () => '/api/reservations/RSV-123/guests',
+        'INVALID_RESERVATION_CODE',
+      ],
+    ])('responde 400 con %s', async (_caso, path, errorCode) => {
+      const url = path();
+      const res = await request(app.getHttpServer()).get(url).expect(400);
+
+      expect(res.body).toMatchObject({ errorCode, path: url });
+      expect(res.body).toHaveProperty('message');
+      expect(res.body).toHaveProperty('timestamp');
+    });
+  });
 });
