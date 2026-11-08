@@ -1,18 +1,38 @@
-import { Controller, Get, Inject, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Inject,
+  Param,
+  Post,
+  Query,
+} from '@nestjs/common';
+import { readReceptionCancellationBody } from '../../../application/use-cases/cancel-reservation/cancel-request.validator.js';
+import {
+  CANCEL_RESERVATION,
+  type CancellationResult,
+  type CancelReservation,
+} from '../../../application/use-cases/cancel-reservation/ports/in/cancel-reservation.port.js';
 import {
   LIST_RESERVATIONS,
   type ListReservations,
   type ReservationListResult,
 } from '../../../application/use-cases/check-view-reservation/ports/in/list-reservations.port.js';
-import { ClientHeader } from './request-headers.js';
+import { ClientHeader, UserHeader } from './request-headers.js';
 import { readReservationListQuery } from './reservation-list-query.dto.js';
 
-/** Las rutas de reservas de `check-view-reservation` (C1 y, en sus tareas, C2 a C5). */
+/**
+ * Las rutas de reservas, compartidas por sus casos de uso: `check-view-reservation` (C1 y, en sus tareas,
+ * C2 a C5) y la cancelación de `cancel-reservation` (A).
+ */
 @Controller('reservations')
 export class ReservationsController {
   constructor(
     @Inject(LIST_RESERVATIONS)
     private readonly listReservations: ListReservations,
+    @Inject(CANCEL_RESERVATION)
+    private readonly cancelReservation: CancelReservation,
   ) {}
 
   /**
@@ -32,5 +52,30 @@ export class ReservationsController {
       ...filters
     } = readReservationListQuery(query);
     return this.listReservations.execute(filters, page);
+  }
+
+  /**
+   * A de `cancel-reservation`, `POST /api/reservations/{reservationRef}/cancellation`: la Recepcionista
+   * cancela una reserva directa (D1). `X-User` es quien la hace (`USER_REQUIRED` si falta). Las reglas, en
+   * el orden de la regla 3, las aplica `CancelReservation` en su propia transacción. Responde `200` con la
+   * cancelación; los errores salen por el filtro global como `400`.
+   */
+  @Post(':reservationRef/cancellation')
+  @HttpCode(200)
+  async cancel(
+    @Param('reservationRef') reservationRef: string,
+    @UserHeader() processedBy: string,
+    @Body() body: unknown,
+  ): Promise<CancellationResult> {
+    const { acknowledged, expectedUpdatedAt, reason } =
+      readReceptionCancellationBody(reservationRef, body);
+    return this.cancelReservation.execute({
+      reservationRef,
+      channel: 'RECEPTION',
+      processedBy,
+      reason,
+      acknowledged,
+      expectedUpdatedAt,
+    });
   }
 }

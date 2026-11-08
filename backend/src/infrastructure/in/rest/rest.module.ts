@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { CalculateDynamicRateModule } from '../../../application/use-cases/calculate-dynamic-rate/calculate-dynamic-rate.module.js';
+import { CancelReservationModule } from '../../../application/use-cases/cancel-reservation/cancel-reservation.module.js';
 import { CheckViewReservationModule } from '../../../application/use-cases/check-view-reservation/check-view-reservation.module.js';
 import { ConsultRoomInventoryModule } from '../../../application/use-cases/consult-room-inventory/consult-room-inventory.module.js';
 import { GenerateDirectReservationModule } from '../../../application/use-cases/generate-direct-reservation/generate-direct-reservation.module.js';
@@ -18,6 +19,7 @@ import { RoomsController } from './rooms.controller.js';
     CalculateDynamicRateModule,
     ProcessGuestDataModule,
     CheckViewReservationModule,
+    CancelReservationModule,
   ],
   controllers: [
     RoomsController,

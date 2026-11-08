@@ -21,7 +21,12 @@ import {
   type CancellationRepository,
 } from '../../ports/out/cancellation.repository.js';
 import { CLOCK, type Clock } from '../../ports/out/clock.js';
-import type { Transaction } from '../../ports/out/transaction.js';
+import {
+  type Transaction,
+  TRANSACTION_RUNNER,
+  type TransactionRunner,
+} from '../../ports/out/transaction.js';
+import { colombiaTime } from '../check-view-reservation/message-time.js';
 import {
   DAILY_LIST_CHANGE_RECORDER,
   type DailyListChangeRecorder,
@@ -43,6 +48,7 @@ import {
   STATUS_NOT_CANCELLABLE,
 } from './error-codes.js';
 import type {
+  CancellationResult,
   CancelReservation,
   CancelReservationCommand,
 } from './ports/in/cancel-reservation.port.js';
@@ -72,12 +78,42 @@ export class CancelReservationService implements CancelReservation {
     private readonly dailyList: DailyListChangeRecorder,
     @Inject(CLOCK)
     private readonly clock: Clock,
+    @Inject(TRANSACTION_RUNNER)
+    private readonly transactions: TransactionRunner,
   ) {}
 
   async cancel(
     tx: Transaction,
     command: CancelReservationCommand,
   ): Promise<Reservation> {
+    return (await this.apply(tx, command)).reservation;
+  }
+
+  async execute(
+    command: CancelReservationCommand,
+  ): Promise<CancellationResult> {
+    const { reservation, cancellation } = await this.transactions.run((tx) =>
+      this.apply(tx, command),
+    );
+    return {
+      reservationRef: reservation.reservationRef,
+      status: 'CANCELLED',
+      cancellation: {
+        cancellationId: cancellation.id,
+        cancellationDate: colombiaTime(cancellation.cancellationDate),
+        channel: cancellation.channel,
+        reason: cancellation.reason,
+        processedBy: cancellation.processedBy,
+        status: cancellation.status,
+      },
+    };
+  }
+
+  /** La regla 3 en orden y, si pasa, el cambio, la `Cancellation` y el aviso, todo en `tx`. */
+  private async apply(
+    tx: Transaction,
+    command: CancelReservationCommand,
+  ): Promise<{ reservation: Reservation; cancellation: Cancellation }> {
     // Paso 1, antes de consultar la base: la referencia y el motivo (punto 9).
     checkCancelRequest(command.reservationRef, command.reason);
 
@@ -97,10 +133,14 @@ export class CancelReservationService implements CancelReservation {
     }
 
     // Paso 4, antes del estado: la segunda de dos cancelaciones simultáneas recibe el mensaje de
-    // concurrencia del spec, no el del estado.
+    // concurrencia del spec, no el del estado. En A el `updatedAt` es obligatorio: sin él no coincide.
+    const checksUpdatedAt =
+      command.channel === 'RECEPTION' ||
+      command.expectedUpdatedAt !== undefined;
     if (
-      command.expectedUpdatedAt !== undefined &&
-      (before.updatedAt === null ||
+      checksUpdatedAt &&
+      (command.expectedUpdatedAt === undefined ||
+        before.updatedAt === null ||
         !isSameInstant(command.expectedUpdatedAt, before.updatedAt))
     ) {
       throw new BusinessError(
@@ -124,11 +164,11 @@ export class CancelReservationService implements CancelReservation {
       'CANCELLED',
       STATUS_REASON_BY_CHANNEL[command.channel],
     );
-    await this.saveCancellation(tx, after, command);
+    const cancellation = await this.saveCancellation(tx, after, command);
 
     // T007: REMOVED con motivo CANCELLED, solo si la reserva estaba en la lista del día ya enviada.
     await this.dailyList.record(tx, before, after);
-    return after;
+    return { reservation: after, cancellation };
   }
 
   /** La única `Cancellation` de la reserva (regla 5), inmutable. */
@@ -136,7 +176,7 @@ export class CancelReservationService implements CancelReservation {
     tx: Transaction,
     reservation: Reservation,
     command: CancelReservationCommand,
-  ): Promise<void> {
+  ): Promise<Cancellation> {
     const cancellation = Cancellation.restore({
       id: randomUUID(),
       reservationRef: reservation.reservationRef,
@@ -148,6 +188,7 @@ export class CancelReservationService implements CancelReservation {
     });
     try {
       await this.cancellations.insert(cancellation, tx);
+      return cancellation;
     } catch (error) {
       // La restricción única es el respaldo ante dos cancelaciones simultáneas (D2).
       if (error instanceof DuplicateCancellationError) {

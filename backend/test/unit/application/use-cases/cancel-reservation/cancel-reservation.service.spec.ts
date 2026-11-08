@@ -106,6 +106,8 @@ function serviceWith(
     { insert: insertCancellation } as CancellationRepository,
     { record } as DailyListChangeRecorder,
     CLOCK,
+    // `execute` abre su transacción; `cancel` recibe la de quien llama.
+    { run: (work) => work(TX) },
   );
   /** La reserva que devolvió `transition`: la ya guardada. */
   const cancelled = () =>
@@ -490,5 +492,99 @@ describe('CancelReservation: la Cancellation que la restricción única rechaza'
       failure,
     );
     expect(record).not.toHaveBeenCalled();
+  });
+});
+
+describe('CancelReservation.execute: la cancelación de la Recepcionista en su propia transacción (T008, A y D1)', () => {
+  it('escenario 1: abre la transacción, cancela y responde lo del contrato A, con la fecha en hora de Colombia', async () => {
+    const reservation = directReservation();
+    const { service, findForUpdate, insertCancellation } =
+      serviceWith(reservation);
+
+    const result = await service.execute(fromReception(reservation));
+
+    // La misma transacción para todo: la que abrió `execute`.
+    expect(findForUpdate).toHaveBeenCalledWith(TX, reservation.reservationRef);
+    const [cancellation] = insertCancellation.mock.calls[0];
+    expect(result).toEqual({
+      reservationRef: reservation.reservationRef,
+      status: 'CANCELLED',
+      cancellation: {
+        cancellationId: cancellation.id,
+        // NOW es 2026-10-09T15:15:20Z: las 10:15:20 en Colombia.
+        cancellationDate: '2026-10-09T10:15:20-05:00',
+        channel: 'RECEPTION',
+        reason: 'El huésped cambió de planes',
+        processedBy: 'laura.mendez',
+        status: 'COMPLETED',
+      },
+    });
+  });
+
+  it('sin motivo responde reason null', async () => {
+    const reservation = directReservation();
+    const { service } = serviceWith(reservation);
+
+    const result = await service.execute(
+      fromReception(reservation, { reason: null }),
+    );
+
+    expect(result.cancellation.reason).toBeNull();
+  });
+
+  it('si una verificación falla, el error sale tal cual y no se registra nada', async () => {
+    const reservation = directReservation({ status: 'IN_PROGRESS' });
+    const { service, insertCancellation, record } = serviceWith(reservation);
+
+    await expectBusinessError(
+      service.execute(fromReception(reservation)),
+      'STATUS_NOT_CANCELLABLE',
+      'El estado actual de la reserva no admite cancelación.',
+    );
+    expect(insertCancellation).not.toHaveBeenCalled();
+    expect(record).not.toHaveBeenCalled();
+  });
+});
+
+describe('CancelReservation: el updatedAt es obligatorio para la Recepcionista (contrato A)', () => {
+  it('paso 4: sin updatedAt, la Recepcionista recibe CONCURRENT_UPDATE y no se cancela', async () => {
+    const reservation = directReservation();
+    const { service, transition } = serviceWith(reservation);
+
+    await expectBusinessError(
+      service.cancel(
+        TX,
+        fromReception(reservation, { expectedUpdatedAt: undefined }),
+      ),
+      'CONCURRENT_UPDATE',
+      'Esta reserva ya fue actualizada o cancelada recientemente',
+    );
+    expect(transition).not.toHaveBeenCalled();
+  });
+
+  it('paso 3 antes del 4: sin acknowledged ni updatedAt, el error es el de la confirmación', async () => {
+    const reservation = directReservation();
+    const { service } = serviceWith(reservation);
+
+    await expectBusinessError(
+      service.cancel(
+        TX,
+        fromReception(reservation, {
+          acknowledged: false,
+          expectedUpdatedAt: undefined,
+        }),
+      ),
+      'CANCELLATION_NOT_CONFIRMED',
+      'Debe confirmar que entiende que la cancelación no se puede deshacer.',
+    );
+  });
+
+  it('Booking sigue sin necesitar updatedAt (contrato B)', async () => {
+    const reservation = otaReservation();
+    const { service } = serviceWith(reservation);
+
+    await expect(
+      service.cancel(TX, fromBooking(reservation)),
+    ).resolves.toMatchObject({ status: 'CANCELLED' });
   });
 });
