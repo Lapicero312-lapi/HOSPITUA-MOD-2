@@ -157,8 +157,11 @@ describe('DailyListJob (plan de check-view-reservation, "Tareas programadas" y D
     it('corre todos los días a las 00:00:00 de America/Bogota (05:00 UTC)', async () => {
       const { moduleRef, cron } = await scheduledJob();
       try {
+        // Como `sendAt()` de cron al programar la siguiente ejecución: en la zona de la tarea. Sin ella,
+        // `getNextDateFrom` calcularía en la zona de la máquina y la prueba dependería de dónde corre.
+        const { cronTime } = cron;
         const at = (iso: string) =>
-          cron.cronTime.getNextDateFrom(new Date(iso)).toJSDate();
+          cronTime.getNextDateFrom(new Date(iso), cronTime.timeZone).toJSDate();
         // Un segundo antes de las 00:00 en Colombia: corre a las 00:00.
         expect(at('2026-10-09T04:59:59Z')).toEqual(
           new Date('2026-10-09T05:00:00Z'),
