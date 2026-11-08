@@ -31,4 +31,19 @@ export class TypeOrmProcessedMessageRepository implements ProcessedMessageReposi
       [message.messageId, message.queue, message.sequenceNumber],
     );
   }
+
+  async highestSequenceNumber(
+    queue: string,
+    tx: Transaction,
+  ): Promise<number | null> {
+    // `bigint` llega como texto: los números de secuencia del Módulo 1 caben en un `number`.
+    const [{ highest }]: { highest: string | null }[] = await managerFor(
+      this.dataSource,
+      tx,
+    ).query(
+      'SELECT max(sequence_number)::text AS highest FROM processed_message WHERE queue = $1',
+      [queue],
+    );
+    return highest === null ? null : Number(highest);
+  }
 }
