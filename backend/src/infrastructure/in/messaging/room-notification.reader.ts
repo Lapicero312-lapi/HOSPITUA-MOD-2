@@ -3,7 +3,6 @@ import {
   readGuestNotification,
   UnusableGuestPayloadError,
 } from '../../../application/use-cases/process-guest-data/guest-payload.validator.js';
-import type { MovementType } from '../../../domain/shared/enums.js';
 import { InvalidMessageError } from './retry-or-dead-letter.js';
 
 /**
@@ -15,6 +14,12 @@ export const MISSING_IDENTIFIERS =
 
 /** El de `process-guest-data` para cualquier otro problema de estructura ("Validación de estructura"). */
 export const INVALID_PAYLOAD = 'Payload inválido.';
+
+/**
+ * `ENTRY` o `DEPARTURE`. Se toma del validador de `application/` y no de `domain/`: `infrastructure/in/`
+ * solo importa `application/` (plan base, tabla de capas).
+ */
+type MovementType = GuestNotification['movementType'];
 
 /** UUID en su forma estándar `8-4-4-4-12` (hexadecimal), de cualquier versión. */
 const UUID_FORMAT =
