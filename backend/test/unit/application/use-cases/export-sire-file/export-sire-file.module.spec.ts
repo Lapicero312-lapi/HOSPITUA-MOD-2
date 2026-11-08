@@ -11,6 +11,8 @@ import { SIRE_EXPORT_REPOSITORY } from '../../../../../src/application/ports/out
 import { ExportSireFileModule } from '../../../../../src/application/use-cases/export-sire-file/export-sire-file.module.js';
 import { ExportSireFileService } from '../../../../../src/application/use-cases/export-sire-file/export-sire-file.service.js';
 import { EXPORT_SIRE_FILE } from '../../../../../src/application/use-cases/export-sire-file/ports/in/export-sire-file.port.js';
+import { PREVIEW_SIRE_MOVEMENT } from '../../../../../src/application/use-cases/export-sire-file/ports/in/preview-sire-movement.port.js';
+import { PreviewSireMovementService } from '../../../../../src/application/use-cases/export-sire-file/preview-sire-movement.service.js';
 
 /**
  * Lo que ponen `PersistenceModule`, `ClockModule` y `SireConfigModule`, que son globales: no se usan en
@@ -36,21 +38,31 @@ class FakeGlobalModule {}
 const INJECTED = Symbol('INJECTED');
 
 describe('ExportSireFileModule (plan base, regla 4)', () => {
-  it('exporta EXPORT_SIRE_FILE: SireController lo puede inyectar', async () => {
-    const moduleRef = await Test.createTestingModule({
-      imports: [FakeGlobalModule, ExportSireFileModule],
-      // Un proveedor de fuera del módulo que lo inyecta: `moduleRef.get` lo encontraría aunque el módulo no
-      // lo exportara; inyectarlo, no.
-      providers: [
-        {
-          provide: INJECTED,
-          inject: [EXPORT_SIRE_FILE],
-          useFactory: (injected: unknown) => injected,
-        },
-      ],
-    }).compile();
+  it.each([
+    ['EXPORT_SIRE_FILE', EXPORT_SIRE_FILE, ExportSireFileService],
+    [
+      'PREVIEW_SIRE_MOVEMENT',
+      PREVIEW_SIRE_MOVEMENT,
+      PreviewSireMovementService,
+    ],
+  ])(
+    'exporta %s: SireController lo puede inyectar',
+    async (_name, token, service) => {
+      const moduleRef = await Test.createTestingModule({
+        imports: [FakeGlobalModule, ExportSireFileModule],
+        // Un proveedor de fuera del módulo que lo inyecta: `moduleRef.get` lo encontraría aunque el módulo no
+        // lo exportara; inyectarlo, no.
+        providers: [
+          {
+            provide: INJECTED,
+            inject: [token],
+            useFactory: (injected: unknown) => injected,
+          },
+        ],
+      }).compile();
 
-    expect(moduleRef.get(INJECTED)).toBeInstanceOf(ExportSireFileService);
-    await moduleRef.close();
-  });
+      expect(moduleRef.get(INJECTED)).toBeInstanceOf(service);
+      await moduleRef.close();
+    },
+  );
 });
