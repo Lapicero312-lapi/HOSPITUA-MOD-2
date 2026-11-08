@@ -1,3 +1,5 @@
+import { Global, Module } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Type } from 'class-transformer';
 import {
   IsIn,
@@ -7,6 +9,10 @@ import {
   Matches,
   Min,
 } from 'class-validator';
+import {
+  SIRE_CONFIG,
+  type SireConfig,
+} from '../../application/ports/out/sire-config.js';
 
 /**
  * Variables de "Exportar archivo SIRE" (plan de `export-sire-file`, "Configuración del formato"). El spec
@@ -92,3 +98,69 @@ export const SIRE_NON_PRODUCTION_DEFAULTS = {
   SIRE_HOTEL_CODE: 'DEV-HOTEL',
   SIRE_CITY_CODE: 'DEV-CIUDAD',
 };
+
+/** Las variables `SIRE_*` que arman el `SireConfig`, ya validadas al arrancar. */
+type SireVariables = Pick<
+  SireEnvironmentVariables,
+  | 'SIRE_HOTEL_CODE'
+  | 'SIRE_CITY_CODE'
+  | 'SIRE_FIELD_SEPARATOR'
+  | 'SIRE_DATE_FORMAT'
+  | 'SIRE_LINE_BREAK'
+  | 'SIRE_FILE_ENCODING'
+  | 'SIRE_MAX_PERIOD_DAYS'
+  | 'SIRE_MAX_RECORDS'
+>;
+
+/**
+ * El `SireConfig` a partir de las variables: `TAB` es el tabulador, `CRLF` es `\r\n` y `LF` es `\n`. Los
+ * demás valores pasan tal cual.
+ */
+export function sireConfigFrom(variables: SireVariables): SireConfig {
+  return {
+    format: {
+      hotelCode: variables.SIRE_HOTEL_CODE,
+      cityCode: variables.SIRE_CITY_CODE,
+      fieldSeparator:
+        variables.SIRE_FIELD_SEPARATOR === 'TAB'
+          ? '\t'
+          : variables.SIRE_FIELD_SEPARATOR,
+      dateFormat: variables.SIRE_DATE_FORMAT,
+      encoding: variables.SIRE_FILE_ENCODING === 'latin1' ? 'latin1' : 'utf-8',
+    },
+    lineBreak: variables.SIRE_LINE_BREAK === 'LF' ? '\n' : '\r\n',
+    maxPeriodDays: variables.SIRE_MAX_PERIOD_DAYS,
+    maxRecords: variables.SIRE_MAX_RECORDS,
+  };
+}
+
+/**
+ * Entrega `SIRE_CONFIG` desde la configuración validada. Es global: `ExportSireFile` y `SireController` lo
+ * inyectan sin importarlo, como `RATE_REFERENCE` de `RateReferenceConfigModule`.
+ */
+@Global()
+@Module({
+  providers: [
+    {
+      provide: SIRE_CONFIG,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService<SireVariables, true>) =>
+        sireConfigFrom({
+          SIRE_HOTEL_CODE: config.get('SIRE_HOTEL_CODE', { infer: true }),
+          SIRE_CITY_CODE: config.get('SIRE_CITY_CODE', { infer: true }),
+          SIRE_FIELD_SEPARATOR: config.get('SIRE_FIELD_SEPARATOR', {
+            infer: true,
+          }),
+          SIRE_DATE_FORMAT: config.get('SIRE_DATE_FORMAT', { infer: true }),
+          SIRE_LINE_BREAK: config.get('SIRE_LINE_BREAK', { infer: true }),
+          SIRE_FILE_ENCODING: config.get('SIRE_FILE_ENCODING', { infer: true }),
+          SIRE_MAX_PERIOD_DAYS: config.get('SIRE_MAX_PERIOD_DAYS', {
+            infer: true,
+          }),
+          SIRE_MAX_RECORDS: config.get('SIRE_MAX_RECORDS', { infer: true }),
+        }),
+    },
+  ],
+  exports: [SIRE_CONFIG],
+})
+export class SireConfigModule {}

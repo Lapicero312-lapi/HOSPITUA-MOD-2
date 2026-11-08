@@ -8,8 +8,8 @@ import { rabbitMqOptions } from './rabbitmq.options.js';
 
 /**
  * La conexión con RabbitMQ (`RABBITMQ_URL`), lo que declara el Módulo 2 al conectarse y el registro de
- * sus consumidores. Es global: los publicadores inyectan `AmqpConnection` sin importarlo. `AppModule`
- * lo importa cuando exista el primer consumidor o publicador.
+ * sus consumidores. Es global: los publicadores inyectan `AmqpConnection` sin importarlo. Lo importa
+ * `AppModule` desde el primer consumidor (`CheckInConsumer`).
  */
 @Global()
 @Module({
