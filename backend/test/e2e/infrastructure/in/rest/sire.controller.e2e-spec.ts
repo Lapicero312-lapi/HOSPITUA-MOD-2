@@ -266,4 +266,61 @@ describe('POST /api/sire/exports (e2e)', () => {
     });
     expect(res.headers['retry-after']).toMatch(/^\d+$/);
   });
+
+  describe('GET /api/sire/movements/{movementId}/preview (C, T011)', () => {
+    const preview = (movementId: string) =>
+      request(app.getHttpServer()).get(
+        `/api/sire/movements/${movementId}/preview`,
+      );
+
+    const exportCount = async (): Promise<number> => {
+      const [{ total }]: { total: number }[] = await dataSource.query(
+        'SELECT count(*)::int AS total FROM sire_export',
+      );
+      return total;
+    };
+
+    it('escenario 6: responde 200 con la forma de C y la línea del archivo, sin X-User y sin crear una SireExport', async () => {
+      const before = await exportCount();
+
+      const res = await preview(johnEntryId)
+        .expect(200)
+        .expect('Content-Type', /application\/json/);
+
+      expect(res.body).toMatchObject({
+        movementId: johnEntryId,
+        line: JOHN_ENTRY,
+      });
+      expect(res.body.reservationRef).toMatch(/^RSV-[0-9A-F]{8}$/);
+      expect(res.body.fields).toHaveLength(12);
+      expect(res.body.fields[5]).toEqual({
+        position: 6,
+        name: 'Apellidos',
+        value: 'SMITH',
+      });
+      await expect(exportCount()).resolves.toBe(before);
+    });
+
+    it('no pasa por el límite de solicitudes de la exportación', async () => {
+      for (let attempt = 0; attempt < 11; attempt++) {
+        await preview(johnEntryId).expect(200);
+      }
+    });
+
+    it.each([
+      ['un movementId con otro formato', () => 'mov-1'],
+      ['un movimiento que no existe', () => randomUUID()],
+      ['el movimiento de una colombiana', () => anaEntryId],
+    ])('responde 400 MOVEMENT_NOT_FOUND con %s', async (_caso, id) => {
+      const movementId = id();
+
+      const res = await preview(movementId).expect(400);
+
+      expect(res.body).toMatchObject({
+        errorCode: 'MOVEMENT_NOT_FOUND',
+        message: 'El movimiento no existe.',
+        path: `/api/sire/movements/${movementId}/preview`,
+      });
+    });
+  });
 });
