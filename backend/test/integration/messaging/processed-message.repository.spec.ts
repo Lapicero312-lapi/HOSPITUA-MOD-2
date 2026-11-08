@@ -140,4 +140,65 @@ describe('TypeOrmProcessedMessageRepository contra PostgreSQL real', () => {
 
     expect((await rows())[0].sequence_number).toBe('9007199254740991');
   });
+
+  describe('highestSequenceNumber (FR-023 de update-reservation)', () => {
+    const highest = (queue: string) =>
+      transactions.run((tx) => messages.highestSequenceNumber(queue, tx));
+
+    it('sin mensajes de la cola es null', async () => {
+      await expect(highest(CHECK_IN_QUEUE)).resolves.toBeNull();
+    });
+
+    it('es el mayor de esa cola, aunque haya llegado antes, sin mirar las otras colas', async () => {
+      await transactions.run(async (tx) => {
+        await messages.record(
+          aMessage({
+            messageId: 'a0000000-0000-4000-8000-000000000001',
+            sequenceNumber: 130,
+          }),
+          tx,
+        );
+        await messages.record(
+          aMessage({
+            messageId: 'a0000000-0000-4000-8000-000000000002',
+            sequenceNumber: 7,
+          }),
+          tx,
+        );
+        await messages.record(
+          aMessage({
+            messageId: 'a0000000-0000-4000-8000-000000000003',
+            queue: CHECK_OUT_QUEUE,
+            sequenceNumber: 500,
+          }),
+          tx,
+        );
+      });
+
+      await expect(highest(CHECK_IN_QUEUE)).resolves.toBe(130);
+      await expect(highest(CHECK_OUT_QUEUE)).resolves.toBe(500);
+    });
+
+    it('ve el mensaje registrado en la misma transacción', async () => {
+      const seen = await transactions.run(async (tx) => {
+        await messages.record(aMessage(), tx);
+        return messages.highestSequenceNumber(CHECK_IN_QUEUE, tx);
+      });
+
+      expect(seen).toBe(42);
+    });
+
+    it('devuelve como número un sequenceNumber más grande que un integer', async () => {
+      await transactions.run((tx) =>
+        messages.record(
+          aMessage({ sequenceNumber: 9_007_199_254_740_991 }),
+          tx,
+        ),
+      );
+
+      await expect(highest(CHECK_IN_QUEUE)).resolves.toBe(
+        9_007_199_254_740_991,
+      );
+    });
+  });
 });
