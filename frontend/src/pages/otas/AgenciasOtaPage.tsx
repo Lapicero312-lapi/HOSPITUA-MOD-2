@@ -12,7 +12,10 @@ function formatPercentage(value: number | null): string {
   }).format(value)} %`;
 }
 
-function formatDateTime(value: string): string {
+function formatDateTime(value: string | null): string {
+  if (value === null) {
+    return 'Sin sincronizar';
+  }
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
     return value;

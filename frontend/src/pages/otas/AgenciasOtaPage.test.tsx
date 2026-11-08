@@ -73,6 +73,28 @@ describe('AgenciasOtaPage', () => {
     expect(screen.getByText('Desconectada')).toBeInTheDocument();
   });
 
+  it('muestra que una agencia aún no se ha sincronizado', async () => {
+    vi.mocked(listOtas).mockResolvedValue({
+      items: [
+        {
+          id: 'ota-3',
+          name: 'Agoda',
+          commissionPercentage: 12,
+          connectionStatus: 'DISCONNECTED',
+          linkedAt: '2026-03-02T09:14:00-05:00',
+          lastSyncAt: null,
+          activeReservations: 0,
+        },
+      ],
+      total: 1,
+    });
+
+    renderPage();
+
+    expect(await screen.findByText('Agoda')).toBeInTheDocument();
+    expect(screen.getByText('Sin sincronizar')).toBeInTheDocument();
+  });
+
   it('muestra el estado vacío sin inventar datos', async () => {
     vi.mocked(listOtas).mockResolvedValue({ items: [], total: 0 });
 
