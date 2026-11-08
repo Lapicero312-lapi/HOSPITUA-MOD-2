@@ -1,5 +1,10 @@
 import { Controller, Get, Inject, Query } from '@nestjs/common';
 import {
+  GET_DAY_SUMMARY,
+  type DaySummary,
+  type GetDaySummary,
+} from '../../../application/use-cases/check-view-reservation/ports/in/get-day-summary.port.js';
+import {
   LIST_RESERVATIONS,
   type ListReservations,
   type ReservationListResult,
@@ -7,13 +12,27 @@ import {
 import { ClientHeader } from './request-headers.js';
 import { readReservationListQuery } from './reservation-list-query.dto.js';
 
-/** Las rutas de reservas de `check-view-reservation` (C1 y, en sus tareas, C2 a C5). */
+/** Las rutas de reservas de `check-view-reservation` (C1, C2 y, en sus tareas, C3 a C5). */
 @Controller('reservations')
 export class ReservationsController {
   constructor(
     @Inject(LIST_RESERVATIONS)
     private readonly listReservations: ListReservations,
+    @Inject(GET_DAY_SUMMARY)
+    private readonly getDaySummary: GetDaySummary,
   ) {}
+
+  /**
+   * C2, `GET /api/reservations/day-summary` para la Recepcionista: las llegadas y salidas esperadas del día
+   * operativo. Es una ruta fija: debe quedar declarada antes que `/{reservationRef}` (C3, T016), para que
+   * no se confunda con una referencia.
+   */
+  @Get('day-summary')
+  daySummary(
+    @ClientHeader(['RECEPTIONIST']) _client: string,
+  ): Promise<DaySummary> {
+    return this.getDaySummary.execute();
+  }
 
   /**
    * C1, `GET /api/reservations` para la Recepcionista (`X-Client: RECEPTIONIST`): el listado con filtros,

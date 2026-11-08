@@ -4,6 +4,7 @@ import {
   RESERVATION_PAGE_SIZE,
   type BlockingRoom,
   type DailyListArrival,
+  type ExpectedArrivalsAndDepartures,
   type ReservationListFilters,
   type ReservationListPage,
   type ReservationQueryPort,
@@ -120,6 +121,27 @@ export class TypeOrmReservationQuery implements ReservationQueryPort {
       reservation: reservationToDomain(row),
       otaName: otaNames.get(row.id) ?? null,
     }));
+  }
+
+  async countExpectedArrivalsAndDepartures(
+    operationalDate: string,
+  ): Promise<ExpectedArrivalsAndDepartures> {
+    // Una sola sentencia, para que las dos cifras salgan del mismo momento de la base.
+    const [row]: {
+      expected_arrivals: number;
+      expected_departures: number;
+    }[] = await this.dataSource.query(
+      `SELECT
+         (SELECT count(*)::int FROM reservation
+          WHERE status IN ('ACTIVE', 'PENDING') AND start_date = $1::date) AS expected_arrivals,
+         (SELECT count(*)::int FROM reservation
+          WHERE status = 'IN_PROGRESS' AND end_date = $1::date) AS expected_departures`,
+      [operationalDate],
+    );
+    return {
+      expectedArrivals: row.expected_arrivals,
+      expectedDepartures: row.expected_departures,
+    };
   }
 
   /** El nombre de la agencia de cada reserva `OTA` de la página. */
