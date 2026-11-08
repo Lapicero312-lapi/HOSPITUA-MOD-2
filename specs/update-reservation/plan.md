@@ -366,8 +366,16 @@ después, operationalDate?)` (de `check-view-reservation`) **dentro de su transa
 modificación y en el No-Show total. No lo llama en el Check-In ni en el Check-Out (FR-017 de ese caso de
 uso).
 
-**C3. Registro de huéspedes**: llama a `RegisterGuestMovements.register(tx, …)` de `process-guest-data`
-en el Check-In y en el Check-Out.
+**C3. Registro de huéspedes**: llama a `RegisterGuestMovements.register(tx, command)` de
+`process-guest-data` (su contrato B1) en el Check-In y en el Check-Out, **dentro de su transacción**,
+después del cambio de estado y antes de insertar el `messageId` en `processed_message` (D3 y D4).
+Acordado con el plan de `process-guest-data` (su T011):
+
+- `command` lleva `reservationId` (el `id` de la reserva bloqueada), y el `roomId`, el `movementType` y el
+  `movementDate` del mensaje. También lleva la lista `guests` tal como la deja el validador de estructura
+  de `process-guest-data`, que el consumidor aplica **antes de abrir la transacción**.
+- Devuelve el `RegistrationSummary`, que el consumidor deja en el log, solo con cifras.
+- Si algo falla después, se revierte todo, incluidos los huéspedes registrados.
 
 **C4. `ApplyOtaChange`** (FR-024; lo llama `generate-ota-reservation` con una revisión `modified`):
 
@@ -616,7 +624,7 @@ sequenceDiagram
     else todo válido
         K->>S: transitionStay(EXPECTED a CHECKED_IN)
         K->>S: transition(ACTIVE a IN_PROGRESS) si es la primera habitación
-        K->>G: register(tx, ENTRY, fecha, guests)
+        K->>G: register(tx, reserva.id, roomId, ENTRY, fecha, guests)
         K->>DB: INSERT processed_message y COMMIT
         K-->>Q: ack
     end
@@ -646,7 +654,7 @@ sequenceDiagram
         alt no queda habitación en EXPECTED ni CHECKED_IN
             K->>S: transition(IN_PROGRESS a COMPLETED)
         end
-        K->>G: register(tx, DEPARTURE, fecha, guests)
+        K->>G: register(tx, reserva.id, roomId, DEPARTURE, fecha, guests)
         K->>DB: INSERT processed_message y COMMIT
         K-->>M1: ack
     end
@@ -739,7 +747,7 @@ traducción del plan base:
 | Notificación válida (200) | Aplica el cambio, registra el `messageId` y confirma el mensaje |
 | Duplicado: mismo `messageId`, o habitación ya en `CHECKED_IN` (Check-In) o `CHECKED_OUT` (Check-Out) (200 idempotente) | Confirma sin efectos |
 | Reserva inexistente, estado que no admite el evento, habitación ajena, `NOT_ARRIVED`, sin ingreso (400) | **Confirma sin cambiar nada**, deja el caso en el log (sin datos personales) con el mensaje del spec y **no reintenta** |
-| Payload ilegible, sin `reservationRef` o `roomId`, o con caracteres maliciosos (400 de payload inválido) | **Dead-letter queue**, sin procesar; log "El payload de notificación es inválido. Falta el identificador de la reserva o de la habitación." |
+| Payload ilegible, sin `reservationRef` o `roomId`, o con caracteres maliciosos (400 de payload inválido) | **Dead-letter queue**, sin procesar; log sin datos personales: "El payload de notificación es inválido. Falta el identificador de la reserva o de la habitación." si falta la `reservationRef` o el `roomId`; con caracteres no permitidos, "Caracteres no válidos en los datos de los huéspedes.", y con cualquier otro problema de estructura, "Payload inválido." (los del validador de `process-guest-data`, acordados en su T011) |
 | Fallo temporal (base de datos caída) | Sin `commit`, reintento con espera creciente y, agotados los reintentos, dead-letter queue |
 | Salto de `sequenceNumber` | Advertencia en el log; se sigue procesando |
 
