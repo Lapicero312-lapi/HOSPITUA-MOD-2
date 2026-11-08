@@ -4,6 +4,7 @@ import {
   RESERVATION_PAGE_SIZE,
   type BlockingRoom,
   type DailyListArrival,
+  type NightBlockingRooms,
   type ReservationListFilters,
   type ReservationListPage,
   type ReservationQueryPort,
@@ -45,6 +46,38 @@ export class TypeOrmReservationQuery implements ReservationQueryPort {
       roomId: row.room_id,
       reservationRef: row.reservation_ref,
     }));
+  }
+
+  async blockingRoomsByCategory(
+    categoryRoom: string,
+    dateFrom: string,
+    dateTo: string,
+  ): Promise<NightBlockingRooms[]> {
+    // Una fila por noche de [dateFrom, dateTo) (date + entero = la noche), aunque ninguna habitación la
+    // ocupe. La estadía [start_date, end_date) ocupa la noche si empieza ese día o antes y sale después. El
+    // uuid se agrega como texto para que el driver devuelva un arreglo; el orden del texto es el del uuid.
+    const rows: { night: string; room_ids: string[] }[] =
+      await this.dataSource.query(
+        `SELECT to_char(n.night, 'YYYY-MM-DD') AS night,
+                coalesce(
+                  array_agg(DISTINCT rr.room_id::text ORDER BY rr.room_id::text)
+                    FILTER (WHERE rr.room_id IS NOT NULL),
+                  '{}'
+                ) AS room_ids
+         FROM (
+           SELECT $2::date + i AS night
+           FROM generate_series(0, $3::date - $2::date - 1) AS i
+         ) n
+         LEFT JOIN reservation_room rr
+           ON rr.blocks_inventory
+          AND rr.category_room = $1
+          AND rr.start_date <= n.night
+          AND rr.end_date > n.night
+         GROUP BY n.night
+         ORDER BY n.night`,
+        [categoryRoom, dateFrom, dateTo],
+      );
+    return rows.map((row) => ({ date: row.night, roomIds: row.room_ids }));
   }
 
   async listReservations(
