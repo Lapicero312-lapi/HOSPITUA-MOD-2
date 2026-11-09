@@ -33,6 +33,7 @@ import {
 import { configureApp } from '../../../src/configure-app.js';
 import type { Reservation } from '../../../src/domain/reservation/reservation.js';
 import type {
+  DocumentType,
   ReservationStatus,
   StatusReason,
   StayStatus,
@@ -79,85 +80,94 @@ const JOHN: GuestPayload = {
   originPlace: 'Miami, Estados Unidos',
   destinationPlace: 'Cartagena, Colombia',
 };
-const KENJI: GuestPayload = {
-  firstName: 'Kenji',
+/**
+ * Los demás, de los movimientos de la vista de huéspedes del wireframe, con sus datos tal cual. Daniela,
+ * colombiana, no trae procedencia ni destino.
+ */
+const HIROSHI: GuestPayload = {
+  firstName: 'Hiroshi',
   lastName: 'Tanaka',
   documentType: 'PAS',
-  documentNumber: 'TK778812',
-  birthDate: '1979-11-02',
+  documentNumber: 'JP0098231',
+  birthDate: '1984-03-11',
   nationality: 'Japón',
   originPlace: 'Tokio, Japón',
-  destinationPlace: 'Bogotá, Colombia',
-};
-const LUCIA: GuestPayload = {
-  firstName: 'Lucía',
-  lastName: 'Fernández',
-  documentType: 'PAS',
-  documentNumber: 'ES4471230',
-  birthDate: '1992-06-25',
-  nationality: 'España',
-  originPlace: 'Madrid, España',
-  destinationPlace: 'Santa Marta, Colombia',
+  destinationPlace: 'Cartagena, Colombia',
 };
 const LUKAS: GuestPayload = {
   firstName: 'Lukas',
   lastName: 'Becker',
   documentType: 'PAS',
   documentNumber: 'C4X8R21K',
-  birthDate: '1990-01-30',
+  birthDate: '1991-07-02',
   nationality: 'Alemania',
   originPlace: 'Berlín, Alemania',
-  destinationPlace: 'Santa Marta, Colombia',
-};
-const MARIA_JOSE: GuestPayload = {
-  firstName: 'María José',
-  lastName: 'Ruiz',
-  documentType: 'CC',
-  documentNumber: '52345678',
-  birthDate: '1983-09-08',
-  nationality: 'Colombia',
-};
-const SOFIA: GuestPayload = {
-  firstName: 'Sofía',
-  lastName: 'Restrepo',
-  documentType: 'CC',
-  documentNumber: '1020304050',
-  birthDate: '2001-04-17',
-  nationality: 'Colombia',
-};
-const PIERRE: GuestPayload = {
-  firstName: 'Pierre',
-  lastName: 'Dubois',
-  documentType: 'PAS',
-  documentNumber: 'FR123456',
-  birthDate: '1985-02-03',
-  nationality: 'Francia',
-  originPlace: 'París, Francia',
   destinationPlace: 'Medellín, Colombia',
 };
-const CARLOS: GuestPayload = {
-  firstName: 'Carlos',
-  lastName: 'Gómez',
+const ISABELA: GuestPayload = {
+  firstName: 'Isabela',
+  lastName: 'Santos Rocha',
+  documentType: 'PAS',
+  documentNumber: 'BR552104',
+  birthDate: '1988-12-19',
+  nationality: 'Brasil',
+  originPlace: 'São Paulo, Brasil',
+  destinationPlace: 'Santa Marta, Colombia',
+};
+const PEDRO: GuestPayload = {
+  firstName: 'Pedro',
+  lastName: 'Santos Rocha',
+  documentType: 'PAS',
+  documentNumber: 'BR552187',
+  birthDate: '2014-05-30',
+  nationality: 'Brasil',
+  originPlace: 'São Paulo, Brasil',
+  destinationPlace: 'Santa Marta, Colombia',
+};
+const LUCIA: GuestPayload = {
+  firstName: 'Lucía',
+  lastName: 'Fernández Gil',
+  documentType: 'PAS',
+  documentNumber: 'ES4471230',
+  birthDate: '1990-09-08',
+  nationality: 'España',
+  originPlace: 'Madrid, España',
+  destinationPlace: 'Bogotá, Colombia',
+};
+const MARTA: GuestPayload = {
+  firstName: 'Marta',
+  lastName: 'Kowalski',
+  documentType: 'PAS',
+  documentNumber: 'PL7730215',
+  birthDate: '1986-02-14',
+  nationality: 'Polonia',
+  originPlace: 'Varsovia, Polonia',
+  destinationPlace: 'Cartagena, Colombia',
+};
+const DANIELA: GuestPayload = {
+  firstName: 'Daniela',
+  lastName: 'Cárdenas Ruiz',
   documentType: 'CC',
-  documentNumber: '1144093552',
-  birthDate: '1988-07-14',
+  documentNumber: '52118904',
+  birthDate: '1992-04-17',
   nationality: 'Colombia',
 };
-const EMMA: GuestPayload = {
-  firstName: 'Emma',
-  lastName: 'Wilson',
+const JONAS: GuestPayload = {
+  firstName: 'Jonas',
+  lastName: 'Weber',
   documentType: 'PAS',
-  documentNumber: 'UK5521987',
-  birthDate: '1996-12-01',
-  nationality: 'Reino Unido',
-  originPlace: 'Londres, Reino Unido',
-  destinationPlace: 'Cartagena, Colombia',
+  documentNumber: 'C9T4M55Z',
+  birthDate: '1989-11-23',
+  nationality: 'Alemania',
+  originPlace: 'Hamburgo, Alemania',
+  destinationPlace: 'Medellín, Colombia',
 };
 
 /**
- * Las estadías de las pruebas, una reserva por fila, de la entrada más reciente a la más antigua: 12
- * huéspedes en 8 reservas, colombianos y extranjeros, unos en el hotel y otros ya fuera. John y Ana tienen
- * dos estadías cada uno. `endDate` es la salida prevista de la reserva.
+ * Las estadías de las pruebas, una reserva por fila, de la entrada más reciente a la más antigua: 12 filas
+ * en 9 reservas, de colombianos y extranjeros, unos en el hotel y otros ya fuera. Isabela y Pedro, y Daniela
+ * y Jonas, comparten reserva como en el wireframe; John y Ana tienen dos estadías cada uno. `endDate` es la
+ * salida prevista de la reserva.
  */
 const STAYS = {
   johnAndAna: {
@@ -166,32 +176,38 @@ const STAYS = {
     exit: null,
     endDate: '2026-10-21',
   },
-  kenji: {
-    guests: [KENJI],
+  lucia: {
+    guests: [LUCIA],
     entry: '2026-10-16',
     exit: null,
     endDate: '2026-10-22',
   },
-  luciaAndLukas: {
-    guests: [LUCIA, LUKAS],
+  isabelaAndPedro: {
+    guests: [ISABELA, PEDRO],
     entry: '2026-10-14',
     exit: '2026-10-17',
     endDate: '2026-10-17',
   },
-  mariaJoseAndSofia: {
-    guests: [MARIA_JOSE, SOFIA],
+  danielaAndJonas: {
+    guests: [DANIELA, JONAS],
     entry: '2026-10-09',
     exit: null,
     endDate: '2026-10-24',
   },
-  pierreAndCarlos: {
-    guests: [PIERRE, CARLOS],
+  lukas: {
+    guests: [LUKAS],
     entry: '2026-10-05',
     exit: '2026-10-08',
     endDate: '2026-10-08',
   },
-  emma: {
-    guests: [EMMA],
+  marta: {
+    guests: [MARTA],
+    entry: '2026-10-03',
+    exit: '2026-10-06',
+    endDate: '2026-10-06',
+  },
+  hiroshi: {
+    guests: [HIROSHI],
     entry: '2026-10-01',
     exit: '2026-10-03',
     endDate: '2026-10-03',
@@ -221,37 +237,69 @@ type StayKey = keyof typeof STAYS;
 
 /**
  * FR-016: una reserva en cada estado sin Check-In, cada una con su titular. Ninguna tiene huéspedes en la
- * vista. Los documentos de los titulares no son de ningún huésped de `STAYS`.
+ * vista. Los titulares son la del plan de `check-view-reservation` (la del builder) en la cancelada, y del
+ * wireframe los de una reserva `NO_SHOW`, una `PENDING` y una `ACTIVE` (el wireframe no tiene canceladas).
+ * Ninguno es huésped de `STAYS`.
  */
 const WITHOUT_CHECK_IN: {
   status: ReservationStatus;
   statusReason: StatusReason | null;
   stayStatus: StayStatus;
-  documentNumber: string;
+  titular: {
+    firstName: string;
+    lastName: string;
+    documentType: DocumentType;
+    documentNumber: string;
+    nationality: string;
+  };
 }[] = [
   {
     status: 'CANCELLED',
     statusReason: 'CANCELLED_BY_RECEPTION',
     stayStatus: 'EXPECTED',
-    documentNumber: '79123456',
+    titular: {
+      firstName: 'Valentina',
+      lastName: 'Ospina',
+      documentType: 'CC',
+      documentNumber: '1144093552',
+      nationality: 'Colombia',
+    },
   },
   {
     status: 'NO_SHOW',
     statusReason: 'DAY_CLOSE_NO_SHOW',
     stayStatus: 'NOT_ARRIVED',
-    documentNumber: '79234567',
+    titular: {
+      firstName: 'Ricardo',
+      lastName: 'Peña Salas',
+      documentType: 'CC',
+      documentNumber: '79554120',
+      nationality: 'Colombia',
+    },
   },
   {
     status: 'PENDING',
     statusReason: null,
     stayStatus: 'EXPECTED',
-    documentNumber: '79345678',
+    titular: {
+      firstName: 'John',
+      lastName: 'Miller',
+      documentType: 'PAS',
+      documentNumber: 'US5519302',
+      nationality: 'Estados Unidos',
+    },
   },
   {
     status: 'ACTIVE',
     statusReason: null,
     stayStatus: 'EXPECTED',
-    documentNumber: '79456789',
+    titular: {
+      firstName: 'Andrés',
+      lastName: 'Molina',
+      documentType: 'CC',
+      documentNumber: '80221334',
+      nationality: 'Colombia',
+    },
   },
 ];
 
@@ -290,14 +338,14 @@ describe('Vista de huéspedes alojados: escenarios 1 a 8 de la historia 3 (T018)
   // Las filas, con el nombre de la reserva y del huésped. Los colombianos no tienen la marca de extranjero.
   const anaNow = () => row('johnAndAna', ANA, false);
   const johnNow = () => row('johnAndAna', JOHN, true);
-  const kenji = () => row('kenji', KENJI, true);
-  const lukas = () => row('luciaAndLukas', LUKAS, true);
-  const lucia = () => row('luciaAndLukas', LUCIA, true);
-  const sofia = () => row('mariaJoseAndSofia', SOFIA, false);
-  const mariaJose = () => row('mariaJoseAndSofia', MARIA_JOSE, false);
-  const carlos = () => row('pierreAndCarlos', CARLOS, false);
-  const pierre = () => row('pierreAndCarlos', PIERRE, true);
-  const emma = () => row('emma', EMMA, true);
+  const lucia = () => row('lucia', LUCIA, true);
+  const isabela = () => row('isabelaAndPedro', ISABELA, true);
+  const pedro = () => row('isabelaAndPedro', PEDRO, true);
+  const daniela = () => row('danielaAndJonas', DANIELA, false);
+  const jonas = () => row('danielaAndJonas', JONAS, true);
+  const lukas = () => row('lukas', LUKAS, true);
+  const marta = () => row('marta', MARTA, true);
+  const hiroshi = () => row('hiroshi', HIROSHI, true);
   const johnInSeptember = () => row('johnInSeptember', JOHN, true);
   const anaInSeptember = () => row('anaInSeptember', ANA, false);
 
@@ -395,7 +443,7 @@ describe('Vista de huéspedes alojados: escenarios 1 a 8 de la historia 3 (T018)
             status: withoutCheckIn.status,
             statusReason: withoutCheckIn.statusReason,
             rooms: [aDirectRoom({ stayStatus: withoutCheckIn.stayStatus })],
-            guest: aGuest({ documentNumber: withoutCheckIn.documentNumber }),
+            guest: aGuest(withoutCheckIn.titular),
           }),
         ),
       );
@@ -422,14 +470,14 @@ describe('Vista de huéspedes alojados: escenarios 1 a 8 de la historia 3 (T018)
         items: [
           anaNow(),
           johnNow(),
-          kenji(),
-          lukas(),
           lucia(),
-          sofia(),
-          mariaJose(),
-          carlos(),
-          pierre(),
-          emma(),
+          isabela(),
+          pedro(),
+          daniela(),
+          jonas(),
+          lukas(),
+          marta(),
+          hiroshi(),
         ],
         page: 1,
         pageSize: 10,
@@ -462,11 +510,13 @@ describe('Vista de huéspedes alojados: escenarios 1 a 8 de la historia 3 (T018)
       expect(res.body).toEqual(
         onePage([
           johnNow(),
-          kenji(),
-          lukas(),
           lucia(),
-          pierre(),
-          emma(),
+          isabela(),
+          pedro(),
+          jonas(),
+          lukas(),
+          marta(),
+          hiroshi(),
           johnInSeptember(),
         ]),
       );
@@ -477,7 +527,7 @@ describe('Vista de huéspedes alojados: escenarios 1 a 8 de la historia 3 (T018)
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual(
-        onePage([anaNow(), sofia(), mariaJose(), carlos(), anaInSeptember()]),
+        onePage([anaNow(), daniela(), anaInSeptember()]),
       );
     });
   });
@@ -488,7 +538,7 @@ describe('Vista de huéspedes alojados: escenarios 1 a 8 de la historia 3 (T018)
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual(
-        onePage([anaNow(), johnNow(), kenji(), sofia(), mariaJose()]),
+        onePage([anaNow(), johnNow(), lucia(), daniela(), jonas()]),
       );
     });
 
@@ -498,11 +548,11 @@ describe('Vista de huéspedes alojados: escenarios 1 a 8 de la historia 3 (T018)
       expect(res.status).toBe(200);
       expect(res.body).toEqual(
         onePage([
+          isabela(),
+          pedro(),
           lukas(),
-          lucia(),
-          carlos(),
-          pierre(),
-          emma(),
+          marta(),
+          hiroshi(),
           johnInSeptember(),
           anaInSeptember(),
         ]),
@@ -511,7 +561,7 @@ describe('Vista de huéspedes alojados: escenarios 1 a 8 de la historia 3 (T018)
   });
 
   it('escenario 4: con el rango del 15 al 17 de octubre, solo los huéspedes cuya estadía se cruza con él', async () => {
-    // Entran: Kenji (entró el 16 y sigue en el hotel), Lucía y Lukas (del 14 al 17) y Sofía y María José
+    // Entran: Lucía (entró el 16 y sigue en el hotel), Isabela y Pedro (del 14 al 17) y Daniela y Jonas
     // (desde el 9, siguen en el hotel: su estadía llega hasta hoy). Quedan fuera John y Ana, que entraron
     // el 18, un día después del rango, y los que salieron antes del 15.
     const res = await guestStays({
@@ -521,7 +571,7 @@ describe('Vista de huéspedes alojados: escenarios 1 a 8 de la historia 3 (T018)
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual(
-      onePage([kenji(), lukas(), lucia(), sofia(), mariaJose()]),
+      onePage([lucia(), isabela(), pedro(), daniela(), jonas()]),
     );
   });
 
@@ -543,7 +593,7 @@ describe('Vista de huéspedes alojados: escenarios 1 a 8 de la historia 3 (T018)
     it.each([
       ['perez', 'Ana Pérez, sin tilde', () => [anaNow(), anaInSeptember()]],
       ['PÉREZ', 'Ana Pérez, en mayúsculas', () => [anaNow(), anaInSeptember()]],
-      ['jose', 'María José, sin tilde', () => [mariaJose()]],
+      ['cardenas', 'Daniela Cárdenas Ruiz, sin tilde', () => [daniela()]],
       [
         'smi',
         'John Smith, por 3 letras del apellido',
@@ -702,8 +752,8 @@ describe('Vista de huéspedes alojados: escenarios 1 a 8 de la historia 3 (T018)
     expect(listed.filter((ref) => refsWithoutCheckIn.includes(ref))).toEqual(
       [],
     );
-    for (const { documentNumber } of WITHOUT_CHECK_IN) {
-      const res = await guestStays({ search: documentNumber });
+    for (const { titular } of WITHOUT_CHECK_IN) {
+      const res = await guestStays({ search: titular.documentNumber });
       expect(res.status).toBe(200);
       expect(res.body).toEqual(noResults);
     }
