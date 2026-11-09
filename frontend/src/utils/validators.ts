@@ -2,7 +2,7 @@
 export function validateSearch(raw: string): string | null {
   const s = raw.trim().replace(/\s+/g, ' ');
   if (!s) return 'Debe proveer un código de reserva válido para la consulta.';
-  if (s.length > 40 || !/^[\p{L}\d \-]+$/u.test(s))
+  if (s.length > 40 || !/^[\p{L}\d -]+$/u.test(s))
     return 'Debe proveer un código de reserva válido para la consulta.';
   if (!/\d/.test(s) && s.length < 3 && !/^rsv-/i.test(s))
     return 'La búsqueda por nombre requiere al menos 3 caracteres.';

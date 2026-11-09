@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { ChannelBadge, ErrorBox, StatusBadge } from '../components/Badges';
-import { ApiError } from '../services/apiClient';
+import { ApiError } from '../services/api-client.ts';
 import { cancelReservation, getReservation } from '../services/reservations';
 import {
   canChange,

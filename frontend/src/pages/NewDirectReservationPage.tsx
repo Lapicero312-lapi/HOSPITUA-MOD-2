@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { ErrorBox } from '../components/Badges';
-import { ApiError } from '../services/apiClient';
+import { ApiError } from '../services/api-client.ts';
 import {
   createDirect,
   getDaySummary,
@@ -13,6 +13,7 @@ import {
 import type { DirectCreateRequest, GuestInput } from '../types';
 import { addDays, categoryLabel, formatMoney } from '../utils/format';
 import { validateDirectForm } from '../utils/directForm';
+import { useDebounced } from '../utils/useDebounced';
 
 const DOC_TYPES: [string, string][] = [
   ['RC', 'Registro Civil'],
@@ -32,15 +33,6 @@ const EMPTY: GuestInput = {
   contactEmail: '',
 };
 
-function useDebounced<T>(value: T, ms = 400) {
-  const [v, setV] = useState(value);
-  useEffect(() => {
-    const t = setTimeout(() => setV(value), ms);
-    return () => clearTimeout(t);
-  }, [value, ms]);
-  return v;
-}
-
 export default function NewDirectReservationPage() {
   const nav = useNavigate();
   const qc = useQueryClient();
@@ -57,22 +49,15 @@ export default function NewDirectReservationPage() {
 
   const [guest, setGuest] = useState<GuestInput>(EMPTY);
   const [notes, setNotes] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [category, setCategory] = useState('');
+  const [startDateInput, setStartDate] = useState('');
+  const [endDateInput, setEndDate] = useState('');
+  const [categoryInput, setCategory] = useState('');
+  const startDate = startDateInput || today;
+  const endDate = endDateInput || (today ? addDays(today, 3) : '');
+  const category = categoryInput || categories[0] || '';
   const [guestCounts, setGuestCounts] = useState<number[]>([2]);
   const [lookupMsg, setLookupMsg] = useState<string | null>(null);
   const idemKey = useRef(crypto.randomUUID()); // una Idempotency-Key por formulario (FR-008)
-
-  useEffect(() => {
-    if (today && !startDate) {
-      setStartDate(today);
-      setEndDate(addDays(today, 3));
-    }
-  }, [today, startDate]);
-  useEffect(() => {
-    if (!category && categories[0]) setCategory(categories[0]);
-  }, [categories, category]);
 
   const clientError = today
     ? validateDirectForm(

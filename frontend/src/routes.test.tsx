@@ -7,7 +7,6 @@ import { ErrorMessage } from './components/ErrorMessage.tsx';
 import { routes } from './routes.tsx';
 import { ApiError } from './services/api-client.ts';
 import { currentUser, signIn } from './services/session.ts';
-import { AuthProvider } from './auth/AuthContext.tsx';
 
 const renderAt = (path: string) => {
   const router = createMemoryRouter(routes, { initialEntries: [path] });
@@ -16,9 +15,7 @@ const renderAt = (path: string) => {
   });
   render(
     <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <RouterProvider router={router} />
-      </AuthProvider>
+      <RouterProvider router={router} />
     </QueryClientProvider>,
   );
   return router;

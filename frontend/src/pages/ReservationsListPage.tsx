@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router';
 import Avatar from '../components/Avatar';
 import {
@@ -29,7 +29,6 @@ export default function ReservationsListPage() {
   const filters = Object.fromEntries(sp);
   const [formError, setFormError] = useState<string | null>(null);
   const [source, setSource] = useState(sp.get('source') ?? '');
-  useEffect(() => setSource(sp.get('source') ?? ''), [sp]);
 
   const list = useQuery({
     queryKey: ['reservations', filters],

@@ -1,17 +1,19 @@
 import { useState, type FormEvent } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router';
-import { useAuth } from '../auth/AuthContext';
-import { nameError } from '../services/session';
+import { currentUser, nameError, signIn } from '../services/session.ts';
+
+type LoginState = { from?: string } | null;
 
 export default function LoginPage() {
-  const { user, login } = useAuth();
   const nav = useNavigate();
   const location = useLocation();
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const state = location.state as { from?: string } | null;
+  const state = location.state as LoginState;
   const requestedPath = state?.from ?? '/';
-  if (user) return <Navigate to={requestedPath} replace />;
+
+  if (currentUser()) return <Navigate to={requestedPath} replace />;
+
   const submit = (e: FormEvent) => {
     e.preventDefault();
     const validationError = nameError(name);
@@ -19,23 +21,29 @@ export default function LoginPage() {
       setError(validationError);
       return;
     }
-    login(name.trim());
+    signIn(name);
     nav(requestedPath, { replace: true });
   };
+
   return (
-    <form className="panel login" onSubmit={submit}>
+    <form className="panel login" onSubmit={submit} noValidate>
       <h2>HOSPITUA · Recepción</h2>
       <p>Ingrese su nombre para registrar las acciones del turno.</p>
       <div className="field">
-        <label htmlFor="n">Nombre de la Recepcionista</label>
+        <label htmlFor="receptionist-name">Nombre de la Recepcionista</label>
         <input
-          id="n"
+          id="receptionist-name"
           value={name}
           onChange={(e) => setName(e.target.value)}
           autoFocus
+          autoComplete="name"
         />
       </div>
-      {error && <div role="alert">{error}</div>}
+      {error && (
+        <div role="alert" className="error-message">
+          {error}
+        </div>
+      )}
       <button className="btn primary">Ingresar</button>
     </form>
   );

@@ -1,7 +1,13 @@
-import { useEffect, useState } from 'react';
-import { NavLink, Navigate, Outlet, useLocation } from 'react-router';
-import { useAuth } from '../auth/AuthContext';
-import Avatar from './Avatar';
+import { useState } from 'react';
+import {
+  NavLink,
+  Navigate,
+  Outlet,
+  useLocation,
+  useNavigate,
+} from 'react-router';
+import { currentUser, signOut } from '../services/session.ts';
+import Avatar from './Avatar.tsx';
 
 // Menú plano, igual que el wireframe.
 const NAV: [string, string][] = [
@@ -18,6 +24,7 @@ const TITLES: [RegExp, string][] = [
   [/^\/reservas\/[^/]+\/cancelar/, 'Cancelar reserva'],
   [/^\/reservas\/[^/]+\/habitacion/, 'Asignar habitación'],
   [/^\/reservas\/[^/]+/, 'Detalle de reserva'],
+  [/^\/reservas/, 'Reservas'],
   [/^\/huespedes/, 'Huéspedes alojados'],
   [/^\/sire/, 'Exportar SIRE'],
   [/^\/habitaciones/, 'Habitaciones'],
@@ -26,12 +33,25 @@ const TITLES: [RegExp, string][] = [
 ];
 
 export default function Layout() {
-  const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const { pathname } = useLocation();
-  const [open, setOpen] = useState(false); // menú lateral en pantallas angostas
-  useEffect(() => setOpen(false), [pathname]);
+  const user = currentUser();
+
+  // El menú lateral en pantallas angostas se abre para la ruta actual.
+  // Si cambia la ruta (pathname), el menú queda cerrado automáticamente al comparar openPath === pathname,
+  // sin necesidad de useEffect ni llamadas a setState en efectos.
+  const [openPath, setOpenPath] = useState<string | null>(null);
+  const open = openPath === pathname;
+
   if (!user) return <Navigate to="/login" replace />;
+
   const title = TITLES.find(([re]) => re.test(pathname))?.[1] ?? 'Reservas';
+
+  const logout = () => {
+    signOut();
+    navigate('/login');
+  };
+
   return (
     <div className="shell">
       <nav
@@ -45,6 +65,13 @@ export default function Layout() {
             HOSPITUA<small>Módulo 2 · Recepción</small>
           </div>
         </div>
+        <NavLink
+          to="/"
+          end
+          className={({ isActive }) => `navbtn${isActive ? ' active' : ''}`}
+        >
+          <span>Inicio</span>
+        </NavLink>
         {NAV.map(([to, label]) => (
           <NavLink
             key={to}
@@ -55,13 +82,15 @@ export default function Layout() {
           </NavLink>
         ))}
       </nav>
-      {open && <div className="side-backdrop" onClick={() => setOpen(false)} />}
+      {open && (
+        <div className="side-backdrop" onClick={() => setOpenPath(null)} />
+      )}
       <div className="main">
         <header className="topbar">
           <div>
             <button
               className="side-toggle"
-              onClick={() => setOpen(!open)}
+              onClick={() => setOpenPath(open ? null : pathname)}
               aria-expanded={open}
             >
               ☰ Menú

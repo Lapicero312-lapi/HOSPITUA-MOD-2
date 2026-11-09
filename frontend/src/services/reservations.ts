@@ -1,4 +1,4 @@
-import { api } from './apiClient';
+import { apiRequest } from './api-client.ts';
 import type {
   DaySummary,
   DirectCreateRequest,
@@ -21,43 +21,44 @@ export function listReservations(filters: ListFilters) {
   Object.entries(filters).forEach(([k, v]) => {
     if (v) qs.set(k, v);
   });
-  return api<ReservationPage>(`/reservations?${qs}`);
+  return apiRequest<ReservationPage>(`/reservations?${qs}`);
 }
-export const getDaySummary = () => api<DaySummary>('/reservations/day-summary');
+export const getDaySummary = () =>
+  apiRequest<DaySummary>('/reservations/day-summary');
 export const getReservation = (ref: string) =>
-  api<ReservationDetail>(`/reservations/${encodeURIComponent(ref)}`);
-export const listOtas = () => api<Ota[]>('/otas');
-export const listRooms = () => api<RoomsResponse>('/rooms');
+  apiRequest<ReservationDetail>(`/reservations/${encodeURIComponent(ref)}`);
+export const listOtas = () => apiRequest<Ota[]>('/otas');
+export const listRooms = () => apiRequest<RoomsResponse>('/rooms');
 export const previewDirect = (body: DirectPreviewRequest) =>
-  api<DirectPreview>('/reservations/direct/preview', {
+  apiRequest<DirectPreview>('/reservations/direct/preview', {
     method: 'POST',
-    body: JSON.stringify(body),
+    body,
   });
 export const createDirect = (
   body: DirectCreateRequest,
   idempotencyKey: string,
 ) =>
-  api<ReservationDetail>('/reservations/direct', {
+  apiRequest<ReservationDetail>('/reservations/direct', {
     method: 'POST',
-    body: JSON.stringify(body),
+    body,
     headers: { 'Idempotency-Key': idempotencyKey },
   });
 export const lookupGuest = (documentType: string, documentNumber: string) =>
-  api<GuestLookup>(
+  apiRequest<GuestLookup>(
     `/guests/lookup?${new URLSearchParams({ documentType, documentNumber })}`,
   );
 export const previewModification = (ref: string, body: ModificationBody) =>
-  api<ModificationPreview>(
+  apiRequest<ModificationPreview>(
     `/reservations/${encodeURIComponent(ref)}/modification-preview`,
-    { method: 'POST', body: JSON.stringify(body) },
+    { method: 'POST', body },
   );
 export const updateReservation = (ref: string, body: ModificationBody) =>
-  api<ReservationDetail>(`/reservations/${encodeURIComponent(ref)}`, {
+  apiRequest<ReservationDetail>(`/reservations/${encodeURIComponent(ref)}`, {
     method: 'PATCH',
-    body: JSON.stringify(body),
+    body,
   });
 export const cancelReservation = (ref: string, body: CancelRequest) =>
-  api<CancelResponse>(`/reservations/${encodeURIComponent(ref)}/cancellation`, {
-    method: 'POST',
-    body: JSON.stringify(body),
-  });
+  apiRequest<CancelResponse>(
+    `/reservations/${encodeURIComponent(ref)}/cancellation`,
+    { method: 'POST', body },
+  );

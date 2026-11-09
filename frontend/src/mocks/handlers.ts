@@ -122,7 +122,7 @@ export const handlers = [
     let search = q.get('search');
     if (search !== null) {
       search = search.trim().replace(/\s+/g, ' ');
-      if (!search || search.length > 40 || !/^[\p{L}\d \-]+$/u.test(search))
+      if (!search || search.length > 40 || !/^[\p{L}\d -]+$/u.test(search))
         return fail(
           'INVALID_RESERVATION_CODE',
           'Debe proveer un código de reserva válido para la consulta.',

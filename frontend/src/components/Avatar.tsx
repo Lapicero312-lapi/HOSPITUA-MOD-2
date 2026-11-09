@@ -9,7 +9,7 @@ const PALETTE = [
   '#0369a1',
   '#c2410c',
 ];
-export const initials = (name: string) =>
+const initials = (name: string) =>
   name
     .split(' ')
     .filter(Boolean)
