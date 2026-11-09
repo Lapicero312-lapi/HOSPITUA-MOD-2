@@ -6,8 +6,10 @@ import { ConsultRoomInventoryModule } from '../../../application/use-cases/consu
 import { ExportSireFileModule } from '../../../application/use-cases/export-sire-file/export-sire-file.module.js';
 import { GenerateDirectReservationModule } from '../../../application/use-cases/generate-direct-reservation/generate-direct-reservation.module.js';
 import { ProcessGuestDataModule } from '../../../application/use-cases/process-guest-data/process-guest-data.module.js';
+import { RegisterOtaInformationCommissionModule } from '../../../application/use-cases/register-ota-information-commission/register-ota-information-commission.module.js';
 import { GuestStaysController } from './guest-stays.controller.js';
 import { GuestsController } from './guests.controller.js';
+import { OtasController } from './otas.controller.js';
 import { RatesController } from './rates.controller.js';
 import { ReservationsController } from './reservations.controller.js';
 import { RoomsController } from './rooms.controller.js';
@@ -24,6 +26,7 @@ import { sireRequestLimitsProvider } from './sire-rate-limiter.js';
     CheckViewReservationModule,
     CancelReservationModule,
     ExportSireFileModule,
+    RegisterOtaInformationCommissionModule,
   ],
   controllers: [
     RoomsController,
@@ -32,6 +35,7 @@ import { sireRequestLimitsProvider } from './sire-rate-limiter.js';
     GuestStaysController,
     ReservationsController,
     SireController,
+    OtasController,
   ],
   // Los límites de `POST /api/sire/exports`: una sola cuenta para todas las solicitudes (T005).
   providers: [sireRequestLimitsProvider],
