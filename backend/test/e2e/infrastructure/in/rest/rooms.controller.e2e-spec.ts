@@ -1,11 +1,9 @@
-import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import type { OpenAPIObject } from '@nestjs/swagger';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { Room } from '../../../../../src/application/integration/room.js';
 import {
   MODULE1_PORT,
   type Module1Port,
@@ -13,20 +11,7 @@ import {
 import { MAINTENANCE_CONCURRENCY } from '../../../../../src/application/shared/maintenance-concurrency.js';
 import { AppModule } from '../../../../../src/app.module.js';
 import { configureApp } from '../../../../../src/configure-app.js';
-
-/** La 201 y la 202 del ejemplo de C1 del plan. Los `id` son UUID cualesquiera. */
-const ROOM_201: Room = {
-  id: randomUUID(),
-  roomNumber: '201',
-  categoryRoom: 'DOBLE',
-  maxCapacity: 2,
-};
-const ROOM_202: Room = {
-  id: randomUUID(),
-  roomNumber: '202',
-  categoryRoom: 'DOBLE',
-  maxCapacity: 3,
-};
+import { ROOM_201, ROOM_202 } from '../../../../support/rooms.js';
 
 /** El Módulo 1 simulado: entrega la 202 antes que la 201 y ninguna tiene mantenimientos. */
 const module1: Partial<Module1Port> = {
