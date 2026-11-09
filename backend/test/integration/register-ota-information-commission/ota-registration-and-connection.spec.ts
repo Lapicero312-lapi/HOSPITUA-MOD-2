@@ -2,6 +2,7 @@ import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
+import request from 'supertest';
 import type { DataSource } from 'typeorm';
 import {
   afterAll,
@@ -267,7 +268,7 @@ describe('Registro de la agencia y estado de la conexión (register-ota-informat
     ['401 (clave de acceso inválida)', 401 as const],
     ['403 (sin permiso)', 403 as const],
   ])(
-    'escenario 3: si Channex rechaza la lectura del feed con %s, la agencia pasa a DISCONNECTED y ella y sus reservas se conservan',
+    'escenario 3: si Channex rechaza la lectura del feed con %s, la agencia pasa a DISCONNECTED, ella y sus reservas se conservan y sigue visible en la pantalla de agencias',
     async (_, status) => {
       await startSystem();
       // Con reservas, la agencia ya tiene el porcentaje que se calculó con la primera.
@@ -299,6 +300,25 @@ describe('Registro de la agencia y estado de la conexión (register-ota-informat
       });
       expect(await reservationsOf(before.id)).toEqual(reservationsBefore);
       expect(reservationsBefore).toHaveLength(2);
+      // Sigue visible en la pantalla de agencias, desconectada (A3: "Una Ota desconectada sigue
+      // apareciendo"). La reserva ACTIVE sigue contando entre las activas; la COMPLETED no cuenta.
+      const screen = await request(app!.getHttpServer())
+        .get('/api/otas')
+        .expect(200);
+      expect(screen.body).toEqual({
+        items: [
+          {
+            id: before.id,
+            name: 'Booking.com',
+            commissionPercentage: 15,
+            connectionStatus: 'DISCONNECTED',
+            linkedAt: '2026-11-09T08:00:00-05:00',
+            lastSyncAt: '2026-11-09T08:00:00-05:00',
+            activeReservations: 1,
+          },
+        ],
+        total: 1,
+      });
     },
   );
 
