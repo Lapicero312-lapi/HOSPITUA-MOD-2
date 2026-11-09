@@ -37,19 +37,19 @@ export type GuestStayDetail = {
   reservationRef: string;
   reservationLink: string;
   guest: {
-    documentType: string;
-    documentNumber: string;
-    firstName: string;
-    lastName: string;
-    birthDate: string;
-    nationality: string;
+    documentType: string | null;
+    documentNumber: string | null;
+    firstName: string | null;
+    lastName: string | null;
+    birthDate: string | null;
+    nationality: string | null;
     isForeign: boolean;
     originPlace: string | null;
     destinationPlace: string | null;
   };
   movements: Array<{
     movementType: 'ENTRY' | 'DEPARTURE';
-    movementDate: string;
+    movementDate: string | null;
   }>;
 };
 

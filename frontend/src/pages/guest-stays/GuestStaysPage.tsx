@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import Avatar from '../../components/Avatar.tsx';
 import { ErrorMessage } from '../../components/ErrorMessage.tsx';
 import {
   getGuestStayDetail,
@@ -10,6 +9,7 @@ import {
   type GuestStayDetail,
   type GuestStayFilters,
 } from '../../services/guest-stays.ts';
+import './GuestStaysPage.css';
 
 type GuestStayKey = {
   reservationRef: string;
@@ -44,16 +44,14 @@ function filtersFromParams(params: URLSearchParams): GuestStayFilters {
 }
 
 function formatDate(value: string | null): string {
-  if (value === null) {
+  if (value === null || value.trim() === '') {
     return '—';
   }
   const [year, month, day] = value.split('-').map(Number);
   if (!year || !month || !day) {
     return value;
   }
-  return new Intl.DateTimeFormat('es-CO', { dateStyle: 'medium' }).format(
-    new Date(year, month - 1, day),
-  );
+  return `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
 }
 
 function filtersToParams(filters: GuestStayFilters): URLSearchParams {
@@ -80,7 +78,33 @@ function filtersToParams(filters: GuestStayFilters): URLSearchParams {
 }
 
 function detailName(detail: GuestStayDetail): string {
-  return `${detail.guest.firstName} ${detail.guest.lastName}`;
+  return `${formatValue(detail.guest.firstName)} ${formatValue(detail.guest.lastName)}`;
+}
+
+function formatValue(value: string | null): string {
+  return value === null || value.trim() === '' ? '—' : value;
+}
+
+function formatDocument(
+  documentType: string | null,
+  documentNumber: string | null,
+): string {
+  return `${formatValue(documentType)} ${formatValue(documentNumber)}`;
+}
+
+function GuestAvatar({ name }: { name: string }) {
+  const initials = name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((word) => word[0].toUpperCase())
+    .join('');
+
+  return (
+    <span className="guest-stay-avatar" aria-hidden="true">
+      {initials}
+    </span>
+  );
 }
 
 function GuestStayDetailDialog({
@@ -102,7 +126,7 @@ function GuestStayDetailDialog({
 
   return (
     <div
-      className="overlay"
+      className="guest-stay-overlay"
       role="presentation"
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) {
@@ -111,7 +135,7 @@ function GuestStayDetailDialog({
       }}
     >
       <section
-        className="modal guest-stay-detail"
+        className="guest-stay-detail"
         role="dialog"
         aria-modal="true"
         aria-labelledby="guest-stay-detail-title"
@@ -125,8 +149,10 @@ function GuestStayDetailDialog({
               <div>
                 <dt>Documento</dt>
                 <dd>
-                  {query.data.guest.documentType}{' '}
-                  {query.data.guest.documentNumber}
+                  {formatDocument(
+                    query.data.guest.documentType,
+                    query.data.guest.documentNumber,
+                  )}
                 </dd>
               </div>
               <div>
@@ -136,17 +162,21 @@ function GuestStayDetailDialog({
               <div>
                 <dt>Nacionalidad</dt>
                 <dd>
-                  {query.data.guest.nationality}
-                  {query.data.guest.isForeign ? ' · Extranjero' : ''}
+                  {query.data.guest.nationality === null ||
+                  query.data.guest.nationality.trim() === ''
+                    ? '—'
+                    : `${query.data.guest.nationality}${
+                        query.data.guest.isForeign ? ' · Extranjero' : ''
+                      }`}
                 </dd>
               </div>
               <div>
                 <dt>Lugar de procedencia</dt>
-                <dd>{query.data.guest.originPlace ?? '—'}</dd>
+                <dd>{formatValue(query.data.guest.originPlace)}</dd>
               </div>
               <div>
                 <dt>Lugar de destino</dt>
-                <dd>{query.data.guest.destinationPlace ?? '—'}</dd>
+                <dd>{formatValue(query.data.guest.destinationPlace)}</dd>
               </div>
               <div>
                 <dt>Reserva</dt>
@@ -206,7 +236,7 @@ function GuestStayRow({
     <tr>
       <td>
         <div className="person">
-          <Avatar name={name} />
+          <GuestAvatar name={name} />
           <div>
             {name}
             <br />

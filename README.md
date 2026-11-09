@@ -26,10 +26,6 @@ pnpm --filter frontend dev                   # frontend en http://localhost:5173
 pnpm --filter simulators start               # opcional: simuladores del Módulo 1 y del Módulo 3
 ```
 
-Para apuntar el frontend de desarrollo al backend, copia
-`frontend/.env.example` como `frontend/.env` si hace falta cambiar `VITE_API_PROXY`
-(por defecto usa `http://localhost:3000`).
-
 El panel de RabbitMQ queda en <http://localhost:15672> (usuario y clave: `hospitua`).
 
 ## Simuladores del Módulo 1 y del Módulo 3

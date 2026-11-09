@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -14,6 +14,7 @@ import {
   getGuestStayDetail,
   listGuestStays,
 } from '../../services/guest-stays.ts';
+import { ApiError } from '../../services/api-client.ts';
 
 const stay = {
   reservationRef: 'RSV-3F9A1C7B',
@@ -90,6 +91,7 @@ describe('GuestStaysPage', () => {
         'En el hotel',
       ),
     ).toBeInTheDocument();
+    expect(screen.getByText('09/10/2026')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Ver detalle' })).toBeEnabled();
     expect(
       screen.queryByRole('button', { name: /editar|guardar/i }),
@@ -105,13 +107,19 @@ describe('GuestStaysPage', () => {
     await user.selectOptions(screen.getByLabelText('Nacionalidad'), 'FOREIGN');
     await user.selectOptions(screen.getByLabelText('Situación'), 'IN_HOTEL');
     await user.type(screen.getByLabelText('Buscar'), 'John');
+    fireEvent.change(screen.getByLabelText('Desde'), {
+      target: { value: '2026-10-01' },
+    });
+    fireEvent.change(screen.getByLabelText('Hasta'), {
+      target: { value: '2026-10-31' },
+    });
     await user.click(screen.getByRole('button', { name: 'Aplicar filtros' }));
 
     expect(listGuestStays).toHaveBeenLastCalledWith({
       nationality: 'FOREIGN',
       presence: 'IN_HOTEL',
-      dateFrom: '',
-      dateTo: '',
+      dateFrom: '2026-10-01',
+      dateTo: '2026-10-31',
       search: 'John',
       page: 1,
     });
@@ -120,8 +128,8 @@ describe('GuestStaysPage', () => {
     expect(listGuestStays).toHaveBeenLastCalledWith({
       nationality: 'FOREIGN',
       presence: 'IN_HOTEL',
-      dateFrom: '',
-      dateTo: '',
+      dateFrom: '2026-10-01',
+      dateTo: '2026-10-31',
       search: 'John',
       page: 2,
     });
@@ -143,11 +151,80 @@ describe('GuestStaysPage', () => {
     expect(
       within(dialog).getByText('Miami, Estados Unidos'),
     ).toBeInTheDocument();
+    expect(within(dialog).getByText('12/05/1990')).toBeInTheDocument();
+    expect(within(dialog).getByText('09/10/2026')).toBeInTheDocument();
     expect(within(dialog).getByText('—')).toBeInTheDocument();
     expect(within(dialog).getByText('Entrada')).toBeInTheDocument();
     expect(
       within(dialog).getByRole('link', { name: 'Ver reserva' }),
     ).toHaveAttribute('href', '/reservations/RSV-3F9A1C7B');
+  });
+
+  it('muestra una raya por cada dato vacío del detalle', async () => {
+    const user = userEvent.setup();
+    vi.mocked(listGuestStays).mockResolvedValue(page);
+    vi.mocked(getGuestStayDetail).mockResolvedValue({
+      ...detail,
+      guest: {
+        ...detail.guest,
+        documentType: '',
+        firstName: null,
+        lastName: 'Pérez',
+        birthDate: null,
+        nationality: '',
+        originPlace: null,
+        destinationPlace: '',
+      },
+    });
+    renderPage();
+
+    await user.click(
+      await screen.findByRole('button', { name: 'Ver detalle' }),
+    );
+
+    const dialog = await screen.findByRole('dialog');
+    expect(
+      within(dialog).getByRole('heading', { name: '— Pérez' }),
+    ).toBeInTheDocument();
+    expect(within(dialog).getByText('— X99')).toBeInTheDocument();
+    expect(within(dialog).getAllByText('—')).toHaveLength(4);
+    expect(within(dialog).queryByText(/null/)).toBeNull();
+  });
+
+  it('muestra el mensaje del API cuando los filtros son inválidos', async () => {
+    const user = userEvent.setup();
+    vi.mocked(listGuestStays)
+      .mockResolvedValueOnce(page)
+      .mockRejectedValueOnce(
+        new ApiError(
+          'INVALID_DATE_RANGE',
+          'La fecha inicial no puede ser posterior a la fecha final.',
+          400,
+        ),
+      );
+    renderPage();
+
+    await screen.findByText('John Smith');
+    fireEvent.change(screen.getByLabelText('Desde'), {
+      target: { value: '2026-10-31' },
+    });
+    fireEvent.change(screen.getByLabelText('Hasta'), {
+      target: { value: '2026-10-01' },
+    });
+    await user.click(screen.getByRole('button', { name: 'Aplicar filtros' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'La fecha inicial no puede ser posterior a la fecha final.',
+    );
+    expect(screen.getByRole('alert')).toHaveClass('error-message');
+    expect(listGuestStays).toHaveBeenLastCalledWith({
+      nationality: 'ALL',
+      presence: 'ALL',
+      dateFrom: '2026-10-31',
+      dateTo: '2026-10-01',
+      search: '',
+      page: 1,
+    });
   });
 
   it('muestra el mensaje del API cuando los filtros no encuentran huéspedes', async () => {
