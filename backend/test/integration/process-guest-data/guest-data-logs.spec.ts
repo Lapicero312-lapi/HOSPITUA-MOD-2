@@ -47,7 +47,11 @@ import { integrationEnv, truncateAllTables } from '../support/database.js';
 const CHECK_IN = INBOUND_QUEUES.CHECK_IN;
 const CHECK_OUT = INBOUND_QUEUES.CHECK_OUT;
 
-/** Los huéspedes de las pruebas del registro (`register-guest-movements.spec.ts`). */
+/**
+ * John, del mensaje de Check-In del plan de `update-reservation`; Lukas, Daniela e Hiroshi, de los
+ * movimientos de la vista de huéspedes del wireframe, con sus datos tal cual. Ana, la otra huésped del
+ * plan, no sirve aquí: su documento (`123`) también puede aparecer dentro de un UUID o de una hora.
+ */
 const JOHN: GuestPayload = {
   firstName: 'John',
   lastName: 'Smith',
@@ -58,27 +62,37 @@ const JOHN: GuestPayload = {
   originPlace: 'Miami, Estados Unidos',
   destinationPlace: 'Cartagena, Colombia',
 };
-const PIERRE: GuestPayload = {
-  firstName: 'Pierre',
-  lastName: 'Dubois',
+const LUKAS: GuestPayload = {
+  firstName: 'Lukas',
+  lastName: 'Becker',
   documentType: 'PAS',
-  documentNumber: 'FR123456',
-  birthDate: '1985-02-03',
-  nationality: 'Francia',
-  originPlace: 'París, Francia',
+  documentNumber: 'C4X8R21K',
+  birthDate: '1991-07-02',
+  nationality: 'Alemania',
+  originPlace: 'Berlín, Alemania',
   destinationPlace: 'Medellín, Colombia',
 };
-const CARLOS: GuestPayload = {
-  firstName: 'Carlos',
-  lastName: 'Gómez',
+const DANIELA: GuestPayload = {
+  firstName: 'Daniela',
+  lastName: 'Cárdenas Ruiz',
   documentType: 'CC',
-  documentNumber: '1144093552',
-  birthDate: '1988-07-14',
+  documentNumber: '52118904',
+  birthDate: '1992-04-17',
   nationality: 'Colombia',
+};
+const HIROSHI: GuestPayload = {
+  firstName: 'Hiroshi',
+  lastName: 'Tanaka',
+  documentType: 'PAS',
+  documentNumber: 'JP0098231',
+  birthDate: '1984-03-11',
+  nationality: 'Japón',
+  originPlace: 'Tokio, Japón',
+  destinationPlace: 'Cartagena, Colombia',
 };
 
 /** Lo que NFR-002 no deja escribir en los logs: el documento y la fecha de nacimiento de cada huésped. */
-const PERSONAL_DATA = [JOHN, PIERRE, CARLOS].flatMap((guest) => [
+const PERSONAL_DATA = [JOHN, LUKAS, DANIELA, HIROSHI].flatMap((guest) => [
   guest.documentNumber,
   guest.birthDate,
 ]);
@@ -233,24 +247,24 @@ describe('Logs sin documento ni fecha de nacimiento de los huéspedes (NFR-002, 
 
   describe('el registro, por las colas', () => {
     it('Check-In: el log del Check-In aplicado no trae los documentos ni las fechas de nacimiento del mensaje', async () => {
-      await checkIn([JOHN, CARLOS]);
+      await checkIn([JOHN, DANIELA]);
 
       expect(allLogs()).toContain('2 huéspedes recibidos, 2 registrados');
       expectNoPersonalData();
     });
 
     it('Check-Out: tampoco el del Check-Out aplicado', async () => {
-      await checkIn([JOHN, CARLOS]);
+      await checkIn([JOHN, DANIELA]);
 
-      await checkOut([JOHN, CARLOS]);
+      await checkOut([JOHN, DANIELA]);
 
       expectNoPersonalData();
     });
 
     it('huésped omitido: la alerta del huésped sin fecha de nacimiento no trae su documento', async () => {
-      const { birthDate: _birthDate, ...pierreWithoutBirthDate } = PIERRE;
+      const { birthDate: _birthDate, ...hiroshiWithoutBirthDate } = HIROSHI;
 
-      await checkIn([JOHN, pierreWithoutBirthDate, CARLOS]);
+      await checkIn([JOHN, hiroshiWithoutBirthDate, DANIELA]);
 
       expect(allLogs()).toContain('Se omitió al huésped 2 de la notificación');
       expectNoPersonalData();
@@ -259,7 +273,7 @@ describe('Logs sin documento ni fecha de nacimiento de los huéspedes (NFR-002, 
     it('salida sin entrada: el aviso no trae los datos del huésped que sale sin haber entrado', async () => {
       await checkIn([JOHN]);
 
-      await checkOut([JOHN, PIERRE]);
+      await checkOut([JOHN, LUKAS]);
 
       expect(allLogs()).toContain(
         'Se registró la salida del huésped 2 de la notificación',
@@ -274,7 +288,7 @@ describe('Logs sin documento ni fecha de nacimiento de los huéspedes (NFR-002, 
         () => {
           const { reservationRef: _ref, ...withoutRef } = aNotification(
             'ENTRY',
-            [JOHN, CARLOS],
+            [JOHN, DANIELA],
           );
           return Buffer.from(JSON.stringify(withoutRef));
         },
@@ -287,7 +301,7 @@ describe('Logs sin documento ni fecha de nacimiento de los huéspedes (NFR-002, 
             JSON.stringify(
               aNotification('ENTRY', [
                 { ...JOHN, documentNumber: `${JOHN.documentNumber};` },
-                CARLOS,
+                DANIELA,
               ]),
             ),
           ),
@@ -297,7 +311,10 @@ describe('Logs sin documento ni fecha de nacimiento de los huéspedes (NFR-002, 
         CHECK_IN,
         () =>
           Buffer.from(
-            JSON.stringify(aNotification('ENTRY', [JOHN, CARLOS])).slice(0, -3),
+            JSON.stringify(aNotification('ENTRY', [JOHN, DANIELA])).slice(
+              0,
+              -3,
+            ),
           ),
       ],
       [
@@ -308,7 +325,7 @@ describe('Logs sin documento ni fecha de nacimiento de los huéspedes (NFR-002, 
             JSON.stringify(
               aNotification('DEPARTURE', [
                 JOHN,
-                { ...CARLOS, documentNumber: `${CARLOS.documentNumber}<` },
+                { ...DANIELA, documentNumber: `${DANIELA.documentNumber}<` },
               ]),
             ),
           ),
@@ -341,8 +358,8 @@ describe('Logs sin documento ni fecha de nacimiento de los huéspedes (NFR-002, 
       '/api/reservations/:reservationRef/guests/:documentNumber';
 
     beforeEach(async () => {
-      await checkIn([JOHN, CARLOS]);
-      await checkOut([JOHN, CARLOS]);
+      await checkIn([JOHN, DANIELA]);
+      await checkOut([JOHN, DANIELA]);
       written = [];
     });
 
@@ -355,8 +372,8 @@ describe('Logs sin documento ni fecha de nacimiento de los huéspedes (NFR-002, 
         undefined,
       ],
       [
-        'C1 buscando el documento de Carlos',
-        () => '/api/guest-stays?search=1144093552',
+        'C1 buscando el documento de Daniela',
+        () => '/api/guest-stays?search=52118904',
         '/api/guest-stays',
         200,
         undefined,
@@ -370,7 +387,7 @@ describe('Logs sin documento ni fecha de nacimiento de los huéspedes (NFR-002, 
       ],
       [
         'C2 con un documento que no está en la reserva (GUEST_NOT_FOUND)',
-        () => `/api/reservations/${reservation.reservationRef}/guests/FR123456`,
+        () => `/api/reservations/${reservation.reservationRef}/guests/C4X8R21K`,
         GUEST_ROUTE,
         400,
         'GUEST_NOT_FOUND',
@@ -384,7 +401,7 @@ describe('Logs sin documento ni fecha de nacimiento de los huéspedes (NFR-002, 
       ],
       [
         'C1 con una búsqueda no válida (INVALID_SEARCH)',
-        () => '/api/guest-stays?search=1144093552%3B',
+        () => '/api/guest-stays?search=52118904%3B',
         '/api/guest-stays',
         400,
         'INVALID_SEARCH',
