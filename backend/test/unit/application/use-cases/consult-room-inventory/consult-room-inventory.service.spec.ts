@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import { Logger } from '@nestjs/common';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Room } from '../../../../../src/application/integration/room.js';
@@ -14,23 +13,7 @@ import {
   INVALID_ROOM_ID,
   INVENTORY_UNAVAILABLE,
 } from '../../../../../src/domain/shared/error-codes.js';
-
-/**
- * Datos de las pruebas del plan ("Pruebas por escenario", T005, T006, T007 y T010), que dice de dónde sale
- * cada uno. El `id` es un UUID cualquiera.
- */
-const ROOM_201: Room = {
-  id: randomUUID(),
-  roomNumber: '201',
-  categoryRoom: 'DOBLE',
-  maxCapacity: 2,
-};
-const ROOM_202: Room = {
-  id: randomUUID(),
-  roomNumber: '202',
-  categoryRoom: 'DOBLE',
-  maxCapacity: 3,
-};
+import { ROOM_201, ROOM_202 } from '../../../../support/rooms.js';
 
 /** Los motivos que da el adaptador cuando el Módulo 1 no está disponible. */
 const UNAVAILABLE_DETAILS = [

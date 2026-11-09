@@ -12,6 +12,7 @@ import { CLOCK, type Clock } from '../../../src/application/ports/out/clock.js';
 import { INVENTORY_UNAVAILABLE } from '../../../src/domain/shared/error-codes.js';
 import type { EnvironmentVariables } from '../../../src/infrastructure/config/env.validation.js';
 import { configureApp } from '../../../src/configure-app.js';
+import { ROOM_201, ROOM_202 } from '../../support/rooms.js';
 import { integrationEnv } from '../support/database.js';
 
 /**
@@ -25,18 +26,6 @@ import { integrationEnv } from '../support/database.js';
  * Datos de las pruebas del plan ("Pruebas por escenario", T013): el ejemplo de C1 y la 101 de
  * `SUITE_JUNIOR` de T012. El `id` es un UUID cualquiera.
  */
-const ROOM_201: Room = {
-  id: randomUUID(),
-  roomNumber: '201',
-  categoryRoom: 'DOBLE',
-  maxCapacity: 2,
-};
-const ROOM_202: Room = {
-  id: randomUUID(),
-  roomNumber: '202',
-  categoryRoom: 'DOBLE',
-  maxCapacity: 3,
-};
 const ROOM_101: Room = {
   id: randomUUID(),
   roomNumber: '101',

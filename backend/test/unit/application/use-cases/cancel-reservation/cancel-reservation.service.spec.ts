@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
+import type { AriChange } from '../../../../../src/application/ports/out/ari-pending-change.repository.js';
 import {
   DuplicateCancellationError,
   type CancellationRepository,
@@ -10,6 +11,7 @@ import { CancelReservationService } from '../../../../../src/application/use-cas
 import type { CancelReservationCommand } from '../../../../../src/application/use-cases/cancel-reservation/ports/in/cancel-reservation.port.js';
 import type { DailyListChangeRecorder } from '../../../../../src/application/use-cases/check-view-reservation/ports/in/daily-list-change-recorder.port.js';
 import type { ReservationLookup } from '../../../../../src/application/use-cases/check-view-reservation/ports/in/reservation-lookup.port.js';
+import type { AriChangeRecorder } from '../../../../../src/application/use-cases/configure-ota/ports/in/ari-change-recorder.port.js';
 import type { ReservationStatusPort } from '../../../../../src/application/use-cases/update-reservation/ports/in/reservation-status.port.js';
 import type { Cancellation } from '../../../../../src/domain/cancellation/cancellation.js';
 import type {
@@ -23,6 +25,7 @@ import type {
 } from '../../../../../src/domain/shared/enums.js';
 import {
   aDirectReservation,
+  aDirectRoom,
   anOtaReservation,
 } from '../../../../support/builders.js';
 
@@ -71,6 +74,7 @@ const fromBooking = (reservation: Reservation): CancelReservationCommand => ({
 function serviceWith(
   stored: Reservation | null,
   insert: CancellationRepository['insert'] = () => Promise.resolve(),
+  availability: AriChangeRecorder['record'] = () => Promise.resolve(),
 ) {
   const calls: string[] = [];
   const findForUpdate = vi.fn((_tx: Transaction, _ref: string) => {
@@ -100,6 +104,10 @@ function serviceWith(
       return Promise.resolve();
     },
   );
+  const recordAvailability = vi.fn((tx: Transaction, changes: AriChange[]) => {
+    calls.push('availability');
+    return availability(tx, changes);
+  });
   const service = new CancelReservationService(
     { findForUpdate } as unknown as ReservationLookup,
     { transition } as unknown as ReservationStatusPort,
@@ -108,6 +116,7 @@ function serviceWith(
     CLOCK,
     // `execute` abre su transacción; `cancel` recibe la de quien llama.
     { run: (work) => work(TX) },
+    { record: recordAvailability },
   );
   /** La reserva que devolvió `transition`: la ya guardada. */
   const cancelled = () =>
@@ -120,6 +129,7 @@ function serviceWith(
     transition,
     insertCancellation,
     record,
+    recordAvailability,
   };
 }
 
@@ -152,7 +162,13 @@ describe('CancelReservation: la cancelación que se aplica (T005 a T007)', () =>
     const saved = await cancelled();
     expect(result).toBe(saved);
     expect(saved.status).toBe('CANCELLED');
-    expect(calls).toEqual(['findForUpdate', 'transition', 'insert', 'record']);
+    expect(calls).toEqual([
+      'findForUpdate',
+      'transition',
+      'insert',
+      'record',
+      'availability',
+    ]);
     expect(findForUpdate).toHaveBeenCalledWith(TX, reservation.reservationRef);
     expect(transition).toHaveBeenCalledWith(
       TX,
@@ -449,8 +465,13 @@ describe('CancelReservation: las verificaciones de la regla 3, en orden', () => 
     'escenario 4, paso 5: una directa en %s da STATUS_NOT_CANCELLABLE y no registra nada',
     async (status) => {
       const reservation = directReservation({ status });
-      const { service, transition, insertCancellation, record } =
-        serviceWith(reservation);
+      const {
+        service,
+        transition,
+        insertCancellation,
+        record,
+        recordAvailability,
+      } = serviceWith(reservation);
 
       await expectBusinessError(
         service.cancel(TX, fromReception(reservation)),
@@ -460,8 +481,130 @@ describe('CancelReservation: las verificaciones de la regla 3, en orden', () => 
       expect(transition).not.toHaveBeenCalled();
       expect(insertCancellation).not.toHaveBeenCalled();
       expect(record).not.toHaveBeenCalled();
+      expect(recordAvailability).not.toHaveBeenCalled();
     },
   );
+});
+
+describe('CancelReservation: lo que Booking ya no puede cancelar no es un error (T009, contrato B)', () => {
+  it.each<ReservationStatus>([
+    'CANCELLED',
+    'IN_PROGRESS',
+    'COMPLETED',
+    'NO_SHOW',
+  ])(
+    'escenario 4: Booking sobre una en %s no cambia nada y devuelve la reserva con su estado',
+    async (status) => {
+      const reservation = otaReservation({ status });
+      const {
+        service,
+        transition,
+        insertCancellation,
+        record,
+        recordAvailability,
+      } = serviceWith(reservation);
+
+      const result = await service.cancel(TX, fromBooking(reservation));
+
+      expect(result).toBe(reservation);
+      expect(result.status).toBe(status);
+      expect(transition).not.toHaveBeenCalled();
+      expect(insertCancellation).not.toHaveBeenCalled();
+      expect(record).not.toHaveBeenCalled();
+      expect(recordAvailability).not.toHaveBeenCalled();
+    },
+  );
+
+  it('paso 4 antes del 5: si Booking manda un updatedAt que no coincide, sigue siendo CONCURRENT_UPDATE', async () => {
+    const reservation = otaReservation({ status: 'CANCELLED' });
+    const { service } = serviceWith(reservation);
+
+    await expectBusinessError(
+      service.cancel(TX, {
+        ...fromBooking(reservation),
+        expectedUpdatedAt: '2020-01-01T00:00:00.000000-05:00',
+      }),
+      'CONCURRENT_UPDATE',
+      'Esta reserva ya fue actualizada o cancelada recientemente',
+    );
+  });
+});
+
+describe('CancelReservation: la disponibilidad liberada para Channex (T009, regla 10)', () => {
+  const DATES = { startDate: '2026-11-10', endDate: '2026-11-12' };
+  const NIGHTS = { dateFrom: '2026-11-10', dateTo: '2026-11-12' };
+
+  it('la Recepcionista: una marca con la categoría y las noches, al final y en la misma transacción', async () => {
+    const reservation = directReservation(DATES);
+    const { service, calls, recordAvailability } = serviceWith(reservation);
+
+    await service.cancel(TX, fromReception(reservation));
+
+    expect(recordAvailability).toHaveBeenCalledExactlyOnceWith(TX, [
+      { categoryRoom: 'DOBLE', ...NIGHTS },
+    ]);
+    expect(calls.at(-1)).toBe('availability');
+  });
+
+  it('Booking: también anota la disponibilidad', async () => {
+    const reservation = otaReservation(DATES);
+    const { service, recordAvailability } = serviceWith(reservation);
+
+    await service.cancel(TX, fromBooking(reservation));
+
+    expect(recordAvailability).toHaveBeenCalledExactlyOnceWith(TX, [
+      { categoryRoom: 'DOBLE', ...NIGHTS },
+    ]);
+  });
+
+  it('execute: la anota en la transacción que abrió', async () => {
+    const reservation = directReservation(DATES);
+    const { service, recordAvailability } = serviceWith(reservation);
+
+    await service.execute(fromReception(reservation));
+
+    expect(recordAvailability).toHaveBeenCalledExactlyOnceWith(TX, [
+      { categoryRoom: 'DOBLE', ...NIGHTS },
+    ]);
+  });
+
+  it('dos habitaciones de la misma categoría son una sola marca; dos categorías, una por cada una', async () => {
+    const sameCategory = directReservation({
+      ...DATES,
+      rooms: [aDirectRoom(), aDirectRoom({ roomNumber: '202' })],
+    });
+    const mixed = directReservation({
+      ...DATES,
+      rooms: [
+        aDirectRoom(),
+        aDirectRoom({ roomNumber: '101', categoryRoom: 'SUITE' }),
+      ],
+    });
+    const same = serviceWith(sameCategory);
+    const both = serviceWith(mixed);
+
+    await same.service.cancel(TX, fromReception(sameCategory));
+    await both.service.cancel(TX, fromReception(mixed));
+
+    expect(same.recordAvailability).toHaveBeenCalledExactlyOnceWith(TX, [
+      { categoryRoom: 'DOBLE', ...NIGHTS },
+    ]);
+    expect(both.recordAvailability).toHaveBeenCalledExactlyOnceWith(TX, [
+      { categoryRoom: 'DOBLE', ...NIGHTS },
+      { categoryRoom: 'SUITE', ...NIGHTS },
+    ]);
+  });
+
+  it('si no se puede anotar, el error sale tal cual: la transacción se revierte (regla 4)', async () => {
+    const reservation = directReservation(DATES);
+    const { service } = serviceWith(reservation, undefined, () =>
+      Promise.reject(new Error('se cayó la conexión')),
+    );
+
+    await expect(
+      service.cancel(TX, fromReception(reservation)),
+    ).rejects.toThrow('se cayó la conexión');
+  });
 });
 
 describe('CancelReservation: la Cancellation que la restricción única rechaza', () => {

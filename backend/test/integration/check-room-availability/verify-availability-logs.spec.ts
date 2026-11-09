@@ -14,7 +14,6 @@ import {
   it,
   vi,
 } from 'vitest';
-import type { Room } from '../../../src/application/integration/room.js';
 import {
   VERIFY_AVAILABILITY,
   type AvailabilityQuery,
@@ -27,8 +26,10 @@ import {
   aDirectRoom,
   aGuest,
 } from '../../support/builders.js';
+import { ROOM_201, ROOM_202 } from '../../support/rooms.js';
 import { captureLogs } from '../support/capture-logs.js';
-import { integrationEnv, truncateAllTables } from '../support/database.js';
+import { checkRoomAvailabilityModules } from '../support/check-room-availability.js';
+import { truncateAllTables } from '../support/database.js';
 
 /**
  * T017 de `check-room-availability`: ningún log de la verificación escribe datos personales (plan base,
@@ -41,19 +42,6 @@ import { integrationEnv, truncateAllTables } from '../support/database.js';
 /** La estadía del ejemplo del DTO del plan (dos noches). */
 const START = '2026-10-10';
 const END = '2026-10-12';
-
-const ROOM_201: Room = {
-  id: '3f6c1e2a-8b4d-4c7e-9a1f-2b3c4d5e6f70',
-  roomNumber: '201',
-  categoryRoom: 'DOBLE',
-  maxCapacity: 2,
-};
-const ROOM_202: Room = {
-  id: '7a2d9c4e-1f3b-4e8a-b6c5-0d9e8f7a6b51',
-  roomNumber: '202',
-  categoryRoom: 'DOBLE',
-  maxCapacity: 3,
-};
 
 /** El titular de la reserva que ocupa la 201 (el del ejemplo del plan de `check-view-reservation`). */
 const HOLDER = {
@@ -122,26 +110,8 @@ describe('VerifyAvailability: los logs no escriben datos personales (T017)', () 
     logs.filter((line) => PERSONAL_DATA.some((data) => line.includes(data)));
 
   beforeAll(async () => {
-    // AppConfigModule lee el entorno al importarse: los módulos se importan después de asignarlo.
-    Object.assign(process.env, { NODE_ENV: 'test', ...integrationEnv() });
-    const { AppConfigModule } =
-      await import('../../../src/infrastructure/config/app-config.module.js');
-    const { PersistenceModule } =
-      await import('../../../src/infrastructure/out/persistence/persistence.module.js');
-    const { ClockModule } =
-      await import('../../../src/infrastructure/out/clock/clock.module.js');
-    const { Module1ClientModule } =
-      await import('../../../src/infrastructure/out/module1/module1-client.module.js');
-    const { CheckRoomAvailabilityModule } =
-      await import('../../../src/application/use-cases/check-room-availability/check-room-availability.module.js');
     moduleRef = await Test.createTestingModule({
-      imports: [
-        AppConfigModule,
-        PersistenceModule,
-        ClockModule,
-        Module1ClientModule,
-        CheckRoomAvailabilityModule,
-      ],
+      imports: await checkRoomAvailabilityModules(),
     }).compile();
     availability = moduleRef.get<VerifyAvailability>(VERIFY_AVAILABILITY);
     dataSource = moduleRef.get(DataSource);

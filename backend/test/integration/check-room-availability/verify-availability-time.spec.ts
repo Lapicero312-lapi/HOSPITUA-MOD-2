@@ -11,7 +11,8 @@ import {
   type VerifyAvailability,
 } from '../../../src/application/use-cases/check-room-availability/ports/in/verify-availability.port.js';
 import type { EnvironmentVariables } from '../../../src/infrastructure/config/env.validation.js';
-import { integrationEnv, truncateAllTables } from '../support/database.js';
+import { checkRoomAvailabilityModules } from '../support/check-room-availability.js';
+import { truncateAllTables } from '../support/database.js';
 
 /**
  * Prueba de tiempo de `check-room-availability` (T016, NFR-001: "La verificación completa debe responder
@@ -51,26 +52,8 @@ describe('VerifyAvailability: tiempo de respuesta (T016, NFR-001)', () => {
   const calendar = { requests: 0, running: 0, maxRunning: 0 };
 
   beforeAll(async () => {
-    // AppConfigModule lee el entorno al importarse: los módulos se importan después de asignarlo.
-    Object.assign(process.env, { NODE_ENV: 'test', ...integrationEnv() });
-    const { AppConfigModule } =
-      await import('../../../src/infrastructure/config/app-config.module.js');
-    const { PersistenceModule } =
-      await import('../../../src/infrastructure/out/persistence/persistence.module.js');
-    const { ClockModule } =
-      await import('../../../src/infrastructure/out/clock/clock.module.js');
-    const { Module1ClientModule } =
-      await import('../../../src/infrastructure/out/module1/module1-client.module.js');
-    const { CheckRoomAvailabilityModule } =
-      await import('../../../src/application/use-cases/check-room-availability/check-room-availability.module.js');
     moduleRef = await Test.createTestingModule({
-      imports: [
-        AppConfigModule,
-        PersistenceModule,
-        ClockModule,
-        Module1ClientModule,
-        CheckRoomAvailabilityModule,
-      ],
+      imports: await checkRoomAvailabilityModules(),
     }).compile();
     availability = moduleRef.get<VerifyAvailability>(VERIFY_AVAILABILITY);
     await truncateAllTables(moduleRef.get(DataSource));
