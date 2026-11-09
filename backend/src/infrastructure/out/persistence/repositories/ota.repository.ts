@@ -37,8 +37,9 @@ type OverviewRow = {
   name: string;
   commission_percentage: string | null;
   connection_status: string;
-  linked_at: Date;
-  last_sync_at: Date;
+  /** Texto, como entrega `pg` las fechas con hora (`PG_TYPES`): `2026-03-02 09:14:00-05`. */
+  linked_at: string;
+  last_sync_at: string;
   active_reservations: number;
 };
 
@@ -135,8 +136,9 @@ function overviewOf(row: OverviewRow): OtaOverview {
         ? null
         : decimalText(row.commission_percentage),
     connectionStatus: row.connection_status as ConnectionStatus,
-    linkedAt: row.linked_at,
-    lastSyncAt: row.last_sync_at,
+    // A `Date` como hace TypeORM con las columnas `timestamptz` de `OtaTable`.
+    linkedAt: new Date(row.linked_at),
+    lastSyncAt: new Date(row.last_sync_at),
     activeReservations: row.active_reservations,
   };
 }
