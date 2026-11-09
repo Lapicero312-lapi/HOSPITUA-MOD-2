@@ -21,6 +21,7 @@ export function Layout() {
           <NavLink to="/" end>
             Inicio
           </NavLink>
+          <NavLink to="/habitaciones">Habitaciones</NavLink>
         </nav>
         <span className="layout-user">
           Recepcionista: {currentUser()}

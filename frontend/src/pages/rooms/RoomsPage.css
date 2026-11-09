@@ -1,0 +1,183 @@
+/*
+ * Pantalla "Habitaciones". Todo cuelga de `.rooms`, así no cambia ninguna otra pantalla. Usa los colores
+ * base de `index.css` y la forma del wireframe: un panel con la tabla y una etiqueta de color para el
+ * mantenimiento próximo.
+ */
+
+.rooms {
+  --rooms-radius: 12px;
+  --rooms-radius-pill: 999px;
+  --rooms-shadow:
+    0 1px 2px rgba(31, 41, 51, 0.04), 0 8px 24px rgba(31, 41, 51, 0.06);
+  --rooms-row-hover: #f0f6fb;
+  --rooms-category-background: #e6f0f7;
+  --rooms-scheduled: #9a4a07;
+  --rooms-scheduled-background: #fdf1dc;
+  --rooms-unavailable-background: #eef2f6;
+  --rooms-error-background: #fef3f2;
+  max-width: 60rem;
+}
+
+.rooms-title {
+  margin: 0 0 1rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.rooms-panel {
+  overflow: hidden;
+  background-color: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--rooms-radius);
+  box-shadow: var(--rooms-shadow);
+}
+
+.rooms-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.rooms-table th {
+  padding: 0.75rem 1.25rem;
+  background-color: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.rooms-table td {
+  padding: 0.875rem 1.25rem;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.rooms-table tbody tr {
+  transition: background-color 120ms ease;
+}
+
+.rooms-table tbody tr:hover {
+  background-color: var(--rooms-row-hover);
+}
+
+.rooms-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.rooms-number {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.rooms-category {
+  display: inline-block;
+  padding: 0.125rem 0.625rem;
+  background-color: var(--rooms-category-background);
+  border-radius: var(--rooms-radius-pill);
+  color: var(--color-accent);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.rooms-capacity {
+  color: var(--color-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Todos con el mismo alto, para que las filas con etiqueta y sin ella midan lo mismo. */
+.rooms-maintenance {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+  font-size: 0.8125rem;
+}
+
+/* Las etiquetas de `SCHEDULED` y `UNAVAILABLE` llevan un punto de color; el de `UNAVAILABLE` va hueco. */
+.rooms-maintenance--scheduled,
+.rooms-maintenance--unavailable {
+  padding-right: 0.75rem;
+  padding-left: 0.75rem;
+  border-radius: var(--rooms-radius-pill);
+  font-weight: 600;
+}
+
+.rooms-maintenance--scheduled::before,
+.rooms-maintenance--unavailable::before {
+  content: '';
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+}
+
+.rooms-maintenance--scheduled {
+  background-color: var(--rooms-scheduled-background);
+  color: var(--rooms-scheduled);
+  font-variant-numeric: tabular-nums;
+}
+
+.rooms-maintenance--scheduled::before {
+  background-color: currentColor;
+}
+
+.rooms-maintenance--none {
+  color: var(--color-muted);
+}
+
+.rooms-maintenance--unavailable {
+  background-color: var(--rooms-unavailable-background);
+  color: var(--color-muted);
+}
+
+.rooms-maintenance--unavailable::before {
+  border: 1.5px solid currentColor;
+}
+
+/* Mientras carga y sin habitaciones: un mensaje centrado dentro del panel. */
+.rooms-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 2.5rem 1.25rem;
+  color: var(--color-muted);
+}
+
+.rooms-state--loading::before {
+  content: '';
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: rooms-spin 0.8s linear infinite;
+}
+
+@keyframes rooms-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rooms-state--loading::before {
+    animation: none;
+  }
+}
+
+/* El mensaje de error (`ErrorMessage`) dentro del panel, en lugar de la tabla. */
+.rooms-panel .error-message {
+  margin: 0;
+  padding: 1rem 1.25rem;
+  background-color: var(--rooms-error-background);
+  border-left: 4px solid var(--color-error);
+}
