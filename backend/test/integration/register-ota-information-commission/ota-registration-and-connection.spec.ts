@@ -270,7 +270,10 @@ describe('Registro de la agencia y estado de la conexión (register-ota-informat
     'escenario 3: si Channex rechaza la lectura del feed con %s, la agencia pasa a DISCONNECTED y ella y sus reservas se conservan',
     async (_, status) => {
       await startSystem();
+      // Con reservas, la agencia ya tiene el porcentaje que se calculó con la primera.
+      await dataSource.query("UPDATE ota SET commission_percentage = '15.00'");
       const before = await theAgency();
+      expect(before.commission_percentage).toBe('15.00');
       const reservations = new TypeOrmReservationRepository(dataSource);
       await reservations.insert(
         anOtaReservation(before.id, { status: 'ACTIVE' }),
