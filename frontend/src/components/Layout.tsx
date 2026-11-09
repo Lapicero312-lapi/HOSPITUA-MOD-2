@@ -22,6 +22,8 @@ export function Layout() {
             Inicio
           </NavLink>
           <NavLink to="/guest-stays">Huéspedes alojados</NavLink>
+          <NavLink to="/habitaciones">Habitaciones</NavLink>
+          <NavLink to="/agencias">Agencias OTA</NavLink>
         </nav>
         <span className="layout-user">
           Recepcionista: {currentUser()}
