@@ -45,6 +45,13 @@ export function Layout() {
         >
           Agencias OTA
         </NavLink>
+        <NavLink
+          className={({ isActive }) => `navbtn${isActive ? ' active' : ''}`}
+          to="/guest-stays"
+          onClick={() => setMenuOpen(false)}
+        >
+          Huéspedes alojados
+        </NavLink>
       </nav>
       {menuOpen && (
         <div className="side-backdrop" onClick={() => setMenuOpen(false)} />
@@ -61,7 +68,13 @@ export function Layout() {
               ☰ Menú
             </button>
             <div className="crumbs">HOSPITUA · Recepción</div>
-            <h1>{pathname === '/otas' ? 'Agencias OTA' : 'Recepción'}</h1>
+            <h1>
+              {pathname === '/otas'
+                ? 'Agencias OTA'
+                : pathname === '/guest-stays'
+                  ? 'Huéspedes alojados'
+                  : 'Recepción'}
+            </h1>
           </div>
           <div className="who">
             <Avatar name={currentUser() ?? ''} />
