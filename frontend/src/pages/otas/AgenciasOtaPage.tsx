@@ -35,7 +35,7 @@ function formatDateTime(value: string): string {
 export function AgenciasOtaPage() {
   const query = useQuery({
     queryKey: ['otas'],
-    queryFn: listOtas,
+    queryFn: ({ signal }) => listOtas(signal),
   });
 
   return (
