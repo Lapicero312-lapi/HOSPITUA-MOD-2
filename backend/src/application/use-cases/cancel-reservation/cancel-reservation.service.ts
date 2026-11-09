@@ -26,7 +26,6 @@ import {
   TRANSACTION_RUNNER,
   type TransactionRunner,
 } from '../../ports/out/transaction.js';
-import { colombiaTime } from '../check-view-reservation/message-time.js';
 import {
   DAILY_LIST_CHANGE_RECORDER,
   type DailyListChangeRecorder,
@@ -61,9 +60,10 @@ const STATUS_REASON_BY_CHANNEL: Record<CancellationChannel, StatusReason> = {
 };
 
 /**
- * `CancelReservation` (plan de `cancel-reservation`, regla 3 y punto 10; T005 a T007). Usa los puertos de
- * entrada de `check-view-reservation` y `update-reservation` (regla 6), y todo va en la transacción de
- * quien llama: si algo falla, no queda nada a medias (regla 4).
+ * `CancelReservation` (plan de `cancel-reservation`, regla 3 y punto 10; T005 a T008). Usa los puertos de
+ * entrada de `check-view-reservation` y `update-reservation` (regla 6). `cancel` va en la transacción de
+ * quien llama (Booking) y `execute` abre la suya (la Recepcionista): si algo falla, no queda nada a medias
+ * (regla 4).
  */
 @Injectable()
 export class CancelReservationService implements CancelReservation {
@@ -100,7 +100,7 @@ export class CancelReservationService implements CancelReservation {
       status: 'CANCELLED',
       cancellation: {
         cancellationId: cancellation.id,
-        cancellationDate: colombiaTime(cancellation.cancellationDate),
+        cancellationDate: cancellation.cancellationDate,
         channel: cancellation.channel,
         reason: cancellation.reason,
         processedBy: cancellation.processedBy,

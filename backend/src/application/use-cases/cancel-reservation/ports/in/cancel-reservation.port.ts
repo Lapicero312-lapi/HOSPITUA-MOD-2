@@ -18,14 +18,14 @@ export type CancelReservationCommand = {
   expectedUpdatedAt?: string;
 };
 
-/** La respuesta 200 de la cancelación de la Recepcionista (plan, contrato A). */
+/** Los datos de la respuesta 200 de la cancelación de la Recepcionista (plan, contrato A y punto 10). */
 export type CancellationResult = {
   reservationRef: string;
   status: 'CANCELLED';
   cancellation: {
     cancellationId: string;
-    /** En hora de Colombia, con segundos: `2026-10-09T10:15:20-05:00`. */
-    cancellationDate: string;
+    /** El instante: la capa REST lo escribe en hora de Colombia. */
+    cancellationDate: Date;
     channel: CancellationChannel;
     reason: string | null;
     processedBy: string;

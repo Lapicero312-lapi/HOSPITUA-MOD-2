@@ -11,7 +11,6 @@ import {
 import { readReceptionCancellationBody } from '../../../application/use-cases/cancel-reservation/cancel-request.validator.js';
 import {
   CANCEL_RESERVATION,
-  type CancellationResult,
   type CancelReservation,
 } from '../../../application/use-cases/cancel-reservation/ports/in/cancel-reservation.port.js';
 import {
@@ -25,6 +24,10 @@ import {
   type ReservationListResult,
 } from '../../../application/use-cases/check-view-reservation/ports/in/list-reservations.port.js';
 import { ClientHeader, UserHeader } from './request-headers.js';
+import {
+  type ReservationCancellationBody,
+  toReservationCancellationBody,
+} from './reservation-cancellation.dto.js';
 import { readReservationListQuery } from './reservation-list-query.dto.js';
 
 /**
@@ -77,18 +80,19 @@ export class ReservationsController {
    * A de `cancel-reservation`, `POST /api/reservations/{reservationRef}/cancellation`: la Recepcionista
    * cancela una reserva directa (D1). `X-User` es quien la hace (`USER_REQUIRED` si falta). Las reglas, en
    * el orden de la regla 3, las aplica `CancelReservation` en su propia transacción. Responde `200` con la
-   * cancelación; los errores salen por el filtro global como `400`.
+   * cancelación; los errores salen por el filtro global como `400`. La referencia es opcional en la ruta para
+   * que una vacía (`…//cancellation`) también llegue a esa revisión y responda `RESERVATION_REF_REQUIRED`.
    */
-  @Post(':reservationRef/cancellation')
+  @Post('{:reservationRef}/cancellation')
   @HttpCode(200)
   async cancel(
-    @Param('reservationRef') reservationRef: string,
+    @Param('reservationRef') reservationRef = '',
     @UserHeader() processedBy: string,
     @Body() body: unknown,
-  ): Promise<CancellationResult> {
+  ): Promise<ReservationCancellationBody> {
     const { acknowledged, expectedUpdatedAt, reason } =
       readReceptionCancellationBody(reservationRef, body);
-    return this.cancelReservation.execute({
+    const result = await this.cancelReservation.execute({
       reservationRef,
       channel: 'RECEPTION',
       processedBy,
@@ -96,5 +100,6 @@ export class ReservationsController {
       acknowledged,
       expectedUpdatedAt,
     });
+    return toReservationCancellationBody(result);
   }
 }

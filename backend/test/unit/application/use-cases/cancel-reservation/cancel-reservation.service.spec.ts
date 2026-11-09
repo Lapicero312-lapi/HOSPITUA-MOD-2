@@ -496,7 +496,7 @@ describe('CancelReservation: la Cancellation que la restricción única rechaza'
 });
 
 describe('CancelReservation.execute: la cancelación de la Recepcionista en su propia transacción (T008, A y D1)', () => {
-  it('escenario 1: abre la transacción, cancela y responde lo del contrato A, con la fecha en hora de Colombia', async () => {
+  it('escenario 1: abre la transacción, cancela y devuelve los datos del contrato A, con el instante de la cancelación', async () => {
     const reservation = directReservation();
     const { service, findForUpdate, insertCancellation } =
       serviceWith(reservation);
@@ -511,8 +511,7 @@ describe('CancelReservation.execute: la cancelación de la Recepcionista en su p
       status: 'CANCELLED',
       cancellation: {
         cancellationId: cancellation.id,
-        // NOW es 2026-10-09T15:15:20Z: las 10:15:20 en Colombia.
-        cancellationDate: '2026-10-09T10:15:20-05:00',
+        cancellationDate: NOW,
         channel: 'RECEPTION',
         reason: 'El huésped cambió de planes',
         processedBy: 'laura.mendez',

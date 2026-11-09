@@ -191,6 +191,7 @@ describe('POST /api/reservations/{reservationRef}/cancellation (e2e)', () => {
   );
 
   it.each([
+    ['una referencia vacía', '', 'RESERVATION_REF_REQUIRED'],
     ['una referencia en blanco', '%20%20', 'RESERVATION_REF_REQUIRED'],
     ['una referencia con otro formato', 'RSV-123', 'INVALID_RESERVATION_CODE'],
     ['una reserva que no existe', 'RSV-00000000', 'RESERVATION_NOT_FOUND'],
