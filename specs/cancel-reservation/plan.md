@@ -109,7 +109,7 @@ interface CancelReservation {
 - Si está en `IN_PROGRESS`, `COMPLETED` o `NO_SHOW`, B no cancela y devuelve el estado a
   `generate-ota-reservation`, que marca el conflicto `CHANGE_NOT_APPLICABLE`.
 
-### C. Errores 400 (los mismos para A y B; el mensaje es el literal del spec cuando existe)
+### C. Errores 400 (los mismos para A y B, salvo `STATUS_NOT_CANCELLABLE`; el mensaje es el literal del spec cuando existe)
 
 | `errorCode` | Cuándo | `message` |
 |---|---|---|
@@ -117,7 +117,7 @@ interface CancelReservation {
 | `INVALID_RESERVATION_CODE` | La referencia no cumple el formato `RSV-` más 8 hexadecimales | "Debe proveer un código de reserva válido para la consulta." |
 | `RESERVATION_NOT_FOUND` | La reserva no existe | "La reserva no existe." |
 | `OTA_RESERVATION_CANCEL_VIA_API` | La Recepcionista intenta cancelar una reserva de OTA | "La cancelación de una reserva de OTA debe llegar desde Booking." |
-| `STATUS_NOT_CANCELLABLE` | La reserva está en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` o `NO_SHOW` | "El estado actual de la reserva no admite cancelación." |
+| `STATUS_NOT_CANCELLABLE` | Solo en A: la reserva está en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` o `NO_SHOW`. En B no es un error: `cancel` devuelve la reserva sin tocarla (contrato B) | "El estado actual de la reserva no admite cancelación." |
 | `CANCELLATION_NOT_CONFIRMED` | La Recepcionista no envía `acknowledged: true` | "Debe confirmar que entiende que la cancelación no se puede deshacer." |
 | `CONCURRENT_UPDATE` | `updatedAt` no coincide: otra cancelación o cambio simultáneo | "Esta reserva ya fue actualizada o cancelada recientemente" |
 | `REASON_TOO_LONG` | `reason` de más de 500 caracteres | "El motivo no puede superar 500 caracteres." |
