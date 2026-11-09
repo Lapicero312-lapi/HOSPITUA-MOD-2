@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { describe, expect, it } from 'vitest';
@@ -34,6 +34,16 @@ describe('Rutas', () => {
     expect(
       screen.getByRole('heading', { name: 'Recepción' }),
     ).toBeInTheDocument();
+    const homeLinks = within(screen.getByRole('list'));
+    expect(
+      homeLinks.getByRole('link', { name: 'Consultar reservas' }),
+    ).toHaveAttribute('href', '/reservas');
+    expect(
+      homeLinks.getByRole('link', { name: 'Habitaciones' }),
+    ).toHaveAttribute('href', '/habitaciones');
+    expect(
+      homeLinks.getByRole('link', { name: 'Agencias OTA' }),
+    ).toHaveAttribute('href', '/agencias');
   });
 
   it('una ruta que no existe muestra "La página no existe." dentro del marco', () => {

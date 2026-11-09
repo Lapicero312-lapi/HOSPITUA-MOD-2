@@ -1,4 +1,5 @@
 import { Link } from 'react-router';
+import './HomePage.css';
 
 /** Pantalla de inicio. Cada caso de uso agrega aquí el acceso a su pantalla. */
 export function HomePage() {
@@ -6,11 +7,23 @@ export function HomePage() {
     <section>
       <h1>Recepción</h1>
       <p>Operación de reservas y cumplimiento legal del hotel.</p>
-      <p style={{ marginTop: 16 }}>
-        <Link to="/reservas" className="btn primary">
-          Consultar reservas
-        </Link>
-      </p>
+      <ul className="home-links">
+        <li>
+          <Link className="home-link" to="/reservas">
+            Consultar reservas
+          </Link>
+        </li>
+        <li>
+          <Link className="home-link" to="/habitaciones">
+            Habitaciones
+          </Link>
+        </li>
+        <li>
+          <Link className="home-link" to="/agencias">
+            Agencias OTA
+          </Link>
+        </li>
+      </ul>
     </section>
   );
 }
