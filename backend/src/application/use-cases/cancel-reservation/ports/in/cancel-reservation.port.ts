@@ -41,8 +41,10 @@ export type CancellationResult = {
 export interface CancelReservation {
   /**
    * Hace las verificaciones de la regla 3 en orden; después pasa la reserva a `CANCELLED`, guarda su
-   * `Cancellation` y anota el cambio en la lista del día, todo en `tx` (regla 4).
-   * @returns La reserva ya cancelada, con su `updatedAt` nuevo.
+   * `Cancellation` y anota el cambio en la lista del día y en la disponibilidad para Channex, todo en `tx`
+   * (reglas 4 y 10).
+   * @returns La reserva ya cancelada, con su `updatedAt` nuevo. Si la cancela Booking (B) y su estado ya no lo
+   * admite (`CANCELLED`, `IN_PROGRESS`, `COMPLETED` o `NO_SHOW`), la reserva sin tocar, con ese estado.
    * @throws BusinessError con un código de la tabla C.
    */
   cancel(

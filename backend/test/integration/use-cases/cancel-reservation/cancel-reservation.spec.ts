@@ -4,6 +4,8 @@ import type { Clock } from '../../../../src/application/ports/out/clock.js';
 import type { Transaction } from '../../../../src/application/ports/out/transaction.js';
 import { CancelReservationService } from '../../../../src/application/use-cases/cancel-reservation/cancel-reservation.service.js';
 import type { CancelReservationCommand } from '../../../../src/application/use-cases/cancel-reservation/ports/in/cancel-reservation.port.js';
+import { AriChangeRecorderService } from '../../../../src/application/use-cases/configure-ota/ari-change-recorder.service.js';
+import type { AriChangeRecorder } from '../../../../src/application/use-cases/configure-ota/ports/in/ari-change-recorder.port.js';
 import { DailyListChangeRecorderService } from '../../../../src/application/use-cases/check-view-reservation/daily-list-change-recorder.service.js';
 import { colombiaTimeWithMicroseconds } from '../../../../src/application/use-cases/check-view-reservation/message-time.js';
 import type { DailyListChangeRecorder } from '../../../../src/application/use-cases/check-view-reservation/ports/in/daily-list-change-recorder.port.js';
@@ -11,6 +13,7 @@ import { ReservationLookupService } from '../../../../src/application/use-cases/
 import { ReservationStatusService } from '../../../../src/application/use-cases/update-reservation/reservation-status.service.js';
 import type { Reservation } from '../../../../src/domain/reservation/reservation.js';
 import { BusinessError } from '../../../../src/domain/shared/business-error.js';
+import { TypeOrmAriPendingChangeRepository } from '../../../../src/infrastructure/out/persistence/repositories/ari-pending-change.repository.js';
 import { TypeOrmCancellationRepository } from '../../../../src/infrastructure/out/persistence/repositories/cancellation.repository.js';
 import { TypeOrmDailyMessageRepository } from '../../../../src/infrastructure/out/persistence/repositories/daily-message.repository.js';
 import { TypeOrmDailySequenceRepository } from '../../../../src/infrastructure/out/persistence/repositories/daily-sequence.repository.js';
@@ -62,9 +65,13 @@ describe('CancelReservation contra PostgreSQL real (T005 a T007)', () => {
   let reservations: TypeOrmReservationRepository;
   let transactions: TypeOrmTransactionRunner;
   let dailyList: DailyListChangeRecorderService;
+  let availability: AriChangeRecorderService;
 
-  /** El servicio; `recorder` permite cambiar la lista del día por una que falla. */
-  const serviceWith = (recorder: DailyListChangeRecorder = dailyList) =>
+  /** El servicio; `recorder` y `ari` permiten cambiar la lista del día y la disponibilidad por unas que fallan. */
+  const serviceWith = (
+    recorder: DailyListChangeRecorder = dailyList,
+    ari: AriChangeRecorder = availability,
+  ) =>
     new CancelReservationService(
       new ReservationLookupService(
         new TypeOrmReservationQuery(dataSource),
@@ -75,14 +82,44 @@ describe('CancelReservation contra PostgreSQL real (T005 a T007)', () => {
       recorder,
       CLOCK,
       transactions,
+      ari,
     );
 
   const cancel = (
     command: CancelReservationCommand,
     recorder?: DailyListChangeRecorder,
+    ari?: AriChangeRecorder,
   ) =>
     transactions.run((tx: Transaction) =>
-      serviceWith(recorder).cancel(tx, command),
+      serviceWith(recorder, ari).cancel(tx, command),
+    );
+
+  /** La cancelación de Booking del contrato B. */
+  const fromBooking = (saved: Reservation): CancelReservationCommand => ({
+    reservationRef: saved.reservationRef,
+    channel: 'OTA_API',
+    processedBy: 'Booking.com',
+    reason: null,
+  });
+
+  /** Una reserva de Booking guardada, en su agencia. */
+  const aStoredBookingReservation = async (changes = {}) => {
+    const ota = await new TypeOrmOtaRepository(dataSource).insert(anOta());
+    return reservations.insert(
+      anOtaReservation(ota.id, {
+        startDate: TODAY,
+        endDate: '2026-10-12',
+        ...changes,
+      }),
+    );
+  };
+
+  const availabilityRows = (): Promise<
+    { category_room: string; date_from: string; date_to: string }[]
+  > =>
+    dataSource.query(
+      `SELECT category_room, date_from::text, date_to::text
+       FROM ari_pending_change ORDER BY category_room`,
     );
 
   /** La cancelación de la Recepcionista, con el `updatedAt` como lo envía la pantalla. */
@@ -151,6 +188,9 @@ describe('CancelReservation contra PostgreSQL real (T005 a T007)', () => {
       new TypeOrmDailyMessageRepository(dataSource),
       new TypeOrmOtaRepository(dataSource),
       CLOCK,
+    );
+    availability = new AriChangeRecorderService(
+      new TypeOrmAriPendingChangeRepository(dataSource),
     );
   });
 
@@ -292,6 +332,120 @@ describe('CancelReservation contra PostgreSQL real (T005 a T007)', () => {
     expect(await blocksInventory(saved.id)).toEqual([true]);
     expect(await cancellationRows()).toEqual([]);
     expect(await messageRows()).toEqual([]);
+    expect(await availabilityRows()).toEqual([]);
+  });
+
+  describe('la disponibilidad liberada para Channex (T009, regla 10)', () => {
+    it('la Recepcionista: una marca por categoría con las noches de la reserva', async () => {
+      const saved = await reservations.insert(
+        arrivingToday({
+          rooms: [
+            aDirectRoom({ roomNumber: '201' }),
+            aDirectRoom({ roomNumber: '202' }),
+            aDirectRoom({ roomNumber: '101', categoryRoom: 'SUITE' }),
+          ],
+        }),
+      );
+
+      await cancel(fromReception(saved));
+
+      expect(await availabilityRows()).toEqual([
+        {
+          category_room: 'DOBLE',
+          date_from: TODAY,
+          date_to: '2026-10-12',
+        },
+        {
+          category_room: 'SUITE',
+          date_from: TODAY,
+          date_to: '2026-10-12',
+        },
+      ]);
+    });
+
+    it('Booking: también deja su marca', async () => {
+      const saved = await aStoredBookingReservation();
+
+      await cancel(fromBooking(saved));
+
+      expect(await availabilityRows()).toEqual([
+        {
+          category_room: 'DOBLE',
+          date_from: TODAY,
+          date_to: '2026-10-12',
+        },
+      ]);
+    });
+
+    it('regla 4, canal B: si quien llama falla después, en su misma transacción, no queda nada: tampoco la marca', async () => {
+      await listAlreadySent();
+      const saved = await aStoredBookingReservation();
+
+      await expect(
+        transactions.run(async (tx: Transaction) => {
+          await serviceWith().cancel(tx, fromBooking(saved));
+          throw new Error('falló generate-ota-reservation');
+        }),
+      ).rejects.toThrow('falló generate-ota-reservation');
+
+      const stored = await reservations.findByRef(saved.reservationRef);
+      expect(stored?.status).toBe('ACTIVE');
+      expect(await cancellationRows()).toEqual([]);
+      expect(await messageRows()).toEqual([]);
+      expect(await availabilityRows()).toEqual([]);
+    });
+
+    it('regla 4: si no se puede anotar, se revierte todo, también el aviso a la lista del día', async () => {
+      await listAlreadySent();
+      const saved = await reservations.insert(arrivingToday());
+      const failing: AriChangeRecorder = {
+        record: () => Promise.reject(new Error('se cayó la conexión')),
+      };
+
+      await expect(
+        cancel(fromReception(saved), undefined, failing),
+      ).rejects.toThrow('se cayó la conexión');
+
+      const stored = await reservations.findByRef(saved.reservationRef);
+      expect(stored?.status).toBe('ACTIVE');
+      expect(await blocksInventory(saved.id)).toEqual([true]);
+      expect(await cancellationRows()).toEqual([]);
+      expect(await messageRows()).toEqual([]);
+      expect(await availabilityRows()).toEqual([]);
+    });
+  });
+
+  describe('lo que Booking ya no puede cancelar no es un error (T009, contrato B)', () => {
+    it('repetir la revisión no cambia nada: una sola Cancellation, un solo REMOVED y una sola marca', async () => {
+      await listAlreadySent();
+      const saved = await aStoredBookingReservation();
+      const first = await cancel(fromBooking(saved));
+
+      const repeated = await cancel(fromBooking(saved));
+
+      expect(repeated.status).toBe('CANCELLED');
+      expect(repeated.updatedAt).toBe(first.updatedAt);
+      expect(await cancellationRows()).toHaveLength(1);
+      expect(await messageRows()).toHaveLength(1);
+      expect(await availabilityRows()).toHaveLength(1);
+    });
+
+    it.each(['IN_PROGRESS', 'COMPLETED', 'NO_SHOW'] as const)(
+      'escenario 4: en %s devuelve su estado sin tocar nada, para que generate-ota-reservation marque el conflicto',
+      async (status) => {
+        const saved = await aStoredBookingReservation({ status });
+
+        const result = await cancel(fromBooking(saved));
+
+        expect(result.status).toBe(status);
+        const stored = await reservations.findByRef(saved.reservationRef);
+        expect(stored?.status).toBe(status);
+        expect(stored?.updatedAt).toBe(saved.updatedAt);
+        expect(await cancellationRows()).toEqual([]);
+        expect(await messageRows()).toEqual([]);
+        expect(await availabilityRows()).toEqual([]);
+      },
+    );
   });
 
   it('D2: dos cancelaciones simultáneas con el mismo updatedAt; una aplica y la otra recibe CONCURRENT_UPDATE, con una sola Cancellation y un solo aviso', async () => {
