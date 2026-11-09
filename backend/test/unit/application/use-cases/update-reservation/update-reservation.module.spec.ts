@@ -9,8 +9,10 @@ import { PROCESSED_MESSAGE_REPOSITORY } from '../../../../../src/application/por
 import { RESERVATION_REPOSITORY } from '../../../../../src/application/ports/out/reservation.repository.js';
 import { TRANSACTION_RUNNER } from '../../../../../src/application/ports/out/transaction.js';
 import { PROCESS_CHECK_IN } from '../../../../../src/application/use-cases/update-reservation/ports/in/process-check-in.port.js';
+import { PROCESS_CHECK_OUT } from '../../../../../src/application/use-cases/update-reservation/ports/in/process-check-out.port.js';
 import { RESERVATION_STATUS } from '../../../../../src/application/use-cases/update-reservation/ports/in/reservation-status.port.js';
 import { ProcessCheckInService } from '../../../../../src/application/use-cases/update-reservation/process-check-in.service.js';
+import { ProcessCheckOutService } from '../../../../../src/application/use-cases/update-reservation/process-check-out.service.js';
 import { ReservationStatusService } from '../../../../../src/application/use-cases/update-reservation/reservation-status.service.js';
 import { UpdateReservationModule } from '../../../../../src/application/use-cases/update-reservation/update-reservation.module.js';
 
@@ -48,6 +50,11 @@ describe('UpdateReservationModule (plan base, regla 4)', () => {
       token: PROCESS_CHECK_IN,
       service: ProcessCheckInService,
       who: 'CheckInConsumer (T015)',
+    },
+    {
+      token: PROCESS_CHECK_OUT,
+      service: ProcessCheckOutService,
+      who: 'CheckOutConsumer (T016)',
     },
   ])(
     'exporta $token.description: $who lo puede inyectar',
