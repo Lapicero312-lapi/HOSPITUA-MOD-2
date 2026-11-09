@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { CalculateDynamicRateModule } from '../../../application/use-cases/calculate-dynamic-rate/calculate-dynamic-rate.module.js';
+import { CancelReservationModule } from '../../../application/use-cases/cancel-reservation/cancel-reservation.module.js';
 import { CheckViewReservationModule } from '../../../application/use-cases/check-view-reservation/check-view-reservation.module.js';
 import { ConsultRoomInventoryModule } from '../../../application/use-cases/consult-room-inventory/consult-room-inventory.module.js';
 import { ExportSireFileModule } from '../../../application/use-cases/export-sire-file/export-sire-file.module.js';
@@ -21,6 +22,7 @@ import { sireRequestLimitsProvider } from './sire-rate-limiter.js';
     CalculateDynamicRateModule,
     ProcessGuestDataModule,
     CheckViewReservationModule,
+    CancelReservationModule,
     ExportSireFileModule,
   ],
   controllers: [

@@ -74,6 +74,7 @@ describe('CancelReservation contra PostgreSQL real (T005 a T007)', () => {
       new TypeOrmCancellationRepository(dataSource),
       recorder,
       CLOCK,
+      transactions,
     );
 
   const cancel = (
