@@ -27,4 +27,11 @@ export interface ProcessedMessageRepository {
    * reintento lo encuentra ya procesado.
    */
   record(message: ProcessedMessage, tx: Transaction): Promise<void>;
+
+  /**
+   * El mayor `sequenceNumber` ya atendido de esa cola, o `null` si todavía no llegó ninguno. Con él el
+   * consumidor de Check-In y de Check-Out detecta un salto de secuencia (plan de `update-reservation`,
+   * FR-023; usa el índice `processed_message(queue, sequence_number)`).
+   */
+  highestSequenceNumber(queue: string, tx: Transaction): Promise<number | null>;
 }

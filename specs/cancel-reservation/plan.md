@@ -411,11 +411,32 @@ canal y `REMOVED`); una con llegada futura (sin aviso); y los intentos sobre `IN
       OTA, recibe `OTA_RESERVATION_CANCEL_VIA_API`. Una cancelación de Booking sobre una reserva directa no
       debería ocurrir, porque `generate-ota-reservation` la busca por su código: es un error del programa y
       responde `REQUEST_NOT_PROCESSED`.
-    - **Paso 4:** `expectedUpdatedAt` se compara como instante, con sus microsegundos, no como texto.
+    - **Paso 4:** `expectedUpdatedAt` se compara como instante, con sus microsegundos, no como texto. En A
+      es obligatorio: si no llega, no coincide y la respuesta es `CONCURRENT_UPDATE`.
     - **La `Cancellation`:** toma su `cancellationDate` de `Clock.now()`. Si la restricción única la
       rechaza, la respuesta es `CONCURRENT_UPDATE`.
 
     Devuelve la reserva ya cancelada.
+
+    `execute(command)` (T008) es la cancelación de la Recepcionista (A y D1): hace lo mismo que `cancel`, en
+    una transacción propia, y devuelve los datos de la respuesta 200 de A:
+
+    ```typescript
+    execute(command: CancelReservationCommand): Promise<CancellationResult>;
+
+    type CancellationResult = {
+      reservationRef: string;
+      status: 'CANCELLED';
+      cancellation: {
+        cancellationId: string;
+        cancellationDate: Date;     // la capa REST lo escribe en hora de Colombia
+        channel: CancellationChannel;
+        reason: string | null;
+        processedBy: string;
+        status: 'COMPLETED';
+      };
+    };
+    ```
 
 ## Puntos abiertos
 

@@ -14,17 +14,12 @@ import {
   INVALID_ROOM_ID,
   INVENTORY_UNAVAILABLE,
 } from '../../../../../src/domain/shared/error-codes.js';
+import { ROOM_201 } from '../../../../support/rooms.js';
 
 /**
  * Datos de las pruebas del plan ("Pruebas por escenario", T005, T006, T007 y T010), que dice de dónde sale
  * cada uno. El `id` es un UUID cualquiera.
  */
-const ROOM_201: Room = {
-  id: randomUUID(),
-  roomNumber: '201',
-  categoryRoom: 'DOBLE',
-  maxCapacity: 2,
-};
 const ROOM_202: Room = {
   id: randomUUID(),
   roomNumber: '202',

@@ -366,8 +366,16 @@ después, operationalDate?)` (de `check-view-reservation`) **dentro de su transa
 modificación y en el No-Show total. No lo llama en el Check-In ni en el Check-Out (FR-017 de ese caso de
 uso).
 
-**C3. Registro de huéspedes**: llama a `RegisterGuestMovements.register(tx, …)` de `process-guest-data`
-en el Check-In y en el Check-Out.
+**C3. Registro de huéspedes**: llama a `RegisterGuestMovements.register(tx, command)` de
+`process-guest-data` (su contrato B1) en el Check-In y en el Check-Out, **dentro de su transacción**,
+después del cambio de estado y antes de insertar el `messageId` en `processed_message` (D3 y D4).
+Acordado con el plan de `process-guest-data` (su T011):
+
+- `command` lleva `reservationId` (el `id` de la reserva bloqueada), y el `roomId`, el `movementType` y el
+  `movementDate` del mensaje. También lleva la lista `guests` tal como la deja el validador de estructura
+  de `process-guest-data`, que el consumidor aplica **antes de abrir la transacción**.
+- Devuelve el `RegistrationSummary`, que el consumidor deja en el log, solo con cifras.
+- Si algo falla después, se revierte todo, incluidos los huéspedes registrados.
 
 **C4. `ApplyOtaChange`** (FR-024; lo llama `generate-ota-reservation` con una revisión `modified`):
 
@@ -460,7 +468,7 @@ Orden de las verificaciones, dentro de una transacción con `SELECT … FOR UPDA
 | 1 | `messageId` ya procesado (`processed_message`) | Duplicado: se confirma sin efectos |
 | 2 | La reserva existe | Log "La reserva notificada no existe en el sistema de reservas." y se confirma |
 | 3 | El `roomId` pertenece a la reserva | Log "La habitación notificada no pertenece a la reserva." y se confirma |
-| 4 | La habitación ya está `CHECKED_IN` | Duplicado idempotente: se confirma sin efectos |
+| 4 | La habitación ya está `CHECKED_IN` | Duplicado idempotente: se confirma sin efectos en la reserva y registra el mensaje con su `sequenceNumber` (punto 6) |
 | 5 | La reserva está en `ACTIVE` o `IN_PROGRESS` | Log "La reserva no admite un Check-In en su estado actual." y se confirma |
 | 6 | La habitación está en `EXPECTED` (no `NOT_ARRIVED` ni `CHECKED_OUT`) | Log con el estado y se confirma |
 
@@ -469,7 +477,8 @@ Si pasa todo: `EXPECTED → CHECKED_IN`; si es la primera, reserva `ACTIVE → I
 
 ### Check-Out (FR-017)
 
-Mismas verificaciones 1 a 4 (con `CHECKED_OUT` como duplicado), y luego:
+Mismas verificaciones 1 a 4 (con `CHECKED_OUT` como duplicado, que también registra el mensaje con su
+`sequenceNumber`), y luego:
 
 | # | Verificación | Si falla |
 |---|---|---|
@@ -607,8 +616,11 @@ sequenceDiagram
     end
     K->>DB: BEGIN y SELECT reserva por reservationRef FOR UPDATE
     K->>DB: ¿messageId ya procesado?
-    alt duplicado o habitación ya CHECKED_IN
+    alt mismo messageId
         K->>DB: COMMIT sin efectos
+        K-->>Q: ack
+    else habitación ya CHECKED_IN (otro messageId)
+        K->>DB: registrar sequenceNumber y COMMIT, sin efectos en la reserva
         K-->>Q: ack
     else reserva inexistente, habitación ajena, estado inválido o habitación no EXPECTED
         K->>DB: registrar sequenceNumber y COMMIT
@@ -616,7 +628,7 @@ sequenceDiagram
     else todo válido
         K->>S: transitionStay(EXPECTED a CHECKED_IN)
         K->>S: transition(ACTIVE a IN_PROGRESS) si es la primera habitación
-        K->>G: register(tx, ENTRY, fecha, guests)
+        K->>G: register(tx, reserva.id, roomId, ENTRY, fecha, guests)
         K->>DB: INSERT processed_message y COMMIT
         K-->>Q: ack
     end
@@ -635,8 +647,11 @@ sequenceDiagram
 
     M1->>K: habitacion.checkout (vía RabbitMQ)
     K->>DB: BEGIN y SELECT reserva FOR UPDATE
-    alt duplicado, o habitación ya CHECKED_OUT
+    alt mismo messageId
         K->>DB: COMMIT sin efectos
+        K-->>M1: ack
+    else habitación ya CHECKED_OUT (otro messageId)
+        K->>DB: registrar sequenceNumber y COMMIT, sin efectos en la reserva
         K-->>M1: ack
     else reserva inexistente o ajena, reserva no IN_PROGRESS, o habitación no CHECKED_IN
         K->>DB: registrar sequenceNumber y COMMIT
@@ -646,7 +661,7 @@ sequenceDiagram
         alt no queda habitación en EXPECTED ni CHECKED_IN
             K->>S: transition(IN_PROGRESS a COMPLETED)
         end
-        K->>G: register(tx, DEPARTURE, fecha, guests)
+        K->>G: register(tx, reserva.id, roomId, DEPARTURE, fecha, guests)
         K->>DB: INSERT processed_message y COMMIT
         K-->>M1: ack
     end
@@ -702,8 +717,8 @@ sequenceDiagram
 - **Control de concurrencia**: `reservation.updated_at` con microsegundos, más `SELECT … FOR UPDATE` para
   serializar la modificación con una notificación de Check-In o Check-Out de la misma reserva.
 - **`processed_message`** se inserta en la misma transacción que el cambio. Para no marcar saltos falsos,
-  también se inserta el `sequenceNumber` de las notificaciones rechazadas que se confirman (ver "Puntos
-  que este plan propone").
+  también se inserta el `sequenceNumber` de las notificaciones rechazadas que se confirman y de los
+  duplicados por estado de la habitación (ver "Puntos que este plan propone").
 - Índice que necesita el control de secuencia: `processed_message(queue, sequence_number)`.
 
 **Máquina de estados** (la implementa `ReservationStatusService`):
@@ -737,9 +752,9 @@ traducción del plan base:
 | Caso del spec | Comportamiento del consumidor |
 |---|---|
 | Notificación válida (200) | Aplica el cambio, registra el `messageId` y confirma el mensaje |
-| Duplicado: mismo `messageId`, o habitación ya en `CHECKED_IN` (Check-In) o `CHECKED_OUT` (Check-Out) (200 idempotente) | Confirma sin efectos |
+| Duplicado: mismo `messageId`, o habitación ya en `CHECKED_IN` (Check-In) o `CHECKED_OUT` (Check-Out) (200 idempotente) | Confirma sin efectos en la reserva. El duplicado por estado (otro `messageId`) registra el mensaje con su `sequenceNumber` (punto 6); el mismo `messageId` ya está registrado |
 | Reserva inexistente, estado que no admite el evento, habitación ajena, `NOT_ARRIVED`, sin ingreso (400) | **Confirma sin cambiar nada**, deja el caso en el log (sin datos personales) con el mensaje del spec y **no reintenta** |
-| Payload ilegible, sin `reservationRef` o `roomId`, o con caracteres maliciosos (400 de payload inválido) | **Dead-letter queue**, sin procesar; log "El payload de notificación es inválido. Falta el identificador de la reserva o de la habitación." |
+| Payload ilegible, sin `reservationRef` o `roomId`, o con caracteres maliciosos (400 de payload inválido) | **Dead-letter queue**, sin procesar; log sin datos personales: "El payload de notificación es inválido. Falta el identificador de la reserva o de la habitación." si falta la `reservationRef` o el `roomId`; con caracteres no permitidos, "Caracteres no válidos en los datos de los huéspedes.", y con cualquier otro problema de estructura, "Payload inválido." (los del validador de `process-guest-data`, acordados en su T011) |
 | Fallo temporal (base de datos caída) | Sin `commit`, reintento con espera creciente y, agotados los reintentos, dead-letter queue |
 | Salto de `sequenceNumber` | Advertencia en el log; se sigue procesando |
 
@@ -952,7 +967,12 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
 5. **El total** de la reserva se muestra en la vista previa (la suma de lo que quedaría) sin tarifa
    anterior ni diferencia, porque el spec habla de "actualizar el total".
 6. **Se registra el `sequenceNumber` de las notificaciones rechazadas que se confirman** en
-   `processed_message` para no marcar saltos falsos.
+   `processed_message` para no marcar saltos falsos. **También el de los duplicados por estado de la
+   habitación** (ya `CHECKED_IN` en el Check-In, o ya `CHECKED_OUT` en el Check-Out): llegan con otro
+   `messageId`, y si no quedaran registrados, el mensaje siguiente avisaría un salto que no existe (por
+   ejemplo, se registra el 4, el 5 es un duplicado por estado, y al llegar el 6 se esperaría el 5). El
+   duplicado por el mismo `messageId` no hace falta registrarlo, porque ya está. "Sin efectos" quiere
+   decir sin cambios en la reserva ni en sus habitaciones.
 7. **`status_reason` con códigos** (`CHECK_IN`, `CHECK_OUT`, `DAY_CLOSE_NO_SHOW`, …); el plan base lo deja
    como texto libre.
 8. **Recuperación del cierre al arrancar** sin una tabla de control: se vuelve a ejecutar (es idempotente).
