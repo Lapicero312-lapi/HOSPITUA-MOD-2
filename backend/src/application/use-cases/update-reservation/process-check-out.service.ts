@@ -47,7 +47,8 @@ export const CHECK_OUT_LOG = {
  * 1. el `messageId` ya procesado: duplicado, se confirma sin efectos;
  * 2. la reserva existe;
  * 3. el `roomId` pertenece a la reserva;
- * 4. la habitación ya está `CHECKED_OUT`: duplicado, se confirma sin efectos;
+ * 4. la habitación ya está `CHECKED_OUT`: duplicado, se confirma sin efectos en la reserva y registra el
+ *    mensaje con su `sequenceNumber`;
  * 5. la reserva está en `IN_PROGRESS`;
  * 6. la habitación está en `CHECKED_IN`.
  *
@@ -118,6 +119,7 @@ export class ProcessCheckOutService implements ProcessCheckOut {
       this.logger.log(
         `Check-Out repetido (${where}): la habitación ya está en CHECKED_OUT y se confirma sin cambios.`,
       );
+      await recordMessage(this.processedMessages, tx, notification);
       return 'DUPLICATE';
     }
 

@@ -46,7 +46,8 @@ export const CHECK_IN_LOG = {
  * 1. el `messageId` ya procesado: duplicado, se confirma sin efectos;
  * 2. la reserva existe;
  * 3. el `roomId` pertenece a la reserva;
- * 4. la habitación ya está `CHECKED_IN`: duplicado, se confirma sin efectos;
+ * 4. la habitación ya está `CHECKED_IN`: duplicado, se confirma sin efectos en la reserva y registra el
+ *    mensaje con su `sequenceNumber` (punto 6 del plan);
  * 5. la reserva está en `ACTIVE` o `IN_PROGRESS`;
  * 6. la habitación está en `EXPECTED`.
  *
@@ -116,6 +117,7 @@ export class ProcessCheckInService implements ProcessCheckIn {
       this.logger.log(
         `Check-In repetido (${where}): la habitación ya está en CHECKED_IN y se confirma sin cambios.`,
       );
+      await recordMessage(this.processedMessages, tx, notification);
       return 'DUPLICATE';
     }
 

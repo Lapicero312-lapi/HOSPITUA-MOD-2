@@ -252,6 +252,41 @@ describe('CheckOutConsumer con RabbitMQ y PostgreSQL reales (T016)', () => {
     expect(await messageCount(DEAD_LETTER)).toBe(0);
   });
 
+  it('el Check-Out de una habitación ya en CHECKED_OUT, con otro messageId, no cambia nada más y deja el mensaje registrado con su sequenceNumber', async () => {
+    const { reservation, room202 } = await aReservationWith(
+      'CHECKED_IN',
+      'CHECKED_OUT',
+    );
+    const message = aCheckOut(reservation, room202);
+
+    await publish(message);
+    await vi.waitFor(
+      async () => expect(await count('processed_message')).toBe(1),
+      { timeout: 10_000, interval: 100 },
+    );
+
+    await expect(
+      dataSource.query(
+        'SELECT message_id, queue, sequence_number FROM processed_message',
+      ),
+    ).resolves.toEqual([
+      {
+        message_id: message.messageId,
+        queue: CHECK_OUT.name,
+        sequence_number: '124',
+      },
+    ]);
+    expect(await stored(reservation)).toEqual({
+      status: 'IN_PROGRESS',
+      stays: [
+        ['201', 'CHECKED_IN'],
+        ['202', 'CHECKED_OUT'],
+      ],
+    });
+    expect(await count('migratory_movement')).toBe(0);
+    expect(await messageCount(DEAD_LETTER)).toBe(0);
+  });
+
   it('un mensaje sin roomId va a la dead-letter sin cambiar nada', async () => {
     const { reservation, room201 } = await aReservationWith(
       'CHECKED_IN',

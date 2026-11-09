@@ -332,9 +332,9 @@ describe('ProcessCheckOutService (plan de update-reservation, "Check-Out (FR-017
       expect(highestSequenceNumber).not.toHaveBeenCalled();
     });
 
-    it('escenario 11: la habitación ya en CHECKED_OUT, con otro messageId, no cambia nada ni registra', async () => {
+    it('escenario 11: la habitación ya en CHECKED_OUT, con otro messageId, no cambia la reserva y registra el mensaje con su sequenceNumber', async () => {
       logs();
-      const { service, update, register, record } = serviceWith({
+      const { service, update, register, recorded } = serviceWith({
         reservation: aReservation('COMPLETED', {
           room201: 'CHECKED_OUT',
           room202: 'CHECKED_OUT',
@@ -345,7 +345,9 @@ describe('ProcessCheckOutService (plan de update-reservation, "Check-Out (FR-017
 
       expect(update).not.toHaveBeenCalled();
       expect(register).not.toHaveBeenCalled();
-      expect(record).not.toHaveBeenCalled();
+      expect(recorded).toEqual([
+        { messageId: MESSAGE_ID, queue: QUEUE, sequenceNumber: 123 },
+      ]);
     });
 
     it('el messageId repetido gana aunque la reserva ya no exista (verificación 1 antes que la 2)', async () => {
@@ -458,6 +460,17 @@ describe('ProcessCheckOutService (plan de update-reservation, "Check-Out (FR-017
   });
 
   describe('FR-023 (T017): el salto de secuencia', () => {
+    it('con el mayor anterior en 121 falta uno solo, y también lo advierte', async () => {
+      const { warn } = logs();
+      const { service } = serviceWith({ highestSequence: 121 });
+
+      await expect(service.execute(notification())).resolves.toBe('APPLIED');
+
+      expect(warn).toHaveBeenCalledExactlyOnceWith(
+        `Salto de secuencia en ${QUEUE}: se esperaba el 122 y llegó el 123. Se sigue procesando.`,
+      );
+    });
+
     it('con el mayor anterior en 120 lo advierte, con la cola de Check-Out, y sigue procesando', async () => {
       const { warn } = logs();
       const { service, highestSequenceNumber } = serviceWith({

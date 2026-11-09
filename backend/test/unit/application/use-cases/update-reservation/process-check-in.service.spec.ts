@@ -309,9 +309,9 @@ describe('ProcessCheckInService (plan de update-reservation, "Check-In (FR-015)"
       expect(highestSequenceNumber).not.toHaveBeenCalled();
     });
 
-    it('escenario 4: la habitación ya en CHECKED_IN, con otro messageId, no cambia nada ni registra', async () => {
+    it('escenario 4 y punto 6: la habitación ya en CHECKED_IN, con otro messageId, no cambia la reserva y registra el mensaje con su sequenceNumber', async () => {
       logs();
-      const { service, update, register, record } = serviceWith({
+      const { service, update, register, recorded } = serviceWith({
         reservation: aReservation('IN_PROGRESS', {
           room201: 'CHECKED_IN',
           room202: 'EXPECTED',
@@ -322,7 +322,9 @@ describe('ProcessCheckInService (plan de update-reservation, "Check-In (FR-015)"
 
       expect(update).not.toHaveBeenCalled();
       expect(register).not.toHaveBeenCalled();
-      expect(record).not.toHaveBeenCalled();
+      expect(recorded).toEqual([
+        { messageId: MESSAGE_ID, queue: QUEUE, sequenceNumber: 123 },
+      ]);
     });
 
     it('el messageId repetido gana aunque la reserva ya no exista (verificación 1 antes que la 2)', async () => {
