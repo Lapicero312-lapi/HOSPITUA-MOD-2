@@ -46,28 +46,35 @@ const FIRST_READ_AT = new Date('2026-11-09T13:30:00.000Z');
 const SECOND_READ_AT = new Date('2026-11-09T14:00:00.000Z');
 const RESTARTED_AT = new Date('2026-11-10T13:00:00.000Z');
 
-/** Una revisión del feed que el adaptador puede leer (ejemplo A1 de `generate-ota-reservation`). */
+/** Una revisión del feed: la del ejemplo A1 de `generate-ota-reservation`, tal cual. */
 const A_REVISION = {
   type: 'booking_revision',
-  id: 'f0b3a1d2-6c4e-4a8b-9d1f-2e3c4b5a6d7e',
+  id: '03dd7198-c5b7-493c-a889-74d0c2211de7',
   attributes: {
-    id: 'f0b3a1d2-6c4e-4a8b-9d1f-2e3c4b5a6d7e',
-    booking_id: '8a7b6c5d-4e3f-4a2b-9c1d-0e9f8a7b6c5d',
+    id: '03dd7198-c5b7-493c-a889-74d0c2211de7',
+    booking_id: 'cfa33f3b-bd32-4b90-8ef9-bde2bfe986cd',
     ota_reservation_code: '9996013801',
     ota_name: 'Booking.com',
     status: 'new',
-    arrival_date: '2026-11-20',
-    departure_date: '2026-11-22',
+    arrival_date: '2026-11-10',
+    departure_date: '2026-11-12',
     amount: '220.00',
     ota_commission: '33.00',
     currency: 'USD',
-    customer: { name: 'Ana', surname: 'Pérez', country: 'CO' },
+    notes: 'Llegada tarde',
+    customer: {
+      name: 'Ana',
+      surname: 'Pérez',
+      mail: 'ana@correo.com',
+      phone: '+57 300 000 0000',
+      country: 'CO',
+    },
     rooms: [
       {
-        room_type_id: '3c2b1a09-8f7e-4d6c-b5a4-938271605f4e',
+        room_type_id: '994d1375-dbbd-4072-8724-b2ab32ce781b',
         rate_plan_id: '445835fb-7956-42ac-9efc-3e6f331f0808',
-        checkin_date: '2026-11-20',
-        checkout_date: '2026-11-22',
+        checkin_date: '2026-11-10',
+        checkout_date: '2026-11-12',
         occupancy: { adults: 2, children: 0, infants: 0 },
       },
     ],
@@ -279,11 +286,12 @@ describe('Registro de la agencia y estado de la conexión (register-ota-informat
       await reservations.insert(
         anOtaReservation(before.id, { status: 'ACTIVE' }),
       );
+      // La otra, con el código del ejemplo A1 de generate-ota-reservation: el de la primera es el del builder.
       await reservations.insert(
         anOtaReservation(before.id, {
           status: 'COMPLETED',
           ota: otaTerms(before.id, {
-            externalConfirmationCode: '4417829014',
+            externalConfirmationCode: '9996013801',
             commissionStatus: 'RECONCILED',
           }),
         }),
