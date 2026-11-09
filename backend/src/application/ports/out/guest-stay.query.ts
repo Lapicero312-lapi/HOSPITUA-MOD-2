@@ -1,4 +1,7 @@
-import type { DocumentType } from '../../../domain/shared/enums.js';
+import type {
+  DocumentType,
+  MovementType,
+} from '../../../domain/shared/enums.js';
 
 /** Símbolo con el que Nest inyecta la consulta (plan base, regla 4). */
 export const GUEST_STAY_QUERY = Symbol('GUEST_STAY_QUERY');
@@ -39,6 +42,24 @@ export type GuestStayRow = {
 };
 
 /**
+ * Un huésped en una reserva con todos sus datos y sus movimientos (plan de `process-guest-data`, C2), tal
+ * como están guardados. Las fechas son `AAAA-MM-DD`.
+ */
+export type GuestStayDetailRow = {
+  reservationRef: string;
+  firstName: string;
+  lastName: string;
+  documentType: DocumentType;
+  documentNumber: string;
+  birthDate: string;
+  nationality: string;
+  originPlace: string | null;
+  destinationPlace: string | null;
+  /** Por fecha; el mismo día, `ENTRY` antes que `DEPARTURE`. Vacía si no tiene ninguno. */
+  movements: { movementType: MovementType; movementDate: string }[];
+};
+
+/**
  * La consulta de la vista de huéspedes alojados (`process-guest-data`, "Consulta de la vista"). Solo lee.
  * Solo cuenta a los huéspedes con al menos un movimiento (FR-016).
  */
@@ -55,4 +76,14 @@ export interface GuestStayQuery {
     offset: number,
     limit: number,
   ): Promise<GuestStayRow[]>;
+
+  /**
+   * C2: el huésped con ese `documentNumber` (exacto) en la reserva con esa `reservationRef`, con sus
+   * movimientos, o `null` si no está. Lo devuelve aunque no tenga movimientos: decidir qué hacer es del
+   * caso de uso.
+   */
+  findDetail(
+    reservationRef: string,
+    documentNumber: string,
+  ): Promise<GuestStayDetailRow | null>;
 }

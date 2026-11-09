@@ -5,6 +5,7 @@ import { CalculateDynamicRateModule } from '../../src/application/use-cases/calc
 import { CancelReservationModule } from '../../src/application/use-cases/cancel-reservation/cancel-reservation.module.js';
 import { CheckRoomAvailabilityModule } from '../../src/application/use-cases/check-room-availability/check-room-availability.module.js';
 import { CheckViewReservationModule } from '../../src/application/use-cases/check-view-reservation/check-view-reservation.module.js';
+import { ExportSireFileModule } from '../../src/application/use-cases/export-sire-file/export-sire-file.module.js';
 import { GenerateDirectReservationModule } from '../../src/application/use-cases/generate-direct-reservation/generate-direct-reservation.module.js';
 import { GenerateOtaReservationModule } from '../../src/application/use-cases/generate-ota-reservation/generate-ota-reservation.module.js';
 import { ProcessGuestDataModule } from '../../src/application/use-cases/process-guest-data/process-guest-data.module.js';
@@ -27,6 +28,7 @@ describe('AppModule importa los módulos de los casos de uso', () => {
     ['GenerateDirectReservationModule', GenerateDirectReservationModule],
     ['GenerateOtaReservationModule', GenerateOtaReservationModule],
     ['ProcessGuestDataModule', ProcessGuestDataModule],
+    ['ExportSireFileModule', ExportSireFileModule],
     ['UpdateReservationModule', UpdateReservationModule],
     ['CancelReservationModule', CancelReservationModule],
   ])('%s', (_name, module) => {
