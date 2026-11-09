@@ -33,48 +33,50 @@ export function AgenciasOtaPage() {
   });
 
   return (
-    <section>
-      <h1>Agencias OTA</h1>
-
+    <section className="panel">
       {query.isPending && <p>Consultando agencias OTA...</p>}
       {query.isError && <ErrorMessage error={query.error} />}
       {query.isSuccess && query.data.items.length === 0 && (
         <p>No hay agencias OTA registradas.</p>
       )}
       {query.isSuccess && query.data.items.length > 0 && (
-        <table className="ota-table">
-          <caption className="visually-hidden">
-            Agencias OTA registradas
-          </caption>
-          <thead>
-            <tr>
-              <th scope="col">Agencia</th>
-              <th scope="col">Comisión</th>
-              <th scope="col">Estado de conexión</th>
-              <th scope="col">Vinculada</th>
-              <th scope="col">Última sincronización</th>
-              <th scope="col">Reservas activas</th>
-            </tr>
-          </thead>
-          <tbody>
-            {query.data.items.map((ota) => (
-              <tr key={ota.id}>
-                <td>{ota.name}</td>
-                <td>{formatPercentage(ota.commissionPercentage)}</td>
-                <td
-                  className={`ota-status ota-status-${ota.connectionStatus.toLowerCase()}`}
-                >
-                  {ota.connectionStatus === 'CONNECTED'
-                    ? 'Conectada'
-                    : 'Desconectada'}
-                </td>
-                <td>{formatDateTime(ota.linkedAt)}</td>
-                <td>{formatDateTime(ota.lastSyncAt)}</td>
-                <td>{ota.activeReservations}</td>
+        <div className="tablewrap">
+          <table className="ota-table">
+            <caption className="visually-hidden">
+              Agencias OTA registradas
+            </caption>
+            <thead>
+              <tr>
+                <th scope="col">Agencia</th>
+                <th scope="col">Comisión</th>
+                <th scope="col">Estado de conexión</th>
+                <th scope="col">Vinculada</th>
+                <th scope="col">Última sincronización</th>
+                <th scope="col">Reservas activas</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {query.data.items.map((ota) => (
+                <tr key={ota.id}>
+                  <td>{ota.name}</td>
+                  <td>{formatPercentage(ota.commissionPercentage)}</td>
+                  <td>
+                    <span
+                      className={`badge ${ota.connectionStatus === 'CONNECTED' ? 'ok' : 'err'}`}
+                    >
+                      {ota.connectionStatus === 'CONNECTED'
+                        ? 'Conectada'
+                        : 'Desconectada'}
+                    </span>
+                  </td>
+                  <td>{formatDateTime(ota.linkedAt)}</td>
+                  <td>{formatDateTime(ota.lastSyncAt)}</td>
+                  <td>{ota.activeReservations}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </section>
   );

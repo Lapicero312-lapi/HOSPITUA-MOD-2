@@ -29,28 +29,33 @@ export function LoginPage() {
   };
 
   return (
-    <main className="layout-main">
-      <h1>HOSPITUA · Recepción</h1>
-      <form className="login-form" onSubmit={submit} noValidate>
-        <label htmlFor="receptionist-name">Nombre de la Recepcionista</label>
-        <input
-          id="receptionist-name"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          aria-invalid={error !== null}
-          aria-describedby={error ? 'receptionist-name-error' : undefined}
-          autoComplete="name"
-        />
+    <main className="content">
+      <form className="panel login" onSubmit={submit} noValidate>
+        <h2>HOSPITUA · Recepción</h2>
+        <p>Ingrese su nombre para registrar las acciones del turno.</p>
+        <div className="field">
+          <label htmlFor="receptionist-name">Nombre de la Recepcionista</label>
+          <input
+            id="receptionist-name"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            aria-invalid={error !== null}
+            aria-describedby={error ? 'receptionist-name-error' : undefined}
+            autoComplete="name"
+          />
+        </div>
         {error && (
-          <p
+          <div
             id="receptionist-name-error"
             role="alert"
             className="error-message"
           >
             {error}
-          </p>
+          </div>
         )}
-        <button type="submit">Ingresar</button>
+        <button className="btn primary" type="submit">
+          Ingresar
+        </button>
       </form>
     </main>
   );
