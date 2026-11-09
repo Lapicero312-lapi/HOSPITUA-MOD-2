@@ -14,6 +14,7 @@ import {
   INVALID_ROOM_ID,
   INVENTORY_UNAVAILABLE,
 } from '../../../../../src/domain/shared/error-codes.js';
+import { ROOM_202 } from '../../../../support/rooms.js';
 
 /**
  * Datos de las pruebas del plan ("Pruebas por escenario", T005, T006, T007 y T010), que dice de dónde sale
@@ -24,12 +25,6 @@ const ROOM_201: Room = {
   roomNumber: '201',
   categoryRoom: 'DOBLE',
   maxCapacity: 2,
-};
-const ROOM_202: Room = {
-  id: randomUUID(),
-  roomNumber: '202',
-  categoryRoom: 'DOBLE',
-  maxCapacity: 3,
 };
 
 /** Los motivos que da el adaptador cuando el Módulo 1 no está disponible. */
