@@ -1,0 +1,79 @@
+.ota-page {
+  --ota-ink: #1f2933;
+  --ota-background: #fff;
+  --ota-surface: #f5f7fa;
+  --ota-border: #d9e2ec;
+  --ota-error: #b42318;
+  --ota-success: #137c3c;
+  padding: 1.25rem;
+  border: 1px solid var(--ota-border);
+  border-radius: 8px;
+  background: var(--ota-background);
+  color: var(--ota-ink);
+}
+
+.ota-page .tablewrap {
+  overflow-x: auto;
+}
+
+.ota-page .ota-table {
+  width: 100%;
+  margin-top: 1rem;
+  border-collapse: collapse;
+  background: var(--ota-background);
+}
+
+.ota-page .ota-table th,
+.ota-page .ota-table td {
+  padding: 0.75rem;
+  border: 1px solid var(--ota-border);
+  text-align: left;
+  vertical-align: top;
+}
+
+.ota-page .ota-table th {
+  background: var(--ota-surface);
+}
+
+.ota-page .visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.ota-page .badge {
+  display: inline-block;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.ota-page .badge.ok {
+  background: #e8f5ec;
+  color: var(--ota-success);
+}
+
+.ota-page .badge.err {
+  background: #fcebea;
+  color: var(--ota-error);
+}
+
+.ota-page .error-message {
+  padding: 0.75rem;
+  border: 1px solid var(--ota-error);
+  border-radius: 4px;
+  background: #fcebea;
+  color: var(--ota-error);
+}
+
+@media (max-width: 700px) {
+  .ota-page {
+    padding: 0.75rem;
+  }
+}

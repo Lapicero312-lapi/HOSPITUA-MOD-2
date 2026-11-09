@@ -8,7 +8,7 @@ export type Ota = {
   commissionPercentage: number | null;
   connectionStatus: OtaConnectionStatus;
   linkedAt: string;
-  lastSyncAt: string | null;
+  lastSyncAt: string;
   activeReservations: number;
 };
 
