@@ -1,9 +1,11 @@
 import { Module } from '@nestjs/common';
 import { DailyListChangeRecorderService } from './daily-list-change-recorder.service.js';
+import { FindReservationsByStayRangeService } from './find-reservations-by-stay-range.service.js';
 import { GenerateDailyListService } from './generate-daily-list.service.js';
 import { GetDaySummaryService } from './get-day-summary.service.js';
 import { ListReservationsService } from './list-reservations.service.js';
 import { DAILY_LIST_CHANGE_RECORDER } from './ports/in/daily-list-change-recorder.port.js';
+import { FIND_RESERVATIONS_BY_STAY_RANGE } from './ports/in/find-reservations-by-stay-range.port.js';
 import { GENERATE_DAILY_LIST } from './ports/in/generate-daily-list.port.js';
 import { GET_DAY_SUMMARY } from './ports/in/get-day-summary.port.js';
 import { LIST_RESERVATIONS } from './ports/in/list-reservations.port.js';
@@ -25,6 +27,10 @@ import { ReservationLookupService } from './reservation-lookup.service.js';
     { provide: LIST_RESERVATIONS, useClass: ListReservationsService },
     { provide: GET_DAY_SUMMARY, useClass: GetDaySummaryService },
     { provide: GENERATE_DAILY_LIST, useClass: GenerateDailyListService },
+    {
+      provide: FIND_RESERVATIONS_BY_STAY_RANGE,
+      useClass: FindReservationsByStayRangeService,
+    },
   ],
   exports: [
     RESERVATION_LOOKUP,
@@ -32,6 +38,7 @@ import { ReservationLookupService } from './reservation-lookup.service.js';
     LIST_RESERVATIONS,
     GET_DAY_SUMMARY,
     GENERATE_DAILY_LIST,
+    FIND_RESERVATIONS_BY_STAY_RANGE,
   ],
 })
 export class CheckViewReservationModule {}

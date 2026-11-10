@@ -34,3 +34,13 @@ export const INVALID_CONFLICT_FILTER = {
   code: 'INVALID_CONFLICT_FILTER',
   message: 'El filtro de conflicto no es válido.',
 } as const;
+
+/**
+ * C5: el Módulo 1 envía un parámetro que su consulta no admite. El mensaje lleva el nombre del parámetro
+ * (plan, "Consulta del Módulo 1"), así que es una función.
+ */
+export const UNSUPPORTED_PARAMETER = {
+  code: 'UNSUPPORTED_PARAMETER',
+  message: (parameter: string) =>
+    `El parámetro ${parameter} no se admite en esta consulta.`,
+} as const;

@@ -92,7 +92,35 @@ export interface ReservationQueryPort {
   countExpectedArrivalsAndDepartures(
     operationalDate: string,
   ): Promise<ExpectedArrivalsAndDepartures>;
+
+  /**
+   * T033: las reservas `PENDING`, `ACTIVE` o `IN_PROGRESS` cuya estadía se cruza con el rango
+   * (`start_date <= dateTo` y `end_date > dateFrom`), cada una con todas sus habitaciones (C5 y
+   * "Consulta del Módulo 1"). Con `roomId`, solo las que tienen esa habitación entre las suyas, en
+   * cualquier `stayStatus`. Ordenadas por `startDate` y después `reservationRef`, ascendentes; las
+   * habitaciones, por `roomNumber`. Las fechas son `AAAA-MM-DD`.
+   */
+  findByStayRange(
+    dateFrom: string,
+    dateTo: string,
+    roomId: string | null,
+  ): Promise<StayRangeReservation[]>;
 }
+
+/** Una reserva de la consulta por fechas del Módulo 1 (C5): sin datos del huésped ni financieros. */
+export type StayRangeReservation = {
+  reservationRef: string;
+  status: 'PENDING' | 'ACTIVE' | 'IN_PROGRESS';
+  /** `AAAA-MM-DD`. */
+  startDate: string;
+  endDate: string;
+  /** Todas las de la reserva. Una sin asignar trae `roomId` y `roomNumber` en `null`. */
+  rooms: {
+    roomId: string | null;
+    roomNumber: string | null;
+    categoryRoom: string;
+  }[];
+};
 
 /** Las dos cifras del resumen del día (C2). */
 export type ExpectedArrivalsAndDepartures = {
