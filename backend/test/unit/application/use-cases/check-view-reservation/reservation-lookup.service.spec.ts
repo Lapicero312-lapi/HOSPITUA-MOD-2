@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type {
   BlockingRoom,
+  NightBlockingRooms,
   ReservationQueryPort,
 } from '../../../../../src/application/ports/out/reservation-query.port.js';
 import type { ReservationRepository } from '../../../../../src/application/ports/out/reservation.repository.js';
@@ -108,4 +109,59 @@ describe('ReservationLookup.findForUpdate (T005 de cancel-reservation)', () => {
     await expect(lookup.findForUpdate(tx, 'RSV-00000000')).resolves.toBeNull();
     expect(lockByRef).toHaveBeenCalledWith(reservation.reservationRef, tx);
   });
+});
+
+describe('ReservationLookup.blockingRoomsByCategory (T016c)', () => {
+  function lookupByCategory(nights: NightBlockingRooms[]) {
+    const blockingRoomsByCategory = vi.fn(() => Promise.resolve(nights));
+    const query = {
+      blockingRoomsByCategory,
+    } as unknown as ReservationQueryPort;
+    return {
+      lookup: new ReservationLookupService(query, {} as ReservationRepository),
+      blockingRoomsByCategory,
+    };
+  }
+
+  it('pide a ReservationQueryPort la categoría y el rango, y devuelve lo que responde', async () => {
+    const nights = [
+      { date: '2026-11-10', roomIds: [ROOM_201] },
+      { date: '2026-11-11', roomIds: [] },
+    ];
+    const { lookup, blockingRoomsByCategory } = lookupByCategory(nights);
+
+    await expect(
+      lookup.blockingRoomsByCategory('DOBLE', '2026-11-10', '2026-11-12'),
+    ).resolves.toEqual(nights);
+    expect(blockingRoomsByCategory).toHaveBeenCalledExactlyOnceWith(
+      'DOBLE',
+      '2026-11-10',
+      '2026-11-12',
+    );
+  });
+
+  it('con una sola noche (dateTo el día siguiente) consulta la base', async () => {
+    const { lookup, blockingRoomsByCategory } = lookupByCategory([]);
+
+    await lookup.blockingRoomsByCategory('DOBLE', '2026-11-10', '2026-11-11');
+
+    expect(blockingRoomsByCategory).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['dateFrom igual a dateTo', '2026-11-10', '2026-11-10'],
+    ['dateFrom después de dateTo', '2026-11-12', '2026-11-10'],
+  ])(
+    'con %s devuelve [] sin consultar la base',
+    async (_, dateFrom, dateTo) => {
+      const { lookup, blockingRoomsByCategory } = lookupByCategory([
+        { date: '2026-11-10', roomIds: [ROOM_201] },
+      ]);
+
+      await expect(
+        lookup.blockingRoomsByCategory('DOBLE', dateFrom, dateTo),
+      ).resolves.toEqual([]);
+      expect(blockingRoomsByCategory).not.toHaveBeenCalled();
+    },
+  );
 });
