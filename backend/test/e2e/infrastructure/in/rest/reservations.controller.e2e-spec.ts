@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { CLOCK } from '../../../../../src/application/ports/out/clock.js';
 import {
   RESERVATION_REPOSITORY,
   type ReservationRepository,
@@ -138,6 +139,89 @@ describe('GET /api/reservations (e2e)', () => {
     expect(res.body).toMatchObject({
       errorCode: 'INVALID_CLIENT',
       message: 'La ruta no admite el cliente indicado en X-Client.',
+    });
+  });
+});
+
+/** Día operativo propio de esta prueba: la base de las e2e es compartida y C2 cuenta todo lo del día. */
+const SUMMARY_DAY = '2032-06-15';
+
+/**
+ * La aplicación completa con el reloj en `SUMMARY_DAY`: comprueba que `GET /api/reservations/day-summary`
+ * está conectada con `GetDaySummary`, con la base y con la lectura de `X-Client` (C2, T012). Qué estados y
+ * fechas cuentan lo prueba `reservation-day-summary.query.spec.ts`.
+ */
+describe('GET /api/reservations/day-summary (e2e)', () => {
+  let app: INestApplication<App>;
+
+  const summary = () =>
+    request(app.getHttpServer()).get('/api/reservations/day-summary');
+
+  beforeAll(async () => {
+    const moduleRef = await Test.createTestingModule({
+      imports: [AppModule],
+    })
+      .overrideProvider(CLOCK)
+      .useValue({
+        today: () => SUMMARY_DAY,
+        now: () => new Date(`${SUMMARY_DAY}T15:00:00Z`),
+      })
+      .compile();
+    app = moduleRef.createNestApplication({ logger: false });
+    configureApp(app);
+    await app.init();
+    const reservations = app.get<ReservationRepository>(RESERVATION_REPOSITORY);
+    await reservations.insert(
+      aDirectReservation({
+        status: 'ACTIVE',
+        startDate: SUMMARY_DAY,
+        endDate: '2032-06-17',
+      }),
+    );
+    await reservations.insert(
+      aDirectReservation({
+        status: 'PENDING',
+        startDate: SUMMARY_DAY,
+        endDate: '2032-06-17',
+      }),
+    );
+    await reservations.insert(
+      aDirectReservation({
+        status: 'IN_PROGRESS',
+        startDate: '2032-06-13',
+        endDate: SUMMARY_DAY,
+      }),
+    );
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  it('responde 200 con la forma exacta de C2 y las cifras del día operativo', async () => {
+    const res = await summary().set('X-Client', 'RECEPTIONIST').expect(200);
+
+    expect(res.body).toEqual({
+      operationalDate: SUMMARY_DAY,
+      expectedArrivals: 2,
+      expectedDepartures: 1,
+    });
+  });
+
+  it.each([
+    ['sin X-Client', undefined],
+    ['con MODULE1', 'MODULE1'],
+    ['con MODULE3', 'MODULE3'],
+    ['con OTA', 'OTA'],
+  ])('%s: 400 INVALID_CLIENT', async (_, client) => {
+    const res = await (
+      client === undefined ? summary() : summary().set('X-Client', client)
+    ).expect(400);
+
+    expect(res.body).toMatchObject({
+      errorCode: 'INVALID_CLIENT',
+      message: 'La ruta no admite el cliente indicado en X-Client.',
+      path: '/api/reservations/day-summary',
     });
   });
 });
