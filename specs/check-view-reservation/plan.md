@@ -371,6 +371,33 @@ resultado es el mismo para la pantalla y para los demás casos de uso, FR-007):
 
 Nunca se envían documento y nombre a la vez: el paso 5 o el 6, no ambos.
 
+**`resolveSearchCriteria(search)` (T006).** Es una función pura en
+`application/use-cases/check-view-reservation/resolve-search-criteria.ts`, que hace los pasos 1, 2, 4, 5 y 6
+sin consultar la base:
+
+```typescript
+type SearchCriteria = {
+  // El texto normalizado (paso 1), para la coincidencia exacta del paso 3 sin distinguir mayúsculas.
+  code: string;
+  // Qué hacer si el paso 3 no encuentra nada.
+  fallback:
+    | { kind: 'NOT_FOUND' }                          // paso 4: empieza con RSV-
+    | { kind: 'DOCUMENT'; documentNumber: string }   // paso 5: tiene al menos un dígito
+    | { kind: 'NAME'; name: string };                // paso 6: sin dígitos
+};
+
+// @throws BusinessError INVALID_RESERVATION_CODE (paso 2) o NAME_SEARCH_TOO_SHORT (paso 6).
+function resolveSearchCriteria(search: string): SearchCriteria;
+```
+
+- **El paso 3** (buscar el código en paralelo) lo hace la T015 con `code`. Si no encuentra coincidencias,
+  aplica `fallback`.
+- **`NAME_SEARCH_TOO_SHORT` se lanza en la función, antes de buscar el código.** Es el último paso del orden
+  de validación de C1, y todo C1 se valida antes de tocar la base. Por eso la llama `ListReservations`,
+  después de que el DTO validó los demás filtros, y así se respeta el orden.
+- **El paso 4 va antes que el 6**, así que `RSV-ABC` sin dígitos da `NOT_FOUND` y no
+  `NAME_SEARCH_TOO_SHORT`.
+
 ## Mensajería hacia el Módulo 1
 
 Cola de salida única del Módulo 2 (la define el plan base): exchange `hospitua.events`, cola
