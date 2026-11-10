@@ -6,6 +6,7 @@ import {
   Inject,
   Param,
   Post,
+  Query,
   Res,
   StreamableFile,
   UseInterceptors,
@@ -20,11 +21,17 @@ import {
   type ExportSireFile,
 } from '../../../application/use-cases/export-sire-file/ports/in/export-sire-file.port.js';
 import {
+  LIST_SIRE_MOVEMENTS,
+  type ListSireMovements,
+  type SireMovementPage,
+} from '../../../application/use-cases/export-sire-file/ports/in/list-sire-movements.port.js';
+import {
   PREVIEW_SIRE_MOVEMENT,
   type PreviewSireMovement,
   type SireMovementPreview,
 } from '../../../application/use-cases/export-sire-file/ports/in/preview-sire-movement.port.js';
 import { readSireExportRequest } from '../../../application/use-cases/export-sire-file/sire-export-request.validator.js';
+import { readSireMovementsQuery } from '../../../application/use-cases/export-sire-file/sire-movements-query.validator.js';
 import { UserHeader } from './request-headers.js';
 import { SireRateLimiter } from './sire-rate-limiter.js';
 
@@ -32,7 +39,7 @@ import { SireRateLimiter } from './sire-rate-limiter.js';
 const CHARSETS = { 'utf-8': 'utf-8', latin1: 'ISO-8859-1' } as const;
 
 /**
- * "Exportar archivo SIRE" de la Recepcionista (plan de `export-sire-file`, contratos A y C). Los errores salen
+ * "Exportar archivo SIRE" de la Recepcionista (plan de `export-sire-file`, contratos A, B y C). Los errores salen
  * por el filtro global como `400` con su `errorCode`, y el límite de solicitudes como `429`.
  */
 @Controller('sire')
@@ -40,6 +47,8 @@ export class SireController {
   constructor(
     @Inject(EXPORT_SIRE_FILE)
     private readonly exportSireFile: ExportSireFile,
+    @Inject(LIST_SIRE_MOVEMENTS)
+    private readonly listSireMovements: ListSireMovements,
     @Inject(PREVIEW_SIRE_MOVEMENT)
     private readonly previewSireMovement: PreviewSireMovement,
     @Inject(SIRE_CONFIG)
@@ -75,6 +84,18 @@ export class SireController {
       type: `text/plain; charset=${CHARSETS[encoding]}`,
       disposition: `attachment; filename="${file.fileName}"`,
     });
+  }
+
+  /**
+   * B, `GET /api/sire/movements`: los movimientos de extranjeros del periodo, de 50 en 50 (D3). Revisa el
+   * periodo y la página sin ejecutar ninguna consulta. Solo lee: no registra nada ni pasa por el limitador,
+   * que es solo de la exportación (punto 13).
+   */
+  @Get('movements')
+  list(@Query() query: unknown): Promise<SireMovementPage> {
+    return this.listSireMovements.execute(
+      readSireMovementsQuery(query, this.config.maxPeriodDays),
+    );
   }
 
   /**
