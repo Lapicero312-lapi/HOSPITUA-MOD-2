@@ -46,9 +46,12 @@ export class DailyListJob
     private readonly lock: AdvisoryLock,
   ) {}
 
-  /** La recuperación al arrancar. No bloquea el arranque. */
-  onApplicationBootstrap(): void {
-    void this.run();
+  /**
+   * La recuperación al arrancar: el arranque la espera, así la aplicación queda lista con la lista del día
+   * ya generada. No lo traba: `run()` no lanza errores, y si otra instancia tiene el bloqueo se salta.
+   */
+  async onApplicationBootstrap(): Promise<void> {
+    await this.run();
   }
 
   /** Espera la ejecución en curso antes de que se cierre la conexión a la base. */

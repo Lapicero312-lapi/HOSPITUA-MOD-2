@@ -81,9 +81,34 @@ describe('DailyListJob (plan de check-view-reservation, "Tareas programadas" y D
   it('al arrancar genera la lista (recuperación de un reinicio o una caída a las 00:00)', async () => {
     const { job, execute } = aJob();
 
-    job.onApplicationBootstrap();
+    await job.onApplicationBootstrap();
 
-    await vi.waitFor(() => expect(execute).toHaveBeenCalledTimes(1));
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
+  it('el arranque espera a que termine la recuperación: las pruebas y las tareas no la encuentran a medias', async () => {
+    const { job, execute } = aJob();
+    const generation = deferred<boolean>();
+    execute.mockReturnValueOnce(generation.promise);
+
+    let started = false;
+    const bootstrap = job.onApplicationBootstrap().then(() => {
+      started = true;
+    });
+    // Una vuelta completa del ciclo de eventos: si el arranque no esperara, ya habría terminado.
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(started).toBe(false);
+
+    generation.resolve(true);
+    await bootstrap;
+    expect(started).toBe(true);
+  });
+
+  it('si la recuperación falla, el arranque termina igual: el error se registra y no se lanza', async () => {
+    const { job, execute } = aJob();
+    execute.mockRejectedValueOnce(new Error('la base no responde'));
+
+    await expect(job.onApplicationBootstrap()).resolves.toBeUndefined();
   });
 
   it('a las 00:00 genera la lista', async () => {
