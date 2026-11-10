@@ -118,7 +118,8 @@ describe('DailyListJob (plan de check-view-reservation, "Tareas programadas" y D
     const shutdown = job.beforeApplicationShutdown().then(() => {
       stopped = true;
     });
-    await Promise.resolve();
+    // Una vuelta completa del ciclo de eventos: si el apagado no esperara la ejecución, ya habría terminado.
+    await new Promise((resolve) => setImmediate(resolve));
     expect(stopped).toBe(false);
 
     generation.resolve(true);
