@@ -1,8 +1,12 @@
 import { Global, Module } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { describe, expect, it } from 'vitest';
+import { ARI_PENDING_CHANGE_REPOSITORY } from '../../../../../src/application/ports/out/ari-pending-change.repository.js';
 import { CANCELLATION_REPOSITORY } from '../../../../../src/application/ports/out/cancellation.repository.js';
+import { CHANNEX_SETUP_STATE } from '../../../../../src/application/ports/out/channex-setup-state.js';
+import { CHANNEX_PORT } from '../../../../../src/application/ports/out/channex.port.js';
 import { CLOCK } from '../../../../../src/application/ports/out/clock.js';
+import { COMMISSION_AUDIT_REPOSITORY } from '../../../../../src/application/ports/out/commission-audit.repository.js';
 import { DAILY_MESSAGE_REPOSITORY } from '../../../../../src/application/ports/out/daily-message.repository.js';
 import { DAILY_SEQUENCE_REPOSITORY } from '../../../../../src/application/ports/out/daily-sequence.repository.js';
 import { GUEST_DATA_REPOSITORY } from '../../../../../src/application/ports/out/guest-data.repository.js';
@@ -21,7 +25,7 @@ import { CANCEL_RESERVATION } from '../../../../../src/application/use-cases/can
  * Todo lo que piden los módulos que importa `CancelReservationModule`, aunque hoy no lo usen: así la prueba
  * no se rompe cuando `CheckViewReservationModule` agrega `GenerateDailyList` (`TRANSACTION_RUNNER`, #500) o
  * `UpdateReservationModule` agrega el Check-In e importa `ProcessGuestDataModule` (sus repositorios y
- * `GUEST_STAY_QUERY`, #508).
+ * `GUEST_STAY_QUERY`, #508). `ConfigureOtaModule` pide los de Channex y los de las agencias (T009).
  */
 const GLOBAL_TOKENS = [
   RESERVATION_REPOSITORY,
@@ -36,6 +40,10 @@ const GLOBAL_TOKENS = [
   GUEST_DATA_REPOSITORY,
   MIGRATORY_MOVEMENT_REPOSITORY,
   GUEST_STAY_QUERY,
+  ARI_PENDING_CHANGE_REPOSITORY,
+  CHANNEX_PORT,
+  CHANNEX_SETUP_STATE,
+  COMMISSION_AUDIT_REPOSITORY,
 ];
 
 /** Lo que ponen `PersistenceModule` y `ClockModule`, que son globales: la base no se usa en esta prueba. */

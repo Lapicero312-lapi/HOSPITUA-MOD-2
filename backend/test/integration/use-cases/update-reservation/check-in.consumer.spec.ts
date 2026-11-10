@@ -227,6 +227,48 @@ describe('CheckInConsumer con RabbitMQ y PostgreSQL reales (T015)', () => {
     expect(await messageCount(DEAD_LETTER)).toBe(0);
   });
 
+  it('punto 6: el Check-In repetido con otro messageId no cambia nada más y deja el mensaje registrado con su sequenceNumber', async () => {
+    const first = aCheckIn();
+    const repeated = aCheckIn({ sequenceNumber: 124 });
+
+    await publish(first);
+    await vi.waitFor(
+      async () => expect(await count('processed_message')).toBe(1),
+      { timeout: 10_000, interval: 100 },
+    );
+    await publish(repeated);
+    await vi.waitFor(
+      async () => expect(await count('processed_message')).toBe(2),
+      { timeout: 10_000, interval: 100 },
+    );
+
+    await expect(
+      dataSource.query(
+        'SELECT message_id, queue, sequence_number FROM processed_message ORDER BY sequence_number',
+      ),
+    ).resolves.toEqual([
+      {
+        message_id: first.messageId,
+        queue: CHECK_IN.name,
+        sequence_number: '123',
+      },
+      {
+        message_id: repeated.messageId,
+        queue: CHECK_IN.name,
+        sequence_number: '124',
+      },
+    ]);
+    expect(await stored()).toEqual({
+      status: 'IN_PROGRESS',
+      stays: [
+        ['201', 'CHECKED_IN'],
+        ['202', 'EXPECTED'],
+      ],
+    });
+    expect(await count('migratory_movement')).toBe(2);
+    expect(await messageCount(DEAD_LETTER)).toBe(0);
+  });
+
   it('T008 de process-guest-data: un mensaje sin reservationRef va a la dead-letter sin cambiar nada', async () => {
     const { reservationRef: _ref, ...withoutRef } = aCheckIn();
 

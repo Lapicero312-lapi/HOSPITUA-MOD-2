@@ -2,6 +2,8 @@ import { Module } from '@nestjs/common';
 import { ProcessGuestDataModule } from '../process-guest-data/process-guest-data.module.js';
 import { ExportSireFileService } from './export-sire-file.service.js';
 import { EXPORT_SIRE_FILE } from './ports/in/export-sire-file.port.js';
+import { PREVIEW_SIRE_MOVEMENT } from './ports/in/preview-sire-movement.port.js';
+import { PreviewSireMovementService } from './preview-sire-movement.service.js';
 
 /**
  * Los servicios de `export-sire-file` (plan base, regla 4 de la arquitectura). Importa
@@ -10,7 +12,10 @@ import { EXPORT_SIRE_FILE } from './ports/in/export-sire-file.port.js';
  */
 @Module({
   imports: [ProcessGuestDataModule],
-  providers: [{ provide: EXPORT_SIRE_FILE, useClass: ExportSireFileService }],
-  exports: [EXPORT_SIRE_FILE],
+  providers: [
+    { provide: EXPORT_SIRE_FILE, useClass: ExportSireFileService },
+    { provide: PREVIEW_SIRE_MOVEMENT, useClass: PreviewSireMovementService },
+  ],
+  exports: [EXPORT_SIRE_FILE, PREVIEW_SIRE_MOVEMENT],
 })
 export class ExportSireFileModule {}

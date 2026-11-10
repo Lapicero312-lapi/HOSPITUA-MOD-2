@@ -15,13 +15,18 @@ import {
   CONCURRENT_UPDATE,
   RESERVATION_NOT_FOUND,
 } from '../../../domain/shared/error-codes.js';
+import type { AriChange } from '../../ports/out/ari-pending-change.repository.js';
 import {
   CANCELLATION_REPOSITORY,
   DuplicateCancellationError,
   type CancellationRepository,
 } from '../../ports/out/cancellation.repository.js';
 import { CLOCK, type Clock } from '../../ports/out/clock.js';
-import type { Transaction } from '../../ports/out/transaction.js';
+import {
+  type Transaction,
+  TRANSACTION_RUNNER,
+  type TransactionRunner,
+} from '../../ports/out/transaction.js';
 import {
   DAILY_LIST_CHANGE_RECORDER,
   type DailyListChangeRecorder,
@@ -30,6 +35,10 @@ import {
   RESERVATION_LOOKUP,
   type ReservationLookup,
 } from '../check-view-reservation/ports/in/reservation-lookup.port.js';
+import {
+  ARI_CHANGE_RECORDER,
+  type AriChangeRecorder,
+} from '../configure-ota/ports/in/ari-change-recorder.port.js';
 import {
   RESERVATION_STATUS,
   type ReservationStatusPort,
@@ -43,6 +52,7 @@ import {
   STATUS_NOT_CANCELLABLE,
 } from './error-codes.js';
 import type {
+  CancellationResult,
   CancelReservation,
   CancelReservationCommand,
 } from './ports/in/cancel-reservation.port.js';
@@ -55,9 +65,13 @@ const STATUS_REASON_BY_CHANNEL: Record<CancellationChannel, StatusReason> = {
 };
 
 /**
- * `CancelReservation` (plan de `cancel-reservation`, regla 3 y punto 10; T005 a T007). Usa los puertos de
- * entrada de `check-view-reservation` y `update-reservation` (regla 6), y todo va en la transacción de
- * quien llama: si algo falla, no queda nada a medias (regla 4).
+ * `CancelReservation` (plan de `cancel-reservation`, regla 3 y punto 10; T005 a T009). Usa los puertos de
+ * entrada de `check-view-reservation`, `update-reservation` y `configure-ota` (regla 6). `cancel` va en la
+ * transacción de quien llama (Booking) y `execute` abre la suya (la Recepcionista): si algo falla, no queda
+ * nada a medias (regla 4).
+ *
+ * Lo que Booking ya no puede cancelar no es un error (contrato B): la reserva se devuelve sin tocarla, con
+ * su estado, y `generate-ota-reservation` la ignora o marca el conflicto.
  */
 @Injectable()
 export class CancelReservationService implements CancelReservation {
@@ -72,9 +86,46 @@ export class CancelReservationService implements CancelReservation {
     private readonly dailyList: DailyListChangeRecorder,
     @Inject(CLOCK)
     private readonly clock: Clock,
+    @Inject(TRANSACTION_RUNNER)
+    private readonly transactions: TransactionRunner,
+    @Inject(ARI_CHANGE_RECORDER)
+    private readonly availability: AriChangeRecorder,
   ) {}
 
   async cancel(
+    tx: Transaction,
+    command: CancelReservationCommand,
+  ): Promise<Reservation> {
+    const before = await this.verify(tx, command);
+    // Contrato B: Booking puede repetir la revisión, y el conflicto lo marca `generate-ota-reservation`.
+    if (command.channel === 'OTA_API' && !isCancellable(before.status)) {
+      return before;
+    }
+    return (await this.apply(tx, before, command)).reservation;
+  }
+
+  async execute(
+    command: CancelReservationCommand,
+  ): Promise<CancellationResult> {
+    const { reservation, cancellation } = await this.transactions.run(
+      async (tx) => this.apply(tx, await this.verify(tx, command), command),
+    );
+    return {
+      reservationRef: reservation.reservationRef,
+      status: 'CANCELLED',
+      cancellation: {
+        cancellationId: cancellation.id,
+        cancellationDate: cancellation.cancellationDate,
+        channel: cancellation.channel,
+        reason: cancellation.reason,
+        processedBy: cancellation.processedBy,
+        status: cancellation.status,
+      },
+    };
+  }
+
+  /** Los pasos 1 a 4 de la regla 3, en orden. Devuelve la reserva, bloqueada hasta el final de `tx`. */
+  private async verify(
     tx: Transaction,
     command: CancelReservationCommand,
   ): Promise<Reservation> {
@@ -97,10 +148,14 @@ export class CancelReservationService implements CancelReservation {
     }
 
     // Paso 4, antes del estado: la segunda de dos cancelaciones simultáneas recibe el mensaje de
-    // concurrencia del spec, no el del estado.
+    // concurrencia del spec, no el del estado. En A el `updatedAt` es obligatorio: sin él no coincide.
+    const checksUpdatedAt =
+      command.channel === 'RECEPTION' ||
+      command.expectedUpdatedAt !== undefined;
     if (
-      command.expectedUpdatedAt !== undefined &&
-      (before.updatedAt === null ||
+      checksUpdatedAt &&
+      (command.expectedUpdatedAt === undefined ||
+        before.updatedAt === null ||
         !isSameInstant(command.expectedUpdatedAt, before.updatedAt))
     ) {
       throw new BusinessError(
@@ -108,7 +163,15 @@ export class CancelReservationService implements CancelReservation {
         CONCURRENT_UPDATE.message,
       );
     }
+    return before;
+  }
 
+  /** El paso 5 y, si pasa, el cambio, la `Cancellation` y los avisos, todo en `tx`. */
+  private async apply(
+    tx: Transaction,
+    before: Reservation,
+    command: CancelReservationCommand,
+  ): Promise<{ reservation: Reservation; cancellation: Cancellation }> {
     // Paso 5: solo ACTIVE o PENDING (regla 2).
     if (!isCancellable(before.status)) {
       throw new BusinessError(
@@ -124,11 +187,14 @@ export class CancelReservationService implements CancelReservation {
       'CANCELLED',
       STATUS_REASON_BY_CHANNEL[command.channel],
     );
-    await this.saveCancellation(tx, after, command);
+    const cancellation = await this.saveCancellation(tx, after, command);
 
     // T007: REMOVED con motivo CANCELLED, solo si la reserva estaba en la lista del día ya enviada.
     await this.dailyList.record(tx, before, after);
-    return after;
+
+    // T009 y regla 10: la disponibilidad liberada, para el envío a Channex.
+    await this.availability.record(tx, releasedAvailability(after));
+    return { reservation: after, cancellation };
   }
 
   /** La única `Cancellation` de la reserva (regla 5), inmutable. */
@@ -136,7 +202,7 @@ export class CancelReservationService implements CancelReservation {
     tx: Transaction,
     reservation: Reservation,
     command: CancelReservationCommand,
-  ): Promise<void> {
+  ): Promise<Cancellation> {
     const cancellation = Cancellation.restore({
       id: randomUUID(),
       reservationRef: reservation.reservationRef,
@@ -148,6 +214,7 @@ export class CancelReservationService implements CancelReservation {
     });
     try {
       await this.cancellations.insert(cancellation, tx);
+      return cancellation;
     } catch (error) {
       // La restricción única es el respaldo ante dos cancelaciones simultáneas (D2).
       if (error instanceof DuplicateCancellationError) {
@@ -159,6 +226,22 @@ export class CancelReservationService implements CancelReservation {
       throw error;
     }
   }
+}
+
+/**
+ * Una marca por cada categoría de la reserva, con sus noches (`configure-ota`, B2: `dateFrom` incluido y
+ * `dateTo` excluido, porque el día de salida no se ocupa). Todas las habitaciones tienen las fechas de la
+ * reserva.
+ */
+function releasedAvailability(reservation: Reservation): AriChange[] {
+  const categories = new Set(
+    reservation.rooms.map((room) => room.categoryRoom),
+  );
+  return [...categories].map((categoryRoom) => ({
+    categoryRoom,
+    dateFrom: reservation.startDate,
+    dateTo: reservation.endDate,
+  }));
 }
 
 /**

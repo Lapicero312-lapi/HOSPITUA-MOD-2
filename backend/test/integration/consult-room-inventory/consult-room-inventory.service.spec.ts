@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
@@ -27,6 +26,7 @@ import {
 import { AppConfigModule } from '../../../src/infrastructure/config/app-config.module.js';
 import type { EnvironmentVariables } from '../../../src/infrastructure/config/env.validation.js';
 import { Module1ClientModule } from '../../../src/infrastructure/out/module1/module1-client.module.js';
+import { ROOM_201, ROOM_202 } from '../../support/rooms.js';
 import { captureLogs } from '../support/capture-logs.js';
 
 /**
@@ -34,23 +34,6 @@ import { captureLogs } from '../support/capture-logs.js';
  * configuración reales, armados con Nest, contra el Módulo 1 simulado (msw). Las pruebas unitarias del
  * servicio usan un `Module1Port` simulado; estas comprueban que las piezas funcionan juntas.
  */
-
-/**
- * Datos de las pruebas del plan ("Pruebas por escenario", T009 y T015), que dice de dónde sale cada uno.
- * El `id` es un UUID cualquiera.
- */
-const ROOM_201: Room = {
-  id: randomUUID(),
-  roomNumber: '201',
-  categoryRoom: 'DOBLE',
-  maxCapacity: 2,
-};
-const ROOM_202: Room = {
-  id: randomUUID(),
-  roomNumber: '202',
-  categoryRoom: 'DOBLE',
-  maxCapacity: 3,
-};
 
 const server = setupServer();
 
