@@ -1,4 +1,5 @@
 import { AmqpConnection } from '@golevelup/nestjs-rabbitmq';
+import { Inject, Injectable, Module, type Type } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
 import type { GetMessage } from 'amqplib';
@@ -18,18 +19,34 @@ import {
 } from '../../../src/application/ports/out/daily-list-publisher.js';
 import { MessagingModule } from '../../../src/infrastructure/config/messaging.module.js';
 import { DAILY_LIST_QUEUE } from '../../../src/infrastructure/config/rabbitmq.topology.js';
+import { RabbitDailyListPublisher } from '../../../src/infrastructure/out/messaging/rabbit-daily-list.publisher.js';
 import { integrationEnv } from '../support/database.js';
 
 const LIST_ID = '0b6f8a52-1c3d-4e5f-9a7b-1c2d3e4f5a6b';
 const UPDATE_ID = '7c8d9e0f-1a2b-4c3d-8e4f-5a6b7c8d9e0f';
 
-/** `MessagingModule` con la conexión a `url`, como lo arma `AppModule`. */
-async function startMessaging(url: string): Promise<TestingModule> {
+/** Un servicio de otro módulo, que no importa `MessagingModule`, como lo hará `PublishPendingDailyMessages`. */
+@Injectable()
+class NeedsPublisher {
+  constructor(
+    @Inject(DAILY_LIST_PUBLISHER) readonly publisher: DailyListPublisher,
+  ) {}
+}
+
+@Module({ providers: [NeedsPublisher] })
+class OtherModule {}
+
+/** `MessagingModule` con la conexión a `url`, como lo arma `AppModule`, junto con los módulos `others`. */
+async function startMessaging(
+  url: string,
+  others: Type[] = [],
+): Promise<TestingModule> {
   process.env.RABBITMQ_URL = url;
   const moduleRef = await Test.createTestingModule({
     imports: [
       ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }),
       MessagingModule,
+      ...others,
     ],
   }).compile();
   moduleRef.useLogger(false);
@@ -144,12 +161,21 @@ describe('RabbitDailyListPublisher sin conexión con RabbitMQ', () => {
 
   beforeAll(async () => {
     // Nadie escucha en el puerto 1: la conexión nunca se establece.
-    offline = await startMessaging('amqp://hospitua:hospitua@127.0.0.1:1');
+    offline = await startMessaging('amqp://hospitua:hospitua@127.0.0.1:1', [
+      OtherModule,
+    ]);
   });
 
   afterAll(async () => {
     await offline?.close();
     process.env.RABBITMQ_URL = integrationEnv().RABBITMQ_URL;
+  });
+
+  // Inyectarlo no necesita la conexión: basta con que MessagingModule lo exporte.
+  it('es global: otro módulo recibe el publicador sin importar MessagingModule', () => {
+    expect(offline.get(NeedsPublisher).publisher).toBeInstanceOf(
+      RabbitDailyListPublisher,
+    );
   });
 
   it('la publicación falla en vez de quedarse esperando', async () => {
