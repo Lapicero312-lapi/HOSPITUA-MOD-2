@@ -98,6 +98,25 @@ describe('GuestStaysPage', () => {
     ).toBeNull();
   });
 
+  it('muestra la fecha de salida de un huésped que ya salió', async () => {
+    vi.mocked(listGuestStays).mockResolvedValue({
+      ...page,
+      items: [
+        {
+          ...stay,
+          entryDate: '2026-10-09',
+          exitDate: '2026-10-12',
+          inHotel: false,
+        },
+      ],
+    });
+    renderPage();
+
+    const row = await screen.findByRole('row', { name: /John Smith/ });
+    expect(within(row).getByText('12/10/2026')).toBeInTheDocument();
+    expect(within(row).queryByText('En el hotel')).toBeNull();
+  });
+
   it('aplica los filtros y permite avanzar a otra página', async () => {
     const user = userEvent.setup();
     vi.mocked(listGuestStays).mockResolvedValue(page);
@@ -133,6 +152,45 @@ describe('GuestStaysPage', () => {
       search: 'John',
       page: 2,
     });
+  });
+
+  it('desactiva Siguiente en la última página', async () => {
+    vi.mocked(listGuestStays).mockResolvedValue({
+      ...page,
+      page: 3,
+      items: [{ ...stay, reservationRef: 'RSV-LAST' }],
+    });
+    renderPage('/guest-stays?page=3');
+
+    await screen.findByText('RSV-LAST');
+    expect(screen.getByRole('button', { name: 'Siguiente →' })).toBeDisabled();
+  });
+
+  it('limpia los filtros aplicados y vuelve a la primera página sin filtros', async () => {
+    const user = userEvent.setup();
+    vi.mocked(listGuestStays).mockResolvedValue(page);
+    renderPage(
+      '/guest-stays?nationality=FOREIGN&presence=CHECKED_OUT&dateFrom=2026-10-01&dateTo=2026-10-31&search=John&page=2',
+    );
+
+    await screen.findByText('John Smith');
+    await user.click(screen.getByRole('button', { name: 'Limpiar filtros' }));
+
+    expect(screen.getByLabelText('Buscar')).toHaveValue('');
+    expect(screen.getByLabelText('Nacionalidad')).toHaveValue('ALL');
+    expect(screen.getByLabelText('Situación')).toHaveValue('ALL');
+    expect(screen.getByLabelText('Desde')).toHaveValue('');
+    expect(screen.getByLabelText('Hasta')).toHaveValue('');
+    await vi.waitFor(() =>
+      expect(listGuestStays).toHaveBeenLastCalledWith({
+        nationality: 'ALL',
+        presence: 'ALL',
+        dateFrom: '',
+        dateTo: '',
+        search: '',
+        page: 1,
+      }),
+    );
   });
 
   it('muestra el detalle completo del huésped con campos vacíos como raya', async () => {
