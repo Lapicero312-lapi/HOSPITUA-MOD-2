@@ -195,6 +195,7 @@ Un único cuadro de búsqueda (`search`) cubre código de reserva, código de la
   "guestCount": 3,
   "notes": "",
   "createdAt": "2026-10-01T09:14:00-05:00",
+  "updatedAt": "2026-10-08T15:42:10.123456-05:00",
   "conflict": null,
   "rooms": [
     {
@@ -219,6 +220,9 @@ Un único cuadro de búsqueda (`search`) cubre código de reserva, código de la
 - `conflict` tiene la misma forma que en C1; una habitación sin asignar trae `roomId` y `roomNumber` en
   `null`. Cada habitación trae su `roomId` (historia 2, escenario 1).
 - En reservas de Booking el titular puede venir sin `documentType` ni `documentNumber` (`null`).
+- `updatedAt` va en hora de Colombia y con microsegundos. Es el control de concurrencia que la pantalla
+  envía al cancelar (`cancel-reservation`, A) y al modificar (`update-reservation`, B1 y B2): "el que la
+  pantalla leyó de la reserva".
 - `cancellation` solo viene en reservas `CANCELLED` por solicitud explícita:
   `{ "cancellationDate", "channel", "reason", "processedBy" }`. El No-Show no tiene `Cancellation`.
 - Si la reserva no existe: `400` `RESERVATION_NOT_FOUND`, "La reserva no existe." (regla del plan base:
