@@ -114,6 +114,47 @@ describe('TypeOrmCancellationRepository contra PostgreSQL real (cancel-reservati
     expect(new Date(row.cancellation_date)).toEqual(CANCELLED_AT);
   });
 
+  describe('findByReservationId (check-view-reservation, T016)', () => {
+    it('devuelve la cancelación guardada con todos sus datos y la referencia de su reserva', async () => {
+      const cancellation = aCancellation();
+      await insert(cancellation);
+
+      await expect(
+        cancellations.findByReservationId(reservation.id),
+      ).resolves.toEqual(cancellation);
+    });
+
+    it('lee la de Booking sin motivo', async () => {
+      const cancellation = aCancellation({
+        channel: 'OTA_API',
+        processedBy: 'Booking.com',
+        reason: null,
+      });
+      await insert(cancellation);
+
+      await expect(
+        cancellations.findByReservationId(reservation.id),
+      ).resolves.toEqual(cancellation);
+    });
+
+    it('devuelve null si la reserva no tiene cancelación', async () => {
+      await expect(
+        cancellations.findByReservationId(reservation.id),
+      ).resolves.toBeNull();
+    });
+
+    it('solo devuelve la de esa reserva', async () => {
+      const other = await new TypeOrmReservationRepository(dataSource).insert(
+        aDirectReservation(),
+      );
+      await insert(aCancellation());
+
+      await expect(
+        cancellations.findByReservationId(other.id),
+      ).resolves.toBeNull();
+    });
+  });
+
   it('la de Booking va por OTA_API, procesada por Booking.com y sin motivo', async () => {
     await insert(
       aCancellation({

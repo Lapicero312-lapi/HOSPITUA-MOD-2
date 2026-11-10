@@ -19,6 +19,10 @@ import {
   type GetDaySummary,
 } from '../../../application/use-cases/check-view-reservation/ports/in/get-day-summary.port.js';
 import {
+  GET_RESERVATION_DETAIL,
+  type GetReservationDetail,
+} from '../../../application/use-cases/check-view-reservation/ports/in/get-reservation-detail.port.js';
+import {
   LIST_RESERVATIONS,
   type ListReservations,
   type ReservationListResult,
@@ -28,11 +32,15 @@ import {
   type ReservationCancellationBody,
   toReservationCancellationBody,
 } from './reservation-cancellation.dto.js';
+import {
+  type ReservationDetailBody,
+  toReservationDetailBody,
+} from './reservation-detail.dto.js';
 import { readReservationListQuery } from './reservation-list-query.dto.js';
 
 /**
- * Las rutas de reservas, compartidas por sus casos de uso: `check-view-reservation` (C1, C2 y, en sus
- * tareas, C3 a C5) y la cancelación de `cancel-reservation` (A).
+ * Las rutas de reservas, compartidas por sus casos de uso: `check-view-reservation` (C1, C2, C3 y, en sus
+ * tareas, C4 y C5) y la cancelación de `cancel-reservation` (A).
  */
 @Controller('reservations')
 export class ReservationsController {
@@ -43,6 +51,8 @@ export class ReservationsController {
     private readonly getDaySummary: GetDaySummary,
     @Inject(CANCEL_RESERVATION)
     private readonly cancelReservation: CancelReservation,
+    @Inject(GET_RESERVATION_DETAIL)
+    private readonly getReservationDetail: GetReservationDetail,
   ) {}
 
   /**
@@ -74,6 +84,22 @@ export class ReservationsController {
       ...filters
     } = readReservationListQuery(query);
     return this.listReservations.execute(filters, page);
+  }
+
+  /**
+   * C3, `GET /api/reservations/{reservationRef}` para la Recepcionista: el detalle completo (FR-006). El
+   * formato de la referencia lo revisa el caso de uso antes de consultar (T017). Con `MODULE3` esta ruta
+   * dará la consulta para liquidar (C4, T032); hasta entonces responde `INVALID_CLIENT`. La ruta fija
+   * `day-summary` (C2, T012) se declara antes que esta.
+   */
+  @Get(':reservationRef')
+  async detail(
+    @ClientHeader(['RECEPTIONIST']) _client: string,
+    @Param('reservationRef') reservationRef: string,
+  ): Promise<ReservationDetailBody> {
+    return toReservationDetailBody(
+      await this.getReservationDetail.execute(reservationRef),
+    );
   }
 
   /**
