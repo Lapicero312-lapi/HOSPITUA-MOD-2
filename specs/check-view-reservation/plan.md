@@ -195,6 +195,7 @@ Un único cuadro de búsqueda (`search`) cubre código de reserva, código de la
   "guestCount": 3,
   "notes": "",
   "createdAt": "2026-10-01T09:14:00-05:00",
+  "updatedAt": "2026-10-08T15:42:10.123456-05:00",
   "conflict": null,
   "rooms": [
     {
@@ -219,6 +220,9 @@ Un único cuadro de búsqueda (`search`) cubre código de reserva, código de la
 - `conflict` tiene la misma forma que en C1; una habitación sin asignar trae `roomId` y `roomNumber` en
   `null`. Cada habitación trae su `roomId` (historia 2, escenario 1).
 - En reservas de Booking el titular puede venir sin `documentType` ni `documentNumber` (`null`).
+- `updatedAt` va en hora de Colombia y con microsegundos. Es el control de concurrencia que la pantalla
+  envía al cancelar (`cancel-reservation`, A) y al modificar (`update-reservation`, B1 y B2): "el que la
+  pantalla leyó de la reserva".
 - `cancellation` solo viene en reservas `CANCELLED` por solicitud explícita:
   `{ "cancellationDate", "channel", "reason", "processedBy" }`. El No-Show no tiene `Cancellation`.
 - Si la reserva no existe: `400` `RESERVATION_NOT_FOUND`, "La reserva no existe." (regla del plan base:
@@ -778,6 +782,53 @@ nunca revierte la operación que originó el mensaje (FR-020).
 `daily-list-publish`, y la publicación inmediata después de confirmar la transacción y después de
 generar la lista. Las dos pasan por el mismo bloqueo, para que dos ejecuciones no publiquen a la vez y
 se desordenen.
+
+### Consulta del Módulo 1 (`FindReservationsByStayRange`, T033)
+
+Lo que C5 no dice y este plan fija:
+
+**Puerto de entrada**, en `ports/in/find-reservations-by-stay-range.port.ts`:
+
+```typescript
+type StayRangeQuery = { dateFrom: string; dateTo: string; roomId: string | null };
+
+type StayRangeReservation = {
+  reservationRef: string;
+  status: 'PENDING' | 'ACTIVE' | 'IN_PROGRESS';
+  startDate: string;
+  endDate: string;
+  rooms: { roomId: string | null; roomNumber: string | null; categoryRoom: string }[];
+};
+
+interface FindReservationsByStayRange {
+  execute(query: StayRangeQuery): Promise<StayRangeReservation[]>;
+}
+```
+
+**Consulta**, `ReservationQueryPort.findByStayRange(dateFrom, dateTo, roomId)`:
+
+- Reservas en `PENDING`, `ACTIVE` o `IN_PROGRESS` con `start_date <= dateTo` y `end_date > dateFrom`.
+- Con `roomId`, solo las que tienen esa habitación entre las suyas, en cualquier `stayStatus`. Cada reserva
+  trae todas sus habitaciones.
+- Orden: `startDate` y después `reservationRef`, ascendentes; las habitaciones, por `roomNumber`.
+- Una habitación sin asignar (reserva de Booking en conflicto) sale con `roomId` y `roomNumber` en `null`.
+- Sin coincidencias: `200` con `{ "items": [] }`. No lleva `message`.
+
+**DTO del Módulo 1**, `readStayRangeQuery(query)` en `infrastructure/in/rest/`. Revisa en este orden; el
+primero que falla responde:
+
+1. Un parámetro que no es `dateFrom`, `dateTo` ni `roomId`: `UNSUPPORTED_PARAMETER`, con el mensaje "El
+   parámetro {nombre} no se admite en esta consulta." Si hay varios, nombra el primero en orden alfabético.
+2. Falta `dateFrom`, falta `dateTo` o faltan las dos: `INCOMPLETE_DATE_RANGE`.
+3. Las fechas, con las mismas reglas y mensajes de C1: `INVALID_DATE`, `INVALID_DATE_RANGE` y
+   `DATE_RANGE_TOO_LARGE`.
+4. `roomId` que no es un UUID: `INVALID_ROOM_ID`.
+
+Un parámetro repetido (`?dateFrom=…&dateFrom=…`) cuenta como valor no válido de ese parámetro.
+
+**Ruta:** `GET /api/reservations` admite `RECEPTIONIST` y `MODULE1`. Con `MODULE1`, el controlador lee la
+consulta con `readStayRangeQuery` y llama a `FindReservationsByStayRange`; con `RECEPTIONIST` sigue
+igual (C1).
 
 ### Tareas programadas (zona horaria `America/Bogota`, con bloqueo asesor)
 

@@ -1,8 +1,11 @@
 import type { Reservation } from '../../../../../domain/reservation/reservation.js';
-import type { BlockingRoom } from '../../../../ports/out/reservation-query.port.js';
+import type {
+  BlockingRoom,
+  NightBlockingRooms,
+} from '../../../../ports/out/reservation-query.port.js';
 import type { Transaction } from '../../../../ports/out/transaction.js';
 
-export type { BlockingRoom };
+export type { BlockingRoom, NightBlockingRooms };
 
 /** Símbolo con el que Nest inyecta el servicio (plan base, regla 4). */
 export const RESERVATION_LOOKUP = Symbol('RESERVATION_LOOKUP');
@@ -41,4 +44,16 @@ export interface ReservationLookup {
     tx: Transaction,
     reservationRef: string,
   ): Promise<Reservation | null>;
+
+  /**
+   * Una entrada por cada noche de `[dateFrom, dateTo)`, en orden de fecha, con los `roomId` de `categoryRoom`
+   * que esa noche ocupan inventario (plan, "`ReservationLookup.blockingRoomsByCategory`"). El día de salida
+   * no se ocupa. Las noches sin ninguna ocupada vienen con `roomIds` vacío. Con `dateFrom` igual o
+   * posterior a `dateTo`, `[]`. La usa `configure-ota` para la disponibilidad de Channex.
+   */
+  blockingRoomsByCategory(
+    categoryRoom: string,
+    dateFrom: string,
+    dateTo: string,
+  ): Promise<NightBlockingRooms[]>;
 }
