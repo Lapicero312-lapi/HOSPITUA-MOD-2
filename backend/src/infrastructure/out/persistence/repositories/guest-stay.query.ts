@@ -2,10 +2,14 @@ import { Injectable } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import type {
   GuestStayCriteria,
+  GuestStayDetailRow,
   GuestStayQuery,
   GuestStayRow,
 } from '../../../../application/ports/out/guest-stay.query.js';
-import type { DocumentType } from '../../../../domain/shared/enums.js';
+import type {
+  DocumentType,
+  MovementType,
+} from '../../../../domain/shared/enums.js';
 
 /**
  * Cada huésped con su entrada y su salida, solo si tiene al menos un movimiento (FR-016), y los filtros de
@@ -84,7 +88,61 @@ export class TypeOrmGuestStayQuery implements GuestStayQuery {
       exitDate: row.exit_date,
     }));
   }
+
+  async findDetail(
+    reservationRef: string,
+    documentNumber: string,
+  ): Promise<GuestStayDetailRow | null> {
+    // El único (reservation_id, document_number) asegura una sola fila.
+    const rows: DetailRow[] = await this.dataSource.query(
+      `SELECT r.reservation_ref, gd.first_name, gd.last_name, gd.document_type, gd.document_number,
+              gd.birth_date::text AS birth_date, gd.nationality, gd.origin_place, gd.destination_place,
+              COALESCE(
+                (SELECT json_agg(
+                          json_build_object('movementType', mm.movement_type,
+                                            'movementDate', mm.movement_date::text)
+                          ORDER BY mm.movement_date, mm.movement_type = 'DEPARTURE')
+                 FROM migratory_movement mm
+                 WHERE mm.guest_data_id = gd.id),
+                '[]'::json) AS movements
+       FROM guest_data gd
+       JOIN reservation r ON r.id = gd.reservation_id
+       WHERE r.reservation_ref = $1 AND gd.document_number = $2`,
+      [reservationRef, documentNumber],
+    );
+    if (rows.length === 0) {
+      return null;
+    }
+    const [row] = rows;
+    return {
+      reservationRef: row.reservation_ref,
+      firstName: row.first_name,
+      lastName: row.last_name,
+      // La base solo acepta los seis tipos (CHECK de la migración base).
+      documentType: row.document_type as DocumentType,
+      documentNumber: row.document_number,
+      birthDate: row.birth_date,
+      nationality: row.nationality,
+      originPlace: row.origin_place,
+      destinationPlace: row.destination_place,
+      movements: row.movements,
+    };
+  }
 }
+
+/** El huésped con sus movimientos como un arreglo JSON, ya ordenado (`[]` si no tiene). */
+type DetailRow = {
+  reservation_ref: string;
+  first_name: string;
+  last_name: string;
+  document_type: string;
+  document_number: string;
+  birth_date: string;
+  nationality: string;
+  origin_place: string | null;
+  destination_place: string | null;
+  movements: { movementType: MovementType; movementDate: string }[];
+};
 
 function filterParams(criteria: GuestStayCriteria): unknown[] {
   const { dateRange, search } = criteria;

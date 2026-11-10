@@ -27,13 +27,16 @@ import {
   RESERVATION_STATUS,
   type ReservationStatusPort,
 } from './ports/in/reservation-status.port.js';
+import {
+  recordMessage,
+  ROOM_STAY_LOG,
+  summaryText,
+  warnOnSequenceGap,
+} from './room-stay-notification.steps.js';
 
 /** Los mensajes del log del spec (plan, "Colas (Check-In y Check-Out)"). No llevan datos personales. */
 export const CHECK_IN_LOG = {
-  RESERVATION_NOT_FOUND:
-    'La reserva notificada no existe en el sistema de reservas.',
-  ROOM_NOT_IN_RESERVATION:
-    'La habitación notificada no pertenece a la reserva.',
+  ...ROOM_STAY_LOG,
   STATUS_NOT_ALLOWED: 'La reserva no admite un Check-In en su estado actual.',
 } as const;
 
@@ -43,7 +46,8 @@ export const CHECK_IN_LOG = {
  * 1. el `messageId` ya procesado: duplicado, se confirma sin efectos;
  * 2. la reserva existe;
  * 3. el `roomId` pertenece a la reserva;
- * 4. la habitación ya está `CHECKED_IN`: duplicado, se confirma sin efectos;
+ * 4. la habitación ya está `CHECKED_IN`: duplicado, se confirma sin efectos en la reserva y registra el
+ *    mensaje con su `sequenceNumber` (punto 6 del plan);
  * 5. la reserva está en `ACTIVE` o `IN_PROGRESS`;
  * 6. la habitación está en `EXPECTED`.
  *
@@ -88,7 +92,12 @@ export class ProcessCheckInService implements ProcessCheckIn {
       );
       return 'DUPLICATE';
     }
-    await this.warnOnSequenceGap(tx, notification);
+    await warnOnSequenceGap(
+      this.processedMessages,
+      this.logger,
+      tx,
+      notification,
+    );
 
     // 2, 3 y 4.
     if (reservation === null) {
@@ -108,6 +117,7 @@ export class ProcessCheckInService implements ProcessCheckIn {
       this.logger.log(
         `Check-In repetido (${where}): la habitación ya está en CHECKED_IN y se confirma sin cambios.`,
       );
+      await recordMessage(this.processedMessages, tx, notification);
       return 'DUPLICATE';
     }
 
@@ -131,7 +141,7 @@ export class ProcessCheckInService implements ProcessCheckIn {
     }
 
     const summary = await this.apply(tx, reservation, notification);
-    await this.record(tx, notification);
+    await recordMessage(this.processedMessages, tx, notification);
     this.logger.log(`Check-In aplicado (${where}): ${summaryText(summary)}`);
     return 'APPLIED';
   }
@@ -174,41 +184,7 @@ export class ProcessCheckInService implements ProcessCheckIn {
     this.logger.warn(
       `Check-In rechazado (reserva ${notification.reservationRef}, habitación ${notification.roomId}): ${reason}`,
     );
-    await this.record(tx, notification);
+    await recordMessage(this.processedMessages, tx, notification);
     return 'REJECTED';
   }
-
-  private record(
-    tx: Transaction,
-    { messageId, queue, sequenceNumber }: CheckInNotification,
-  ): Promise<void> {
-    return this.processedMessages.record(
-      { messageId, queue, sequenceNumber },
-      tx,
-    );
-  }
-
-  /**
-   * FR-023: si entre el mayor `sequenceNumber` ya atendido de la cola y este falta alguno, lo advierte y
-   * sigue: el Módulo 2 no reordena.
-   */
-  private async warnOnSequenceGap(
-    tx: Transaction,
-    { queue, sequenceNumber }: CheckInNotification,
-  ): Promise<void> {
-    const highest = await this.processedMessages.highestSequenceNumber(
-      queue,
-      tx,
-    );
-    if (highest !== null && sequenceNumber > highest + 1) {
-      this.logger.warn(
-        `Salto de secuencia en ${queue}: se esperaba el ${highest + 1} y llegó el ${sequenceNumber}. Se sigue procesando.`,
-      );
-    }
-  }
-}
-
-/** El `RegistrationSummary` para el log (plan de `process-guest-data`, B1): solo cifras. */
-function summaryText(summary: RegistrationSummary): string {
-  return `${summary.received} huéspedes recibidos, ${summary.registered} registrados, ${summary.alreadyRegistered} ya registrados, ${summary.foreign} extranjeros y ${summary.skipped} omitidos.`;
 }
