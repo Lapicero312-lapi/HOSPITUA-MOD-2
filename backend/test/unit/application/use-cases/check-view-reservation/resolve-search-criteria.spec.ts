@@ -21,12 +21,31 @@ const INVALID_CODE = {
 
 describe('resolveSearchCriteria (plan de check-view-reservation, "Algoritmo de búsqueda"; T006)', () => {
   describe('paso 1: quita los espacios de los extremos', () => {
-    it('el código y el criterio van sin ellos', () => {
-      expect(resolveSearchCriteria('  1144093552  ')).toEqual({
-        code: '1144093552',
-        fallback: { kind: 'DOCUMENT', documentNumber: '1144093552' },
-      });
-    });
+    it.each([
+      [
+        'un documento',
+        '  1144093552  ',
+        {
+          code: '1144093552',
+          fallback: { kind: 'DOCUMENT', documentNumber: '1144093552' },
+        },
+      ],
+      [
+        'un nombre',
+        ' Gómez ',
+        { code: 'Gómez', fallback: { kind: 'NAME', name: 'Gómez' } },
+      ],
+      [
+        'la referencia interna',
+        ' RSV-3F9A1C7B ',
+        { code: 'RSV-3F9A1C7B', fallback: { kind: 'NOT_FOUND' } },
+      ],
+    ])(
+      'con %s, el código y el criterio van sin ellos',
+      (_, search, expected) => {
+        expect(resolveSearchCriteria(search)).toEqual(expected);
+      },
+    );
   });
 
   describe('paso 2: formato, si no INVALID_RESERVATION_CODE', () => {
@@ -85,6 +104,13 @@ describe('resolveSearchCriteria (plan de check-view-reservation, "Algoritmo de b
       expect(resolveSearchCriteria('RSV').fallback).toEqual({
         kind: 'NAME',
         name: 'RSV',
+      });
+    });
+
+    it('RSV- en medio del texto no es la referencia interna: el paso 4 pide que empiece con RSV-', () => {
+      expect(resolveSearchCriteria('AB-RSV-CD').fallback).toEqual({
+        kind: 'NAME',
+        name: 'AB-RSV-CD',
       });
     });
   });
