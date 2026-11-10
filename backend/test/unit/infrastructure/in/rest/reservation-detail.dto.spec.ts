@@ -22,6 +22,8 @@ describe('toReservationDetailBody (plan de check-view-reservation, C3; T016)', (
       endDate: '2026-10-25',
       notes: 'Llegada tarde',
       createdAt: new Date('2026-10-01T14:14:00.000Z'),
+      // Como lo guarda PostgreSQL: en UTC y con microsegundos.
+      updatedAt: '2026-10-08 20:42:10.123456+00',
       rooms: [
         aDirectRoom({
           roomId: ROOM_ID,
@@ -64,6 +66,7 @@ describe('toReservationDetailBody (plan de check-view-reservation, C3; T016)', (
       guestCount: 3,
       notes: 'Llegada tarde',
       createdAt: '2026-10-01T09:14:00-05:00',
+      updatedAt: '2026-10-08T15:42:10.123456-05:00',
       conflict: null,
       rooms: [
         {
@@ -148,8 +151,12 @@ describe('toReservationDetailBody (plan de check-view-reservation, C3; T016)', (
     });
   });
 
-  it('sin observaciones, notes va null; sin createdAt (no guardada), createdAt va null', () => {
-    const reservation = aDirectReservation({ notes: null, createdAt: null });
+  it('sin observaciones, notes va null; sin createdAt ni updatedAt (no guardada), van null', () => {
+    const reservation = aDirectReservation({
+      notes: null,
+      createdAt: null,
+      updatedAt: null,
+    });
 
     const body = toReservationDetailBody({
       reservation,
@@ -160,9 +167,10 @@ describe('toReservationDetailBody (plan de check-view-reservation, C3; T016)', (
 
     expect(body.notes).toBeNull();
     expect(body.createdAt).toBeNull();
+    expect(body.updatedAt).toBeNull();
   });
 
-  it('no lleva comisión, quoteId ni updatedAt (solo lo de C3)', () => {
+  it('no lleva comisión ni quoteId (solo lo de C3)', () => {
     const body = toReservationDetailBody({
       reservation: anOtaReservation(OTA_ID),
       nights: 2,
@@ -173,7 +181,6 @@ describe('toReservationDetailBody (plan de check-view-reservation, C3; T016)', (
     const text = JSON.stringify(body);
     expect(text).not.toContain('commission');
     expect(text).not.toContain('quoteId');
-    expect(text).not.toContain('updatedAt');
     expect(text).not.toContain('grossAmount"');
   });
 });

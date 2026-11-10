@@ -1,5 +1,8 @@
 import type { ReservationDetail } from '../../../application/use-cases/check-view-reservation/ports/in/get-reservation-detail.port.js';
-import { colombiaTime } from '../../../application/use-cases/check-view-reservation/message-time.js';
+import {
+  colombiaTime,
+  colombiaTimeWithMicroseconds,
+} from '../../../application/use-cases/check-view-reservation/message-time.js';
 
 /** El dinero como texto decimal con dos decimales y su moneda (plan base, "Dinero"). */
 type MoneyBody = { amount: string; currency: string };
@@ -17,6 +20,8 @@ export type ReservationDetailBody = {
   guestCount: number;
   notes: string | null;
   createdAt: string | null;
+  /** La versión de la reserva: lo que la pantalla envía al cancelar y al modificar. */
+  updatedAt: string | null;
   conflict: { reason: string; detectedAt: Date } | null;
   rooms: {
     roomId: string | null;
@@ -55,7 +60,7 @@ export function toReservationDetailBody({
   otaName,
   cancellation,
 }: ReservationDetail): ReservationDetailBody {
-  const { guest, conflict, createdAt } = reservation;
+  const { guest, conflict, createdAt, updatedAt } = reservation;
   return {
     reservationRef: reservation.reservationRef,
     status: reservation.status,
@@ -68,6 +73,9 @@ export function toReservationDetailBody({
     guestCount: reservation.guestCount,
     notes: reservation.notes,
     createdAt: createdAt === null ? null : colombiaTime(createdAt),
+    // Con sus microsegundos: es el control de concurrencia de cancelar y modificar.
+    updatedAt:
+      updatedAt === null ? null : colombiaTimeWithMicroseconds(updatedAt),
     conflict:
       conflict === null
         ? null

@@ -117,6 +117,10 @@ describe('GET /api/reservations/{reservationRef} (e2e, C3)', () => {
     expect(res.body.createdAt).toMatch(
       /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}-05:00$/,
     );
+    // El control de concurrencia de cancelar y modificar: con sus seis decimales.
+    expect(res.body.updatedAt).toMatch(
+      /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}-05:00$/,
+    );
   });
 
   it('una de Booking trae su agencia y su código, sin importe, y la habitación sin asignar en null', async () => {
