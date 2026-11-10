@@ -352,6 +352,14 @@ sequenceDiagram
 - `sire_export` es un registro de auditoría: **no se modifica ni se borra**.
 - Lee `migratory_movement` y `guest_data` solo a través de `SelectForeignMovements`; el índice
   `(movement_date)` del plan base sostiene el filtro del periodo.
+- **`SireMovement`** (B2 de `process-guest-data`, acordado en su T014) trae cada movimiento con todos los
+  datos de su huésped, ya filtrado (solo extranjeros) y ordenado; este caso de uso no lo vuelve a filtrar
+  ni a ordenar.
+  - **A y C** pasan cada movimiento a `formatSireLine`.
+  - **B** toma de él sus campos, con `fullName` igual a `firstName` y `lastName` separados por un
+    espacio.
+  - **`byMovementId`** devuelve `null` si el movimiento no existe, es de un colombiano o el `movementId`
+    no es un UUID: es el `MOVEMENT_NOT_FOUND` de la tabla D.
 
 **Estados y transiciones**: ninguno. No interviene `Reservation.status`.
 

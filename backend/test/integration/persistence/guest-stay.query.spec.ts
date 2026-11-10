@@ -434,4 +434,101 @@ describe('TypeOrmGuestStayQuery contra PostgreSQL real (plan de process-guest-da
     expect(second.map((row) => row.documentNumber)).toEqual(['D02', 'D01']);
     await expect(query.count(ALL)).resolves.toBe(12);
   });
+
+  describe('findDetail (C2)', () => {
+    it('trae todos los datos del huésped y sus movimientos por fecha', async () => {
+      const ref = await seed({
+        firstName: 'John',
+        lastName: 'Smith',
+        documentNumber: 'X99',
+        entry: '2026-10-09',
+        exit: '2026-10-12',
+      });
+
+      await expect(query.findDetail(ref, 'X99')).resolves.toEqual({
+        reservationRef: ref,
+        firstName: 'John',
+        lastName: 'Smith',
+        documentType: 'PAS',
+        documentNumber: 'X99',
+        birthDate: '1990-05-12',
+        nationality: 'Estados Unidos',
+        originPlace: null,
+        destinationPlace: null,
+        movements: [
+          { movementType: 'ENTRY', movementDate: '2026-10-09' },
+          { movementType: 'DEPARTURE', movementDate: '2026-10-12' },
+        ],
+      });
+    });
+
+    it('el mismo día, la entrada va antes que la salida', async () => {
+      const ref = await seed({
+        documentNumber: 'X99',
+        entry: '2026-10-09',
+        exit: '2026-10-09',
+      });
+
+      const detail = await query.findDetail(ref, 'X99');
+
+      expect(detail?.movements.map(({ movementType }) => movementType)).toEqual(
+        ['ENTRY', 'DEPARTURE'],
+      );
+    });
+
+    it('solo con la salida trae solo la salida', async () => {
+      const ref = await seed({ documentNumber: 'X99', exit: '2026-10-12' });
+
+      const detail = await query.findDetail(ref, 'X99');
+
+      expect(detail?.movements).toEqual([
+        { movementType: 'DEPARTURE', movementDate: '2026-10-12' },
+      ]);
+    });
+
+    it('sin movimientos trae al huésped con la lista vacía', async () => {
+      const ref = await seed({ documentNumber: 'SIN-MOV' });
+
+      const detail = await query.findDetail(ref, 'SIN-MOV');
+
+      expect(detail?.movements).toEqual([]);
+    });
+
+    it('solo el de esa reserva: el mismo huésped en otra reserva no se mezcla', async () => {
+      const september = await seed({
+        documentNumber: 'X99',
+        entry: '2026-09-01',
+        exit: '2026-09-03',
+      });
+      const october = await seed({
+        documentNumber: 'X99',
+        entry: '2026-10-09',
+      });
+
+      const detail = await query.findDetail(october, 'X99');
+
+      expect(detail?.reservationRef).toBe(october);
+      expect(detail?.movements).toEqual([
+        { movementType: 'ENTRY', movementDate: '2026-10-09' },
+      ]);
+      expect(
+        (await query.findDetail(september, 'X99'))?.movements,
+      ).toHaveLength(2);
+    });
+
+    it.each([
+      ['otro documento', 'RSV', 'X98'],
+      ['el documento en minúsculas (coincidencia exacta)', 'RSV', 'x99'],
+      ['otra reserva', 'OTHER', 'X99'],
+    ])('con %s no lo encuentra', async (_case, which, documentNumber) => {
+      const ref = await seed({ documentNumber: 'X99', entry: '2026-10-09' });
+
+      await expect(
+        query.findDetail(
+          which === 'RSV' ? ref : 'RSV-00000000',
+          documentNumber,
+        ),
+      ).resolves.toBeNull();
+    });
+  });
 });

@@ -11,6 +11,12 @@ export const RESERVATION_QUERY_PORT = Symbol('RESERVATION_QUERY_PORT');
 /** Una habitación que ya ocupa inventario y la reserva que la ocupa (`check-room-availability`, A1). */
 export type BlockingRoom = { roomId: string; reservationRef: string };
 
+/**
+ * Las habitaciones de una categoría que ocupan inventario en una noche (`check-view-reservation`,
+ * "`ReservationLookup.blockingRoomsByCategory`"): cada `roomId` una vez, en orden.
+ */
+export type NightBlockingRooms = { date: string; roomIds: string[] };
+
 /** Tamaño fijo de una página del listado (`check-view-reservation`, C1: no hay `pageSize`). */
 export const RESERVATION_PAGE_SIZE = 10;
 
@@ -64,6 +70,18 @@ export interface ReservationQueryPort {
   ): Promise<BlockingRoom[]>;
 
   /**
+   * T016c: una entrada por cada noche de `[dateFrom, dateTo)`, en orden de fecha, con las habitaciones de
+   * `categoryRoom` que esa noche ocupan inventario (`blocks_inventory`, como `findBlockingRooms`). La
+   * categoría es la que guardó la reserva (`reservation_room.category_room`). Las noches sin ninguna
+   * ocupada también vienen, con `roomIds` vacío.
+   */
+  blockingRoomsByCategory(
+    categoryRoom: string,
+    dateFrom: string,
+    dateTo: string,
+  ): Promise<NightBlockingRooms[]>;
+
+  /**
    * T005: una página de `RESERVATION_PAGE_SIZE` reservas con los filtros de C1, con `page` desde 1. Si
    * `page` pasa de la última, devuelve `items` vacío con el `totalItems` real: el ajuste a la última
    * página válida es de T011. La búsqueda por código, documento o nombre la agregan T015 y T020.
@@ -84,7 +102,23 @@ export interface ReservationQueryPort {
     operationalDate: string,
     tx: Transaction,
   ): Promise<DailyListArrival[]>;
+
+  /**
+   * T012: cuántas reservas se esperan ese día (C2, FR-005a), contadas por reserva y no por habitación.
+   * `operationalDate` es `AAAA-MM-DD`.
+   */
+  countExpectedArrivalsAndDepartures(
+    operationalDate: string,
+  ): Promise<ExpectedArrivalsAndDepartures>;
 }
+
+/** Las dos cifras del resumen del día (C2). */
+export type ExpectedArrivalsAndDepartures = {
+  /** Reservas `ACTIVE` o `PENDING` con `startDate` igual al día. */
+  expectedArrivals: number;
+  /** Reservas `IN_PROGRESS` con `endDate` igual al día. */
+  expectedDepartures: number;
+};
 
 /** Una llegada del día, con lo que hace falta para proyectarla en la lista (T023). */
 export type DailyListArrival = {

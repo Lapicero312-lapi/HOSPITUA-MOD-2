@@ -5,6 +5,8 @@ import { HomePage } from './pages/HomePage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
 import { NotFoundPage } from './pages/NotFoundPage.tsx';
 import { GuestStaysPage } from './pages/guest-stays/GuestStaysPage.tsx';
+import { OtasPage } from './pages/otas/OtasPage.tsx';
+import { RoomsPage } from './pages/rooms/RoomsPage.tsx';
 import { RouteErrorPage } from './pages/RouteErrorPage.tsx';
 
 /**
@@ -24,6 +26,8 @@ export const routes: RouteObject[] = [
     children: [
       { index: true, element: <HomePage /> },
       { path: 'guest-stays', element: <GuestStaysPage /> },
+      { path: 'habitaciones', element: <RoomsPage /> },
+      { path: 'agencias', element: <OtasPage /> },
       { path: '*', element: <NotFoundPage /> },
     ],
   },

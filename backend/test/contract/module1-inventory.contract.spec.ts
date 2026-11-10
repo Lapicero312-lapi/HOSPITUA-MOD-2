@@ -1,4 +1,3 @@
-import { randomUUID } from 'node:crypto';
 import { HttpService } from '@nestjs/axios';
 import axios from 'axios';
 import { delay, http, HttpResponse, type JsonBodyType } from 'msw';
@@ -11,29 +10,13 @@ import {
 } from '../../src/application/ports/out/module1.port.js';
 import { validateEnv } from '../../src/infrastructure/config/env.validation.js';
 import { Module1HttpAdapter } from '../../src/infrastructure/out/module1/module1-http.adapter.js';
+import { ROOM_201, ROOM_202 } from '../support/rooms.js';
 
 /**
  * Pruebas de contrato de la parte de inventario del adaptador del Módulo 1 (T008): `getRoom` (A1),
  * `listRoomsByCategory` (A2) y `listRooms` (A3). Las de `getMaintenances` están en
  * `module1-maintenance.contract.spec.ts`.
  */
-
-/**
- * Datos de las pruebas del adaptador del plan ("Pruebas por escenario", T008): las habitaciones del
- * ejemplo A2. El `id` es un UUID cualquiera.
- */
-const ROOM_201 = {
-  id: randomUUID(),
-  roomNumber: '201',
-  categoryRoom: 'DOBLE',
-  maxCapacity: 2,
-};
-const ROOM_202 = {
-  id: randomUUID(),
-  roomNumber: '202',
-  categoryRoom: 'DOBLE',
-  maxCapacity: 3,
-};
 
 /** La configuración real: la dirección del Módulo 1 y su tiempo máximo de espera por defecto (1 s). */
 const { MODULE1_BASE_URL, MODULE1_TIMEOUT_MS } = validateEnv({});

@@ -2,14 +2,46 @@ import { Injectable } from '@nestjs/common';
 import { DataSource, EntityManager, QueryFailedError } from 'typeorm';
 import {
   DuplicateOtaError,
+  type OtaOverview,
   type OtaRepository,
 } from '../../../../application/ports/out/ota.repository.js';
 import type { Transaction } from '../../../../application/ports/out/transaction.js';
 import type { Ota } from '../../../../domain/ota/ota.js';
-import type { ConnectionStatus } from '../../../../domain/shared/enums.js';
+import type {
+  ConnectionStatus,
+  ReservationStatus,
+} from '../../../../domain/shared/enums.js';
+import { decimalText } from '../mappers/decimal-text.js';
 import { otaToDomain, otaToTable } from '../mappers/ota.mapper.js';
 import { OtaTable } from '../tables/ota.table.js';
 import { managerFor } from '../typeorm-transaction.js';
+
+/** Las reservas que cuentan en `activeReservations` (plan de `register-ota-information-commission`, A3). */
+const ACTIVE_RESERVATION_STATUSES: readonly ReservationStatus[] = [
+  'PENDING',
+  'ACTIVE',
+  'IN_PROGRESS',
+];
+
+/** A3: los datos de cada agencia y el conteo de sus reservas activas. `$1` son esos estados. */
+const OVERVIEW_SELECT = `
+  SELECT o.id, o.name, o.commission_percentage, o.connection_status,
+         o.linked_at, o.last_sync_at,
+         (SELECT count(*)::int
+            FROM reservation r
+           WHERE r.ota_id = o.id AND r.status = ANY($1::text[])) AS active_reservations
+    FROM ota o`;
+
+type OverviewRow = {
+  id: string;
+  name: string;
+  commission_percentage: string | null;
+  connection_status: string;
+  /** Texto, como entrega `pg` las fechas con hora (`PG_TYPES`): `2026-03-02 09:14:00-05`. */
+  linked_at: string;
+  last_sync_at: string;
+  active_reservations: number;
+};
 
 @Injectable()
 export class TypeOrmOtaRepository implements OtaRepository {
@@ -75,6 +107,40 @@ export class TypeOrmOtaRepository implements OtaRepository {
       [id, connectionStatus, lastSyncAt],
     );
   }
+
+  async listOverviews(): Promise<OtaOverview[]> {
+    const rows: OverviewRow[] = await this.dataSource.query(
+      `${OVERVIEW_SELECT}
+       ORDER BY o.name`,
+      [ACTIVE_RESERVATION_STATUSES],
+    );
+    return rows.map(overviewOf);
+  }
+
+  async findOverviewById(id: string): Promise<OtaOverview | null> {
+    const rows: OverviewRow[] = await this.dataSource.query(
+      `${OVERVIEW_SELECT}
+       WHERE o.id = $2`,
+      [ACTIVE_RESERVATION_STATUSES, id],
+    );
+    return rows.length === 0 ? null : overviewOf(rows[0]);
+  }
+}
+
+function overviewOf(row: OverviewRow): OtaOverview {
+  return {
+    id: row.id,
+    name: row.name,
+    commissionPercentage:
+      row.commission_percentage === null
+        ? null
+        : decimalText(row.commission_percentage),
+    connectionStatus: row.connection_status as ConnectionStatus,
+    // A `Date` como hace TypeORM con las columnas `timestamptz` de `OtaTable`.
+    linkedAt: new Date(row.linked_at),
+    lastSyncAt: new Date(row.last_sync_at),
+    activeReservations: row.active_reservations,
+  };
 }
 
 async function findOne(

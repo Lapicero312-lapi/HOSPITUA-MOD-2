@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   checkAcknowledged,
   checkCancelRequest,
+  readReceptionCancellationBody,
 } from '../../../../../src/application/use-cases/cancel-reservation/cancel-request.validator.js';
 
 /** La referencia y el motivo del ejemplo de A del plan. */
@@ -118,5 +119,68 @@ describe('Validador de la cancelación (plan de cancel-reservation, punto 9)', (
         'Debe confirmar que entiende que la cancelación no se puede deshacer.',
       );
     });
+  });
+});
+
+describe('readReceptionCancellationBody (contrato A, T008)', () => {
+  it('lee el ejemplo de A tal cual', () => {
+    expect(
+      readReceptionCancellationBody(REF, {
+        updatedAt: '2026-10-08T15:42:10.123456-05:00',
+        acknowledged: true,
+        reason: REASON,
+      }),
+    ).toEqual({
+      acknowledged: true,
+      expectedUpdatedAt: '2026-10-08T15:42:10.123456-05:00',
+      reason: REASON,
+    });
+  });
+
+  it.each([
+    ['sin cuerpo', undefined],
+    ['una lista', []],
+    ['un objeto vacío', {}],
+  ])(
+    '%s: sin confirmar, sin updatedAt y sin motivo (las reglas las aplica CancelReservation)',
+    (_case, body) => {
+      expect(readReceptionCancellationBody(REF, body)).toEqual({
+        acknowledged: false,
+        expectedUpdatedAt: undefined,
+        reason: null,
+      });
+    },
+  );
+
+  it.each([['true'], [1], ['sí']])(
+    'acknowledged %j no confirma: solo true exacto',
+    (acknowledged) => {
+      expect(
+        readReceptionCancellationBody(REF, { acknowledged }).acknowledged,
+      ).toBe(false);
+    },
+  );
+
+  it('un updatedAt que no es texto no viene: no coincide (paso 4)', () => {
+    expect(
+      readReceptionCancellationBody(REF, { updatedAt: 1_760_000_000 })
+        .expectedUpdatedAt,
+    ).toBeUndefined();
+  });
+
+  it('un motivo que no es texto es INVALID_CHARACTERS', () => {
+    fails(
+      () => readReceptionCancellationBody(REF, { reason: 42 }),
+      'INVALID_CHARACTERS',
+      'El formato de los datos contiene caracteres no válidos.',
+    );
+  });
+
+  it('con un motivo que no es texto, la referencia inválida va primero (paso 1)', () => {
+    fails(
+      () => readReceptionCancellationBody('RSV-123', { reason: 42 }),
+      'INVALID_RESERVATION_CODE',
+      'Debe proveer un código de reserva válido para la consulta.',
+    );
   });
 });
