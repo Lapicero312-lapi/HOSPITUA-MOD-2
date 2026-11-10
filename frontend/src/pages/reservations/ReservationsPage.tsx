@@ -447,7 +447,7 @@ function ReservationRow({ reservation }: { reservation: ReservationListItem }) {
       </td>
       <td>
         {reservation.source === 'DIRECT' ? (
-          'Directa'
+          'Directo'
         ) : (
           <>
             OTA

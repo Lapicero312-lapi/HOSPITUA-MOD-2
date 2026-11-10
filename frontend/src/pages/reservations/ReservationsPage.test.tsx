@@ -200,7 +200,7 @@ describe('Pantalla "Consultar reservas"', () => {
           'RSV-3F9A1C7B',
           'Valentina Ospina1144093552',
           '204 · DOBLE',
-          'Directa',
+          'Directo',
           '23/10/2026 → 25/10/2026',
           'Activa',
           'Pendiente de Check-In',
