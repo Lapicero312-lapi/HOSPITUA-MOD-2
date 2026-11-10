@@ -48,6 +48,7 @@ describe('GetReservationDetail (plan de check-view-reservation, C3; T016 y T017)
       ['solo espacios', '   '],
       ['sin el prefijo', '3F9A1C7B'],
       ['en minúscula', 'rsv-3f9a1c7b'],
+      ['con los hexadecimales en minúscula', 'RSV-3f9a1c7b'],
       ['con 7 caracteres', 'RSV-3F9A1C7'],
       ['con 9 caracteres', 'RSV-3F9A1C7B0'],
       ['con un carácter que no es hexadecimal', 'RSV-3F9A1C7G'],
