@@ -138,7 +138,7 @@ describe('Pantalla "Detalle de la reserva"', () => {
 
       await screen.findByRole('heading', { name: 'Reserva RSV-3F9A1C7B' });
       expect(screen.getByText('Activa')).toBeInTheDocument();
-      expect(fieldOf('Estadía y tarifa', 'Canal')).toBe('Directa');
+      expect(fieldOf('Estadía y tarifa', 'Canal')).toBe('Directo');
       expect(fieldOf('Estadía y tarifa', 'Fecha de entrada')).toBe(
         '23/10/2026',
       );
@@ -162,7 +162,7 @@ describe('Pantalla "Detalle de la reserva"', () => {
         'Estado en la reserva',
       ]);
       expect(roomRows()).toEqual([
-        ['204', 'DOBLE', '3', '713.000,00 COP', 'Por llegar'],
+        ['204', 'DOBLE', '3', '713.000,00 COP', 'Esperada'],
       ]);
     });
 
@@ -411,9 +411,9 @@ describe('Pantalla "Detalle de la reserva"', () => {
   });
 
   it.each([
-    ['EXPECTED', 'Por llegar'],
-    ['CHECKED_IN', 'En el hotel'],
-    ['CHECKED_OUT', 'Ya salió'],
+    ['EXPECTED', 'Esperada'],
+    ['CHECKED_IN', 'Con Check-In'],
+    ['CHECKED_OUT', 'Con Check-Out'],
     ['NOT_ARRIVED', 'No llegó'],
   ] as const)(
     'el estado %s de una habitación se muestra "%s"',
@@ -448,6 +448,19 @@ describe('Pantalla "Detalle de la reserva"', () => {
     expect(await screen.findByRole('status')).toHaveTextContent(
       'En conflicto: El cambio de Booking no se pudo aplicar',
     );
+    expect(
+      screen.queryByRole('link', { name: 'Asignar habitación' }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('con una habitación sin asignar pero sin conflicto no hay "Asignar habitación": la acción es solo para resolver un conflicto', async () => {
+    renderDetail({
+      ...BOOKING,
+      rooms: [{ ...BOOKING.rooms[0], roomId: null, roomNumber: null }],
+    });
+
+    await screen.findByRole('table');
+    expect(roomRows()[0][0]).toBe('Sin asignar');
     expect(
       screen.queryByRole('link', { name: 'Asignar habitación' }),
     ).not.toBeInTheDocument();

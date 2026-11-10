@@ -23,9 +23,9 @@ const STATUS_LABELS: Record<DetailStatus, string> = {
 };
 
 const STAY_STATUS_LABELS: Record<StayStatus, string> = {
-  EXPECTED: 'Por llegar',
-  CHECKED_IN: 'En el hotel',
-  CHECKED_OUT: 'Ya salió',
+  EXPECTED: 'Esperada',
+  CHECKED_IN: 'Con Check-In',
+  CHECKED_OUT: 'Con Check-Out',
   NOT_ARRIVED: 'No llegó',
 };
 
@@ -141,7 +141,7 @@ function Detail({ reservation }: { reservation: ReservationDetail }) {
         <dl className="detail-fields">
           <Field label="Canal">
             {reservation.source === 'DIRECT'
-              ? 'Directa'
+              ? 'Directo'
               : `OTA · ${reservation.otaName ?? EMPTY}`}
           </Field>
           {reservation.source === 'OTA' && (
