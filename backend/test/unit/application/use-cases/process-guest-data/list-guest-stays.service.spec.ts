@@ -37,7 +37,10 @@ function serviceWith(total: number, rows: GuestStayRow[] = []) {
   const count = vi.fn<GuestStayQuery['count']>().mockResolvedValue(total);
   const findPage = vi.fn<GuestStayQuery['findPage']>().mockResolvedValue(rows);
   return {
-    service: new ListGuestStaysService({ count, findPage }, CLOCK),
+    service: new ListGuestStaysService(
+      { count, findPage, findDetail: vi.fn() },
+      CLOCK,
+    ),
     count,
     findPage,
   };

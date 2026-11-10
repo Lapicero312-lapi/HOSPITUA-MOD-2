@@ -13,23 +13,12 @@ import {
   INVENTORY_UNAVAILABLE,
   MAINTENANCE_CHECK_UNAVAILABLE,
 } from '../../../../../src/domain/shared/error-codes.js';
+import { ROOM_201, ROOM_202 } from '../../../../support/rooms.js';
 
 /**
  * Datos de las pruebas del plan ("Pruebas por escenario", T011), que dice de dónde sale cada uno: el
- * ejemplo de C1, con el reloj simulado en el 2026-10-11. Los `id` son UUID cualesquiera.
+ * ejemplo de C1, con el reloj simulado en el 2026-10-11.
  */
-const ROOM_201: Room = {
-  id: randomUUID(),
-  roomNumber: '201',
-  categoryRoom: 'DOBLE',
-  maxCapacity: 2,
-};
-const ROOM_202: Room = {
-  id: randomUUID(),
-  roomNumber: '202',
-  categoryRoom: 'DOBLE',
-  maxCapacity: 3,
-};
 const TODAY = '2026-10-11';
 /** La salida de la ventana: hoy más 30 días, así que cubre los siguientes 30 días contando hoy. */
 const WINDOW_END = '2026-11-10';

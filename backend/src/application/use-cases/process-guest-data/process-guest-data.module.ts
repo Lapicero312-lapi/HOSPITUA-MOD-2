@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
+import { GetGuestStayDetailService } from './get-guest-stay-detail.service.js';
 import { ListGuestStaysService } from './list-guest-stays.service.js';
+import { GET_GUEST_STAY_DETAIL } from './ports/in/get-guest-stay-detail.port.js';
 import { LIST_GUEST_STAYS } from './ports/in/list-guest-stays.port.js';
 import { REGISTER_GUEST_MOVEMENTS } from './ports/in/register-guest-movements.port.js';
 import { SELECT_FOREIGN_MOVEMENTS } from './ports/in/select-foreign-movements.port.js';
@@ -22,11 +24,13 @@ import { SelectForeignMovementsService } from './select-foreign-movements.servic
       useClass: SelectForeignMovementsService,
     },
     { provide: LIST_GUEST_STAYS, useClass: ListGuestStaysService },
+    { provide: GET_GUEST_STAY_DETAIL, useClass: GetGuestStayDetailService },
   ],
   exports: [
     REGISTER_GUEST_MOVEMENTS,
     SELECT_FOREIGN_MOVEMENTS,
     LIST_GUEST_STAYS,
+    GET_GUEST_STAY_DETAIL,
   ],
 })
 export class ProcessGuestDataModule {}
