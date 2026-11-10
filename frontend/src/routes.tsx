@@ -5,6 +5,7 @@ import { HomePage } from './pages/HomePage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
 import { NotFoundPage } from './pages/NotFoundPage.tsx';
 import { OtasPage } from './pages/otas/OtasPage.tsx';
+import { ReservationsPage } from './pages/reservations/ReservationsPage.tsx';
 import { RoomsPage } from './pages/rooms/RoomsPage.tsx';
 import { RouteErrorPage } from './pages/RouteErrorPage.tsx';
 
@@ -24,6 +25,7 @@ export const routes: RouteObject[] = [
     errorElement: <RouteErrorPage />,
     children: [
       { index: true, element: <HomePage /> },
+      { path: 'reservas', element: <ReservationsPage /> },
       { path: 'habitaciones', element: <RoomsPage /> },
       { path: 'agencias', element: <OtasPage /> },
       { path: '*', element: <NotFoundPage /> },
