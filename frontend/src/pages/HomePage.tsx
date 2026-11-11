@@ -14,6 +14,11 @@ export function HomePage() {
           </Link>
         </li>
         <li>
+          <Link className="home-link" to="/tarifas">
+            Tarifas
+          </Link>
+        </li>
+        <li>
           <Link className="home-link" to="/agencias">
             Agencias OTA
           </Link>
