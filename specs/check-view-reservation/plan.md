@@ -742,7 +742,7 @@ interface DailyMessageRepository {    // se agregan tres métodos
   recordFailure(messageId: string, attempts: number, status: 'PENDING' | 'FAILED', nextAttemptAt: Date | null): Promise<void>;
 }
 
-// UnpublishedDailyMessage: messageId, kind, payload, publishStatus ('PENDING' | 'FAILED'), attempts y nextAttemptAt.
+// UnpublishedDailyMessage: messageId, operationalDate, sequenceNumber, kind, payload, publishStatus ('PENDING' | 'FAILED'), attempts y nextAttemptAt.
 ```
 
 **`RabbitDailyListPublisher` (T025).**
