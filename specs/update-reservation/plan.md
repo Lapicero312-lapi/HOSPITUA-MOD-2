@@ -330,8 +330,16 @@ interface ReservationStatusService {
   transition(tx: Transaction, reservation: Reservation, target: ReservationStatus, reason: StatusReason): Promise<Reservation>;
   // Cambia el stayStatus de una habitación, recalcula blocks_inventory y la guarda.
   transitionStay(tx: Transaction, reservation: Reservation, roomId: string, target: StayStatus): Promise<Reservation>;
+  // Cierre del día de una reserva IN_PROGRESS: pasa a NOT_ARRIVED todas sus habitaciones en EXPECTED,
+  // también las que no tienen habitación asignada, y la guarda. El status no cambia (FR-019).
+  markNotArrived(tx: Transaction, reservation: Reservation): Promise<Reservation>;
 }
 ```
+
+- `markNotArrived` existe porque `transitionStay` elige la habitación por su `roomId`, y una reserva de
+  Booking en conflicto puede estar `IN_PROGRESS` con una habitación sin asignar (`roomId` vacío) que
+  también debe pasar a `NOT_ARRIVED`. Con una reserva que no está en `IN_PROGRESS`, lanza
+  `INVALID_STATUS_TRANSITION`: en `ACTIVE` o `PENDING` lo hace `transition(NO_SHOW)`.
 
 **Transiciones permitidas** (las vive el dominio; cualquier otra se rechaza):
 
@@ -1008,6 +1016,54 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
 
     `notes` de más de 500 caracteres es `NOTES_TOO_LONG` (paso 6). Como el dominio lanza estos códigos, sus
     mensajes están en `domain/shared/error-codes.ts`.
+13. **`CloseDay` (T021 y T023).** Puerto de entrada en `ports/in/close-day.port.ts`:
+
+    ```typescript
+    type CloseDaySummary = {
+      operationalDate: string;
+      noShow: number;       // ACTIVE o PENDING que pasaron a NO_SHOW
+      notArrived: number;   // IN_PROGRESS con habitaciones que pasaron a NOT_ARRIVED y siguen IN_PROGRESS
+      completed: number;    // IN_PROGRESS con habitaciones que pasaron a NOT_ARRIVED y quedaron COMPLETED
+      ignored: number;      // todo el grupo ingresó, o la reserva cambió antes de bloquearla
+      failed: number;       // su transacción se revirtió (FR-022)
+    };
+
+    interface CloseDay {
+      // El día operativo que terminó, en AAAA-MM-DD. Nunca lanza por una reserva: la cuenta en failed.
+      execute(operationalDate: string): Promise<CloseDaySummary>;
+    }
+    ```
+
+    Pasos de `execute`:
+    1. **Selección por lotes:** `ReservationQueryPort.findToClose(operationalDate, afterRef, limit)` devuelve
+       las `reservationRef` de las reservas con `startDate` igual al día y en `ACTIVE`, `PENDING` o
+       `IN_PROGRESS`, ordenadas por `reservationRef`, mayores que `afterRef` y como mucho `limit`
+       (`CLOSE_DAY_BATCH_SIZE`). El lote siguiente empieza después de la última referencia del anterior:
+       no se pagina con `OFFSET`, porque las reservas ya cerradas salen de la selección y correrían las
+       páginas.
+    2. **Una transacción por reserva:** bloquea la reserva con `ReservationRepository.lockByRef` y vuelve a
+       revisar su estado y su `startDate`, porque pudo cambiar entre la selección y el bloqueo. Si ya no
+       existe, cambió de fecha o ya no está en `ACTIVE`, `PENDING` ni `IN_PROGRESS`, se ignora.
+    3. **`ACTIVE` o `PENDING`:** `transition(NO_SHOW, DAY_CLOSE_NO_SHOW)` (también pasa sus habitaciones a
+       `NOT_ARRIVED`); `DailyListChangeRecorder.record(tx, antes, después, operationalDate)` con el día
+       cerrado, no con el de hoy (T023; el aviso `REMOVED` por `NO_SHOW` sale solo si la reserva pertenecía
+       a la lista); y, si es de Booking (`source = OTA`), `OtaNoShowReporter.record(tx, reserva)`.
+    4. **`IN_PROGRESS` con alguna habitación en `EXPECTED`:** `markNotArrived` y, si ya no le queda ninguna
+       `CHECKED_IN`, `transition(COMPLETED, DAY_CLOSE_PARTIAL)`. No avisa a la lista (punto abierto 1).
+       Si no le queda ninguna en `EXPECTED`, se ignora (escenario 4).
+    5. **Un error en una reserva** revierte solo su transacción, deja una advertencia en el log con su
+       `reservationRef` y el motivo (sin datos personales) y se sigue con la siguiente (FR-022). Un error
+       al seleccionar un lote sí detiene el cierre: es la pérdida de la base de datos, que maneja
+       `CloseDayJob` (T022).
+    6. Al terminar, deja en el log el resumen, solo con cifras, y lo devuelve.
+
+    Quedan fuera de `CloseDay`: la hora, el bloqueo asesor, la recuperación al arrancar y las alertas de
+    zona horaria y de pérdida de la base de datos (`CloseDayJob`, T022); el aviso a `AriChangeRecorder`
+    (T028); y el borrado de las `idempotency_key` vencidas, que se agrega con su repositorio
+    (`generate-direct-reservation`, T019).
+
+    `CLOSE_DAY_BATCH_SIZE` llega por inyección (`@Inject(CLOSE_DAY_BATCH_SIZE)`), desde la configuración
+    validada.
 
 ## Puntos abiertos
 
