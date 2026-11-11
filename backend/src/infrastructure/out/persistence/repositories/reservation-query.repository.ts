@@ -5,9 +5,11 @@ import {
   type BlockingRoom,
   type DailyListArrival,
   type ExpectedArrivalsAndDepartures,
+  type NightBlockingRooms,
   type ReservationListFilters,
   type ReservationListPage,
   type ReservationQueryPort,
+  type StayRangeReservation,
 } from '../../../../application/ports/out/reservation-query.port.js';
 import type { Transaction } from '../../../../application/ports/out/transaction.js';
 import { reservationToDomain } from '../mappers/reservation.mapper.js';
@@ -46,6 +48,38 @@ export class TypeOrmReservationQuery implements ReservationQueryPort {
       roomId: row.room_id,
       reservationRef: row.reservation_ref,
     }));
+  }
+
+  async blockingRoomsByCategory(
+    categoryRoom: string,
+    dateFrom: string,
+    dateTo: string,
+  ): Promise<NightBlockingRooms[]> {
+    // Una fila por noche de [dateFrom, dateTo) (date + entero = la noche), aunque ninguna habitación la
+    // ocupe. La estadía [start_date, end_date) ocupa la noche si empieza ese día o antes y sale después. El
+    // uuid se agrega como texto para que el driver devuelva un arreglo; el orden del texto es el del uuid.
+    const rows: { night: string; room_ids: string[] }[] =
+      await this.dataSource.query(
+        `SELECT to_char(n.night, 'YYYY-MM-DD') AS night,
+                coalesce(
+                  array_agg(DISTINCT rr.room_id::text ORDER BY rr.room_id::text)
+                    FILTER (WHERE rr.room_id IS NOT NULL),
+                  '{}'
+                ) AS room_ids
+         FROM (
+           SELECT $2::date + i AS night
+           FROM generate_series(0, $3::date - $2::date - 1) AS i
+         ) n
+         LEFT JOIN reservation_room rr
+           ON rr.blocks_inventory
+          AND rr.category_room = $1
+          AND rr.start_date <= n.night
+          AND rr.end_date > n.night
+         GROUP BY n.night
+         ORDER BY n.night`,
+        [categoryRoom, dateFrom, dateTo],
+      );
+    return rows.map((row) => ({ date: row.night, roomIds: row.room_ids }));
   }
 
   async listReservations(
@@ -142,6 +176,59 @@ export class TypeOrmReservationQuery implements ReservationQueryPort {
       expectedArrivals: row.expected_arrivals,
       expectedDepartures: row.expected_departures,
     };
+  }
+
+  async findByStayRange(
+    dateFrom: string,
+    dateTo: string,
+    roomId: string | null,
+  ): Promise<StayRangeReservation[]> {
+    // Una fila por habitación. El cruce es el de C1: llega a más tardar el último día y sale después del
+    // primero. Con `roomId`, la reserva debe tener esa habitación, pero salen todas las suyas.
+    const rows: {
+      reservation_ref: string;
+      status: StayRangeReservation['status'];
+      start_date: string;
+      end_date: string;
+      room_id: string | null;
+      room_number: string | null;
+      category_room: string;
+    }[] = await this.dataSource.query(
+      `SELECT r.reservation_ref, r.status, r.start_date::text AS start_date, r.end_date::text AS end_date,
+              rr.room_id::text AS room_id, rr.room_number, rr.category_room
+       FROM reservation r
+       JOIN reservation_room rr ON rr.reservation_id = r.id
+       WHERE r.status IN ('PENDING', 'ACTIVE', 'IN_PROGRESS')
+         AND r.start_date <= $2::date
+         AND r.end_date > $1::date
+         AND ($3::uuid IS NULL OR EXISTS (
+           SELECT 1 FROM reservation_room own
+           WHERE own.reservation_id = r.id AND own.room_id = $3::uuid))
+       ORDER BY r.start_date, r.reservation_ref, rr.room_number, rr.id`,
+      [dateFrom, dateTo, roomId],
+    );
+    const byRef = new Map<string, StayRangeReservation>();
+    for (const row of rows) {
+      // `reservation_ref` es `char(12)`: llega sin espacios de relleno porque mide 12 exactos.
+      let reservation = byRef.get(row.reservation_ref);
+      if (reservation === undefined) {
+        reservation = {
+          reservationRef: row.reservation_ref,
+          status: row.status,
+          startDate: row.start_date,
+          endDate: row.end_date,
+          rooms: [],
+        };
+        byRef.set(row.reservation_ref, reservation);
+      }
+      reservation.rooms.push({
+        roomId: row.room_id,
+        roomNumber: row.room_number,
+        categoryRoom: row.category_room,
+      });
+    }
+    // Un `Map` conserva el orden de inserción: el de la consulta.
+    return [...byRef.values()];
   }
 
   /** El nombre de la agencia de cada reserva `OTA` de la página. */

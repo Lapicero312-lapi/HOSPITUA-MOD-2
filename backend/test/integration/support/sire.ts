@@ -1,5 +1,7 @@
+import { Writable } from 'node:stream';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { Logger, PARAMS_PROVIDER_TOKEN } from 'nestjs-pino';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { DataSource } from 'typeorm';
@@ -18,6 +20,7 @@ import {
 } from '../../../src/application/use-cases/process-guest-data/ports/in/register-guest-movements.port.js';
 import { configureApp } from '../../../src/configure-app.js';
 import type { Reservation } from '../../../src/domain/reservation/reservation.js';
+import { pinoHttpOptions } from '../../../src/infrastructure/shared/logging.options.js';
 import { aDirectReservation, aDirectRoom } from '../../support/builders.js';
 import { integrationEnv, truncateAllTables } from './database.js';
 
@@ -34,17 +37,34 @@ export type SireStay = {
  * La aplicación completa (`AppModule`) por HTTP, con PostgreSQL y RabbitMQ reales y la configuración `SIRE_*`
  * por defecto de pruebas (`DEV-HOTEL`, `DEV-CIUDAD`, tabulador, `dd/MM/yyyy`, CRLF y `utf-8`). Empieza con
  * la base vacía.
+ *
+ * Con `onLog`, los logs salen como en producción (`main.ts`: todo lo que se escribe con el `Logger` de Nest
+ * pasa por nestjs-pino), pero en el nivel más bajo (`trace`), para que ninguno quede sin revisar, y cada
+ * escritura llega a `onLog` en vez de a la salida. Sin `onLog`, la aplicación no escribe logs.
  */
-export async function startSireApp() {
+export async function startSireApp(onLog?: (written: string) => void) {
   // AppConfigModule lee el entorno al importarse: AppModule se importa después de asignarlo.
   Object.assign(process.env, { NODE_ENV: 'test', ...integrationEnv() });
   const { AppModule } = await import('../../../src/app.module.js');
-  const moduleRef = await Test.createTestingModule({
-    imports: [AppModule],
-  }).compile();
-  const app: INestApplication<App> = moduleRef.createNestApplication({
-    logger: false,
-  });
+  const builder = Test.createTestingModule({ imports: [AppModule] });
+  if (onLog !== undefined) {
+    const destination = new Writable({
+      write(chunk: Buffer, _encoding, done) {
+        onLog(chunk.toString());
+        done();
+      },
+    });
+    builder
+      .overrideProvider(PARAMS_PROVIDER_TOKEN)
+      .useValue({ pinoHttp: [pinoHttpOptions('trace'), destination] });
+  }
+  const moduleRef = await builder.compile();
+  const app: INestApplication<App> = moduleRef.createNestApplication(
+    onLog === undefined ? { logger: false } : { bufferLogs: true },
+  );
+  if (onLog !== undefined) {
+    app.useLogger(app.get(Logger));
+  }
   configureApp(app);
   await app.init();
   const dataSource = app.get(DataSource);

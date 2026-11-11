@@ -43,7 +43,7 @@ const DATE_FORMAT = /^\d{4}-\d{2}-\d{2}$/;
  */
 const SEARCH_FORMAT = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9-]{1,40}$/;
 /** UUID en su forma estándar `8-4-4-4-12` (hexadecimal), de cualquier versión. */
-const UUID_FORMAT =
+export const UUID_FORMAT =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Una fecha `AAAA-MM-DD` que existe en el calendario. */
@@ -194,8 +194,8 @@ export function readReservationListQuery(
   };
 }
 
-/** Las dos fechas o ninguna; ya tienen formato válido. */
-function readStayRange(
+/** Las dos fechas o ninguna; ya tienen formato válido. También la usa la consulta del Módulo 1 (C5). */
+export function readStayRange(
   dateFrom: unknown,
   dateTo: unknown,
 ): ReservationListQuery['stayRange'] {
@@ -228,7 +228,7 @@ function errorOf(error: ErrorCode): BusinessError {
  * `Date` no la puede crear; con un día que ese mes no tiene (por ejemplo `2026-02-30`), la corre al mes
  * siguiente y deja de coincidir. Se lee en UTC para que no dependa de la zona horaria del computador.
  */
-function isRealDate(value: unknown): boolean {
+export function isRealDate(value: unknown): boolean {
   if (typeof value !== 'string' || !DATE_FORMAT.test(value)) {
     return false;
   }
