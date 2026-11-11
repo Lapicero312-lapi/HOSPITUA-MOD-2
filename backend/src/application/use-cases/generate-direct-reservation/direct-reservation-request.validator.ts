@@ -9,6 +9,8 @@ import {
   GUEST_DATA_REQUIRED,
   INVALID_CATEGORY,
   INVALID_CHARACTERS,
+  INVALID_EMAIL,
+  INVALID_GUEST_COUNT,
   INVALID_RESERVATION_DATES,
   INVALID_ROOM_COUNT,
   INVALID_ROOM_ID,
@@ -17,7 +19,6 @@ import {
 } from '../../../domain/shared/error-codes.js';
 import { isValidCategoryRoom } from '../consult-room-inventory/category-room.validator.js';
 import { isValidRoomId } from '../consult-room-inventory/room-id.validator.js';
-import { INVALID_EMAIL, INVALID_GUEST_COUNT } from './error-codes.js';
 import { readGuestDocument } from './guest-document.validator.js';
 
 type ErrorCode = { readonly code: string; readonly message: string };
