@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   ApiError,
+  apiFile,
   apiRequest,
   CONNECTION_ERROR,
   CONNECTION_ERROR_MESSAGE,
@@ -127,5 +128,78 @@ describe('apiRequest', () => {
     await expect(
       apiRequest('/algo', { method: 'POST' }),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe('apiFile', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', fetchMock);
+  });
+
+  afterEach(() => {
+    fetchMock.mockReset();
+    vi.unstubAllGlobals();
+  });
+
+  it('envía las mismas cabeceras que apiRequest, pide texto y devuelve la respuesta para leer el archivo y sus cabeceras', async () => {
+    signIn('Laura Méndez');
+    fetchMock.mockResolvedValue(
+      new Response('línea\r\n', {
+        status: 200,
+        headers: { 'Content-Type': 'text/plain', 'Export-Id': 'E-1' },
+      }),
+    );
+
+    const response = await apiFile('/sire/exports', {
+      method: 'POST',
+      body: { exportKind: 'PERIOD' },
+    });
+
+    expect(await response.text()).toBe('línea\r\n');
+    expect(response.headers.get('Export-Id')).toBe('E-1');
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe('/api/sire/exports');
+    expect(init?.method).toBe('POST');
+    expect(init?.body).toBe('{"exportKind":"PERIOD"}');
+    expect(init?.headers).toMatchObject({
+      Accept: 'text/plain',
+      'X-Client': 'RECEPTIONIST',
+      'X-User': 'Laura Méndez',
+      'Content-Type': 'application/json',
+    });
+  });
+
+  it('un error de la API (JSON) es ApiError con su código, su mensaje y su estado, también un 429', async () => {
+    fetchMock.mockResolvedValue(
+      jsonResponse(
+        {
+          errorCode: 'TOO_MANY_REQUESTS',
+          message: 'Se superó el límite de solicitudes de exportación.',
+          timestamp: '2026-10-11T15:00:00.000Z',
+          path: '/api/sire/exports',
+        },
+        429,
+      ),
+    );
+
+    const error = await apiFile('/sire/exports', { method: 'POST' }).catch(
+      (failure: unknown) => failure,
+    );
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({
+      errorCode: 'TOO_MANY_REQUESTS',
+      message: 'Se superó el límite de solicitudes de exportación.',
+      status: 429,
+    });
+  });
+
+  it('sin respuesta del servidor es CONNECTION_ERROR', async () => {
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+
+    await expect(apiFile('/sire/exports')).rejects.toMatchObject({
+      errorCode: CONNECTION_ERROR,
+      message: CONNECTION_ERROR_MESSAGE,
+    });
   });
 });

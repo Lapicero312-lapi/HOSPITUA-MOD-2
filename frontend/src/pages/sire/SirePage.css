@@ -1,0 +1,250 @@
+/*
+ * Pantalla "Exportar archivo SIRE". Todo cuelga de `.sire`, así no cambia ninguna otra pantalla. Usa los
+ * colores base de `index.css`: el panel del periodo, el de los movimientos y la vista previa encima.
+ */
+
+.sire {
+  --sire-radius: 12px;
+  --sire-shadow:
+    0 1px 2px rgba(31, 41, 51, 0.04), 0 8px 24px rgba(31, 41, 51, 0.06);
+  --sire-row-hover: #f0f6fb;
+  --sire-error-background: #fef3f2;
+  --sire-notice-background: #e5f4ea;
+  --sire-notice: #1d6b3f;
+  --sire-backdrop: rgba(31, 41, 51, 0.45);
+  max-width: 72rem;
+}
+
+.sire-title {
+  margin: 0 0 1rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.sire-subtitle {
+  margin: 0;
+  padding: 1rem 1.25rem 0.75rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.sire-panel {
+  margin-bottom: 1.25rem;
+  overflow: hidden;
+  background-color: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--sire-radius);
+  box-shadow: var(--sire-shadow);
+}
+
+/* El periodo: las dos fechas, los atajos y la descarga del periodo, en una fila que se acomoda. */
+.sire-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+}
+
+.sire-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.8125rem;
+  color: var(--color-muted);
+}
+
+.sire-download-all {
+  margin-left: auto;
+}
+
+.sire-primary {
+  background-color: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #fff;
+}
+
+.sire button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.sire-notice {
+  margin: 0;
+  padding: 0.75rem 1.25rem;
+  background-color: var(--sire-notice-background);
+  color: var(--sire-notice);
+  font-size: 0.875rem;
+}
+
+.sire-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.sire-table th {
+  padding: 0.75rem 1.25rem;
+  background-color: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.sire-table td {
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid var(--color-border);
+  vertical-align: middle;
+}
+
+.sire-table tbody tr:hover {
+  background-color: var(--sire-row-hover);
+}
+
+.sire-ref,
+.sire-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8125rem;
+}
+
+.sire-guest,
+.sire-movement {
+  display: block;
+  font-weight: 600;
+}
+
+.sire-secondary {
+  display: block;
+  color: var(--color-muted);
+  font-size: 0.8125rem;
+}
+
+.sire-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.sire-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 0.75rem 1.25rem;
+  font-size: 0.875rem;
+}
+
+.sire-pagination > span:first-child {
+  margin-right: auto;
+  color: var(--color-muted);
+}
+
+/* Sin periodo, mientras carga o sin extranjeros: un mensaje centrado dentro del panel. */
+.sire-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 2.5rem 1.25rem;
+  color: var(--color-muted);
+}
+
+.sire-state--loading::before {
+  content: '';
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: sire-spin 0.8s linear infinite;
+}
+
+@keyframes sire-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sire-state--loading::before {
+    animation: none;
+  }
+}
+
+/* La vista previa: una ventana encima de la pantalla. */
+.sire-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background-color: var(--sire-backdrop);
+}
+
+.sire-dialog {
+  width: min(44rem, 100%);
+  max-height: calc(100vh - 2rem);
+  overflow: auto;
+  padding-bottom: 1rem;
+  background-color: var(--color-background);
+  border-radius: var(--sire-radius);
+  box-shadow: var(--sire-shadow);
+}
+
+.sire-dialog > .sire-secondary {
+  padding: 0 1.25rem 0.75rem;
+}
+
+.sire-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  margin: 0 0 0.75rem;
+  padding: 0 1.25rem;
+}
+
+.sire-meta dt {
+  color: var(--color-muted);
+  font-size: 0.75rem;
+}
+
+.sire-meta dd {
+  margin: 0;
+  font-weight: 600;
+}
+
+.sire-line {
+  margin: 0 1.25rem 1rem;
+  padding: 0.75rem;
+  overflow-x: auto;
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  white-space: pre;
+}
+
+.sire-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 0 1.25rem;
+}
+
+/* El mensaje de error (`ErrorMessage`) dentro de un panel o de la vista previa. */
+.sire-panel .error-message,
+.sire-dialog .error-message {
+  margin: 0 0 0.75rem;
+  padding: 1rem 1.25rem;
+  background-color: var(--sire-error-background);
+  border-left: 4px solid var(--color-error);
+}

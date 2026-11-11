@@ -8,6 +8,7 @@ import { OtasPage } from './pages/otas/OtasPage.tsx';
 import { CancelReservationPage } from './pages/reservations/cancel/CancelReservationPage.tsx';
 import { RoomsPage } from './pages/rooms/RoomsPage.tsx';
 import { RouteErrorPage } from './pages/RouteErrorPage.tsx';
+import { SirePage } from './pages/sire/SirePage.tsx';
 
 /**
  * Las rutas de la aplicación. Cada caso de uso agrega las de sus pantallas dentro de `Layout`, que
@@ -25,6 +26,7 @@ export const routes: RouteObject[] = [
     errorElement: <RouteErrorPage />,
     children: [
       { index: true, element: <HomePage /> },
+      { path: 'sire', element: <SirePage /> },
       { path: 'habitaciones', element: <RoomsPage /> },
       { path: 'agencias', element: <OtasPage /> },
       {
