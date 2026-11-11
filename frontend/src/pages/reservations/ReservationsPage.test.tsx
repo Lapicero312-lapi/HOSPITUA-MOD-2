@@ -329,15 +329,6 @@ describe('Pantalla "Consultar reservas"', () => {
         screen.getByRole('link', { name: 'Ver detalle de RSV-3F9A1C7B' }),
       ).toHaveAttribute('href', '/reservas/RSV-3F9A1C7B');
     });
-
-    it('"+ Nueva reserva directa" lleva a su pantalla', async () => {
-      renderAt('/reservas');
-
-      await screen.findByRole('table');
-      expect(
-        screen.getByRole('link', { name: '+ Nueva reserva directa' }),
-      ).toHaveAttribute('href', '/reservas/nueva');
-    });
   });
 
   describe('el resumen del día (FR-005a)', () => {

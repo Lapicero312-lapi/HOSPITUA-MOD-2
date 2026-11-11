@@ -128,9 +128,6 @@ export function ReservationsPage() {
     <section className="reservations">
       <header className="reservations-header">
         <h1 className="reservations-title">Consultar reservas</h1>
-        <Link className="reservations-new" to="/reservas/nueva">
-          + Nueva reserva directa
-        </Link>
       </header>
       <DaySummaryPanel />
       <Filters key={filters.search} filters={filters} onChange={change} />
