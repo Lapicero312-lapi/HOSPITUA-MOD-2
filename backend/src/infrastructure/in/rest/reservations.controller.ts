@@ -8,6 +8,14 @@ import {
   Post,
   Query,
 } from '@nestjs/common';
+import {
+  ApiBadRequestResponse,
+  ApiBody,
+  ApiHeader,
+  ApiOkResponse,
+  ApiOperation,
+  ApiParam,
+} from '@nestjs/swagger';
 import { readReceptionCancellationBody } from '../../../application/use-cases/cancel-reservation/cancel-request.validator.js';
 import {
   CANCEL_RESERVATION,
@@ -31,9 +39,16 @@ import {
   type ListReservations,
   type ReservationListResult,
 } from '../../../application/use-cases/check-view-reservation/ports/in/list-reservations.port.js';
+import { ApiErrorBody } from '../../shared/api-error.js';
 import { ClientHeader, UserHeader } from './request-headers.js';
 import {
+  CANCELLATION_ERROR_EXAMPLES,
+  CANCELLATION_EXAMPLE,
+  CANCELLATION_REQUEST_EXAMPLE,
+  RESERVATION_REF_PATTERN,
   type ReservationCancellationBody,
+  ReservationCancellationDto,
+  ReservationCancellationRequestDto,
   toReservationCancellationBody,
 } from './reservation-cancellation.dto.js';
 import {
@@ -130,6 +145,43 @@ export class ReservationsController {
    */
   @Post('{:reservationRef}/cancellation')
   @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'La Recepcionista cancela una reserva directa en `ACTIVE` o `PENDING`: la reserva pasa a `CANCELLED`, se registra su `Cancellation` y, si estaba en la lista del día, se avisa al Módulo 1 (`REMOVED`). No se puede deshacer y no tiene efectos financieros. Una reserva de Booking no se cancela aquí: su cancelación llega por el feed de Channex (B, sin ruta).',
+  })
+  @ApiParam({
+    name: 'reservationRef',
+    description:
+      'La referencia de la reserva: `RSV-` y 8 hexadecimales en mayúscula.',
+    schema: { type: 'string', pattern: RESERVATION_REF_PATTERN },
+    example: 'RSV-3F9A1C7B',
+  })
+  @ApiHeader({
+    name: 'X-User',
+    required: true,
+    description:
+      'La Recepcionista que cancela (máximo 100 caracteres): se guarda en `processed_by` y sale como `processedBy`.',
+  })
+  @ApiBody({
+    type: ReservationCancellationRequestDto,
+    examples: {
+      PLAN: {
+        summary: 'El ejemplo del contrato A del plan',
+        value: CANCELLATION_REQUEST_EXAMPLE,
+      },
+    },
+  })
+  @ApiOkResponse({
+    type: ReservationCancellationDto,
+    description: 'La reserva cancelada y su `Cancellation`.',
+    example: CANCELLATION_EXAMPLE,
+  })
+  @ApiBadRequestResponse({
+    type: ApiErrorBody,
+    description:
+      'Falta `X-User` o no es válido, la referencia o el motivo no son válidos, la reserva no existe o es de Booking, falta la confirmación, otro cambio ganó o el estado no admite cancelación, o una excepción inesperada. Nada queda a medias.',
+    examples: CANCELLATION_ERROR_EXAMPLES,
+  })
   async cancel(
     @Param('reservationRef') reservationRef = '',
     @UserHeader() processedBy: string,
