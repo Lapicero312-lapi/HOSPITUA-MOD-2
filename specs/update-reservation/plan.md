@@ -282,6 +282,7 @@ tarifas que el solicitante vio:
 | `RECALCULATION_UNAVAILABLE` | El Módulo 3 no responde al recotizar | "No se pudo calcular la nueva tarifa en este momento. Intente más tarde." |
 | `RATE_CHANGED` | La tarifa cambió entre la vista previa y la confirmación | "La tarifa cambió, vuelva a cotizar." |
 | `INVENTORY_UNAVAILABLE`, `MAINTENANCE_CHECK_UNAVAILABLE`, `INVALID_ROOM_ID` | Fallos del Módulo 1 o `roomId` inexistente | Los de `consult-room-inventory` y `consult-maintenance-calendar` |
+| `INVALID_GUEST_COUNT`, `GUEST_DATA_REQUIRED`, `INVALID_DOCUMENT_TYPE`, `INVALID_EMAIL` | `guestCount` que no es un número entero, o un titular incompleto, con un tipo de documento que no existe o con el correo mal formado (regla 7 de la modificación) | Los de `generate-direct-reservation` |
 
 **B3. `PATCH /api/reservations/{reservationRef}/room-assignment`** (FR-025): asigna habitación a las
 habitaciones sin asignar de una reserva de Booking en conflicto. Cabecera `X-User`.
@@ -442,7 +443,8 @@ de negocio".
 | **Cambiada de la misma categoría** | Una quitada y una agregada de la misma categoría: la nueva **hereda** la tarifa (`roomGrossAmount`, `quoteId` y `currency`) de la quitada, sin recotizar, si las fechas no cambian |
 | **Cambiada de categoría** | Una quitada y una agregada de distinta categoría: la nueva se cotiza |
 
-3. **Qué se valida y en qué orden** (la primera falla responde):
+3. **Qué se valida y en qué orden** (la primera falla responde). Antes del paso 1 se revisa la **forma** del
+   cuerpo, sin consultar nada (regla 7):
    1. Reserva existente, `DIRECT` y en `ACTIVE` o `PENDING`.
    2. `updatedAt` coincide.
    3. Fechas: entrada no anterior al día operativo en curso (Clock, no una fecha fija) y salida posterior.
@@ -450,7 +452,7 @@ de negocio".
       el Módulo 1 (`ConsultRoomInventory.byRoomId`).
    5. `guestCount` de cada habitación: al menos 1 y no mayor que su `maxCapacity` (la de la reserva es la
       suma).
-   6. Titular sin `nationality`, y datos y `notes` con caracteres válidos y `notes` de máximo 500.
+   6. Titular sin `nationality`, y datos y `notes` con caracteres válidos y `notes` de máximo 500 (regla 7).
    7. Disponibilidad (`VerifyAvailability`, con `excludeReservationRef`): de **todas las habitaciones que
       quedan** si cambian las fechas, y solo de las **agregadas o cambiadas** en los demás casos. Si una
       falla, se rechaza el cambio completo.
@@ -466,6 +468,33 @@ de negocio".
 6. **Titular**: corrige el `guest` de **esta** reserva (cada reserva tiene su propio titular, plan base),
    con todos sus datos salvo `nationality`. No afecta a otras reservas ni a `guest_data`: la modificación
    solo se permite antes del Check-In.
+7. **Validador del cuerpo de cambio (T008)**, en `modification-request.validator.ts`: dos funciones puras
+   que no consultan nada; B1 y B2 las usan igual. Solo un campo que **no viene** deja el dato como está; un
+   `null` es un valor más, salvo en `notes`, donde borra las observaciones. Un cuerpo que no es un objeto
+   cuenta como `{}`.
+   - **`readModificationRequest(body)`: la forma, antes del paso 1** (como el paso 1 de
+     `generate-direct-reservation`). Lo que no tiene la forma esperada responde con el código del paso al que
+     pertenece, en este orden:
+     1. `startDate` o `endDate` que no es texto: `INVALID_RESERVATION_DATES`. El texto lo revisa el paso 3.
+     2. `rooms` que no es una lista: `INVALID_ROOM_COUNT`. En cada habitación, en el orden en que llegan: un
+        `roomId` que no es un UUID, `INVALID_ROOM_ID`; un `guestCount` que no es un número entero,
+        `INVALID_GUEST_COUNT`. El `roomId` queda en minúsculas, para que el paso 4 vea repetido el mismo UUID
+        escrito con mayúsculas. La cantidad de habitaciones, las repetidas y las personas de menos de 1 las
+        revisan los pasos 4 y 5.
+     3. `updatedAt` que no es texto no da error aquí: no coincide en el paso 2 (`CONCURRENT_UPDATE`), como en
+        `cancel-reservation`.
+   - **`readHolderAndNotes(body)`: el paso 6**, en este orden:
+     1. El titular trae el campo `nationality`, con cualquier valor: `NATIONALITY_NOT_EDITABLE`.
+     2. El titular, si viene, trae **todos** sus datos salvo `nationality` (los reemplaza, regla 6), con las
+        reglas de la creación (puntos 9 y 10 de `generate-direct-reservation`): `firstName`, `lastName`,
+        `documentType` y `documentNumber` obligatorios (`GUEST_DATA_REQUIRED`); el documento como en la
+        creación (`INVALID_DOCUMENT_TYPE` o `INVALID_CHARACTERS`); y cada texto sin caracteres de control y
+        que quepa en su columna (`INVALID_CHARACTERS`). Se guardan sin los espacios de los extremos, y el
+        teléfono y el correo vacíos quedan en `null`.
+     3. `notes` que no es texto, o con caracteres de control que no son el salto de línea ni la tabulación:
+        `INVALID_CHARACTERS`.
+     4. `notes` de más de 500 caracteres: `NOTES_TOO_LONG` (`checkNotes` del dominio).
+     5. `contactEmail` sin la forma `algo@dominio.ext`, sin espacios: `INVALID_EMAIL`.
 
 ### Check-In (FR-015)
 
