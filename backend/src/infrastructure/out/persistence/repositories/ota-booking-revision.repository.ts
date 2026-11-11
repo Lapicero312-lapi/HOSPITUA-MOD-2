@@ -62,6 +62,24 @@ export class TypeOrmOtaBookingRevisionRepository implements OtaBookingRevisionRe
     );
   }
 
+  async findBookingIdOf(
+    reservationId: string,
+    tx?: Transaction,
+  ): Promise<string | null> {
+    // Todas las revisiones de una reserva traen el mismo booking_id: basta la más reciente.
+    const rows: { booking_id: string }[] = await managerFor(
+      this.dataSource,
+      tx,
+    ).query(
+      `SELECT booking_id::text AS booking_id FROM ota_booking_revision
+       WHERE reservation_id = $1
+       ORDER BY processed_at DESC
+       LIMIT 1`,
+      [reservationId],
+    );
+    return rows.length > 0 ? rows[0].booking_id : null;
+  }
+
   async findPendingAck(): Promise<ProcessedRevision[]> {
     const rows = await this.dataSource.manager.find(OtaBookingRevisionTable, {
       where: { ackedAt: IsNull() },

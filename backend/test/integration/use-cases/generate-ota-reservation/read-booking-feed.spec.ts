@@ -131,6 +131,11 @@ describe('ReadBookingFeed y ChannexSyncJob contra PostgreSQL real', () => {
     } as unknown as ChannexSetupState;
     const job = new ChannexSyncJob(
       feedWith(fake.channex),
+      // Sin no-shows pendientes: la prueba es de la lectura del feed.
+      {
+        publish: () =>
+          Promise.resolve({ reported: 0, rejected: 0, pending: 0 }),
+      },
       state,
       new AdvisoryLock(dataSource),
       new SchedulerRegistry(),

@@ -112,6 +112,18 @@ export interface ReservationQueryPort {
   ): Promise<ExpectedArrivalsAndDepartures>;
 
   /**
+   * El cierre del día (`update-reservation`, punto 13): las `reservationRef` de las reservas con
+   * `startDate` igual a `operationalDate` (`AAAA-MM-DD`) y en `ACTIVE`, `PENDING` o `IN_PROGRESS`, mayores
+   * que `afterRef` (o desde la primera si es `null`), en orden de `reservationRef` y como mucho `limit`. Así
+   * el lote siguiente empieza después del anterior aunque las reservas ya cerradas salgan de la selección.
+   */
+  findToClose(
+    operationalDate: string,
+    afterRef: string | null,
+    limit: number,
+  ): Promise<string[]>;
+
+  /**
    * T033: las reservas `PENDING`, `ACTIVE` o `IN_PROGRESS` cuya estadía se cruza con el rango
    * (`start_date <= dateTo` y `end_date > dateFrom`), cada una con todas sus habitaciones (C5 y
    * "Consulta del Módulo 1"). Con `roomId`, solo las que tienen esa habitación entre las suyas, en

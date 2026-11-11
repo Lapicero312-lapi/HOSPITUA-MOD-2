@@ -55,6 +55,15 @@ export interface OtaBookingRevisionRepository {
 
   /** T007: las que quedaron sin `ack`, de la más antigua a la más reciente. */
   findPendingAck(): Promise<ProcessedRevision[]>;
+
+  /**
+   * T011b: el `booking_id` de las revisiones de esa reserva (es el mismo en todas), para el reporte del
+   * no-show (A3), o `null` si la reserva no tiene ninguna revisión.
+   */
+  findBookingIdOf(
+    reservationId: string,
+    tx?: Transaction,
+  ): Promise<string | null>;
 }
 
 /** La revisión ya está registrada (clave primaria de `ota_booking_revision`). */
