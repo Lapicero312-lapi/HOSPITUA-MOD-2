@@ -147,12 +147,6 @@
   text-transform: uppercase;
 }
 
-.detail-table tfoot th,
-.detail-table tfoot td {
-  border-bottom: none;
-  font-weight: 700;
-}
-
 .detail-money {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;

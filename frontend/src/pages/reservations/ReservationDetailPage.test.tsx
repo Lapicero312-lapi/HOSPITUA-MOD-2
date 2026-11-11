@@ -200,47 +200,11 @@ describe('Pantalla "Detalle de la reserva"', () => {
     });
   });
 
-  describe('el total de la reserva (se calcula al mostrarlo)', () => {
-    it('es la suma exacta de las tarifas de las habitaciones, sin errores de decimales', async () => {
-      renderDetail({
-        ...DIRECT,
-        rooms: [
-          {
-            ...DIRECT.rooms[0],
-            roomGrossAmount: { amount: '530000.10', currency: 'COP' },
-          },
-          {
-            ...DIRECT.rooms[0],
-            roomId: 'b5d3f7a9-2c4e-4f6a-9b8c-0d1e2f3a4b5c',
-            roomNumber: '205',
-            roomGrossAmount: { amount: '350000.20', currency: 'COP' },
-          },
-        ],
-      });
+  it('una reserva de Booking no tiene tarifas: una raya en el valor bruto', async () => {
+    renderDetail(BOOKING);
 
-      await screen.findByRole('table');
-      const total = screen.getByRole('rowheader', { name: 'Total' });
-      expect(total.parentElement).toHaveTextContent('880.000,30 COP');
-    });
-
-    it('con una sola habitación, el total es su tarifa', async () => {
-      renderDetail(DIRECT);
-
-      await screen.findByRole('table');
-      expect(
-        screen.getByRole('rowheader', { name: 'Total' }).parentElement,
-      ).toHaveTextContent('713.000,00 COP');
-    });
-
-    it('una reserva de Booking no tiene tarifas: una raya en el valor bruto y ningún total', async () => {
-      renderDetail(BOOKING);
-
-      await screen.findByRole('table');
-      expect(roomRows()[0][3]).toBe('—');
-      expect(
-        screen.queryByRole('rowheader', { name: 'Total' }),
-      ).not.toBeInTheDocument();
-    });
+    await screen.findByRole('table');
+    expect(roomRows()[0][3]).toBe('—');
   });
 
   describe('una reserva de Booking', () => {
@@ -463,26 +427,6 @@ describe('Pantalla "Detalle de la reserva"', () => {
     expect(roomRows()[0][0]).toBe('Sin asignar');
     expect(
       screen.queryByRole('link', { name: 'Asignar habitación' }),
-    ).not.toBeInTheDocument();
-  });
-
-  it('si las habitaciones tienen monedas distintas no se muestra un total: no se suman', async () => {
-    renderDetail({
-      ...DIRECT,
-      rooms: [
-        DIRECT.rooms[0],
-        {
-          ...DIRECT.rooms[0],
-          roomId: 'b5d3f7a9-2c4e-4f6a-9b8c-0d1e2f3a4b5c',
-          roomNumber: '205',
-          roomGrossAmount: { amount: '120.00', currency: 'USD' },
-        },
-      ],
-    });
-
-    await screen.findByRole('table');
-    expect(
-      screen.queryByRole('rowheader', { name: 'Total' }),
     ).not.toBeInTheDocument();
   });
 

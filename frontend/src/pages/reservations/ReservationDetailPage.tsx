@@ -216,7 +216,6 @@ function Field({
 }
 
 function RoomsTable({ rooms }: { rooms: DetailRoom[] }) {
-  const total = totalOf(rooms);
   return (
     <table className="detail-table">
       <thead>
@@ -244,17 +243,6 @@ function RoomsTable({ rooms }: { rooms: DetailRoom[] }) {
           </tr>
         ))}
       </tbody>
-      {total !== null && (
-        <tfoot>
-          <tr>
-            <th scope="row" colSpan={3}>
-              Total
-            </th>
-            <td className="detail-money">{formatMoney(total)}</td>
-            <td />
-          </tr>
-        </tfoot>
-      )}
     </table>
   );
 }
@@ -276,36 +264,6 @@ function GuestFields({ guest }: { guest: DetailGuest }) {
       <Field label="Email">{guest.contactEmail ?? EMPTY}</Field>
     </dl>
   );
-}
-
-/**
- * El total de la reserva: la suma de las tarifas de sus habitaciones. No viene del backend porque no se
- * guarda: se calcula al mostrarlo (plan de `calculate-dynamic-rate`, FR-002). Se suma en centavos con
- * enteros, sin pasar por decimales de coma flotante. `null` si alguna habitación no tiene tarifa (reservas
- * `OTA`) o si las monedas no coinciden.
- */
-function totalOf(rooms: DetailRoom[]): Money | null {
-  const amounts = rooms.map((room) => room.roomGrossAmount);
-  const [first] = amounts;
-  if (
-    first === undefined ||
-    first === null ||
-    amounts.some(
-      (amount) => amount === null || amount.currency !== first.currency,
-    )
-  ) {
-    return null;
-  }
-  let cents = 0n;
-  for (const amount of amounts as Money[]) {
-    const [whole, decimals = ''] = amount.amount.split('.');
-    cents += BigInt(whole) * 100n + BigInt(decimals.padEnd(2, '0').slice(0, 2));
-  }
-  const text = cents.toString().padStart(3, '0');
-  return {
-    amount: `${text.slice(0, -2)}.${text.slice(-2)}`,
-    currency: first.currency,
-  };
 }
 
 /** `713000.00 COP` como `713.000,00 COP`: puntos de miles y coma decimal, sin pasar por un número. */
