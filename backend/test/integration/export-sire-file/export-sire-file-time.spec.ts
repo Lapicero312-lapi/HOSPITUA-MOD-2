@@ -50,7 +50,8 @@ describe('Exportar archivo SIRE: tiempo de respuesta y archivo grande (T016, NFR
 
   /**
    * Carga `count` huéspedes con el prefijo `prefix` en su documento, repartidos en las reservas que ya
-   * existen, con su entrada (`firstEntry` más hasta `spreadDays` días) y su salida tres días después.
+   * existen, con su entrada (`firstEntry` más hasta `spreadDays` días) y, si `withDeparture`, su salida
+   * tres días después.
    */
   async function loadGuests(
     prefix: string,
@@ -58,6 +59,7 @@ describe('Exportar archivo SIRE: tiempo de respuesta y archivo grande (T016, NFR
     nationality: string,
     firstEntry: string,
     spreadDays: number,
+    withDeparture = true,
   ): Promise<void> {
     await sire.dataSource.query(
       `INSERT INTO guest_data
@@ -72,10 +74,13 @@ describe('Exportar archivo SIRE: tiempo de respuesta y archivo grande (T016, NFR
          ON r.n = g % $4::int`,
       [prefix, count, nationality, RESERVATIONS],
     );
-    for (const [movementType, offset] of [
+    const movements = [
       ['ENTRY', 0],
       ['DEPARTURE', 3],
-    ] as const) {
+    ] as const;
+    for (const [movementType, offset] of withDeparture
+      ? movements
+      : movements.slice(0, 1)) {
       await sire.dataSource.query(
         `INSERT INTO migratory_movement (id, guest_data_id, movement_type, movement_date)
          SELECT gen_random_uuid(), gd.id, $2::text,
@@ -143,7 +148,14 @@ describe('Exportar archivo SIRE: tiempo de respuesta y archivo grande (T016, NFR
   }, 120_000);
 
   it('con un movimiento más que SIRE_MAX_RECORDS no se genera el archivo: 400 PERIOD_TOO_LARGE, sin registro', async () => {
-    await loadGuests('Z', 1, 'Francia', '2032-06-01', 1);
+    // Solo su entrada: con la salida serían dos de más, y un tope corrido en uno no se notaría.
+    await loadGuests('Z', 1, 'Francia', '2032-06-01', 1, false);
+    const [{ count }] = await sire.dataSource.query<{ count: number }[]>(
+      `SELECT count(*)::int AS count FROM migratory_movement
+       WHERE movement_date BETWEEN $1::date AND $2::date`,
+      [...YEAR],
+    );
+    expect(count).toBe(MAX_RECORDS + 1);
     const user = newUser();
 
     const res = await sire.exportPeriod(user, ...YEAR).expect(400);
