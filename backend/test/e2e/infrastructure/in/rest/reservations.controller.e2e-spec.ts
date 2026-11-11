@@ -125,6 +125,78 @@ describe('GET /api/reservations (e2e)', () => {
     });
   });
 
+  describe('con X-Client: MODULE1, la consulta por fechas (C5, T033)', () => {
+    it('responde 200 con todas las reservas del rango, sin paginar, de la llegada más antigua a la más reciente y con la forma de C5', async () => {
+      const res = await list({}, 'MODULE1').expect(200);
+
+      const body = res.body as { items: Record<string, unknown>[] };
+      expect(Object.keys(body)).toEqual(['items']);
+      // Las 12 de marzo de 2031: no hay página de 10.
+      expect(body.items).toHaveLength(12);
+      expect(body.items.map(({ startDate }) => startDate)).toEqual(
+        Array.from(
+          { length: 12 },
+          (_, index) => `2031-03-${String(index + 1).padStart(2, '0')}`,
+        ),
+      );
+      expect(body.items[0]).toEqual({
+        reservationRef: expect.stringMatching(/^RSV-[0-9A-F]{8}$/) as string,
+        status: 'ACTIVE',
+        startDate: '2031-03-01',
+        endDate: '2031-03-03',
+        rooms: [
+          {
+            roomId: expect.stringMatching(/^[0-9a-f-]{36}$/) as string,
+            roomNumber: '204',
+            categoryRoom: 'DOBLE',
+          },
+        ],
+      });
+    });
+
+    it('con roomId devuelve solo la reserva de esa habitación', async () => {
+      const all = await list({}, 'MODULE1').expect(200);
+      const [first] = (
+        all.body as {
+          items: { reservationRef: string; rooms: { roomId: string }[] }[];
+        }
+      ).items;
+
+      const res = await list(
+        { roomId: first.rooms[0].roomId },
+        'MODULE1',
+      ).expect(200);
+
+      expect(
+        (res.body as { items: { reservationRef: string }[] }).items.map(
+          ({ reservationRef }) => reservationRef,
+        ),
+      ).toEqual([first.reservationRef]);
+    });
+
+    it('un parámetro de la Recepcionista responde 400 UNSUPPORTED_PARAMETER con su nombre', async () => {
+      const res = await list({ status: 'ACTIVE' }, 'MODULE1').expect(400);
+
+      expect(res.body).toMatchObject({
+        errorCode: 'UNSUPPORTED_PARAMETER',
+        message: 'El parámetro status no se admite en esta consulta.',
+        path: '/api/reservations',
+      });
+    });
+
+    it('sin las fechas responde 400 INCOMPLETE_DATE_RANGE: para el Módulo 1 son obligatorias', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/reservations')
+        .set('X-Client', 'MODULE1')
+        .expect(400);
+
+      expect(res.body).toMatchObject({
+        errorCode: 'INCOMPLETE_DATE_RANGE',
+        message: 'Debe completar ambas fechas del rango.',
+      });
+    });
+  });
+
   it.each([
     ['sin X-Client', undefined],
     ['con un X-Client que la ruta todavía no admite', 'MODULE3'],

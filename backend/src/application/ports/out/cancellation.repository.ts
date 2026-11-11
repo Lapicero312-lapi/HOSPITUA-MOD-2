@@ -17,6 +17,12 @@ export interface CancellationRepository {
    * @throws Error si la reserva no existe: quien cancela ya la localizó con bloqueo.
    */
   insert(cancellation: Cancellation, tx: Transaction): Promise<void>;
+
+  /**
+   * La cancelación de la reserva con ese `id`, o `null` si no tiene (`check-view-reservation`,
+   * "`GetReservationDetail`"; T016).
+   */
+  findByReservationId(reservationId: string): Promise<Cancellation | null>;
 }
 
 /** La reserva ya tiene su `Cancellation` (restricción única de `cancellation.reservation_id`). */

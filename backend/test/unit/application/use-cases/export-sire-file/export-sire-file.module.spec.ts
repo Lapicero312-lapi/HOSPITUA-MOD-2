@@ -10,7 +10,9 @@ import { SIRE_CONFIG } from '../../../../../src/application/ports/out/sire-confi
 import { SIRE_EXPORT_REPOSITORY } from '../../../../../src/application/ports/out/sire-export.repository.js';
 import { ExportSireFileModule } from '../../../../../src/application/use-cases/export-sire-file/export-sire-file.module.js';
 import { ExportSireFileService } from '../../../../../src/application/use-cases/export-sire-file/export-sire-file.service.js';
+import { ListSireMovementsService } from '../../../../../src/application/use-cases/export-sire-file/list-sire-movements.service.js';
 import { EXPORT_SIRE_FILE } from '../../../../../src/application/use-cases/export-sire-file/ports/in/export-sire-file.port.js';
+import { LIST_SIRE_MOVEMENTS } from '../../../../../src/application/use-cases/export-sire-file/ports/in/list-sire-movements.port.js';
 import { PREVIEW_SIRE_MOVEMENT } from '../../../../../src/application/use-cases/export-sire-file/ports/in/preview-sire-movement.port.js';
 import { PreviewSireMovementService } from '../../../../../src/application/use-cases/export-sire-file/preview-sire-movement.service.js';
 
@@ -40,6 +42,7 @@ const INJECTED = Symbol('INJECTED');
 describe('ExportSireFileModule (plan base, regla 4)', () => {
   it.each([
     ['EXPORT_SIRE_FILE', EXPORT_SIRE_FILE, ExportSireFileService],
+    ['LIST_SIRE_MOVEMENTS', LIST_SIRE_MOVEMENTS, ListSireMovementsService],
     [
       'PREVIEW_SIRE_MOVEMENT',
       PREVIEW_SIRE_MOVEMENT,

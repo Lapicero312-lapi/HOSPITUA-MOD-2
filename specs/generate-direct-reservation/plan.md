@@ -143,8 +143,8 @@ tarifas que el solicitante vio:
   },
   "notes": "Llegada después de las 8 p. m.",
   "expectedRates": [
-    { "position": 1, "lodgingAmount": "750000.00" },
-    { "position": 2, "lodgingAmount": "750000.00" }
+    { "position": 1, "lodgingAmount": "750000.00", "currency": "COP" },
+    { "position": 2, "lodgingAmount": "750000.00", "currency": "COP" }
   ]
 }
 ```
@@ -153,7 +153,8 @@ tarifas que el solicitante vio:
   `documentNumber` y `nationality` (texto libre con el nombre del país; el huésped es extranjero si no es
   exactamente `Colombia`) son obligatorios; `contactPhone` y `contactEmail` son opcionales.
 - `notes`: opcional, máximo 500 caracteres.
-- `expectedRates`: el `lodgingAmount` de cada habitación que vio el solicitante, por `position`. El
+- `expectedRates`: el `lodgingAmount` y la `currency` de cada habitación que vio el solicitante en la
+  vista previa, por `position`. El
   servidor **vuelve a cotizar** y compara (decisión D1); si difiere, `RATE_CHANGED`. **Nunca se guarda un
   monto enviado por el cliente.**
 
@@ -608,7 +609,8 @@ y por caída del Módulo 3.
        - `categoryRoom`, con el validador de `consult-room-inventory` (`INVALID_CATEGORY`);
        - cada `roomId` que venga debe ser un UUID (`INVALID_ROOM_ID`);
        - solo en B, `expectedRates` debe traer una entrada por habitación, con `position` de 1 a n sin
-         repetir y `lodgingAmount` como decimal positivo de dos decimales. Si no, `RATE_CHANGED`: la
+         repetir, `lodgingAmount` como decimal positivo de dos decimales y `currency` de 3 letras
+         mayúsculas (`verifyQuotes` compara el valor y la moneda). Si no, `RATE_CHANGED`: la
          pantalla vuelve a cotizar.
     2. **Habitaciones:**
        - `rooms` que no es una lista, o con 0 o más de 10 entradas: `INVALID_ROOM_COUNT`;
@@ -631,6 +633,43 @@ y por caída del Módulo 3.
 
        Los textos del titular se guardan sin los espacios de los extremos, y un teléfono o un correo vacío
        queda en `null`.
+11. **`PreviewDirectReservation` (T007).** Puerto de entrada en
+    `ports/in/preview-direct-reservation.port.ts`:
+
+    ```typescript
+    type DirectReservationPreview = {
+      categoryRoom: string;
+      availability: AvailabilityResult;          // el de VerifyAvailability.check
+      assignedRooms: { position: number; room: Room; guestCount: number }[];
+      quoteRequests: RoomQuoteRequest[];         // key = la posición como texto ("1", "2"…)
+      quotes: RoomQuote[];
+      guestCount: number;                        // la suma de las habitaciones
+    };
+
+    interface PreviewDirectReservation {
+      // @throws BusinessError con los códigos de la tabla C.
+      execute(body: unknown): Promise<DirectReservationPreview>;
+    }
+    ```
+
+    Pasos, en el orden de la regla 2; el primero que falla da el error:
+    1. `readPreviewRequest(body, clock.today())` (punto 10).
+    2. Una sola llamada a `VerifyAvailability.check` con la categoría y las fechas, sin `limit`: la
+       respuesta muestra todas las habitaciones de la categoría.
+    3. **Asignación**, por `position` (el orden de `rooms`, desde 1):
+       - una entrada con `roomId` que no está en el resultado (no existe o es de otra categoría) da
+         `INVALID_ROOM_ID`;
+       - una entrada con `roomId` que no está disponible da `ROOM_NOT_AVAILABLE` con su `roomNumber`;
+       - las entradas sin `roomId` reciben, en su orden, las de menor `roomNumber` con `assignRooms`,
+         sin repetir las elegidas por `roomId`. Si no alcanzan, `NO_AVAILABILITY`.
+    4. **Capacidad:** un `guestCount` mayor que el `maxCapacity` de su habitación da
+       `GUEST_COUNT_EXCEEDS_CAPACITY`.
+    5. `quoteRooms` con una solicitud por habitación y el contexto `NEW_RESERVATION`. No se llama si
+       falló un paso anterior (regla 3).
+
+    Los pasos 2 a 4 van en una función que también usa `CreateDirectReservation` (T008).
+    `DirectReservationsController` convierte el resultado en el JSON de A con `toAvailabilityDto` y
+    `toQuotesDto(quotes, quoteRequests, true)`, y responde `200`.
 
 ## Puntos abiertos
 

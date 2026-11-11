@@ -267,6 +267,54 @@ describe('POST /api/sire/exports (e2e)', () => {
     expect(res.headers['retry-after']).toMatch(/^\d+$/);
   });
 
+  describe('GET /api/sire/movements (B, T010)', () => {
+    it('responde 200 con la forma de B, sin X-User; Ana, colombiana, no sale', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/sire/movements')
+        .query({ startDate: '2031-03-01', endDate: '2031-03-31' })
+        .expect(200)
+        .expect('Content-Type', /application\/json/);
+
+      expect(res.body).toMatchObject({
+        page: 1,
+        pageSize: 50,
+        totalItems: 2,
+        totalPages: 1,
+        message: null,
+      });
+      expect(res.body.items).toEqual([
+        expect.objectContaining({
+          movementId: johnEntryId,
+          guest: {
+            fullName: 'John Smith',
+            documentType: 'PAS',
+            documentNumber: 'E2ESIRE1',
+            nationality: 'Estados Unidos',
+          },
+          movementType: 'ENTRY',
+          movementDate: '2031-03-05',
+        }),
+        expect.objectContaining({
+          movementType: 'DEPARTURE',
+          movementDate: '2031-03-08',
+        }),
+      ]);
+    });
+
+    it('los parámetros inválidos salen por el filtro global como 400 con su errorCode', async () => {
+      const res = await request(app.getHttpServer())
+        .get('/api/sire/movements')
+        .query({ startDate: '2031-03-01', endDate: '2031-03-31', page: '0' })
+        .expect(400);
+
+      expect(res.body).toMatchObject({
+        errorCode: 'INVALID_PAGE',
+        message: 'El número de página debe ser 1 o mayor.',
+        path: '/api/sire/movements',
+      });
+    });
+  });
+
   describe('GET /api/sire/movements/{movementId}/preview (C, T011)', () => {
     const preview = (movementId: string) =>
       request(app.getHttpServer()).get(

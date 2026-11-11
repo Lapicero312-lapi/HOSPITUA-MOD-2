@@ -11,6 +11,12 @@ export const RESERVATION_QUERY_PORT = Symbol('RESERVATION_QUERY_PORT');
 /** Una habitación que ya ocupa inventario y la reserva que la ocupa (`check-room-availability`, A1). */
 export type BlockingRoom = { roomId: string; reservationRef: string };
 
+/**
+ * Las habitaciones de una categoría que ocupan inventario en una noche (`check-view-reservation`,
+ * "`ReservationLookup.blockingRoomsByCategory`"): cada `roomId` una vez, en orden.
+ */
+export type NightBlockingRooms = { date: string; roomIds: string[] };
+
 /** Tamaño fijo de una página del listado (`check-view-reservation`, C1: no hay `pageSize`). */
 export const RESERVATION_PAGE_SIZE = 10;
 
@@ -64,6 +70,18 @@ export interface ReservationQueryPort {
   ): Promise<BlockingRoom[]>;
 
   /**
+   * T016c: una entrada por cada noche de `[dateFrom, dateTo)`, en orden de fecha, con las habitaciones de
+   * `categoryRoom` que esa noche ocupan inventario (`blocks_inventory`, como `findBlockingRooms`). La
+   * categoría es la que guardó la reserva (`reservation_room.category_room`). Las noches sin ninguna
+   * ocupada también vienen, con `roomIds` vacío.
+   */
+  blockingRoomsByCategory(
+    categoryRoom: string,
+    dateFrom: string,
+    dateTo: string,
+  ): Promise<NightBlockingRooms[]>;
+
+  /**
    * T005: una página de `RESERVATION_PAGE_SIZE` reservas con los filtros de C1, con `page` desde 1. Si
    * `page` pasa de la última, devuelve `items` vacío con el `totalItems` real: el ajuste a la última
    * página válida es de T011. La búsqueda por código, documento o nombre la agregan T015 y T020.
@@ -92,7 +110,35 @@ export interface ReservationQueryPort {
   countExpectedArrivalsAndDepartures(
     operationalDate: string,
   ): Promise<ExpectedArrivalsAndDepartures>;
+
+  /**
+   * T033: las reservas `PENDING`, `ACTIVE` o `IN_PROGRESS` cuya estadía se cruza con el rango
+   * (`start_date <= dateTo` y `end_date > dateFrom`), cada una con todas sus habitaciones (C5 y
+   * "Consulta del Módulo 1"). Con `roomId`, solo las que tienen esa habitación entre las suyas, en
+   * cualquier `stayStatus`. Ordenadas por `startDate` y después `reservationRef`, ascendentes; las
+   * habitaciones, por `roomNumber`. Las fechas son `AAAA-MM-DD`.
+   */
+  findByStayRange(
+    dateFrom: string,
+    dateTo: string,
+    roomId: string | null,
+  ): Promise<StayRangeReservation[]>;
 }
+
+/** Una reserva de la consulta por fechas del Módulo 1 (C5): sin datos del huésped ni financieros. */
+export type StayRangeReservation = {
+  reservationRef: string;
+  status: 'PENDING' | 'ACTIVE' | 'IN_PROGRESS';
+  /** `AAAA-MM-DD`. */
+  startDate: string;
+  endDate: string;
+  /** Todas las de la reserva. Una sin asignar trae `roomId` y `roomNumber` en `null`. */
+  rooms: {
+    roomId: string | null;
+    roomNumber: string | null;
+    categoryRoom: string;
+  }[];
+};
 
 /** Las dos cifras del resumen del día (C2). */
 export type ExpectedArrivalsAndDepartures = {
