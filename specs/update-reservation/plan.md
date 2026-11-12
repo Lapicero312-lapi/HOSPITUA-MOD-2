@@ -719,7 +719,7 @@ sequenceDiagram
     alt otra instancia lo tiene
         A-->>J: se salta esta ejecución
     end
-    J->>U: execute(operationalDate = el día que terminó)
+    J->>U: closePendingDays(hoy): execute(operationalDate) por cada día pendiente, el que terminó incluido
     loop por lotes de CLOSE_DAY_BATCH_SIZE
         U->>DB: reservas del día en ACTIVE, PENDING o IN_PROGRESS
         loop una transacción por reserva
@@ -1012,7 +1012,8 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
    decir sin cambios en la reserva ni en sus habitaciones.
 7. **`status_reason` con códigos** (`CHECK_IN`, `CHECK_OUT`, `DAY_CLOSE_NO_SHOW`, …); el plan base lo deja
    como texto libre.
-8. **Recuperación del cierre al arrancar** sin una tabla de control: se vuelve a ejecutar (es idempotente).
+8. **Recuperación del cierre al arrancar** sin una tabla de control: se vuelve a ejecutar (es idempotente)
+   para cada día anterior que todavía tenga algo que cerrar (punto 14).
 9. **Al asignar habitación (B3), una sin capacidad suficiente se rechaza** con
    `GUEST_COUNT_EXCEEDS_CAPACITY`: el spec solo pide verificar la disponibilidad, pero asignarla dejaría un
    conflicto que ya no se podría resolver.
@@ -1060,6 +1061,9 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
     interface CloseDay {
       // El día operativo que terminó, en AAAA-MM-DD. Nunca lanza por una reserva: la cuenta en failed.
       execute(operationalDate: string): Promise<CloseDaySummary>;
+      // Cierra, del más antiguo al más reciente, cada día anterior a `today` que todavía tiene algo que
+      // cerrar (T022, punto 14). Si uno se detiene por un error al seleccionar, lanza y no sigue.
+      closePendingDays(today: string): Promise<CloseDaySummary[]>;
     }
     ```
 
@@ -1093,6 +1097,26 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
 
     `CLOSE_DAY_BATCH_SIZE` llega por inyección (`@Inject(CLOSE_DAY_BATCH_SIZE)`), desde la configuración
     validada.
+14. **`CloseDayJob` (T022)**, en `infrastructure/in/jobs/close-day.job.ts`, registrado en `JobsModule`.
+    - **Cuándo:** a las 00:00:30 (`'30 0 0 * * *'`, `timeZone: 'America/Bogota'`) y al arrancar la
+      aplicación (la recuperación), con el bloqueo asesor `close-day`. Si otra instancia lo tiene, se
+      salta esa ejecución. El arranque espera la recuperación y el apagado espera la ejecución en curso,
+      como `DailyListJob`.
+    - **Qué cierra:** `CloseDay.closePendingDays(Clock.today())`, no solo el día anterior. Con
+      `ReservationQueryPort.findDaysToClose(today)` busca los días anteriores a `today` que tienen
+      reservas en `ACTIVE` o `PENDING`, o en `IN_PROGRESS` con alguna habitación en `EXPECTED`, y llama a
+      `execute` con cada uno, del más antiguo al más reciente. Así "la recuperación al arrancar lo
+      completa" también cuando el servidor estuvo apagado varios días, y la siguiente ejecución completa
+      un cierre que se detuvo por la base de datos aunque la aplicación no se haya reiniciado. El día de
+      hoy nunca se cierra: su llegada todavía puede ocurrir.
+    - **Zona horaria (caso borde):** el día sale siempre del `Clock`, que usa `America/Bogota`, y el
+      planificador también. Si en el momento de la ejecución el desfase del servidor con UTC no es el de
+      `America/Bogota`, deja la alerta de negocio en un log de nivel `error`, con la zona del servidor, y
+      sigue con la del hotel.
+    - **Pérdida de la base de datos (caso borde):** si `closePendingDays` o el bloqueo lanzan, deja una
+      alerta de nivel `error` sin el texto del error (no expone detalles de infraestructura) y termina sin
+      propagarlo. Cada reserva va en su propia transacción, así que ninguna queda a medias, y la siguiente
+      ejecución (al arrancar o a las 00:00:30) cierra lo que faltó.
 
 ## Puntos abiertos
 
