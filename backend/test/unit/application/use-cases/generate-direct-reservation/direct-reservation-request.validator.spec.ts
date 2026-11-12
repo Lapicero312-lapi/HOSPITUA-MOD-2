@@ -52,8 +52,8 @@ const creation = (changes: Record<string, unknown> = {}) => ({
   guest: GUEST,
   notes: 'Llegada después de las 8 p. m.',
   expectedRates: [
-    { position: 1, lodgingAmount: '750000.00' },
-    { position: 2, lodgingAmount: '750000.00' },
+    { position: 1, lodgingAmount: '750000.00', currency: 'COP' },
+    { position: 2, lodgingAmount: '750000.00', currency: 'COP' },
   ],
   ...changes,
 });
@@ -108,8 +108,8 @@ describe('Validador de la solicitud de la reserva directa (plan, punto 10)', () 
         guest: GUEST,
         notes: 'Llegada después de las 8 p. m.',
         expectedRates: [
-          { position: 1, lodgingAmount: '750000.00' },
-          { position: 2, lodgingAmount: '750000.00' },
+          { position: 1, lodgingAmount: '750000.00', currency: 'COP' },
+          { position: 2, lodgingAmount: '750000.00', currency: 'COP' },
         ],
       });
     });
@@ -186,93 +186,124 @@ describe('Validador de la solicitud de la reserva directa (plan, punto 10)', () 
           readCreationRequest(
             creation({
               expectedRates: [
-                { position: 2, lodgingAmount: '750000.00' },
-                { position: 1, lodgingAmount: '520000.50' },
+                { position: 2, lodgingAmount: '750000.00', currency: 'COP' },
+                { position: 1, lodgingAmount: '520000.50', currency: 'COP' },
               ],
             }),
             TODAY,
           ).expectedRates,
         ).toEqual([
-          { position: 2, lodgingAmount: '750000.00' },
-          { position: 1, lodgingAmount: '520000.50' },
+          { position: 2, lodgingAmount: '750000.00', currency: 'COP' },
+          { position: 1, lodgingAmount: '520000.50', currency: 'COP' },
         ]);
       });
 
       it.each([
         ['ausente', undefined],
-        ['que no es una lista', { position: 1, lodgingAmount: '750000.00' }],
+        [
+          'que no es una lista',
+          { position: 1, lodgingAmount: '750000.00', currency: 'COP' },
+        ],
         [
           'con menos entradas que habitaciones',
-          [{ position: 1, lodgingAmount: '750000.00' }],
+          [{ position: 1, lodgingAmount: '750000.00', currency: 'COP' }],
         ],
         [
           'con una posición 0',
           [
-            { position: 0, lodgingAmount: '750000.00' },
-            { position: 1, lodgingAmount: '750000.00' },
+            { position: 0, lodgingAmount: '750000.00', currency: 'COP' },
+            { position: 1, lodgingAmount: '750000.00', currency: 'COP' },
           ],
         ],
         [
           'con una posición mayor que n',
           [
-            { position: 1, lodgingAmount: '750000.00' },
-            { position: 3, lodgingAmount: '750000.00' },
+            { position: 1, lodgingAmount: '750000.00', currency: 'COP' },
+            { position: 3, lodgingAmount: '750000.00', currency: 'COP' },
           ],
         ],
         [
           'con una posición repetida',
           [
-            { position: 1, lodgingAmount: '750000.00' },
-            { position: 1, lodgingAmount: '750000.00' },
+            { position: 1, lodgingAmount: '750000.00', currency: 'COP' },
+            { position: 1, lodgingAmount: '750000.00', currency: 'COP' },
           ],
         ],
         [
           'con una posición en texto',
           [
-            { position: '1', lodgingAmount: '750000.00' },
-            { position: 2, lodgingAmount: '750000.00' },
+            { position: '1', lodgingAmount: '750000.00', currency: 'COP' },
+            { position: 2, lodgingAmount: '750000.00', currency: 'COP' },
           ],
         ],
         [
           'con una posición decimal',
           [
-            { position: 1.5, lodgingAmount: '750000.00' },
-            { position: 2, lodgingAmount: '750000.00' },
+            { position: 1.5, lodgingAmount: '750000.00', currency: 'COP' },
+            { position: 2, lodgingAmount: '750000.00', currency: 'COP' },
           ],
         ],
         [
           'con un monto como número',
           [
-            { position: 1, lodgingAmount: 750000 },
-            { position: 2, lodgingAmount: '750000.00' },
+            { position: 1, lodgingAmount: 750000, currency: 'COP' },
+            { position: 2, lodgingAmount: '750000.00', currency: 'COP' },
           ],
         ],
         [
           'con un monto sin decimales',
           [
-            { position: 1, lodgingAmount: '750000' },
-            { position: 2, lodgingAmount: '750000.00' },
+            { position: 1, lodgingAmount: '750000', currency: 'COP' },
+            { position: 2, lodgingAmount: '750000.00', currency: 'COP' },
           ],
         ],
         [
           'con un monto de un decimal',
           [
-            { position: 1, lodgingAmount: '750000.0' },
-            { position: 2, lodgingAmount: '750000.00' },
+            { position: 1, lodgingAmount: '750000.0', currency: 'COP' },
+            { position: 2, lodgingAmount: '750000.00', currency: 'COP' },
           ],
         ],
         [
           'con un monto en cero',
           [
-            { position: 1, lodgingAmount: '0.00' },
-            { position: 2, lodgingAmount: '750000.00' },
+            { position: 1, lodgingAmount: '0.00', currency: 'COP' },
+            { position: 2, lodgingAmount: '750000.00', currency: 'COP' },
           ],
         ],
         [
           'con un monto negativo',
           [
-            { position: 1, lodgingAmount: '-1.00' },
-            { position: 2, lodgingAmount: '750000.00' },
+            { position: 1, lodgingAmount: '-1.00', currency: 'COP' },
+            { position: 2, lodgingAmount: '750000.00', currency: 'COP' },
+          ],
+        ],
+        [
+          'sin moneda',
+          [
+            { position: 1, lodgingAmount: '750000.00' },
+            { position: 2, lodgingAmount: '750000.00', currency: 'COP' },
+          ],
+        ],
+        [
+          'con la moneda en minúsculas',
+          [
+            { position: 1, lodgingAmount: '750000.00', currency: 'cop' },
+            { position: 2, lodgingAmount: '750000.00', currency: 'COP' },
+          ],
+        ],
+        [
+          'con una moneda de 2 letras',
+          [
+            { position: 1, lodgingAmount: '750000.00', currency: 'CO' },
+            { position: 2, lodgingAmount: '750000.00', currency: 'COP' },
+          ],
+        ],
+        [
+          'con una moneda de 4 letras',
+          [
+            { position: 1, lodgingAmount: '750000.00', currency: 'COPS' },
+            { position: 2, lodgingAmount: '750000.00', currency: 'COP' },
           ],
         ],
       ])('%s: RATE_CHANGED', (_, expectedRates) => {
@@ -308,7 +339,9 @@ describe('Validador de la solicitud de la reserva directa (plan, punto 10)', () 
           creationError(
             creation({
               rooms: 'X',
-              expectedRates: [{ position: 1, lodgingAmount: '750000.00' }],
+              expectedRates: [
+                { position: 1, lodgingAmount: '750000.00', currency: 'COP' },
+              ],
             }),
           ),
         ).toEqual(expected('INVALID_ROOM_COUNT'));

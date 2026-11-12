@@ -325,6 +325,27 @@ export class Reservation {
     return Reservation.restore({ ...this.props, rooms });
   }
 
+  /**
+   * El cierre del día de una reserva `IN_PROGRESS` (FR-019): sus habitaciones en `EXPECTED`, también las
+   * que no tienen habitación asignada, pasan a `NOT_ARRIVED`. El `status` no cambia: si ya no queda ninguna
+   * `CHECKED_IN`, quien llama la pasa a `COMPLETED`.
+   * @throws BusinessError `INVALID_STATUS_TRANSITION` si la reserva no está en `IN_PROGRESS` (en `ACTIVE` o
+   * `PENDING` sus habitaciones pasan a `NOT_ARRIVED` con `NO_SHOW`).
+   */
+  withNotArrivedRooms(): Reservation {
+    if (this.props.status !== 'IN_PROGRESS') {
+      throw invalidStatusTransition();
+    }
+    return Reservation.restore({
+      ...this.props,
+      rooms: this.props.rooms.map((room) =>
+        room.stayStatus === 'EXPECTED'
+          ? room.withStayStatus('NOT_ARRIVED')
+          : room,
+      ),
+    });
+  }
+
   private allows(target: ReservationStatus): boolean {
     const stays = this.props.rooms.map((room) => room.stayStatus);
     if (target === 'IN_PROGRESS') {

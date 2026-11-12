@@ -13,6 +13,8 @@ import { DAILY_SEQUENCE_REPOSITORY } from '../../../../../src/application/ports/
 import { GUEST_DATA_REPOSITORY } from '../../../../../src/application/ports/out/guest-data.repository.js';
 import { GUEST_STAY_QUERY } from '../../../../../src/application/ports/out/guest-stay.query.js';
 import { MIGRATORY_MOVEMENT_REPOSITORY } from '../../../../../src/application/ports/out/migratory-movement.repository.js';
+import { OTA_BOOKING_REVISION_REPOSITORY } from '../../../../../src/application/ports/out/ota-booking-revision.repository.js';
+import { OTA_NO_SHOW_REPORT_REPOSITORY } from '../../../../../src/application/ports/out/ota-no-show-report.repository.js';
 import { OTA_REPOSITORY } from '../../../../../src/application/ports/out/ota.repository.js';
 import { PROCESSED_MESSAGE_REPOSITORY } from '../../../../../src/application/ports/out/processed-message.repository.js';
 import { RESERVATION_QUERY_PORT } from '../../../../../src/application/ports/out/reservation-query.port.js';
@@ -21,13 +23,16 @@ import { TRANSACTION_RUNNER } from '../../../../../src/application/ports/out/tra
 import { CancelReservationModule } from '../../../../../src/application/use-cases/cancel-reservation/cancel-reservation.module.js';
 import { CancelReservationService } from '../../../../../src/application/use-cases/cancel-reservation/cancel-reservation.service.js';
 import { CANCEL_RESERVATION } from '../../../../../src/application/use-cases/cancel-reservation/ports/in/cancel-reservation.port.js';
+import { CLOSE_DAY_BATCH_SIZE } from '../../../../../src/application/use-cases/update-reservation/ports/in/close-day.port.js';
 
 /**
  * Todo lo que piden los módulos que importa `CancelReservationModule`, aunque hoy no lo usen: así la prueba
  * no se rompe cuando `CheckViewReservationModule` agrega `GenerateDailyList` (`TRANSACTION_RUNNER`, #500) o
  * `UpdateReservationModule` agrega el Check-In e importa `ProcessGuestDataModule` (sus repositorios y
- * `GUEST_STAY_QUERY`, #508). `ConfigureOtaModule` pide los de Channex y los de las agencias (T009), y
- * `PublishPendingDailyMessages`, el publicador de la lista del día (T026).
+ * `GUEST_STAY_QUERY`, #508). `ConfigureOtaModule` pide los de Channex y los de las agencias (T009).
+ * `UpdateReservationModule` agrega el cierre del día (T021): `CLOSE_DAY_BATCH_SIZE`, y los repositorios de
+ * las revisiones y de los no-shows de `GenerateOtaReservationModule` (T011b). `CheckViewReservationModule`
+ * agrega `PublishPendingDailyMessages`, que pide el publicador de la lista del día (T026).
  */
 const GLOBAL_TOKENS = [
   RESERVATION_REPOSITORY,
@@ -47,6 +52,9 @@ const GLOBAL_TOKENS = [
   CHANNEX_PORT,
   CHANNEX_SETUP_STATE,
   COMMISSION_AUDIT_REPOSITORY,
+  OTA_BOOKING_REVISION_REPOSITORY,
+  OTA_NO_SHOW_REPORT_REPOSITORY,
+  CLOSE_DAY_BATCH_SIZE,
 ];
 
 /** Lo que ponen `PersistenceModule` y `ClockModule`, que son globales: la base no se usa en esta prueba. */

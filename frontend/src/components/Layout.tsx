@@ -24,7 +24,9 @@ export function Layout() {
           <NavLink to="/reservas" end>
             Reservas
           </NavLink>
+          <NavLink to="/sire">Exportar SIRE</NavLink>
           <NavLink to="/habitaciones">Habitaciones</NavLink>
+          <NavLink to="/tarifas">Tarifas</NavLink>
           <NavLink to="/agencias">Agencias OTA</NavLink>
         </nav>
         <span className="layout-user">

@@ -5,10 +5,12 @@ import { HomePage } from './pages/HomePage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
 import { NotFoundPage } from './pages/NotFoundPage.tsx';
 import { OtasPage } from './pages/otas/OtasPage.tsx';
+import { RatesPage } from './pages/rates/RatesPage.tsx';
 import { CancelReservationPage } from './pages/reservations/cancel/CancelReservationPage.tsx';
 import { ReservationsPage } from './pages/reservations/ReservationsPage.tsx';
 import { RoomsPage } from './pages/rooms/RoomsPage.tsx';
 import { RouteErrorPage } from './pages/RouteErrorPage.tsx';
+import { SirePage } from './pages/sire/SirePage.tsx';
 
 /**
  * Las rutas de la aplicación. Cada caso de uso agrega las de sus pantallas dentro de `Layout`, que
@@ -27,7 +29,9 @@ export const routes: RouteObject[] = [
     children: [
       { index: true, element: <HomePage /> },
       { path: 'reservas', element: <ReservationsPage /> },
+      { path: 'sire', element: <SirePage /> },
       { path: 'habitaciones', element: <RoomsPage /> },
+      { path: 'tarifas', element: <RatesPage /> },
       { path: 'agencias', element: <OtasPage /> },
       {
         path: 'reservas/:reservationRef/cancelar',

@@ -11,6 +11,10 @@ import {
   type ChannexSetupState,
 } from '../../../application/ports/out/channex-setup-state.js';
 import {
+  PUBLISH_PENDING_NO_SHOWS,
+  type PublishPendingNoShows,
+} from '../../../application/use-cases/generate-ota-reservation/ports/in/publish-pending-no-shows.port.js';
+import {
   READ_BOOKING_FEED,
   type ReadBookingFeed,
 } from '../../../application/use-cases/generate-ota-reservation/ports/in/read-booking-feed.port.js';
@@ -23,10 +27,12 @@ export const CHANNEX_SYNC_INTERVAL = 'channex-sync';
 export const CHANNEX_SYNC_LOCK = 'channex-sync';
 
 /**
- * La tarea de Channex (plan de `generate-ota-reservation`, punto 7): cada `CHANNEX_SYNC_INTERVAL_SECONDS`
- * lee el feed. Procesar las revisiones (T006), enviar la disponibilidad (`configure-ota`) y los no-shows
- * pendientes (T011b) se agregan en sus tareas. No hace nada mientras la configuración de Channex no esté
- * lista, y corre con un bloqueo asesor para que dos ejecuciones no se crucen.
+ * La tarea de Channex (plan de `generate-ota-reservation`, puntos 7 y 8): cada
+ * `CHANNEX_SYNC_INTERVAL_SECONDS` lee el feed y después envía los no-shows pendientes (A3), aunque la
+ * lectura no haya podido leerlo: el reporte no depende del feed. Procesar las revisiones (T006) y enviar la
+ * disponibilidad (`configure-ota`, que va antes de los no-shows) se agregan en sus tareas. No hace nada
+ * mientras la configuración de Channex no esté lista, y corre con un bloqueo asesor para que dos
+ * ejecuciones no se crucen.
  */
 @Injectable()
 export class ChannexSyncJob
@@ -37,6 +43,8 @@ export class ChannexSyncJob
   constructor(
     @Inject(READ_BOOKING_FEED)
     private readonly feed: ReadBookingFeed,
+    @Inject(PUBLISH_PENDING_NO_SHOWS)
+    private readonly noShows: PublishPendingNoShows,
     @Inject(CHANNEX_SETUP_STATE)
     private readonly state: ChannexSetupState,
     private readonly lock: AdvisoryLock,
@@ -72,10 +80,11 @@ export class ChannexSyncJob
     try {
       return await this.lock.runExclusive(CHANNEX_SYNC_LOCK, async () => {
         await this.feed.read();
+        await this.noShows.publish();
       });
     } catch (error) {
       this.logger.error(
-        'La lectura del feed de Channex falló por un error inesperado: se intenta en la siguiente',
+        'El ciclo de Channex falló por un error inesperado: se intenta en el siguiente',
         error instanceof Error ? error.stack : String(error),
       );
       return false;

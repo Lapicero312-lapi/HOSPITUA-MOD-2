@@ -2,6 +2,7 @@ import { Logger } from '@nestjs/common';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChannexSetupState } from '../../../../../src/application/ports/out/channex-setup-state.js';
+import type { PublishPendingNoShows } from '../../../../../src/application/use-cases/generate-ota-reservation/ports/in/publish-pending-no-shows.port.js';
 import type { ReadBookingFeed } from '../../../../../src/application/use-cases/generate-ota-reservation/ports/in/read-booking-feed.port.js';
 import type { AdvisoryLock } from '../../../../../src/infrastructure/in/jobs/advisory-lock.js';
 import {
@@ -25,9 +26,18 @@ function aJob({
   withSettings = true,
   locked = false,
 }: { ready?: boolean; withSettings?: boolean; locked?: boolean } = {}) {
-  const read = vi
-    .fn<ReadBookingFeed['read']>()
-    .mockResolvedValue({ status: 'READ', revisions: [] });
+  /** El orden en que se llamaron la lectura del feed y el envío de los no-shows. */
+  const calls: string[] = [];
+  const read = vi.fn<ReadBookingFeed['read']>().mockImplementation(() => {
+    calls.push('read');
+    return Promise.resolve({ status: 'READ', revisions: [] });
+  });
+  const publish = vi
+    .fn<PublishPendingNoShows['publish']>()
+    .mockImplementation(() => {
+      calls.push('publish');
+      return Promise.resolve({ reported: 0, rejected: 0, pending: 0 });
+    });
   const state = {
     settings: () => (withSettings ? SETTINGS : null),
     isReady: () => ready,
@@ -45,11 +55,12 @@ function aJob({
   const scheduler = new SchedulerRegistry();
   const job = new ChannexSyncJob(
     { read },
+    { publish },
     state,
     { runExclusive } as unknown as AdvisoryLock,
     scheduler,
   );
-  return { job, read, runExclusive, scheduler };
+  return { job, read, publish, calls, runExclusive, scheduler };
 }
 
 describe('ChannexSyncJob (plan de generate-ota-reservation, punto 7)', () => {
@@ -119,20 +130,53 @@ describe('ChannexSyncJob (plan de generate-ota-reservation, punto 7)', () => {
   });
 
   it('no hace nada mientras la configuración de Channex no esté lista', async () => {
-    const { job, read, runExclusive } = aJob({ ready: false });
+    const { job, read, publish, runExclusive } = aJob({ ready: false });
 
     await expect(job.run()).resolves.toBe(false);
 
     expect(runExclusive).not.toHaveBeenCalled();
     expect(read).not.toHaveBeenCalled();
+    expect(publish).not.toHaveBeenCalled();
   });
 
   it('si otra ejecución tiene el bloqueo, se salta esta', async () => {
-    const { job, read } = aJob({ locked: true });
+    const { job, read, publish } = aJob({ locked: true });
 
     await expect(job.run()).resolves.toBe(false);
 
     expect(read).not.toHaveBeenCalled();
+    expect(publish).not.toHaveBeenCalled();
+  });
+
+  it('después de leer el feed envía los no-shows pendientes, dentro del mismo bloqueo (punto 8)', async () => {
+    const { job, calls, runExclusive } = aJob();
+
+    await expect(job.run()).resolves.toBe(true);
+
+    expect(calls).toEqual(['read', 'publish']);
+    expect(runExclusive).toHaveBeenCalledTimes(1);
+  });
+
+  it('envía los no-shows aunque la lectura no haya podido leer el feed: el reporte no depende del feed', async () => {
+    const { job, read, publish } = aJob();
+    read.mockResolvedValueOnce({ status: 'NOT_READ' });
+
+    await expect(job.run()).resolves.toBe(true);
+
+    expect(publish).toHaveBeenCalledTimes(1);
+  });
+
+  it('un error inesperado al enviar los no-shows se registra y el ciclo siguiente los envía de nuevo', async () => {
+    const { job, publish } = aJob();
+    publish.mockRejectedValueOnce(new Error('la base de datos no responde'));
+
+    await expect(job.run()).resolves.toBe(false);
+    expect(errors).toEqual([
+      'El ciclo de Channex falló por un error inesperado: se intenta en el siguiente',
+    ]);
+
+    await expect(job.run()).resolves.toBe(true);
+    expect(publish).toHaveBeenCalledTimes(2);
   });
 
   it('un error inesperado se registra y la siguiente ejecución lee de nuevo', async () => {
