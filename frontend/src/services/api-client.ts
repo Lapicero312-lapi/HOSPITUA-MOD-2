@@ -50,13 +50,39 @@ export async function apiRequest<T>(
   path: string,
   request: ApiRequest = {},
 ): Promise<T> {
+  const response = await send(path, request, 'application/json');
+  if (response.status === 204) {
+    return undefined as T;
+  }
+  return (await response.json()) as T;
+}
+
+/**
+ * Llama a la API del Módulo 2 cuando la respuesta es un archivo y no JSON (la exportación SIRE): con las
+ * mismas cabeceras y los mismos errores que `apiRequest`. Devuelve la respuesta para leer el archivo y sus
+ * cabeceras.
+ * @throws ApiError con el error que respondió el backend, o `CONNECTION_ERROR` si no hubo respuesta.
+ */
+export function apiFile(
+  path: string,
+  request: ApiRequest = {},
+): Promise<Response> {
+  return send(path, request, 'text/plain');
+}
+
+/** La llamada, con las cabeceras de la Recepcionista; si el backend responde un error, lo lanza. */
+async function send(
+  path: string,
+  request: ApiRequest,
+  accept: string,
+): Promise<Response> {
   const user = currentUser();
   let response: Response;
   try {
     response = await fetch(`${API_PREFIX}${path}`, {
       method: request.method ?? 'GET',
       headers: {
-        Accept: 'application/json',
+        Accept: accept,
         'X-Client': 'RECEPTIONIST',
         ...(user === null ? {} : { 'X-User': user }),
         ...(request.body === undefined
@@ -79,10 +105,7 @@ export async function apiRequest<T>(
   if (!response.ok) {
     throw await toApiError(response);
   }
-  if (response.status === 204) {
-    return undefined as T;
-  }
-  return (await response.json()) as T;
+  return response;
 }
 
 async function toApiError(response: Response): Promise<ApiError> {
