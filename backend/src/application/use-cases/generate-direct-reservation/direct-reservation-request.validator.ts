@@ -9,6 +9,8 @@ import {
   GUEST_DATA_REQUIRED,
   INVALID_CATEGORY,
   INVALID_CHARACTERS,
+  INVALID_EMAIL,
+  INVALID_GUEST_COUNT,
   INVALID_RESERVATION_DATES,
   INVALID_ROOM_COUNT,
   INVALID_ROOM_ID,
@@ -17,7 +19,6 @@ import {
 } from '../../../domain/shared/error-codes.js';
 import { isValidCategoryRoom } from '../consult-room-inventory/category-room.validator.js';
 import { isValidRoomId } from '../consult-room-inventory/room-id.validator.js';
-import { INVALID_EMAIL, INVALID_GUEST_COUNT } from './error-codes.js';
 import { readGuestDocument } from './guest-document.validator.js';
 
 type ErrorCode = { readonly code: string; readonly message: string };
@@ -25,6 +26,8 @@ type ErrorCode = { readonly code: string; readonly message: string };
 const MAX_ROOMS = 10;
 /** Un decimal positivo con dos decimales, como lo muestra la cotización (`"750000.00"`). */
 const AMOUNT_FORMAT = /^\d+\.\d{2}$/;
+/** Una moneda: 3 letras mayúsculas (`COP`), con la que `verifyQuotes` compara. */
+const CURRENCY_FORMAT = /^[A-Z]{3}$/;
 /** `algo@dominio.ext`, sin espacios (punto 10). */
 const EMAIL_FORMAT = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** Un carácter de control (`\p{Cc}`). */
@@ -67,8 +70,12 @@ export type RequestedGuest = {
   contactEmail: string | null;
 };
 
-/** La tarifa que vio el solicitante para una habitación, por su posición (B). */
-export type ExpectedRate = { position: number; lodgingAmount: string };
+/** La tarifa que vio el solicitante para una habitación, por su posición (B): el valor y su moneda. */
+export type ExpectedRate = {
+  position: number;
+  lodgingAmount: string;
+  currency: string;
+};
 
 /** La solicitud de la creación (B), ya revisada. */
 export type DirectReservationCreation = DirectReservationRequest & {
@@ -148,7 +155,7 @@ function checkFormats(
 
 /**
  * `expectedRates`: una entrada por habitación, con `position` de 1 a n sin repetir y `lodgingAmount` como
- * decimal positivo de dos decimales. Si no, `RATE_CHANGED`: la pantalla vuelve a cotizar.
+ * decimal positivo de dos decimales y `currency` de 3 letras mayúsculas. Si no, `RATE_CHANGED`: la pantalla vuelve a cotizar.
  */
 function readExpectedRates(
   value: unknown,
@@ -162,7 +169,7 @@ function readExpectedRates(
   }
   const positions = new Set<number>();
   const rates = value.map((entry): ExpectedRate => {
-    const { position, lodgingAmount } = asRecord(entry);
+    const { position, lodgingAmount, currency } = asRecord(entry);
     if (
       typeof position !== 'number' ||
       !Number.isInteger(position) ||
@@ -171,12 +178,14 @@ function readExpectedRates(
       positions.has(position) ||
       typeof lodgingAmount !== 'string' ||
       !AMOUNT_FORMAT.test(lodgingAmount) ||
-      Number(lodgingAmount) <= 0
+      Number(lodgingAmount) <= 0 ||
+      typeof currency !== 'string' ||
+      !CURRENCY_FORMAT.test(currency)
     ) {
       throw errorOf(RATE_CHANGED);
     }
     positions.add(position);
-    return { position, lodgingAmount };
+    return { position, lodgingAmount, currency };
   });
   return rates;
 }

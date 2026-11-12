@@ -66,4 +66,35 @@ describe('ReservationStatusService', () => {
     ).rejects.toMatchObject({ errorCode: 'INVALID_STATUS_TRANSITION' });
     expect(update).not.toHaveBeenCalled();
   });
+
+  it('markNotArrived guarda la reserva IN_PROGRESS con sus habitaciones en EXPECTED en NOT_ARRIVED', async () => {
+    const { update, repository } = fakeRepository();
+    const reservation = aDirectReservation({
+      status: 'IN_PROGRESS',
+      rooms: [aDirectRoom({ stayStatus: 'CHECKED_IN' }), aDirectRoom()],
+    });
+
+    const result = await new ReservationStatusService(
+      repository,
+    ).markNotArrived(tx, reservation);
+
+    expect(result.rooms.map((room) => room.stayStatus)).toEqual([
+      'CHECKED_IN',
+      'NOT_ARRIVED',
+    ]);
+    expect(result.status).toBe('IN_PROGRESS');
+    expect(update).toHaveBeenCalledWith(result, tx);
+  });
+
+  it('markNotArrived con una reserva que no está IN_PROGRESS no guarda nada', async () => {
+    const { update, repository } = fakeRepository();
+
+    await expect(
+      new ReservationStatusService(repository).markNotArrived(
+        tx,
+        aDirectReservation(),
+      ),
+    ).rejects.toMatchObject({ errorCode: 'INVALID_STATUS_TRANSITION' });
+    expect(update).not.toHaveBeenCalled();
+  });
 });

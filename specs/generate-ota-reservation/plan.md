@@ -248,6 +248,8 @@ interface OtaBookingRevisionRepository {
   markAcked(revisionId: string): Promise<void>;
   // T007: las que quedaron sin ack, de la más antigua a la más reciente (índice parcial de processed_at).
   findPendingAck(): Promise<ProcessedRevision[]>;
+  // T011b: el booking_id de las revisiones de esa reserva (es el mismo en todas), o null si no tiene.
+  findBookingIdOf(reservationId: string, tx?: Transaction): Promise<string | null>;
 }
 ```
 
@@ -507,6 +509,46 @@ revisión se confirma.
 
    `ChannexSyncJob` corre cada `CHANNEX_SYNC_INTERVAL_SECONDS`, con el bloqueo asesor `channex-sync`, y no
    hace nada mientras `ChannexSetupState.isReady()` sea `false`.
+8. **`OtaNoShowReporter` y `PublishPendingNoShows` (T011b).** Puertos de entrada en `ports/in/`:
+
+   ```typescript
+   interface OtaNoShowReporter {
+     // Regla 9: deja el reporte PENDING en la transacción del cierre del día.
+     record(tx: Transaction, reservation: Reservation): Promise<void>;
+   }
+
+   type NoShowPublication = { reported: number; rejected: number; pending: number };
+
+   interface PublishPendingNoShows {
+     // A3: envía las pendientes, de la más antigua a la más reciente.
+     publish(): Promise<NoShowPublication>;
+   }
+   ```
+
+   - **`record`** toma el `booking_id` de las revisiones de esa reserva
+     (`OtaBookingRevisionRepository.findBookingIdOf(reservationId, tx)`; es el mismo en todas) e inserta la
+     fila `PENDING` con `attempts = 0`. Si la reserva ya tiene su fila, no hace nada. Con una reserva que no
+     es `OTA`, o que no tiene ninguna revisión, lanza `Error` (es un dato que no debería existir): el cierre
+     del día revierte esa reserva, deja la advertencia y sigue con las demás (FR-022 de
+     `update-reservation`).
+   - **`OtaNoShowReportRepository`** (`application/ports/out/`), sobre `ota_no_show_report`:
+     `insertPending(tx, reservationId, bookingId)`; `findPending()` (por `created_at`, con el índice
+     parcial); `markReported(reservationId, at)` (`REPORTED`, `reported_at = at`); `markRejected(reservationId)`
+     (`REJECTED`); y `countAttempt(reservationId)` (sigue `PENDING`). Los tres últimos suman un intento y solo
+     cambian una fila que sigue `PENDING`.
+   - **`publish`**, por cada pendiente, llama a `ChannexPort.reportNoShow(bookingId)`:
+     - `200`: `markReported` con la hora del `Clock`.
+     - `404` o `422` (`ChannexRejectedError`): `markRejected` y una advertencia en el log; no se reintenta.
+     - Otro `4xx` (`ChannexRejectedError`): `countAttempt` y sigue con la siguiente; es de ese reporte, así
+       que se reintenta en el ciclo siguiente.
+     - `401`, `403`, `429`, `5xx` o sin respuesta (`ChannexUnauthorizedError`, `ChannexRateLimitedError` o
+       `ChannexUnavailableError`): `countAttempt` y **se detiene**: las demás fallarían igual, y con un `429`
+       hay que respetar la pausa. Todas siguen `PENDING` y se reintentan en el ciclo siguiente.
+
+     Las advertencias llevan el `reservationId` y el código de Channex, sin datos personales.
+   - **`ChannexSyncJob`** llama a `publish` en cada ciclo, después de la lectura del feed (y, cuando
+     exista, del envío de la disponibilidad de `configure-ota`), con el mismo bloqueo asesor. Lo llama
+     aunque la lectura del feed haya fallado: el reporte no depende del feed.
 
 ## Puntos abiertos
 

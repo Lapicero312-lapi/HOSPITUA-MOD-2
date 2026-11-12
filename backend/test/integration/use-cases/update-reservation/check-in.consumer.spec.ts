@@ -114,12 +114,20 @@ describe('CheckInConsumer con RabbitMQ y PostgreSQL reales (T015)', () => {
       await import('../../../../src/infrastructure/config/messaging.module.js');
     const { ConsumersModule } =
       await import('../../../../src/infrastructure/in/messaging/consumers.module.js');
+    // Los consumidores llegan a update-reservation, que importa generate-ota-reservation (CHANNEX_PORT) y
+    // entrega el cierre del día (CLOSE_DAY_BATCH_SIZE): los dos son globales en la aplicación.
+    const { ChannexClientModule } =
+      await import('../../../../src/infrastructure/out/channex/channex-client.module.js');
+    const { CloseDayConfigModule } =
+      await import('../../../../src/infrastructure/config/close-day.config.js');
     moduleRef = await Test.createTestingModule({
       imports: [
         AppConfigModule,
         PersistenceModule,
         ClockModule,
         MessagingModule,
+        ChannexClientModule,
+        CloseDayConfigModule,
         ConsumersModule,
       ],
     }).compile();

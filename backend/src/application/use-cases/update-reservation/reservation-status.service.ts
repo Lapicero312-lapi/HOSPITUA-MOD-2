@@ -43,4 +43,11 @@ export class ReservationStatusService implements ReservationStatusPort {
       tx,
     );
   }
+
+  async markNotArrived(
+    tx: Transaction,
+    reservation: Reservation,
+  ): Promise<Reservation> {
+    return this.reservations.update(reservation.withNotArrivedRooms(), tx);
+  }
 }
