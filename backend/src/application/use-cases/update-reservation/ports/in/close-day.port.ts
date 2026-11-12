@@ -33,4 +33,14 @@ export interface CloseDay {
    * dejar ninguna reserva a medias.
    */
   execute(operationalDate: string): Promise<CloseDaySummary>;
+
+  /**
+   * Cierra, del más antiguo al más reciente, cada día operativo anterior a `today` (`AAAA-MM-DD`) que
+   * todavía tiene algo que cerrar (plan, punto 14; T022). Así la recuperación completa los días que no se
+   * cerraron, también si el servidor estuvo apagado varios días o un cierre se detuvo por la base de datos.
+   * El día `today` nunca se cierra.
+   * @returns El resumen de cada día cerrado, en orden; vacío si no había ninguno pendiente.
+   * @throws Error si falla una selección: se detiene en ese día y no sigue con los siguientes.
+   */
+  closePendingDays(today: string): Promise<CloseDaySummary[]>;
 }

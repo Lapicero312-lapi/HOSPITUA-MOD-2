@@ -35,8 +35,9 @@ let warnings: string[];
 let infos: string[];
 
 /**
- * Las reservas en memoria, como las vería la base: `findToClose` las selecciona con la misma regla del
- * repositorio, `lockByRef` las devuelve y `update` las guarda. El servicio de estados es el real.
+ * Las reservas en memoria, como las vería la base: `findToClose` y `findDaysToClose` las seleccionan con la
+ * misma regla del repositorio, `lockByRef` las devuelve y `update` las guarda. El servicio de estados es el
+ * real.
  */
 function aClose(stored: Reservation[], batchSize = 100) {
   const byRef = new Map(stored.map((r) => [r.reservationRef, r]));
@@ -53,6 +54,24 @@ function aClose(stored: Reservation[], batchSize = 100) {
           .map((r) => r.reservationRef)
           .sort()
           .slice(0, limit),
+      ),
+  );
+  const findDaysToClose = vi.fn<ReservationQueryPort['findDaysToClose']>(
+    (today) =>
+      Promise.resolve(
+        [
+          ...new Set(
+            [...byRef.values()]
+              .filter(
+                (r) =>
+                  r.startDate < today &&
+                  (['ACTIVE', 'PENDING'].includes(r.status) ||
+                    (r.status === 'IN_PROGRESS' &&
+                      r.rooms.some((room) => room.stayStatus === 'EXPECTED'))),
+              )
+              .map((r) => r.startDate),
+          ),
+        ].sort(),
       ),
   );
   const lockByRef = vi.fn((ref: string, _tx: Transaction) =>
@@ -74,7 +93,7 @@ function aClose(stored: Reservation[], batchSize = 100) {
     .mockResolvedValue(undefined);
   const run = vi.fn(<T>(work: (tx: Transaction) => Promise<T>) => work(tx));
   const service = new CloseDayService(
-    { findToClose } as unknown as ReservationQueryPort,
+    { findToClose, findDaysToClose } as unknown as ReservationQueryPort,
     reservations,
     new ReservationStatusService(reservations),
     { record },
@@ -85,6 +104,7 @@ function aClose(stored: Reservation[], batchSize = 100) {
   return {
     service,
     findToClose,
+    findDaysToClose,
     update,
     record,
     reportNoShow,
@@ -495,5 +515,103 @@ describe('CloseDayService (plan de update-reservation, "Cierre del día", D5 y p
     expect(infos).toEqual([
       `Cierre del día ${DAY}: 1 No-Show, 0 con habitaciones sin llegar, 0 completadas, 0 ignoradas y 0 con error.`,
     ]);
+  });
+  describe('closePendingDays: los días que quedaron sin cerrar (punto 14; T022)', () => {
+    /** Una reserva directa que llega ese día. */
+    const arrivingOn = (
+      startDate: string,
+      changes: Partial<ReservationProps> = {},
+    ) => aDirectReservation({ startDate, endDate: '2026-10-20', ...changes });
+
+    it('cierra cada día anterior a hoy que tiene algo pendiente, del más antiguo al más reciente, y nunca hoy', async () => {
+      const older = arrivingOn('2026-10-07');
+      const yesterday = arrivingOn(DAY);
+      const today = arrivingOn(NEXT);
+      const { service, findDaysToClose, findToClose, current } = aClose([
+        yesterday,
+        today,
+        older,
+      ]);
+
+      const summaries = await service.closePendingDays(NEXT);
+
+      expect(findDaysToClose).toHaveBeenCalledExactlyOnceWith(NEXT);
+      expect(summaries).toEqual([
+        {
+          operationalDate: '2026-10-07',
+          noShow: 1,
+          notArrived: 0,
+          completed: 0,
+          ignored: 0,
+          failed: 0,
+        },
+        {
+          operationalDate: DAY,
+          noShow: 1,
+          notArrived: 0,
+          completed: 0,
+          ignored: 0,
+          failed: 0,
+        },
+      ]);
+      // Un lote menor que CLOSE_DAY_BATCH_SIZE termina el día: una selección por día.
+      expect(findToClose.mock.calls.map(([day]) => day)).toEqual([
+        '2026-10-07',
+        DAY,
+      ]);
+      expect(current(older.reservationRef)?.status).toBe('NO_SHOW');
+      expect(current(yesterday.reservationRef)?.status).toBe('NO_SHOW');
+      expect(current(today.reservationRef)?.status).toBe('ACTIVE');
+    });
+
+    it('cada día lleva su propia fecha al aviso de la lista (T023)', async () => {
+      const older = arrivingOn('2026-10-07');
+      const yesterday = arrivingOn(DAY);
+      const { service, record } = aClose([older, yesterday]);
+
+      await service.closePendingDays(NEXT);
+
+      expect(record.mock.calls.map((call) => call[3])).toEqual([
+        '2026-10-07',
+        DAY,
+      ]);
+    });
+
+    it('sin días pendientes no selecciona ninguna reserva y devuelve una lista vacía', async () => {
+      const { service, findToClose, update } = aClose([arrivingOn(NEXT)]);
+
+      await expect(service.closePendingDays(NEXT)).resolves.toEqual([]);
+      expect(findToClose).not.toHaveBeenCalled();
+      expect(update).not.toHaveBeenCalled();
+    });
+
+    it('si un día se detiene por la base de datos, lanza y no sigue con los siguientes', async () => {
+      const older = arrivingOn('2026-10-07');
+      const yesterday = arrivingOn(DAY);
+      const { service, findToClose, current } = aClose([older, yesterday]);
+      findToClose.mockRejectedValueOnce(new Error('Connection terminated'));
+
+      await expect(service.closePendingDays(NEXT)).rejects.toThrow(
+        'Connection terminated',
+      );
+      expect(findToClose.mock.calls.map(([day]) => day)).toEqual([
+        '2026-10-07',
+      ]);
+      expect(current(older.reservationRef)?.status).toBe('ACTIVE');
+      expect(current(yesterday.reservationRef)?.status).toBe('ACTIVE');
+    });
+
+    it('la segunda vez ya no encuentra días pendientes (NFR-003)', async () => {
+      const { service, update } = aClose([
+        arrivingOn('2026-10-07'),
+        arrivingOn(DAY),
+      ]);
+
+      await service.closePendingDays(NEXT);
+      update.mockClear();
+
+      await expect(service.closePendingDays(NEXT)).resolves.toEqual([]);
+      expect(update).not.toHaveBeenCalled();
+    });
   });
 });
