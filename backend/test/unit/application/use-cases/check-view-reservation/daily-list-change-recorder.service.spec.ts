@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { Clock } from '../../../../../src/application/ports/out/clock.js';
-import type { DailyMessage } from '../../../../../src/application/ports/out/daily-message.repository.js';
+import type {
+  DailyMessage,
+  DailyMessageRepository,
+} from '../../../../../src/application/ports/out/daily-message.repository.js';
 import type {
   DailySequence,
   DailySequenceRepository,
@@ -125,7 +128,7 @@ function recorderWith(
   };
   const recorder = new DailyListChangeRecorderService(
     sequences as unknown as DailySequenceRepository,
-    messages,
+    messages as unknown as DailyMessageRepository,
     otaRepository as unknown as OtaRepository,
     clock,
   );

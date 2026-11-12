@@ -6,6 +6,7 @@ import { DailyListChangeRecorderService } from '../../../../src/application/use-
 import { GenerateDailyListService } from '../../../../src/application/use-cases/check-view-reservation/generate-daily-list.service.js';
 import { GENERATE_DAILY_LIST } from '../../../../src/application/use-cases/check-view-reservation/ports/in/generate-daily-list.port.js';
 import type { Reservation } from '../../../../src/domain/reservation/reservation.js';
+import type { DailyMessageRepository } from '../../../../src/application/ports/out/daily-message.repository.js';
 import { TypeOrmDailyMessageRepository } from '../../../../src/infrastructure/out/persistence/repositories/daily-message.repository.js';
 import { TypeOrmDailySequenceRepository } from '../../../../src/infrastructure/out/persistence/repositories/daily-sequence.repository.js';
 import { TypeOrmOtaRepository } from '../../../../src/infrastructure/out/persistence/repositories/ota.repository.js';
@@ -25,6 +26,7 @@ import {
   openTestDataSource,
   truncateAllTables,
 } from '../../support/database.js';
+import { FakeDailyListPublisherModule } from '../../support/fake-daily-list-publisher.js';
 
 /** El día operativo del ejemplo de "Lista del día" del plan, a las 00:00:02 de Colombia. */
 const TODAY = '2026-10-09';
@@ -393,7 +395,7 @@ describe('GenerateDailyList contra PostgreSQL real (T023)', () => {
         query,
         {
           insert: () => Promise.reject(new Error('se cayó la conexión')),
-        },
+        } as unknown as DailyMessageRepository,
         CLOCK,
       );
 
@@ -427,6 +429,7 @@ describe('CheckViewReservationModule exporta GenerateDailyList', () => {
         AppConfigModule,
         PersistenceModule,
         ClockModule,
+        FakeDailyListPublisherModule,
         CheckViewReservationModule,
       ],
       providers: [
