@@ -6,8 +6,8 @@ import {
 import {
   GUEST_DATA_REQUIRED,
   INVALID_CHARACTERS,
+  INVALID_DOCUMENT_TYPE,
 } from '../../../domain/shared/error-codes.js';
-import { INVALID_DOCUMENT_TYPE } from './error-codes.js';
 
 /**
  * Letras, dígitos y guion: los caracteres de la búsqueda por documento de `check-view-reservation`. Las

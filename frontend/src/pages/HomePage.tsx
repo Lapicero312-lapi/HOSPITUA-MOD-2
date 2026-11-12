@@ -9,6 +9,11 @@ export function HomePage() {
       <p>Operación de reservas y cumplimiento legal del hotel.</p>
       <ul className="home-links">
         <li>
+          <Link className="home-link" to="/reservas">
+            Reservas
+          </Link>
+        </li>
+        <li>
           <Link className="home-link" to="/sire">
             Exportar SIRE
           </Link>

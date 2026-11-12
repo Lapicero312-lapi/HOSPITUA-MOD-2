@@ -2,26 +2,10 @@
  * Códigos de error que solo usa `generate-direct-reservation`, con los mensajes literales de la tabla C de
  * su plan. Los que comparte con otros casos de uso están en `domain/shared/error-codes.ts`, y los que ya
  * lanza el dominio (`INVALID_ROOM_COUNT`, `GUEST_COUNT_TOO_LOW`, `NOTES_TOO_LONG`…) se quedan donde están.
- * Se lanzan con `new BusinessError(INVALID_DOCUMENT_TYPE.code, INVALID_DOCUMENT_TYPE.message)`.
+ * Los del titular y de las personas (`INVALID_DOCUMENT_TYPE`, `INVALID_EMAIL`, `INVALID_GUEST_COUNT`) también
+ * los usa la modificación de `update-reservation`, así que están en `domain/shared/error-codes.ts`.
+ * Se lanzan con `new BusinessError(NO_AVAILABILITY.code, NO_AVAILABILITY.message)`.
  */
-
-/** `documentType` no es `RC`, `TI`, `CC`, `CE`, `PAS` ni `NIT`. */
-export const INVALID_DOCUMENT_TYPE = {
-  code: 'INVALID_DOCUMENT_TYPE',
-  message: 'El tipo de documento no es válido.',
-} as const;
-
-/** `contactEmail` del titular con formato inválido. */
-export const INVALID_EMAIL = {
-  code: 'INVALID_EMAIL',
-  message: 'El correo electrónico no es válido.',
-} as const;
-
-/** `guestCount` de una habitación no es un entero positivo (el `0` es `GUEST_COUNT_TOO_LOW`, del dominio). */
-export const INVALID_GUEST_COUNT = {
-  code: 'INVALID_GUEST_COUNT',
-  message: 'La cantidad de personas debe ser un número entero mayor que cero.',
-} as const;
 
 /** `VerifyAvailability` encuentra menos habitaciones disponibles que las pedidas por categoría. */
 export const NO_AVAILABILITY = {
