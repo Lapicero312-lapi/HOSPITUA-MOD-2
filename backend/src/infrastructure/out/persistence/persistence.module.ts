@@ -9,6 +9,7 @@ import { DAILY_MESSAGE_REPOSITORY } from '../../../application/ports/out/daily-m
 import { DAILY_SEQUENCE_REPOSITORY } from '../../../application/ports/out/daily-sequence.repository.js';
 import { MIGRATORY_MOVEMENT_REPOSITORY } from '../../../application/ports/out/migratory-movement.repository.js';
 import { OTA_BOOKING_REVISION_REPOSITORY } from '../../../application/ports/out/ota-booking-revision.repository.js';
+import { OTA_NO_SHOW_REPORT_REPOSITORY } from '../../../application/ports/out/ota-no-show-report.repository.js';
 import { OTA_REPOSITORY } from '../../../application/ports/out/ota.repository.js';
 import { ARI_PENDING_CHANGE_REPOSITORY } from '../../../application/ports/out/ari-pending-change.repository.js';
 import { OTA_ROOM_TYPE_MAPPING_REPOSITORY } from '../../../application/ports/out/ota-room-type-mapping.repository.js';
@@ -31,6 +32,7 @@ import { TypeOrmAriPendingChangeRepository } from './repositories/ari-pending-ch
 import { TypeOrmOtaRoomTypeMappingRepository } from './repositories/ota-room-type-mapping.repository.js';
 import { TypeOrmMigratoryMovementRepository } from './repositories/migratory-movement.repository.js';
 import { TypeOrmOtaBookingRevisionRepository } from './repositories/ota-booking-revision.repository.js';
+import { TypeOrmOtaNoShowReportRepository } from './repositories/ota-no-show-report.repository.js';
 import { TypeOrmOtaRepository } from './repositories/ota.repository.js';
 import { TypeOrmReservationQuery } from './repositories/reservation-query.repository.js';
 import { TypeOrmReservationRepository } from './repositories/reservation.repository.js';
@@ -86,6 +88,10 @@ import { TypeOrmTransactionRunner } from './typeorm-transaction.js';
       useClass: TypeOrmOtaBookingRevisionRepository,
     },
     {
+      provide: OTA_NO_SHOW_REPORT_REPOSITORY,
+      useClass: TypeOrmOtaNoShowReportRepository,
+    },
+    {
       provide: OTA_ROOM_TYPE_MAPPING_REPOSITORY,
       useClass: TypeOrmOtaRoomTypeMappingRepository,
     },
@@ -116,6 +122,7 @@ import { TypeOrmTransactionRunner } from './typeorm-transaction.js';
     DAILY_MESSAGE_REPOSITORY,
     COMMISSION_AUDIT_REPOSITORY,
     OTA_BOOKING_REVISION_REPOSITORY,
+    OTA_NO_SHOW_REPORT_REPOSITORY,
     OTA_ROOM_TYPE_MAPPING_REPOSITORY,
     ARI_PENDING_CHANGE_REPOSITORY,
     PROCESSED_MESSAGE_REPOSITORY,

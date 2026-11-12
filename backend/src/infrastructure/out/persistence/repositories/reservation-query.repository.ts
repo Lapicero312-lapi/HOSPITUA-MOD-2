@@ -231,6 +231,24 @@ export class TypeOrmReservationQuery implements ReservationQueryPort {
     return [...byRef.values()];
   }
 
+  async findToClose(
+    operationalDate: string,
+    afterRef: string | null,
+    limit: number,
+  ): Promise<string[]> {
+    const rows: { reservation_ref: string }[] = await this.dataSource.query(
+      // El orden y el corte comparan el mismo texto, así un lote empieza justo después del anterior.
+      `SELECT reservation_ref::text AS reservation_ref FROM reservation
+       WHERE start_date = $1::date
+         AND status IN ('ACTIVE', 'PENDING', 'IN_PROGRESS')
+         AND ($2::text IS NULL OR reservation_ref::text > $2::text)
+       ORDER BY reservation_ref::text
+       LIMIT $3`,
+      [operationalDate, afterRef, limit],
+    );
+    return rows.map((row) => row.reservation_ref);
+  }
+
   /** El nombre de la agencia de cada reserva `OTA` de la página. */
   private async otaNamesOf(ids: string[]): Promise<Map<string, string>> {
     const rows: { id: string; name: string }[] = await this.dataSource.query(
