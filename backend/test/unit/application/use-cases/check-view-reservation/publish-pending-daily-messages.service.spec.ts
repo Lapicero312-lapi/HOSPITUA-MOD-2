@@ -160,6 +160,15 @@ describe('PublishPendingDailyMessages (T026)', () => {
     expect(calls).toEqual([`find ${UNPUBLISHED_BATCH}`]);
   });
 
+  it('lee de a 100, como dice el plan (findUnpublished(100))', async () => {
+    const { repository } = repositoryWith([]);
+    const { publisher } = publisherFailing();
+
+    await serviceWith(repository, publisher).execute();
+
+    expect(repository.findUnpublished).toHaveBeenCalledExactlyOnceWith(100);
+  });
+
   describe('se detiene en el primero que no puede salir: un mensaje nunca sale antes que uno anterior', () => {
     it('uno FAILED: los siguientes esperan detrás', async () => {
       const { repository } = repositoryWith([
