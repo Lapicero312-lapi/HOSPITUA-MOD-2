@@ -29,6 +29,38 @@
   font-weight: 600;
 }
 
+/* La cifra del periodo: una tarjeta entre el periodo y la tabla (`sStats` del wireframe). */
+.sire-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin: 0 0 1.25rem;
+}
+
+.sire-stat {
+  min-width: 12rem;
+  padding: 0.875rem 1.25rem;
+  background-color: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--sire-radius);
+  box-shadow: var(--sire-shadow);
+}
+
+.sire-stat dt {
+  color: var(--color-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.sire-stat dd {
+  margin: 0.25rem 0 0;
+  font-size: 1.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
 .sire-panel {
   margin-bottom: 1.25rem;
   overflow: hidden;
@@ -138,11 +170,6 @@
   gap: 0.75rem;
   padding: 0.75rem 1.25rem;
   font-size: 0.875rem;
-}
-
-.sire-pagination > span:first-child {
-  margin-right: auto;
-  color: var(--color-muted);
 }
 
 /* Sin periodo, mientras carga o sin extranjeros: un mensaje centrado dentro del panel. */

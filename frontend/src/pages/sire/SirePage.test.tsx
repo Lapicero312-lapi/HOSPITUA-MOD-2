@@ -100,16 +100,25 @@ const errorResponse = (errorCode: string, message: string, status = 400) =>
     status,
   );
 
-/** El archivo de A: las líneas con CRLF y las cabeceras de la exportación. */
-const fileResponse = (lines: number) =>
+/**
+ * El archivo de A: las líneas con su fin de línea (CRLF por defecto; `SIRE_LINE_BREAK` se puede configurar) y
+ * las cabeceras de la exportación. `disposition: null` responde sin `Content-Disposition`.
+ */
+const fileResponse = (
+  lines: number,
+  {
+    lineBreak = '\r\n',
+    disposition = `attachment; filename="SIRE_${EXPORT_ID}.txt"`,
+  }: { lineBreak?: string; disposition?: string | null } = {},
+) =>
   new Response(
-    Array.from({ length: lines }, () => `${JOHN_LINE}\r\n`).join(''),
+    Array.from({ length: lines }, () => `${JOHN_LINE}${lineBreak}`).join(''),
     {
       status: 200,
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
         'Export-Id': EXPORT_ID,
-        'Content-Disposition': `attachment; filename="SIRE_${EXPORT_ID}.txt"`,
+        ...(disposition === null ? {} : { 'Content-Disposition': disposition }),
       },
     },
   );
@@ -179,6 +188,14 @@ const movementRows = () =>
 const downloadAll = () =>
   screen.getByRole('button', { name: 'Descargar todo el periodo (.TXT)' });
 
+/** La cifra de la tarjeta "Movimientos en el periodo", o `null` si la tarjeta no está. */
+const periodCount = () => {
+  const label = screen.queryByText('Movimientos en el periodo');
+  return label === null
+    ? null
+    : (label.nextElementSibling?.textContent ?? null);
+};
+
 /**
  * La pantalla "Exportar SIRE" (spec de `export-sire-file`, historia 1 y FR-010) con A, B y C del plan
  * simulados.
@@ -208,6 +225,7 @@ describe('Pantalla "Exportar SIRE"', () => {
       expect(screen.getByLabelText('Fecha inicial')).toHaveValue('2026-10-01');
       expect(downloadAll()).toBeDisabled();
       expect(fetchMock).not.toHaveBeenCalled();
+      expect(periodCount()).toBeNull();
     });
 
     it('con las dos fechas consulta el periodo desde la página 1 y lo guarda en la dirección', async () => {
@@ -282,6 +300,7 @@ describe('Pantalla "Exportar SIRE"', () => {
       );
       expect(screen.queryByRole('table')).not.toBeInTheDocument();
       expect(downloadAll()).toBeDisabled();
+      expect(periodCount()).toBeNull();
     });
   });
 
@@ -314,9 +333,40 @@ describe('Pantalla "Exportar SIRE"', () => {
           'Salida12/10/2026',
         ],
       ]);
-      expect(screen.getByText('2 movimientos')).toBeInTheDocument();
+      expect(periodCount()).toBe('2');
       expect(screen.getByText('Página 1 de 1')).toBeInTheDocument();
       expect(downloadAll()).toBeEnabled();
+    });
+
+    it('la tarjeta "Movimientos en el periodo" va entre el periodo y la tabla, como en el wireframe, y no se repite en la paginación', async () => {
+      backend({});
+      renderAt(OCTOBER);
+
+      const table = await screen.findByRole('table');
+      const card = screen.getByText('Movimientos en el periodo');
+      expect(card.tagName).toBe('DT');
+      expect(card.nextElementSibling?.tagName).toBe('DD');
+      expect(
+        screen.getByLabelText('Fecha final').compareDocumentPosition(card) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      expect(
+        card.compareDocumentPosition(table) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      expect(
+        screen.getByRole('navigation', { name: 'Paginación' }),
+      ).not.toHaveTextContent(/movimiento/);
+    });
+
+    it('la tarjeta cuenta todos los movimientos del periodo, no solo los de la página', async () => {
+      backend({
+        list: () =>
+          jsonResponse(pageOf([JOHN_ENTRY], { totalItems: 51, totalPages: 2 })),
+      });
+      renderAt(OCTOBER);
+
+      await screen.findByRole('table');
+      expect(periodCount()).toBe('51');
     });
 
     it('un periodo sin extranjeros muestra el mensaje del backend y no deja descargar (listar no es un error)', async () => {
@@ -326,6 +376,7 @@ describe('Pantalla "Exportar SIRE"', () => {
       expect(await screen.findByText(NO_MOVEMENTS)).toBeInTheDocument();
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
       expect(downloadAll()).toBeDisabled();
+      expect(periodCount()).toBe('0');
     });
 
     it('pagina de a 50: "Siguiente" pide la página 2 con el mismo periodo', async () => {
@@ -378,6 +429,7 @@ describe('Pantalla "Exportar SIRE"', () => {
       expect(
         await screen.findByText('Cargando movimientos…'),
       ).toBeInTheDocument();
+      expect(periodCount()).toBeNull();
     });
   });
 
@@ -406,6 +458,51 @@ describe('Pantalla "Exportar SIRE"', () => {
       const [file, fileName] = vi.mocked(saveFile).mock.calls[0];
       expect(fileName).toBe(`SIRE_${EXPORT_ID}.txt`);
       expect(await file.text()).toBe(`${JOHN_LINE}\r\n${JOHN_LINE}\r\n`);
+    });
+
+    it('cuenta las líneas también con un fin de línea LF (SIRE_LINE_BREAK se puede configurar)', async () => {
+      backend({ exportResponse: () => fileResponse(3, { lineBreak: '\n' }) });
+      renderAt(OCTOBER);
+      await screen.findByRole('table');
+
+      await userEvent.click(downloadAll());
+
+      expect(await screen.findByRole('status')).toHaveTextContent(
+        `Archivo SIRE_${EXPORT_ID}.txt descargado: 3 movimientos.`,
+      );
+    });
+
+    it('guarda el archivo con el nombre de Content-Disposition, aunque no sea el de respaldo', async () => {
+      backend({
+        exportResponse: () =>
+          fileResponse(1, {
+            disposition: 'attachment; filename="SIRE_octubre.txt"',
+          }),
+      });
+      renderAt(OCTOBER);
+      await screen.findByRole('table');
+
+      await userEvent.click(downloadAll());
+
+      expect(await screen.findByRole('status')).toHaveTextContent(
+        'Archivo SIRE_octubre.txt descargado: 1 movimiento.',
+      );
+      expect(vi.mocked(saveFile).mock.calls[0][1]).toBe('SIRE_octubre.txt');
+    });
+
+    it('sin Content-Disposition, el nombre es SIRE_<Export-Id>.txt', async () => {
+      backend({ exportResponse: () => fileResponse(1, { disposition: null }) });
+      renderAt(OCTOBER);
+      await screen.findByRole('table');
+
+      await userEvent.click(downloadAll());
+
+      expect(await screen.findByRole('status')).toHaveTextContent(
+        `Archivo SIRE_${EXPORT_ID}.txt descargado: 1 movimiento.`,
+      );
+      expect(vi.mocked(saveFile).mock.calls[0][1]).toBe(
+        `SIRE_${EXPORT_ID}.txt`,
+      );
     });
 
     it('"Descargar" de una fila exporta solo ese movimiento', async () => {

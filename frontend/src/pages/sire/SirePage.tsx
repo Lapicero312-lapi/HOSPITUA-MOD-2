@@ -151,6 +151,7 @@ export function SirePage() {
           </p>
         )}
       </div>
+      <PeriodStats complete={complete} query={movements} />
       <div className="sire-panel">
         <h2 className="sire-subtitle">Movimientos del periodo</h2>
         <Movements
@@ -175,6 +176,31 @@ export function SirePage() {
         />
       )}
     </section>
+  );
+}
+
+/**
+ * La cifra del periodo en su tarjeta, entre el periodo y la tabla, como `sStats` del wireframe: todos los
+ * movimientos del periodo (`totalItems`), no solo los de la página. Sin periodo completo, mientras carga o con
+ * un error no se muestra.
+ */
+function PeriodStats({
+  complete,
+  query,
+}: {
+  complete: boolean;
+  query: UseQueryResult<SireMovementPage>;
+}) {
+  if (!complete || !query.isSuccess) {
+    return null;
+  }
+  return (
+    <dl className="sire-stats">
+      <div className="sire-stat">
+        <dt>Movimientos en el periodo</dt>
+        <dd>{query.data.totalItems}</dd>
+      </div>
+    </dl>
   );
 }
 
@@ -273,11 +299,6 @@ function Movements({
         </tbody>
       </table>
       <nav className="sire-pagination" aria-label="Paginación">
-        <span>
-          {list.totalItems === 1
-            ? '1 movimiento'
-            : `${list.totalItems} movimientos`}
-        </span>
         <button
           type="button"
           disabled={list.page <= 1}
