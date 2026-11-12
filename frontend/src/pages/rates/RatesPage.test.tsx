@@ -229,11 +229,13 @@ describe('Pantalla "Tarifas"', () => {
     const router = renderAt('/');
     const navigation = screen.getByRole('navigation', { name: 'Principal' });
 
-    expect(
-      within(navigation)
-        .getAllByRole('link')
-        .map((link) => link.textContent),
-    ).toEqual(['Inicio', 'Habitaciones', 'Tarifas', 'Agencias OTA']);
+    // Solo el lugar de "Tarifas": cada pantalla nueva agrega su enlace al menú.
+    const links = within(navigation)
+      .getAllByRole('link')
+      .map((link) => link.textContent);
+    expect(links).toContain('Tarifas');
+    expect(links.indexOf('Tarifas')).toBe(links.indexOf('Habitaciones') + 1);
+    expect(links.indexOf('Agencias OTA')).toBe(links.indexOf('Tarifas') + 1);
     await userEvent.click(
       within(navigation).getByRole('link', { name: 'Tarifas' }),
     );
