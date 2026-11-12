@@ -437,6 +437,13 @@ canal y `REMOVED`); una con llegada futura (sin aviso); y los intentos sobre `IN
       };
     };
     ```
+11. **OpenAPI (T015).** `/api/docs` documenta A, la única ruta: el parámetro `reservationRef`, la cabecera
+    `X-User` (obligatoria), el cuerpo con `updatedAt` y `acknowledged` obligatorios y `reason` opcional, la
+    respuesta `200` con el ejemplo de A y la `400` con un ejemplo por cada código de la tabla C, en el orden de
+    la regla 3, y por `INVALID_USER` (`X-User` de más de 100 caracteres), la otra respuesta de la cabecera. B no
+    aparece en `/api/docs`, porque no tiene ruta: es el puerto `CancelReservation`, que
+    `generate-ota-reservation` llama por dentro. Lo que T015 dice de B queda en la descripción de A: Booking
+    cancela por el feed de Channex, y por eso A responde `OTA_RESERVATION_CANCEL_VIA_API` a una reserva de OTA.
 
 ## Puntos abiertos
 

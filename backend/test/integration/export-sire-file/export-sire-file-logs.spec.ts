@@ -90,6 +90,7 @@ type LogLine = {
 };
 
 const EXPORTS_ROUTE = '/api/sire/exports';
+const MOVEMENTS_ROUTE = '/api/sire/movements';
 const PREVIEW_ROUTE = '/api/sire/movements/:movementId/preview';
 
 describe('Exportar archivo SIRE: logs sin datos personales de los huéspedes (NFR-002, T017)', () => {
@@ -202,6 +203,28 @@ describe('Exportar archivo SIRE: logs sin datos personales de los huéspedes (NF
     expect((res.body as { line: string }).line).toContain('C4X8R21K');
     await expectCleanLogs('GET', PREVIEW_ROUTE, 200);
     expect(allLogs()).not.toContain(movementId);
+  });
+
+  it('el listado de los movimientos: la respuesta trae los datos del huésped, el log no', async () => {
+    const res = await request(sire.app.getHttpServer())
+      .get('/api/sire/movements')
+      .query({ startDate: '2026-10-01', endDate: '2026-10-31' })
+      .expect(200);
+
+    // La respuesta sí los trae: así se sabe que se revisa un listado con datos.
+    const body = JSON.stringify(res.body);
+    expect(body).toContain('X99');
+    expect(body).toContain('Lukas Becker');
+    await expectCleanLogs('GET', MOVEMENTS_ROUTE, 200);
+  });
+
+  it('un rechazo del listado (INVALID_PAGE)', async () => {
+    await request(sire.app.getHttpServer())
+      .get('/api/sire/movements')
+      .query({ startDate: '2026-10-01', endDate: '2026-10-31', page: '0' })
+      .expect(400);
+
+    await expectCleanLogs('GET', MOVEMENTS_ROUTE, 400, 'INVALID_PAGE');
   });
 
   it('un dato del huésped que no se puede escribir (INVALID_GUEST_CHARACTERS): el log no dice cuál ni de quién', async () => {

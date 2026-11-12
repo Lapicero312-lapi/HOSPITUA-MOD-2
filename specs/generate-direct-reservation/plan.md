@@ -670,6 +670,38 @@ y por caída del Módulo 3.
     Los pasos 2 a 4 van en una función que también usa `CreateDirectReservation` (T008).
     `DirectReservationsController` convierte el resultado en el JSON de A con `toAvailabilityDto` y
     `toQuotesDto(quotes, quoteRequests, true)`, y responde `200`.
+12. **`CreateDirectReservation` (T008).** Puerto de entrada en
+    `ports/in/create-direct-reservation.port.ts`:
+
+    ```typescript
+    interface CreateDirectReservation {
+      // @throws BusinessError con los códigos de la tabla C.
+      execute(body: unknown): Promise<ReservationDetail>;   // el de GetReservationDetail (C3)
+    }
+    ```
+
+    Pasos, en el orden de la regla 2; el primero que falla da el error:
+    1. `readCreationRequest(body, clock.today())` (punto 10). La `currency` de cada `expectedRates` se
+       revisa en el paso 1, con el `lodgingAmount`.
+    2. Disponibilidad, asignación y capacidad: la misma función de la vista previa (punto 11, pasos 2 a 4),
+       con una consulta nueva a `VerifyAvailability.check`, también de los mantenimientos (regla 9).
+    3. `verifyQuotes` con una solicitud por habitación (`key` = la posición como texto, contexto
+       `NEW_RESERVATION`) y, por `key`, el `lodgingAmount` y la `currency` de `expectedRates`. Guarda las
+       cotizaciones nuevas, nunca los montos que envió el cliente.
+    4. `Reservation.createDirect` (punto 8) con un titular nuevo, las `notes` y, por habitación, la
+       habitación asignada, su `guestCount` y su cotización (`lodgingAmount` y `quoteId`).
+    5. `withNewReservationRef` (regla 7): cada intento abre su propia transacción con `TransactionRunner` e
+       inserta la reserva con `ReservationRepository.insert`.
+    6. Después del `COMMIT`, `GetReservationDetail.execute(reservationRef)` (regla 6 del plan base): la
+       respuesta tiene la misma forma que C3, con su `updatedAt`.
+
+    `DirectReservationsController` responde `201` con `Location: /api/reservations/{reservationRef}` y el
+    cuerpo de `toReservationDetailBody`.
+
+    Lo agregan sus tareas: el reintento ante `RoomOverlapError` y `AVAILABILITY_TAKEN` (T009), las
+    llamadas a `DailyListChangeRecorder` y a `AriChangeRecorder` dentro de la transacción (T010) y la
+    `Idempotency-Key` (T019). Hasta T009, un solape rechazado por la base responde
+    `REQUEST_NOT_PROCESSED`.
 
 ## Puntos abiertos
 
