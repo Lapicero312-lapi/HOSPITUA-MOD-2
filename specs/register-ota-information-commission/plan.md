@@ -310,6 +310,94 @@ interface OtaConnectionTracker {
 | `DUPLICATE_CONFIRMATION_CODE` | El `externalConfirmationCode` ya existe para esa `Ota` | "El código de confirmación ya está registrado para esta agencia." |
 | `OTA_NOT_FOUND` | La `Ota` no existe | "La agencia no existe." |
 
+### C. Contratos internos de la historia 2
+
+1. **`ListOtaCommissions` (T011).** Puerto en `ports/in/list-ota-commissions.port.ts`:
+
+   ```typescript
+   type OtaCommissionFilters = {
+     dateFrom: string;
+     dateTo: string;
+     commissionStatus: CommissionStatus | null;
+     reservationStatus: ReservationStatus | null;
+     otaId: string | null;
+   };
+
+   interface ListOtaCommissions {
+     // items con los campos de A1, page, pageSize 100, totalItems y totalPages
+     execute(filters: OtaCommissionFilters, page: number): Promise<OtaCommissionPage>;
+   }
+   ```
+
+   - **Validación** en el controlador (`readOtaCommissionQuery`). El primero que falla responde:
+     1. las fechas:
+        - falta una o las dos: `INCOMPLETE_DATE_RANGE`;
+        - no es una `AAAA-MM-DD` real: `INVALID_DATE`;
+        - `dateFrom` posterior a `dateTo`: `INVALID_DATE_RANGE`;
+        - más de 366 días: `DATE_RANGE_TOO_LARGE`;
+     2. `commissionStatus`: `INVALID_COMMISSION_STATUS`;
+     3. `reservationStatus`: `INVALID_STATUS`;
+     4. `otaId` que no es un UUID: `OTA_NOT_FOUND`; uno que no existe da `items: []`;
+     5. `page` que no es un entero ≥ 1: `INVALID_PAGE` ("El número de página debe ser 1 o mayor.").
+   - **Consulta:** `ReservationQueryPort.listOtaCommissions(filters, page)`. Solo `source = OTA` con
+     `end_date` dentro del rango inclusivo, ordenadas por `end_date` y `reservation_ref` ascendentes, de a 100.
+     Una página que pasa de la última devuelve la última válida, como C1 de `check-view-reservation`.
+   - **DTO:** el porcentaje como número JSON (`Number`) y los importes con dos decimales.
+
+2. **`ReconcileCommissions` (T012 y T013).** Puerto en `ports/in/reconcile-commissions.port.ts`:
+
+   ```typescript
+   interface ReconcileCommissions {
+     execute(
+       action: 'RECONCILED' | 'PAID',
+       items: { reservationRef: string; grossAmount: string; commissionAmount: string }[],
+     ): Promise<{
+       action: 'RECONCILED' | 'PAID';
+       results: {
+         reservationRef: string;
+         result: 'APPLIED' | 'ALREADY_APPLIED' | 'REJECTED';
+         commissionStatus: CommissionStatus | null;
+         reason: string | null;
+       }[];
+       summary: { applied: number; alreadyApplied: number; rejected: number };
+     }>;
+   }
+   ```
+
+   - **Cuerpo** (`readReconciliationRequest`, en el controlador). El primero que falla responde y no se
+     procesa ningún ítem:
+     1. no es un objeto, o `items` no es una lista, está vacía o tiene más de `RECONCILIATION_MAX_ITEMS`:
+        `INVALID_RECONCILIATION_REQUEST`. El máximo llega por `@Inject`, como `CLOSE_DAY_BATCH_SIZE`;
+     2. `action`: `INVALID_RECONCILIATION_ACTION`;
+     3. por ítem, en orden:
+        - `reservationRef` que no es `RSV-` y 8 hexadecimales: `INVALID_RESERVATION_CODE`;
+        - un importe que no es un decimal no negativo con hasta dos decimales: `INVALID_AMOUNT`.
+   - **Cada ítem va en su propia transacción**, en el orden recibido, con
+     `ReservationRepository.lockByRef(ref, tx)`. El primer caso que se cumple da el resultado:
+     1. no existe: `REJECTED` `RESERVATION_NOT_FOUND`, con `commissionStatus` en `null`;
+     2. es `DIRECT`: `REJECTED` `NOT_OTA_RESERVATION`, con `commissionStatus` en `null`;
+     3. está `CANCELLED`: `RESERVATION_CANCELLED`;
+     4. está `NO_SHOW`: `RESERVATION_NO_SHOW`;
+     5. está en otro estado que no es `COMPLETED`: `RESERVATION_NOT_COMPLETED`;
+     6. el `grossAmount` o el `commissionAmount` no tienen el mismo valor que los guardados (`400` es igual a
+        `400.00`; el Módulo 3 no envía la moneda): `AMOUNT_MISMATCH`;
+     7. la comisión ya está en `action`: `ALREADY_APPLIED`, sin cambios ni auditoría;
+     8. `canChangeCommissionStatus` no permite el cambio: `INVALID_TRANSITION`;
+     9. si no, `Reservation.withCommissionStatus(action)` (un método nuevo del dominio),
+        `ReservationRepository.update` y `CommissionAuditRepository.record`. La auditoría lleva `action`,
+        `previousStatus`, los importes y el porcentaje de la reserva, el canal `MODULE3` y `performedBy`
+        `MODULE3`. El resultado es `APPLIED`.
+
+     Los rechazos de los casos 3 a 8 devuelven el `commissionStatus` actual. Un error inesperado revierte solo
+     ese ítem, que sale `REJECTED` con `REQUEST_NOT_PROCESSED`, y los demás siguen.
+
+3. **OpenAPI (T021).** `/api/docs` documenta A1, A2 y A3:
+   - **A1:** sus parámetros y la `200` con el ejemplo del plan;
+   - **A2:** el cuerpo con su ejemplo y la `200` con el ejemplo de resultados por ítem;
+   - **A3:** las dos rutas y su `400` con `OTA_NOT_FOUND`;
+   - **las `400` de A1 y A2:** un ejemplo por código, en el orden de validación de los puntos 1 y 2, y
+     `REQUEST_NOT_PROCESSED`.
+
 ## Reglas de negocio
 
 1. **Fórmula**: `commissionAmount = grossAmount × commissionPercentage / 100`, con `decimal.js`, **dos
