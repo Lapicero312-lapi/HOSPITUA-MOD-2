@@ -124,6 +124,13 @@ export interface ReservationQueryPort {
   ): Promise<string[]>;
 
   /**
+   * La recuperación del cierre del día (`update-reservation`, punto 14): los días (`AAAA-MM-DD`) anteriores
+   * a `today` que tienen alguna reserva en `ACTIVE` o `PENDING`, o en `IN_PROGRESS` con alguna habitación
+   * en `EXPECTED`, del más antiguo al más reciente y sin repetir.
+   */
+  findDaysToClose(today: string): Promise<string[]>;
+
+  /**
    * T033: las reservas `PENDING`, `ACTIVE` o `IN_PROGRESS` cuya estadía se cruza con el rango
    * (`start_date <= dateTo` y `end_date > dateFrom`), cada una con todas sus habitaciones (C5 y
    * "Consulta del Módulo 1"). Con `roomId`, solo las que tienen esa habitación entre las suyas, en
