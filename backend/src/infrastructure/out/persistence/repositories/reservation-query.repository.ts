@@ -1,8 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { DataSource, In } from 'typeorm';
 import {
+  OTA_COMMISSION_PAGE_SIZE,
   RESERVATION_PAGE_SIZE,
   type BlockingRoom,
+  type OtaCommissionFilters,
+  type OtaCommissionRow,
+  type OtaCommissionRows,
   type DailyListArrival,
   type ExpectedArrivalsAndDepartures,
   type NightBlockingRooms,
@@ -12,6 +16,11 @@ import {
   type StayRangeReservation,
 } from '../../../../application/ports/out/reservation-query.port.js';
 import type { Transaction } from '../../../../application/ports/out/transaction.js';
+import { Money } from '../../../../domain/shared/money.js';
+import type {
+  CommissionStatus,
+  ReservationStatus,
+} from '../../../../domain/shared/enums.js';
 import { reservationToDomain } from '../mappers/reservation.mapper.js';
 import { ReservationTable } from '../tables/reservation.tables.js';
 import { managerFor } from '../typeorm-transaction.js';
@@ -247,6 +256,84 @@ export class TypeOrmReservationQuery implements ReservationQueryPort {
       [operationalDate, afterRef, limit],
     );
     return rows.map((row) => row.reservation_ref);
+  }
+
+  async listOtaCommissions(
+    filters: OtaCommissionFilters,
+    page: number,
+  ): Promise<OtaCommissionRows> {
+    if (!Number.isInteger(page) || page < 1) {
+      throw new Error(`La página ${page} no es un entero de 1 en adelante.`);
+    }
+    const conditions = [
+      "r.source = 'OTA'",
+      'r.end_date >= $1::date',
+      'r.end_date <= $2::date',
+    ];
+    const params: unknown[] = [filters.dateFrom, filters.dateTo];
+    const add = (
+      condition: (placeholder: string) => string,
+      value: unknown,
+    ) => {
+      params.push(value);
+      conditions.push(condition(`${params.length}`));
+    };
+    if (filters.commissionStatus !== null) {
+      add((p) => `r.commission_status = ${p}`, filters.commissionStatus);
+    }
+    if (filters.reservationStatus !== null) {
+      add((p) => `r.status = ${p}`, filters.reservationStatus);
+    }
+    if (filters.otaId !== null) {
+      add((p) => `r.ota_id = ${p}::uuid`, filters.otaId);
+    }
+    const where = `WHERE ${conditions.join(' AND ')}`;
+    const [{ total }]: { total: number }[] = await this.dataSource.query(
+      `SELECT count(*)::int AS total FROM reservation r ${where}`,
+      params,
+    );
+    // Las fechas y los importes salen como texto: así no dependen de cómo `pg` convierte `date` y `numeric`.
+    const rows: {
+      reservation_ref: string;
+      ota_id: string;
+      ota_name: string;
+      external_confirmation_code: string;
+      status: ReservationStatus;
+      start_date: string;
+      end_date: string;
+      gross_amount: string;
+      currency: string;
+      commission_percentage: string;
+      commission_amount: string;
+      commission_status: CommissionStatus;
+    }[] = await this.dataSource.query(
+      `SELECT r.reservation_ref, r.ota_id::text AS ota_id, o.name AS ota_name, r.external_confirmation_code,
+              r.status, to_char(r.start_date, 'YYYY-MM-DD') AS start_date,
+              to_char(r.end_date, 'YYYY-MM-DD') AS end_date, r.gross_amount::text AS gross_amount,
+              r.currency, r.commission_percentage::text AS commission_percentage,
+              r.commission_amount::text AS commission_amount, r.commission_status
+       FROM reservation r JOIN ota o ON o.id = r.ota_id
+       ${where}
+       ORDER BY r.end_date ASC, r.reservation_ref ASC
+       LIMIT ${OTA_COMMISSION_PAGE_SIZE} OFFSET ${params.length + 1}`,
+      [...params, (page - 1) * OTA_COMMISSION_PAGE_SIZE],
+    );
+    return {
+      totalItems: total,
+      items: rows.map((row): OtaCommissionRow => ({
+        reservationRef: row.reservation_ref,
+        otaId: row.ota_id,
+        otaName: row.ota_name,
+        externalConfirmationCode: row.external_confirmation_code,
+        status: row.status,
+        startDate: row.start_date,
+        endDate: row.end_date,
+        grossAmount: Money.of(row.gross_amount, row.currency),
+        commissionPercentage: row.commission_percentage,
+        commissionAmount: Money.of(row.commission_amount, row.currency),
+        commissionStatus: row.commission_status,
+      })),
+    };
   }
 
   async findDaysToClose(today: string): Promise<string[]> {
