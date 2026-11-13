@@ -10,6 +10,7 @@ import {
 } from '../../../../../src/application/ports/out/reservation.repository.js';
 import { AppModule } from '../../../../../src/app.module.js';
 import { configureApp } from '../../../../../src/configure-app.js';
+import { CloseDayJob } from '../../../../../src/infrastructure/in/jobs/close-day.job.js';
 import {
   aDirectReservation,
   aDirectRoom,
@@ -286,6 +287,10 @@ describe('GET /api/reservations/day-summary (e2e)', () => {
         today: () => SUMMARY_DAY,
         now: () => new Date(`${SUMMARY_DAY}T15:00:00Z`),
       })
+      // Con el reloj fijo, el cierre del día no corre al arrancar: en la base compartida cerraría las
+      // reservas que otras e2e guardaron antes de ese día (recuperación de T022 de update-reservation).
+      .overrideProvider(CloseDayJob)
+      .useValue({})
       .compile();
     app = moduleRef.createNestApplication({ logger: false });
     configureApp(app);
