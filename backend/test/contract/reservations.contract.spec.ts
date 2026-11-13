@@ -18,6 +18,7 @@ import {
 } from '../../src/application/use-cases/check-view-reservation/ports/in/get-reservation-for-billing.port.js';
 import { LIST_RESERVATIONS } from '../../src/application/use-cases/check-view-reservation/ports/in/list-reservations.port.js';
 import { ASSIGN_ROOM } from '../../src/application/use-cases/update-reservation/ports/in/assign-room.port.js';
+import { CONFIRM_MODIFICATION } from '../../src/application/use-cases/update-reservation/ports/in/confirm-modification.port.js';
 import { PREVIEW_MODIFICATION } from '../../src/application/use-cases/update-reservation/ports/in/preview-modification.port.js';
 import { BusinessError } from '../../src/domain/shared/business-error.js';
 import { RESERVATION_NOT_FOUND } from '../../src/domain/shared/error-codes.js';
@@ -127,6 +128,7 @@ describe('Contrato de C4 y C5 (T034 de check-view-reservation)', () => {
         { provide: CANCEL_RESERVATION, useValue: {} },
         { provide: PREVIEW_MODIFICATION, useValue: {} },
         { provide: ASSIGN_ROOM, useValue: {} },
+        { provide: CONFIRM_MODIFICATION, useValue: {} },
       ],
     }).compile();
     app = moduleRef.createNestApplication({ logger: false });
