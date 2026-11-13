@@ -37,6 +37,15 @@ describe('Rutas', () => {
     ).toBeInTheDocument();
     expect(screen.getByText('HOSPITUA · Recepción')).toBeInTheDocument();
   });
+
+  it('la ruta duplicada de agencias OTA no abre una segunda pantalla', () => {
+    signIn('Ana Pérez');
+    renderAt('/otas');
+
+    expect(
+      screen.getByRole('heading', { name: 'La página no existe.' }),
+    ).toBeInTheDocument();
+  });
 });
 
 describe('Login simulado', () => {
