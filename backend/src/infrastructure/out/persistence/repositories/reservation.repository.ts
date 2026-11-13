@@ -55,6 +55,22 @@ export class TypeOrmReservationRepository implements ReservationRepository {
     return rows.length > 0;
   }
 
+  async findByOtaConfirmationCode(
+    otaId: string,
+    externalConfirmationCode: string,
+    tx?: Transaction,
+  ): Promise<Reservation | null> {
+    const rows: { reservation_ref: string }[] = await managerFor(
+      this.dataSource,
+      tx,
+    ).query(
+      'SELECT reservation_ref FROM reservation WHERE ota_id = $1 AND external_confirmation_code = $2 LIMIT 1',
+      [otaId, externalConfirmationCode],
+    );
+    const [row] = rows;
+    return row === undefined ? null : this.findByRef(row.reservation_ref, tx);
+  }
+
   async lockByRef(
     reservationRef: string,
     tx: Transaction,

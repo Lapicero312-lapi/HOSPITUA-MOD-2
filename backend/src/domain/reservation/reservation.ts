@@ -362,6 +362,24 @@ export class Reservation {
   }
 
   /**
+   * Marca el conflicto de una reserva de Booking que un cambio de Booking no pudo tocar (B3 de
+   * `generate-ota-reservation`: una cancelación que llega con la reserva en `IN_PROGRESS`, `COMPLETED` o
+   * `NO_SHOW`). Lo demás no cambia.
+   * @throws Error si la reserva es directa: una reserva directa nunca está en conflicto.
+   */
+  withConflict(reason: ConflictReason, detectedAt: Date): Reservation {
+    if (this.props.source !== 'OTA') {
+      throw new Error(
+        `La reserva ${this.props.reservationRef} es directa: no puede estar en conflicto.`,
+      );
+    }
+    return Reservation.restore({
+      ...this.props,
+      conflict: { reason, detectedAt },
+    });
+  }
+
+  /**
    * Una reserva de Booking nueva (plan de `generate-ota-reservation`, punto 6): en `ACTIVE`, con cada
    * habitación en `EXPECTED` y sin tarifa por habitación. Nunca la rechaza por falta de lugar ni por
    * capacidad (D13): si hay motivo, marca el conflicto con el primero de `NO_ROOM_AVAILABLE` (alguna
