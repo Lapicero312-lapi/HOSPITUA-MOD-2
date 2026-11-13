@@ -1,5 +1,3 @@
-import type { Room } from '../../integration/room.js';
-
 /** Lo que el Módulo 2 envía a Channex por categoría (plan de `configure-ota`, A2 y C1, paso 1). */
 export type RoomTypeGroup = {
   categoryRoom: string;
@@ -22,9 +20,12 @@ export type AvailabilityRange = {
 /**
  * C1, paso 1 (T003): agrupa por categoría las habitaciones vendibles que informa el Módulo 1, con su
  * cantidad y su mayor capacidad. Ordenadas por categoría, para que el resultado no dependa del orden en
- * que llegan.
+ * que llegan. Solo lee `categoryRoom` y `maxCapacity`, así que recibe los `Room` del Módulo 1 sin
+ * convertirlos y el dominio no depende de ese tipo.
  */
-export function groupRoomsByCategory(rooms: readonly Room[]): RoomTypeGroup[] {
+export function groupRoomsByCategory(
+  rooms: readonly { categoryRoom: string; maxCapacity: number }[],
+): RoomTypeGroup[] {
   const groups = new Map<string, RoomTypeGroup>();
   for (const room of rooms) {
     const group = groups.get(room.categoryRoom);

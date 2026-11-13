@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { Room } from '../../../../../src/application/integration/room.js';
+import type { Room } from '../../../../src/application/integration/room.js';
 import {
   groupRoomsByCategory,
   toChannexRanges,
-} from '../../../../../src/application/use-cases/configure-ota/channex-grouping.js';
+} from '../../../../src/domain/ota/channex-grouping.js';
 
 const room = (
   roomNumber: string,
