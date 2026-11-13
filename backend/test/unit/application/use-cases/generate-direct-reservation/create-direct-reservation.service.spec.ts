@@ -18,6 +18,8 @@ import type {
   GetReservationDetail,
   ReservationDetail,
 } from '../../../../../src/application/use-cases/check-view-reservation/ports/in/get-reservation-detail.port.js';
+import type { DailyListChangeRecorder } from '../../../../../src/application/use-cases/check-view-reservation/ports/in/daily-list-change-recorder.port.js';
+import type { AriChangeRecorder } from '../../../../../src/application/use-cases/configure-ota/ports/in/ari-change-recorder.port.js';
 import { CreateDirectReservationService } from '../../../../../src/application/use-cases/generate-direct-reservation/create-direct-reservation.service.js';
 import type { Reservation } from '../../../../../src/domain/reservation/reservation.js';
 import { BusinessError } from '../../../../../src/domain/shared/business-error.js';
@@ -75,6 +77,7 @@ function aService(
   options: {
     availability?: AvailabilityResult;
     insert?: ReservationRepository['insert'];
+    recordDailyList?: DailyListChangeRecorder['record'];
   } = {},
 ) {
   const calls: string[] = [];
@@ -110,6 +113,17 @@ function aService(
       reservationRef: ref,
     } as unknown as ReservationDetail);
   });
+  const recordDailyList = vi.fn<DailyListChangeRecorder['record']>(
+    options.recordDailyList ??
+      (() => {
+        calls.push('dailyList');
+        return Promise.resolve();
+      }),
+  );
+  const recordAvailability = vi.fn<AriChangeRecorder['record']>(() => {
+    calls.push('ari');
+    return Promise.resolve();
+  });
   const service = new CreateDirectReservationService(
     clock,
     { check },
@@ -117,8 +131,20 @@ function aService(
     { run } as unknown as TransactionRunner,
     { insert } as unknown as ReservationRepository,
     { execute: detailOf },
+    { record: recordDailyList },
+    { record: recordAvailability },
   );
-  return { service, calls, check, verifyQuotes, quoteRooms, insert, detailOf };
+  return {
+    service,
+    calls,
+    check,
+    verifyQuotes,
+    quoteRooms,
+    insert,
+    detailOf,
+    recordDailyList,
+    recordAvailability,
+  };
 }
 
 const errorOf = async (work: Promise<unknown>) => {
@@ -146,6 +172,8 @@ describe('CreateDirectReservation (plan de generate-direct-reservation, B, D2 y 
       'verifyQuotes',
       'BEGIN',
       'insert',
+      'dailyList',
+      'ari',
       'COMMIT',
       `detail ${reservation.reservationRef}`,
     ]);
@@ -398,5 +426,67 @@ describe('CreateDirectReservation (plan de generate-direct-reservation, B, D2 y 
       'se cayó la conexión',
     );
     expect(detailOf).not.toHaveBeenCalled();
+  });
+
+  describe('los avisos, dentro de la transacción de la reserva (regla 8 y T010)', () => {
+    it('la lista del día recibe la reserva guardada, sin estado anterior, en la misma transacción', async () => {
+      const { service, insert, recordDailyList } = aService();
+
+      await service.execute(REQUEST);
+
+      expect(recordDailyList).toHaveBeenCalledExactlyOnceWith(
+        TX,
+        null,
+        inserted(insert),
+      );
+    });
+
+    it('Channex recibe la categoría y las noches que ocupa, de la entrada a la salida, en la misma transacción', async () => {
+      const { service, recordAvailability } = aService();
+
+      await service.execute(REQUEST);
+
+      expect(recordAvailability).toHaveBeenCalledExactlyOnceWith(TX, [
+        { categoryRoom: 'DOBLE', dateFrom: '2026-10-12', dateTo: '2026-10-15' },
+      ]);
+    });
+
+    it('si un aviso falla, la transacción no se confirma y no se lee el detalle', async () => {
+      const { service, calls, detailOf, recordAvailability } = aService({
+        recordDailyList: () => Promise.reject(new Error('se cayó la conexión')),
+      });
+
+      await expect(service.execute(REQUEST)).rejects.toThrow(
+        'se cayó la conexión',
+      );
+      expect(calls).not.toContain('COMMIT');
+      expect(recordAvailability).not.toHaveBeenCalled();
+      expect(detailOf).not.toHaveBeenCalled();
+    });
+
+    it('con una referencia repetida, los avisos solo van con la reserva que sí se guardó', async () => {
+      let attempt = 0;
+      const { service, insert, recordDailyList, recordAvailability } = aService(
+        {
+          insert: (reservation) => {
+            attempt += 1;
+            return attempt === 1
+              ? Promise.reject(
+                  new DuplicateReservationRefError(reservation.reservationRef),
+                )
+              : Promise.resolve(reservation);
+          },
+        },
+      );
+
+      await service.execute(REQUEST);
+
+      expect(recordDailyList).toHaveBeenCalledExactlyOnceWith(
+        TX,
+        null,
+        inserted(insert, 1),
+      );
+      expect(recordAvailability).toHaveBeenCalledTimes(1);
+    });
   });
 });

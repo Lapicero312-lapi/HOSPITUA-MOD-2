@@ -304,6 +304,33 @@ function whereOf(filters: ReservationListFilters): {
     params.push(value);
     conditions.push(condition(`$${params.length}`));
   };
+  const { search } = filters;
+  if (search?.kind === 'CODE') {
+    // Paso 3: la referencia y el código de la OTA a la vez, con sus índices; ignora los demás filtros.
+    add(
+      (p) =>
+        `(lower(r.reservation_ref) = lower(${p}) OR lower(r.external_confirmation_code) = lower(${p}))`,
+      search.code,
+    );
+    return { where: `WHERE ${conditions[0]}`, params };
+  }
+  if (search?.kind === 'DOCUMENT') {
+    add(
+      (p) =>
+        `EXISTS (SELECT 1 FROM guest g WHERE g.reservation_id = r.id AND g.document_number = ${p})`,
+      search.documentNumber,
+    );
+  }
+  if (search?.kind === 'NAME') {
+    // La misma expresión del índice GIN: con otra, PostgreSQL no lo usa.
+    add(
+      (p) =>
+        `EXISTS (SELECT 1 FROM guest g WHERE g.reservation_id = r.id
+           AND immutable_unaccent(lower(g.first_name || ' ' || g.last_name))
+               LIKE '%' || immutable_unaccent(lower(${p})) || '%')`,
+      search.name,
+    );
+  }
   if (filters.status !== null) {
     add((p) => `r.status = ${p}`, filters.status);
   }

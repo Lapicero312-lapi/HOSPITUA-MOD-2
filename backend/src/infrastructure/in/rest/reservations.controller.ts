@@ -35,10 +35,21 @@ import {
   type GetReservationDetail,
 } from '../../../application/use-cases/check-view-reservation/ports/in/get-reservation-detail.port.js';
 import {
+  GET_RESERVATION_FOR_BILLING,
+  type GetReservationForBilling,
+} from '../../../application/use-cases/check-view-reservation/ports/in/get-reservation-for-billing.port.js';
+import { BusinessError } from '../../../domain/shared/business-error.js';
+import { RESERVATION_NOT_FOUND } from '../../../domain/shared/error-codes.js';
+import { ApiError } from '../../shared/api-error.js';
+import {
   LIST_RESERVATIONS,
   type ListReservations,
   type ReservationListResult,
 } from '../../../application/use-cases/check-view-reservation/ports/in/list-reservations.port.js';
+import {
+  PREVIEW_MODIFICATION,
+  type PreviewModification,
+} from '../../../application/use-cases/update-reservation/ports/in/preview-modification.port.js';
 import { ApiErrorBody } from '../../shared/api-error.js';
 import { ClientHeader, UserHeader } from './request-headers.js';
 import {
@@ -52,9 +63,17 @@ import {
   toReservationCancellationBody,
 } from './reservation-cancellation.dto.js';
 import {
+  type ReservationBillingBody,
+  toReservationBillingBody,
+} from './reservation-billing.dto.js';
+import {
   type ReservationDetailBody,
   toReservationDetailBody,
 } from './reservation-detail.dto.js';
+import {
+  type ModificationPreviewBody,
+  toModificationPreviewBody,
+} from './reservation-modification.dto.js';
 import { readReservationListQuery } from './reservation-list-query.dto.js';
 import {
   readStayRangeQuery,
@@ -63,8 +82,8 @@ import {
 } from './stay-range-query.dto.js';
 
 /**
- * Las rutas de reservas, compartidas por sus casos de uso: `check-view-reservation` (C1, C2, C3, C5 y, en
- * su tarea, C4) y la cancelación de `cancel-reservation` (A).
+ * Las rutas de reservas, compartidas por sus casos de uso: `check-view-reservation` (C1 a C5) y la
+ * cancelación de `cancel-reservation` (A).
  */
 @Controller('reservations')
 export class ReservationsController {
@@ -77,8 +96,12 @@ export class ReservationsController {
     private readonly cancelReservation: CancelReservation,
     @Inject(GET_RESERVATION_DETAIL)
     private readonly getReservationDetail: GetReservationDetail,
+    @Inject(GET_RESERVATION_FOR_BILLING)
+    private readonly getReservationForBilling: GetReservationForBilling,
     @Inject(FIND_RESERVATIONS_BY_STAY_RANGE)
     private readonly findByStayRange: FindReservationsByStayRange,
+    @Inject(PREVIEW_MODIFICATION)
+    private readonly previewModification: PreviewModification,
   ) {}
 
   /**
@@ -95,8 +118,8 @@ export class ReservationsController {
 
   /**
    * C1, `GET /api/reservations` para la Recepcionista (`X-Client: RECEPTIONIST`): el listado con filtros,
-   * orden y paginación. Los filtros se validan antes de consultar, en el orden del plan (T007). La
-   * búsqueda (`search`) se valida, pero todavía no filtra: la agregan T015 y T020.
+   * orden y paginación. Los filtros se validan antes de consultar, en el orden del plan (T007). Con
+   * `search`, primero el código y, si no coincide ninguna, el documento o el nombre (T015 y T020).
    *
    * C5, la misma ruta con `X-Client: MODULE1`: las reservas vigentes cuya estadía se cruza con un rango de
    * fechas y, si viene `roomId`, las de esa habitación (FR-023, T033). Sus parámetros los revisa
@@ -112,28 +135,50 @@ export class ReservationsController {
         await this.findByStayRange.execute(readStayRangeQuery(query)),
       );
     }
-    const {
-      search: _search,
-      page,
-      ...filters
-    } = readReservationListQuery(query);
-    return this.listReservations.execute(filters, page);
+    const { search, page, ...filters } = readReservationListQuery(query);
+    return this.listReservations.execute(filters, page, search);
   }
 
   /**
    * C3, `GET /api/reservations/{reservationRef}` para la Recepcionista: el detalle completo (FR-006). El
-   * formato de la referencia lo revisa el caso de uso antes de consultar (T017). Con `MODULE3` esta ruta
-   * dará la consulta para liquidar (C4, T032); hasta entonces responde `INVALID_CLIENT`. La ruta fija
+   * formato de la referencia lo revisa el caso de uso antes de consultar (T017). Con `MODULE3` es la
+   * consulta para liquidar (C4, T032). La ruta fija
    * `day-summary` (C2, T012) se declara antes que esta.
    */
   @Get(':reservationRef')
   async detail(
-    @ClientHeader(['RECEPTIONIST']) _client: string,
+    @ClientHeader(['RECEPTIONIST', 'MODULE3']) client: string,
     @Param('reservationRef') reservationRef: string,
-  ): Promise<ReservationDetailBody> {
+  ): Promise<ReservationDetailBody | ReservationBillingBody> {
+    if (client === 'MODULE3') {
+      return this.billing(reservationRef);
+    }
     return toReservationDetailBody(
       await this.getReservationDetail.execute(reservationRef),
     );
+  }
+
+  /**
+   * C4, la misma ruta con `X-Client: MODULE3`: lo que el Módulo 3 necesita para liquidar (FR-022, T032). Una
+   * reserva que no existe responde `404`, la única excepción del plan base ("Errores"), porque el Módulo 3
+   * la espera así; los demás errores, `400`.
+   */
+  private async billing(
+    reservationRef: string,
+  ): Promise<ReservationBillingBody> {
+    try {
+      return toReservationBillingBody(
+        await this.getReservationForBilling.execute(reservationRef),
+      );
+    } catch (error) {
+      if (
+        error instanceof BusinessError &&
+        error.errorCode === RESERVATION_NOT_FOUND.code
+      ) {
+        throw new ApiError(error.errorCode, error.message, 404);
+      }
+      throw error;
+    }
   }
 
   /**
@@ -198,5 +243,22 @@ export class ReservationsController {
       expectedUpdatedAt,
     });
     return toReservationCancellationBody(result);
+  }
+
+  /**
+   * B1 de `update-reservation`, `POST /api/reservations/{reservationRef}/modification-preview`: la vista
+   * previa de la modificación de una reserva directa (D1 y regla 8). No guarda nada. Responde `200` con los
+   * cambios, la disponibilidad verificada, las tarifas recotizadas y el total; los errores de la tabla de B
+   * salen por el filtro global como `400`.
+   */
+  @Post(':reservationRef/modification-preview')
+  @HttpCode(200)
+  async modificationPreview(
+    @Param('reservationRef') reservationRef: string,
+    @Body() body: unknown,
+  ): Promise<ModificationPreviewBody> {
+    return toModificationPreviewBody(
+      await this.previewModification.execute(reservationRef, body),
+    );
   }
 }

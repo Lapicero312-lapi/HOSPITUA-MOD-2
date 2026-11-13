@@ -7,6 +7,7 @@ import { ExportSireFileModule } from '../../../application/use-cases/export-sire
 import { GenerateDirectReservationModule } from '../../../application/use-cases/generate-direct-reservation/generate-direct-reservation.module.js';
 import { ProcessGuestDataModule } from '../../../application/use-cases/process-guest-data/process-guest-data.module.js';
 import { RegisterOtaInformationCommissionModule } from '../../../application/use-cases/register-ota-information-commission/register-ota-information-commission.module.js';
+import { UpdateReservationModule } from '../../../application/use-cases/update-reservation/update-reservation.module.js';
 import { DirectReservationsController } from './direct-reservations.controller.js';
 import { GuestStaysController } from './guest-stays.controller.js';
 import { GuestsController } from './guests.controller.js';
@@ -28,6 +29,7 @@ import { sireRequestLimitsProvider } from './sire-rate-limiter.js';
     CancelReservationModule,
     ExportSireFileModule,
     RegisterOtaInformationCommissionModule,
+    UpdateReservationModule,
   ],
   controllers: [
     RoomsController,

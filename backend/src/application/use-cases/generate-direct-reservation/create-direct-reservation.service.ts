@@ -32,6 +32,14 @@ import {
   type GetReservationDetail,
   type ReservationDetail,
 } from '../check-view-reservation/ports/in/get-reservation-detail.port.js';
+import {
+  DAILY_LIST_CHANGE_RECORDER,
+  type DailyListChangeRecorder,
+} from '../check-view-reservation/ports/in/daily-list-change-recorder.port.js';
+import {
+  ARI_CHANGE_RECORDER,
+  type AriChangeRecorder,
+} from '../configure-ota/ports/in/ari-change-recorder.port.js';
 import { assignDirectRooms } from './assign-direct-rooms.js';
 import { readCreationRequest } from './direct-reservation-request.validator.js';
 import type { CreateDirectReservation } from './ports/in/create-direct-reservation.port.js';
@@ -41,7 +49,7 @@ import { withNewReservationRef } from './with-new-reservation-ref.js';
 /**
  * La creación de una reserva directa (plan, B, D2 y punto 12; T008). Las llamadas a los Módulos 1 y 3 van
  * antes de abrir la transacción; dentro solo está la inserción (punto 5 de "Puntos que este plan
- * propone"). El reintento ante un solape (T009), los avisos a la lista del día y a Channex (T010) y la
+ * propone"), con los avisos a la lista del día y a Channex (T010). El reintento ante un solape (T009) y la
  * `Idempotency-Key` (T019) los agregan sus tareas.
  */
 @Injectable()
@@ -59,6 +67,10 @@ export class CreateDirectReservationService implements CreateDirectReservation {
     private readonly reservations: ReservationRepository,
     @Inject(GET_RESERVATION_DETAIL)
     private readonly detail: GetReservationDetail,
+    @Inject(DAILY_LIST_CHANGE_RECORDER)
+    private readonly dailyList: DailyListChangeRecorder,
+    @Inject(ARI_CHANGE_RECORDER)
+    private readonly availabilityChanges: AriChangeRecorder,
   ) {}
 
   async execute(body: unknown): Promise<ReservationDetail> {
@@ -96,10 +108,11 @@ export class CreateDirectReservationService implements CreateDirectReservation {
     const guest = Guest.restore({ id: randomUUID(), ...request.guest });
     const rooms = roomsWithRates(assignedRooms, quotes);
 
-    // Paso 5: una transacción por intento, porque un error de unicidad la deja abortada (regla 7).
+    // Paso 5: una transacción por intento, porque un error de unicidad la deja abortada (regla 7). Los
+    // avisos van en la misma transacción: si se revierte, no queda ninguno (T010).
     const saved = await withNewReservationRef((reservationRef) =>
-      this.transactions.run((tx) =>
-        this.reservations.insert(
+      this.transactions.run(async (tx) => {
+        const reservation = await this.reservations.insert(
           Reservation.createDirect({
             reservationRef,
             startDate,
@@ -109,8 +122,15 @@ export class CreateDirectReservationService implements CreateDirectReservation {
             rooms,
           }),
           tx,
-        ),
-      ),
+        );
+        // Regla 8: `ADDED` solo si la llegada es hoy y la lista ya se envió; si no, nada.
+        await this.dailyList.record(tx, null, reservation);
+        // La disponibilidad que ocupa, para Channex: una sola categoría, de la entrada a la salida (FR-026).
+        await this.availabilityChanges.record(tx, [
+          { categoryRoom, dateFrom: startDate, dateTo: endDate },
+        ]);
+        return reservation;
+      }),
     );
 
     // Paso 6: la misma forma que C3, con su `updatedAt`.
