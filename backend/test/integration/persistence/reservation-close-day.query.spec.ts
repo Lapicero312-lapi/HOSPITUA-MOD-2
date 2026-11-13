@@ -135,4 +135,52 @@ describe('TypeOrmReservationQuery.findToClose contra PostgreSQL real (update-res
       ordered.slice(2),
     );
   });
+
+  describe('findDaysToClose: los días pendientes antes de hoy (punto 14, T022)', () => {
+    /** Tres días antes del día que se cierra. */
+    const OLDER = '2026-10-06';
+
+    it('trae, del más antiguo al más reciente y sin repetir, los días anteriores a hoy con ACTIVE o PENDING', async () => {
+      await stored('ACTIVE', DAY);
+      await stored('PENDING', DAY);
+      await stored('PENDING', OLDER);
+      await stored('ACTIVE', BEFORE);
+
+      expect(await query.findDaysToClose(NEXT)).toEqual([OLDER, BEFORE, DAY]);
+    });
+
+    it('no trae hoy ni los días siguientes: su llegada todavía puede ocurrir', async () => {
+      await stored('ACTIVE', NEXT);
+      await stored('ACTIVE', '2026-10-12');
+
+      expect(await query.findDaysToClose(NEXT)).toEqual([]);
+    });
+
+    it('no trae un día que solo tiene reservas en un estado final', async () => {
+      for (const status of ['COMPLETED', 'CANCELLED', 'NO_SHOW'] as const) {
+        await stored(status, DAY);
+      }
+
+      expect(await query.findDaysToClose(NEXT)).toEqual([]);
+    });
+
+    it('un IN_PROGRESS cuenta solo si le queda alguna habitación en EXPECTED', async () => {
+      // Todo el grupo ingresó: no hay nada que cerrar ese día (escenario 4).
+      await stored('IN_PROGRESS', OLDER, {
+        rooms: [
+          aDirectRoom({ stayStatus: 'CHECKED_IN' }),
+          aDirectRoom({ roomNumber: '202', stayStatus: 'CHECKED_OUT' }),
+        ],
+      });
+      // Llegada parcial: una habitación sigue esperada.
+      await stored('IN_PROGRESS', BEFORE, {
+        rooms: [
+          aDirectRoom({ stayStatus: 'CHECKED_IN' }),
+          aDirectRoom({ roomNumber: '202', stayStatus: 'EXPECTED' }),
+        ],
+      });
+
+      expect(await query.findDaysToClose(NEXT)).toEqual([BEFORE]);
+    });
+  });
 });

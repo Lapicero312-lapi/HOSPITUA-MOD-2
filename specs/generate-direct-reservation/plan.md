@@ -702,6 +702,23 @@ y por caída del Módulo 3.
     llamadas a `DailyListChangeRecorder` y a `AriChangeRecorder` dentro de la transacción (T010) y la
     `Idempotency-Key` (T019). Hasta T009, un solape rechazado por la base responde
     `REQUEST_NOT_PROCESSED`.
+13. **OpenAPI (T017).** `/api/docs` documenta A y B **como responden hoy**:
+    - **A:** el cuerpo con su ejemplo, la respuesta `200` con el ejemplo de A, y la `400` con un ejemplo por
+      cada código que A puede responder. A no recibe titular, observaciones ni tarifas, así que no lleva sus
+      errores (`RATE_CHANGED`, `NOTES_TOO_LONG`, `GUEST_DATA_REQUIRED`, `INVALID_DOCUMENT_TYPE`,
+      `INVALID_CHARACTERS` ni `INVALID_EMAIL`). Sí lleva `CURRENCY_MISMATCH`: el total de la vista previa lo
+      suma `reservationTotal` (B3 de `calculate-dynamic-rate`), que lo responde si el Módulo 3 cotiza las
+      habitaciones en monedas distintas.
+    - **B:** el cuerpo con su ejemplo, la respuesta `201` con la cabecera `Location` y el detalle con la forma
+      de C3 de `check-view-reservation`, y la `400` con un ejemplo por cada código que B puede responder.
+    - **Los ejemplos de error** van en el orden de la regla 2 (punto 10), después los de la disponibilidad y
+      la asignación (punto 11) y al final los de la cotización y `REQUEST_NOT_PROCESSED`.
+    - **Lo que todavía no existe no se documenta:** la cabecera `Idempotency-Key` con
+      `IDEMPOTENCY_KEY_REQUIRED` e `IDEMPOTENCY_KEY_REUSED` los agrega T019, y `AVAILABILITY_TAKEN`, T009,
+      cuando los programen.
+    - **Las clases:** las de C3 van en `reservation-detail.dto.ts`, junto a `toReservationDetailBody`, para
+      que la documentación de `GET /api/reservations/{reservationRef}` (T037 de `check-view-reservation`)
+      las reutilice; las de `availability` y `quotes`, en los archivos de sus DTO compartidos.
 
 ## Puntos abiertos
 

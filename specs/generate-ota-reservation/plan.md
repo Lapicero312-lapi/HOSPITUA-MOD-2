@@ -170,13 +170,26 @@ Módulo 1; regla 6 del plan base); los pasos 6 a 10 van en **una transacción**:
 5. Consulta la disponibilidad de cada categoría (`VerifyAvailability.check`) y asigna con `assignRooms` la
    de menor `roomNumber`, sin repetir. Las que no tengan habitación libre quedan **sin asignar**
    (`room_id` vacío, `blocks_inventory = false`).
-6. Crea la `Reservation` en `ACTIVE`, con `source = OTA`, `ota_id` de Booking.com y el titular nuevo.
-7. Calcula la comisión con `RegisterOtaConfirmationAndCommission.calculate`, con el porcentaje fijo de la
-   agencia, y escribe su auditoría. Si la agencia todavía no tiene porcentaje, `calculate` lo calcula con el
-   `ota_commission` de esta revisión y este caso de uso lo guarda con `ManageOta.setCommissionPercentage`, en
-   la misma transacción. Si la revisión no trae
-   `ota_commission`, o trae uno que da un porcentaje fuera de 0 a 100, no guarda nada ni confirma la
-   revisión, y lo registra en el log (FR-004 de `register-ota-information-commission`).
+6. **La comisión** (B1 de `register-ota-information-commission`), antes de crear la reserva, porque
+   `Reservation.createOta` la recibe ya calculada en `ota`:
+   - `RegisterOtaConfirmationAndCommission.calculate({ otaId, grossAmount, reportedCommission,
+     externalConfirmationCode })`, con el `otaId` de Booking.com, el `grossAmount` y el `otaCommission` del
+     mapeador (`reportedCommission`, `null` si la revisión no lo trae) y el `ota_reservation_code`.
+     `calculate` no persiste: usa el porcentaje fijo de la agencia o, si todavía no lo tiene, lo calcula con
+     esta revisión (`learnedPercentage: true`).
+   - Si `learnedPercentage` es `true`, `ManageOta.setCommissionPercentage(tx, otaId,
+     commissionPercentage)` lo guarda en la agencia, en esta misma transacción.
+   - Si `calculate` lanza (`OTA_NOT_FOUND`, `COMMISSION_NOT_REPORTED`, `INVALID_COMMISSION_PERCENTAGE` o
+     `DUPLICATE_CONFIRMATION_CODE`), se revierte la transacción: **no guarda nada ni confirma** la revisión,
+     y lo registra en el log con el `revisionId` y el código, sin datos personales (FR-004 de
+     `register-ota-information-commission`). La revisión queda en el feed y se vuelve a intentar en la
+     siguiente lectura; un `DUPLICATE_CONFIRMATION_CODE` (otra revisión creó la reserva entre el paso 2 y
+     este) se procesa entonces como `modified` (paso 2).
+7. **La reserva y su auditoría**: crea la `Reservation` con `createOta` en `ACTIVE`, con `source = OTA`,
+   el titular nuevo y en `ota` el `otaId`, el `ota_reservation_code`, el `grossAmount` y, de
+   `CommissionResult`, el `commissionPercentage`, el `commissionAmount` y el `commissionStatus`
+   (`CALCULATED`); la inserta y después llama a `recordAudit(tx, reservation.id, result, 'Booking.com')`,
+   que deja la fila `CALCULATED` de `commission_audit` (regla 6 de `register-ota-information-commission`).
 8. Si hay habitaciones sin asignar, marca `NO_ROOM_AVAILABLE`; si alguna supera su `maxCapacity`,
    `CAPACITY_EXCEEDED` (si hay varios motivos, el primero en este orden: `NO_ROOM_AVAILABLE`,
    `CAPACITY_EXCEEDED`, `CHANGE_NOT_APPLICABLE`).
@@ -303,7 +316,7 @@ sequenceDiagram
             U->>U: relacionar tipos de habitación con categorías
             U->>V: check(categoría, fechas)
             U->>U: assignRooms; las que no caben, sin asignar
-            U->>DB: BEGIN; reserva ACTIVE, habitaciones, titular, comisión, conflicto, avisos, revisión; COMMIT
+            U->>DB: BEGIN; comisión (calculate y, si la aprende, setCommissionPercentage); reserva ACTIVE con su comisión, habitaciones, titular y conflicto; recordAudit; avisos; revisión; COMMIT
             J->>P: ackBookingRevision(id)
             P->>CX: POST /booking_revisions/{id}/ack
             J->>DB: acked_at

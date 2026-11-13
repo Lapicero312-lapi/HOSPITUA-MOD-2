@@ -495,6 +495,70 @@ de negocio".
         `INVALID_CHARACTERS`.
      4. `notes` de más de 500 caracteres: `NOTES_TOO_LONG` (`checkNotes` del dominio).
      5. `contactEmail` sin la forma `algo@dominio.ext`, sin espacios: `INVALID_EMAIL`.
+8. **`PreviewModification` (T009)**, puerto en `ports/in/preview-modification.port.ts`. No guarda nada y no
+   abre ninguna transacción:
+
+   ```typescript
+   type ModificationPreview = {
+     reservationRef: string;
+     changes: {
+       dates: boolean;                               // startDate o endDate distintas de las actuales
+       roomsAdded: string[];                         // roomId de las agregadas (diffRooms.added)
+       roomsRemoved: string[];                       // roomId de las quitadas (diffRooms.removed)
+       roomsSwapped: { from: string; to: string }[]; // roomId de las cambiadas, de la misma o de otra categoría
+       guestCountChanged: boolean;                   // cambia la suma, o las personas de una conservada
+       guestChanged: boolean;                        // el titular viene y algún dato difiere del actual
+       notesChanged: boolean;                        // notes viene y difiere de las actuales
+     };
+     requiresConfirmation: boolean;                  // hay habitaciones recotizadas
+     availability: RoomAvailability[];               // las verificadas, en el orden de la solicitud; [] si ninguna
+     quotes: { quotes: RoomQuote[]; requests: RoomQuoteRequest[]; total: Money } | null;
+     reservation: { startDate: string; endDate: string; guestCount: number };
+   };
+
+   interface PreviewModification {
+     // @throws BusinessError con los códigos de la tabla de errores de B.
+     execute(reservationRef: string, body: unknown): Promise<ModificationPreview>;
+   }
+   ```
+
+   Pasos, en el orden de la regla 3; el primero que falla responde:
+   1. **Forma:** `readModificationRequest(body)` (regla 7).
+   2. **La reserva:** `ReservationLookup.findByRef`. Si no existe (también con una referencia mal formada),
+      `RESERVATION_NOT_FOUND`; si es `OTA`, `OTA_RESERVATION_READ_ONLY`; si no está en `ACTIVE` ni
+      `PENDING`, `STATUS_NOT_EDITABLE`.
+   3. **`updatedAt`:** el enviado y el de la reserva son el mismo instante (`isSameInstant`, como en
+      `cancel-reservation`); si no, o si no vino, `CONCURRENT_UPDATE`.
+   4. **Fechas:** las enviadas o, si no vienen, las actuales; `checkStayDates` con `Clock.today()`. Se
+      revisan aunque no cambien.
+   5. **Habitaciones:** si `rooms` no viene, quedan las actuales y no se hacen los pasos 5 y 6 (no se
+      consulta al Módulo 1). Si viene, `checkRoomList` y después `ConsultRoomInventory.byRoomId` de cada
+      una (`INVALID_ROOM_ID` o `INVENTORY_UNAVAILABLE`), que da su categoría y su `maxCapacity`.
+   6. **Personas:** `checkGuestCounts` con la `maxCapacity` de cada una.
+   7. **Titular y observaciones:** `readHolderAndNotes(body)` (regla 7).
+   8. **Disponibilidad:** `diffRooms(actuales, pedidas)`. Si cambian las fechas, se verifican todas las que
+      quedan; si no, solo las agregadas y las nuevas de las cambiadas (de cualquier categoría). Cada una con
+      `VerifyAvailability.check({ roomId, startDate, endDate, excludeReservationRef })`. Con todas las
+      respuestas, se recorren en el orden de la solicitud: la primera que falla, con un error o no
+      disponible (`ROOM_NOT_AVAILABLE` con su número), rechaza el cambio completo.
+
+   Las consultas al Módulo 1 de los pasos 5 y 8 van **en paralelo con el tope `MAINTENANCE_CONCURRENCY`**
+   (el de las consultas al Módulo 1, 5 por defecto), como en `check-room-availability`, para cumplir la
+   NFR-001 (recotizar en menos de 3 s): con 10 habitaciones y el Módulo 1 a 150 ms, de a una tardarían unos
+   4,5 s solo en esos dos pasos. Se esperan todas las respuestas, aunque una falle, y si fallan varias
+   responde la primera en el orden de la solicitud, no la que contestó antes: así el error es siempre el
+   mismo.
+   9. **Cotización:** `roomsNeedingQuote`. Si sale vacía, `quotes` es `null` y `requiresConfirmation` es
+      `false`, sin llamar al Módulo 3. Si no, `quoteRooms` con una solicitud por habitación (`key` = su
+      `roomId`, contexto `RECALCULATION`), todo o nada (`RECALCULATION_UNAVAILABLE`).
+   10. **Total:** `reservationTotal` de todas las habitaciones que quedan: la cotización nueva de las
+       recotizadas, la tarifa de la quitada en las cambiadas de la misma categoría (la heredan) y la propia
+       en las conservadas (regla 2 y punto 5 de "Puntos que este plan propone").
+
+   `ReservationsController` responde `200` en `POST /api/reservations/{reservationRef}/modification-preview`:
+   `availability.rooms` con `roomId`, `roomNumber`, `available` y `reason`; `quotes` con
+   `toQuotesDto(quotes, requests, false)` de `calculate-dynamic-rate` más el `total`; y los demás campos tal
+   cual. `ConfirmModification` (T010) repite los pasos 1 a 8 y cambia `quoteRooms` por `verifyQuotes`.
 
 ### Check-In (FR-015)
 
@@ -719,7 +783,7 @@ sequenceDiagram
     alt otra instancia lo tiene
         A-->>J: se salta esta ejecución
     end
-    J->>U: execute(operationalDate = el día que terminó)
+    J->>U: closePendingDays(hoy): execute(operationalDate) por cada día pendiente, el que terminó incluido
     loop por lotes de CLOSE_DAY_BATCH_SIZE
         U->>DB: reservas del día en ACTIVE, PENDING o IN_PROGRESS
         loop una transacción por reserva
@@ -1012,7 +1076,8 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
    decir sin cambios en la reserva ni en sus habitaciones.
 7. **`status_reason` con códigos** (`CHECK_IN`, `CHECK_OUT`, `DAY_CLOSE_NO_SHOW`, …); el plan base lo deja
    como texto libre.
-8. **Recuperación del cierre al arrancar** sin una tabla de control: se vuelve a ejecutar (es idempotente).
+8. **Recuperación del cierre al arrancar** sin una tabla de control: se vuelve a ejecutar (es idempotente)
+   para cada día anterior que todavía tenga algo que cerrar (punto 14).
 9. **Al asignar habitación (B3), una sin capacidad suficiente se rechaza** con
    `GUEST_COUNT_EXCEEDS_CAPACITY`: el spec solo pide verificar la disponibilidad, pero asignarla dejaría un
    conflicto que ya no se podría resolver.
@@ -1060,6 +1125,9 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
     interface CloseDay {
       // El día operativo que terminó, en AAAA-MM-DD. Nunca lanza por una reserva: la cuenta en failed.
       execute(operationalDate: string): Promise<CloseDaySummary>;
+      // Cierra, del más antiguo al más reciente, cada día anterior a `today` que todavía tiene algo que
+      // cerrar (T022, punto 14). Si uno se detiene por un error al seleccionar, lanza y no sigue.
+      closePendingDays(today: string): Promise<CloseDaySummary[]>;
     }
     ```
 
@@ -1093,6 +1161,26 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
 
     `CLOSE_DAY_BATCH_SIZE` llega por inyección (`@Inject(CLOSE_DAY_BATCH_SIZE)`), desde la configuración
     validada.
+14. **`CloseDayJob` (T022)**, en `infrastructure/in/jobs/close-day.job.ts`, registrado en `JobsModule`.
+    - **Cuándo:** a las 00:00:30 (`'30 0 0 * * *'`, `timeZone: 'America/Bogota'`) y al arrancar la
+      aplicación (la recuperación), con el bloqueo asesor `close-day`. Si otra instancia lo tiene, se
+      salta esa ejecución. El arranque espera la recuperación y el apagado espera la ejecución en curso,
+      como `DailyListJob`.
+    - **Qué cierra:** `CloseDay.closePendingDays(Clock.today())`, no solo el día anterior. Con
+      `ReservationQueryPort.findDaysToClose(today)` busca los días anteriores a `today` que tienen
+      reservas en `ACTIVE` o `PENDING`, o en `IN_PROGRESS` con alguna habitación en `EXPECTED`, y llama a
+      `execute` con cada uno, del más antiguo al más reciente. Así "la recuperación al arrancar lo
+      completa" también cuando el servidor estuvo apagado varios días, y la siguiente ejecución completa
+      un cierre que se detuvo por la base de datos aunque la aplicación no se haya reiniciado. El día de
+      hoy nunca se cierra: su llegada todavía puede ocurrir.
+    - **Zona horaria (caso borde):** el día sale siempre del `Clock`, que usa `America/Bogota`, y el
+      planificador también. Si en el momento de la ejecución el desfase del servidor con UTC no es el de
+      `America/Bogota`, deja la alerta de negocio en un log de nivel `error`, con la zona del servidor, y
+      sigue con la del hotel.
+    - **Pérdida de la base de datos (caso borde):** si `closePendingDays` o el bloqueo lanzan, deja una
+      alerta de nivel `error` sin el texto del error (no expone detalles de infraestructura) y termina sin
+      propagarlo. Cada reserva va en su propia transacción, así que ninguna queda a medias, y la siguiente
+      ejecución (al arrancar o a las 00:00:30) cierra lo que faltó.
 
 ## Puntos abiertos
 

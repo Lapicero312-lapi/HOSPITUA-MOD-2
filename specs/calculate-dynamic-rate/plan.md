@@ -200,7 +200,8 @@ enviado por el cliente**: lo que se persiste es el de la cotización nueva, con 
 
 - El dinero viaja como **texto decimal** con dos decimales y su moneda.
 - `total` aparece en la vista previa de una reserva nueva. En una modificación solo se muestran las
-  habitaciones recotizadas, **sin tarifa anterior ni diferencia** (FR-007).
+  habitaciones recotizadas, **sin tarifa anterior ni diferencia** (FR-007); su `total` es el de todas las
+  habitaciones que quedarían y lo agrega `update-reservation` (B1 y regla 8 de su plan).
 - El `quoteId` **no sale** hacia la pantalla.
 
 ### C. REST del Módulo 2: pantalla "Tarifas" (FR-009)
@@ -556,7 +557,8 @@ seguro ante un Módulo 3 caído.
     - por habitación, `key`, `categoryRoom` (el de su solicitud, con la misma `key`), `nights` (la
       cantidad de `nightlyRates`), `nightlyRates` y `lodgingAmount`;
     - `total` (con `reservationTotal`) solo si `withTotal` es verdadero, como en la vista previa de una
-      reserva nueva; en una modificación no va.
+      reserva nueva. En una modificación va `false`: el total suma también las habitaciones que no se
+      recotizan, así que lo calcula `update-reservation` (B1 y regla 8 de su plan).
 
     Los montos salen como texto con dos decimales y su moneda (`{ "amount": "250000.00", "currency":
     "COP" }`). El `quoteId` no sale.

@@ -60,6 +60,15 @@ export class CloseDayService implements CloseDay {
     private readonly batchSize: number,
   ) {}
 
+  async closePendingDays(today: string): Promise<CloseDaySummary[]> {
+    const summaries: CloseDaySummary[] = [];
+    for (const operationalDate of await this.query.findDaysToClose(today)) {
+      // Uno a la vez y en orden: si uno se detiene, los siguientes esperan a la próxima ejecución.
+      summaries.push(await this.execute(operationalDate));
+    }
+    return summaries;
+  }
+
   async execute(operationalDate: string): Promise<CloseDaySummary> {
     const summary: CloseDaySummary = {
       operationalDate,

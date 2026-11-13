@@ -249,6 +249,21 @@ export class TypeOrmReservationQuery implements ReservationQueryPort {
     return rows.map((row) => row.reservation_ref);
   }
 
+  async findDaysToClose(today: string): Promise<string[]> {
+    const rows: { start_date: string }[] = await this.dataSource.query(
+      // `to_char`, para no depender de cómo `pg` convierte `date`.
+      `SELECT DISTINCT to_char(r.start_date, 'YYYY-MM-DD') AS start_date FROM reservation r
+       WHERE r.start_date < $1::date
+         AND (r.status IN ('ACTIVE', 'PENDING')
+              OR (r.status = 'IN_PROGRESS'
+                  AND EXISTS (SELECT 1 FROM reservation_room rr
+                              WHERE rr.reservation_id = r.id AND rr.stay_status = 'EXPECTED')))
+       ORDER BY start_date`,
+      [today],
+    );
+    return rows.map((row) => row.start_date);
+  }
+
   /** El nombre de la agencia de cada reserva `OTA` de la página. */
   private async otaNamesOf(ids: string[]): Promise<Map<string, string>> {
     const rows: { id: string; name: string }[] = await this.dataSource.query(
