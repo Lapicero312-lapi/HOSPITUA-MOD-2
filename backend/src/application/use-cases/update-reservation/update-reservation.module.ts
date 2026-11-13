@@ -19,17 +19,20 @@ import { ApplyOtaChangeService } from './apply-ota-change.service.js';
 import { APPLY_OTA_CHANGE } from './ports/in/apply-ota-change.port.js';
 import { RegisterOtaInformationCommissionModule } from '../register-ota-information-commission/register-ota-information-commission.module.js';
 import { ConfigureOtaModule } from '../configure-ota/configure-ota.module.js';
+import { ConfirmModificationService } from './confirm-modification.service.js';
+import { CONFIRM_MODIFICATION } from './ports/in/confirm-modification.port.js';
 
 /**
  * Los servicios de `update-reservation` (plan base, regla 4 de la arquitectura). Exporta
  * `RESERVATION_STATUS` para `cancel-reservation` (T025), `PROCESS_CHECK_IN` y `PROCESS_CHECK_OUT` para
  * `CheckInConsumer` y `CheckOutConsumer` (T015 y T016), `CLOSE_DAY` para `CloseDayJob` (T022) y
- * `PREVIEW_MODIFICATION` para `ReservationsController` (T009) y `APPLY_OTA_CHANGE` para
+ * `PREVIEW_MODIFICATION` y `CONFIRM_MODIFICATION` para `ReservationsController` (T009 y T010) y `APPLY_OTA_CHANGE` para
  * `generate-ota-reservation` (T026, con `RegisterOtaInformationCommissionModule` y `ConfigureOtaModule`). Importa `ProcessGuestDataModule` por
  * `REGISTER_GUEST_MOVEMENTS`, `CheckViewReservationModule` por `DAILY_LIST_CHANGE_RECORDER` y
  * `RESERVATION_LOOKUP`, `GenerateOtaReservationModule` por `OTA_NO_SHOW_REPORTER`, y
  * `ConsultRoomInventoryModule`, `CheckRoomAvailabilityModule` y `CalculateDynamicRateModule` por los puertos
- * de la modificación (regla 8). Usa
+ * de la modificación (reglas 8 y 9). `CheckViewReservationModule` da también `GET_RESERVATION_DETAIL` a la
+ * confirmación. Usa
  * `RESERVATION_REPOSITORY`, `RESERVATION_QUERY_PORT`, `PROCESSED_MESSAGE_REPOSITORY` y `TRANSACTION_RUNNER`
  * de `PersistenceModule`, y `CLOSE_DAY_BATCH_SIZE` de `CloseDayConfigModule`, que son globales.
  */
@@ -51,6 +54,7 @@ import { ConfigureOtaModule } from '../configure-ota/configure-ota.module.js';
     { provide: CLOSE_DAY, useClass: CloseDayService },
     { provide: PREVIEW_MODIFICATION, useClass: PreviewModificationService },
     { provide: APPLY_OTA_CHANGE, useClass: ApplyOtaChangeService },
+    { provide: CONFIRM_MODIFICATION, useClass: ConfirmModificationService },
   ],
   exports: [
     RESERVATION_STATUS,
@@ -59,6 +63,7 @@ import { ConfigureOtaModule } from '../configure-ota/configure-ota.module.js';
     CLOSE_DAY,
     PREVIEW_MODIFICATION,
     APPLY_OTA_CHANGE,
+    CONFIRM_MODIFICATION,
   ],
 })
 export class UpdateReservationModule {}
