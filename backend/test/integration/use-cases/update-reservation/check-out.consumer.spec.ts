@@ -129,12 +129,19 @@ describe('CheckOutConsumer con RabbitMQ y PostgreSQL reales (T016)', () => {
       await import('../../../../src/infrastructure/config/messaging.module.js');
     const { ConsumersModule } =
       await import('../../../../src/infrastructure/in/messaging/consumers.module.js');
-    // Los consumidores llegan a update-reservation, que importa generate-ota-reservation (CHANNEX_PORT) y
-    // entrega el cierre del día (CLOSE_DAY_BATCH_SIZE): los dos son globales en la aplicación.
+    // Los consumidores llegan a update-reservation, que importa generate-ota-reservation (CHANNEX_PORT),
+    // entrega el cierre del día (CLOSE_DAY_BATCH_SIZE) y la vista previa de la modificación (los Módulos 1
+    // y 3 y la tarifa de referencia): todos son globales en la aplicación.
     const { ChannexClientModule } =
       await import('../../../../src/infrastructure/out/channex/channex-client.module.js');
     const { CloseDayConfigModule } =
       await import('../../../../src/infrastructure/config/close-day.config.js');
+    const { Module1ClientModule } =
+      await import('../../../../src/infrastructure/out/module1/module1-client.module.js');
+    const { Module3ClientModule } =
+      await import('../../../../src/infrastructure/out/module3/module3-client.module.js');
+    const { RateReferenceConfigModule } =
+      await import('../../../../src/infrastructure/config/rate-reference.config.js');
     moduleRef = await Test.createTestingModule({
       imports: [
         AppConfigModule,
@@ -143,6 +150,9 @@ describe('CheckOutConsumer con RabbitMQ y PostgreSQL reales (T016)', () => {
         MessagingModule,
         ChannexClientModule,
         CloseDayConfigModule,
+        Module1ClientModule,
+        Module3ClientModule,
+        RateReferenceConfigModule,
         ConsumersModule,
       ],
     }).compile();

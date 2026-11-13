@@ -352,6 +352,61 @@ Cualquier otro parámetro (`search`, `status`, `source`, `page`...) con `X-Clien
 El `400` es `INVALID_CLIENT`. No es una regla de seguridad: solo indica que esa ruta no tiene una
 respuesta para ese llamador.
 
+### OpenAPI (T037) y pruebas de contrato (T034)
+
+Lo que las tareas no dicen y este plan fija:
+
+**Una ruta, dos llamadores.** OpenAPI admite una sola operación por ruta y método, así que
+`GET /api/reservations` (C1 y C5) y `GET /api/reservations/{reservationRef}` (C3 y C4) son una operación
+cada una:
+
+- la cabecera `X-Client` es obligatoria y lista solo los valores que admite la ruta (`RECEPTIONIST` y
+  `MODULE1`; `RECEPTIONIST` y `MODULE3`; en `day-summary`, solo `RECEPTIONIST`);
+- la descripción de la operación dice qué responde a cada llamador;
+- la respuesta `200` es `oneOf` de las dos formas, con el ejemplo del plan de cada llamador;
+- `GET /api/reservations` documenta los parámetros de C1 y `roomId`, y cada uno dice con qué llamador va.
+  `dateFrom` y `dateTo` no se marcan obligatorios: solo lo son con `MODULE1`, y su descripción lo dice.
+
+**Los errores.** La respuesta `400` de cada ruta lleva un ejemplo por cada código que responde hoy, en el
+orden en que se revisan. Va primero `INVALID_CLIENT`, porque la cabecera se lee antes que todo, y al final
+`REQUEST_NOT_PROCESSED`. El `summary` de cada ejemplo dice a qué llamador corresponde.
+
+- **`GET /api/reservations`:**
+  - los de C1, en su orden de validación;
+  - `RESERVATION_NOT_FOUND`, que sale después de buscar el código;
+  - los propios de C5: `UNSUPPORTED_PARAMETER` e `INVALID_ROOM_ID`. Los de las fechas tienen el mismo
+    código y el mismo mensaje en C1 y en C5, así que van una sola vez.
+- **`GET /api/reservations/day-summary`:** `INVALID_CLIENT` y `REQUEST_NOT_PROCESSED`.
+- **`GET /api/reservations/{reservationRef}`:**
+  - la `400`: `INVALID_CLIENT`, `INVALID_RESERVATION_CODE` y el `RESERVATION_NOT_FOUND` de la
+    Recepcionista;
+  - la `404` va aparte, con el `RESERVATION_NOT_FOUND` del Módulo 3.
+
+**Las clases.** Las respuestas se documentan como clases, en el archivo de su DTO:
+
+| Respuesta | Clase | Archivo |
+|---|---|---|
+| C1 | `ReservationListDto` y sus partes | `reservation-list.dto.ts` (nuevo) |
+| C2 | `DaySummaryDto` | `day-summary.dto.ts` (nuevo) |
+| C3 | `ReservationDetailDto` (T017 de `generate-direct-reservation`) | `reservation-detail.dto.ts` |
+| C4 | `ReservationBillingDto` (`ReservationBillingBody` pasa a ser esa clase) | `reservation-billing.dto.ts` |
+| C5 | `StayRangeDto` y sus partes (`StayRangeBody` pasa a ser esa clase) | `stay-range-query.dto.ts` |
+
+La cancelación de la misma ruta (A de `cancel-reservation`) ya está documentada.
+
+**Las pruebas de contrato (T034)**, "forma exacta y `404`" (ver "Pruebas por escenario"), van en
+`test/contract/reservations.contract.spec.ts`. Como las demás de `test/contract/`, no usan la base: el
+controlador es el real, con el filtro global y los casos de uso simulados. Comprueban:
+
+- **C4:**
+  - con los datos de los dos ejemplos del plan, el cuerpo es exactamente el del ejemplo, sin otras claves;
+  - `otaCommissionPercentage` sale como número en el texto de la respuesta, no como texto;
+  - una reserva que no existe responde `404` con el cuerpo de error.
+- **C5:**
+  - con los datos del ejemplo, el cuerpo es exactamente `{ "items": [...] }`, sin campos de paginación;
+  - sin reservas, `{ "items": [] }`.
+- **Las dos:** la respuesta es `application/json`, y otro `X-Client` responde `400` `INVALID_CLIENT`.
+
 ## Algoritmo de búsqueda
 
 Una sola función de aplicación, `ResolveSearchCriteria`, convierte `search` en un criterio (así el
@@ -782,6 +837,21 @@ nunca revierte la operación que originó el mensaje (FR-020).
 `daily-list-publish`, y la publicación inmediata después de confirmar la transacción y después de
 generar la lista. Las dos pasan por el mismo bloqueo, para que dos ejecuciones no publiquen a la vez y
 se desordenen.
+
+Cómo se arma (T029):
+
+- **El bloqueo va dentro de `PublishPendingDailyMessages`.** `execute()` corre con el bloqueo asesor
+  `daily-list-publish` por un puerto de salida nuevo, `ExclusiveRunner` (`runExclusive(name, work):
+  Promise<boolean>`, en `application/ports/out/`), que la persistencia implementa con
+  `pg_try_advisory_lock`, como el `AdvisoryLock` de las tareas. Si otra ejecución lo tiene, devuelve `0`
+  sin publicar y lo anota; la que lo tiene, al soltarlo, vuelve a leer una vez, para que ningún mensaje
+  confirmado mientras tanto espere a la tarea de 10 s (NFR-005).
+- **`PublishPendingJob`** (`infrastructure/in/jobs/`, en `JobsModule`) llama a `execute()` cada 10 s. Un
+  error inesperado queda en el log de nivel `error`, sin el texto del error, y no se propaga.
+- **La publicación inmediata.** `TransactionRunner` suma `afterCommit(tx, work)`: corre `work` cuando la
+  transacción se confirma (nunca si se revierte), sin esperarlo y con su error en el log.
+  `DailyListChangeRecorder.record` lo usa cuando guarda un mensaje, y `GenerateDailyList` llama a
+  `execute()` después de su transacción si generó la lista.
 
 ### Consulta del Módulo 3 (`GetReservationForBilling`, T032)
 

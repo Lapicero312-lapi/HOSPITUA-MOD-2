@@ -22,6 +22,14 @@ export type IntegrationEnv = {
   DB_USER: string;
   DB_PASSWORD: string;
   RABBITMQ_URL: string;
+  /**
+   * Vacía a propósito, como en las e2e (`test/e2e/support/integration-env.ts`): las variables del sistema
+   * ganan sobre `backend/.env`, así ninguna prueba llama al Channex real con la clave de quien la corre, ni
+   * la aplicación registra por su cuenta la agencia Booking.com mientras la prueba usa la base. Sin clave,
+   * las tareas de Channex quedan apagadas (`configure-ota`, B0). La prueba que necesita Channex pone una
+   * clave de prueba y lo simula.
+   */
+  CHANNEX_API_KEY: string;
 };
 
 declare module 'vitest' {
@@ -61,6 +69,7 @@ export default async function setup(project: TestProject) {
     DB_USER: USER,
     DB_PASSWORD: PASSWORD,
     RABBITMQ_URL: `amqp://${USER}:${PASSWORD}@${rabbitmq.getHost()}:${rabbitmq.getMappedPort(AMQP_PORT)}`,
+    CHANNEX_API_KEY: '',
   };
 
   const dataSource = new DataSource(
