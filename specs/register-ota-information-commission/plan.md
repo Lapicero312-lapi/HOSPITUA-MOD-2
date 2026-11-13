@@ -226,7 +226,10 @@ interface RegisterOtaConfirmationAndCommission {
 ```
 
 - `calculate` **no persiste**: valida y calcula. La reserva con sus campos de comisión la inserta quien
-  llama en su transacción, y luego llama a `recordAudit`.
+  llama en su transacción, y luego llama a `recordAudit`. En `generate-ota-reservation` es el orden de los
+  pasos 6 y 7 de su B1: `calculate`, `setCommissionPercentage` si aprende el porcentaje, la reserva con la
+  comisión y `recordAudit` con `performedBy` `Booking.com` (regla 6); si `calculate` lanza, no guarda nada ni
+  confirma la revisión.
 - **El porcentaje** (FR-002): si la `Ota` ya lo tiene, se usa ese. Si no, se calcula con esta reserva:
   `reportedCommission ÷ grossAmount × 100`, con dos decimales y `ROUND_HALF_UP`, y el resultado sale con
   `learnedPercentage: true`. Quien llama lo guarda con `ManageOta.setCommissionPercentage` en su misma
@@ -344,7 +347,7 @@ sequenceDiagram
     participant R as OtaRepository
     participant DB as PostgreSQL
 
-    G->>C: calculate(otaId, grossAmount, externalConfirmationCode)
+    G->>C: calculate(otaId, grossAmount, reportedCommission, externalConfirmationCode)
     C->>R: findById(otaId)
     alt la agencia no existe
         C-->>G: BusinessError OTA_NOT_FOUND (400)
