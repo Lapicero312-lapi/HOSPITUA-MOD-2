@@ -48,10 +48,21 @@ export type ReservationListResult = {
   message: string | null;
 };
 
+/** Los filtros de C1 ya validados, sin la búsqueda: `search` llega como texto y lo resuelve el caso de uso. */
+export type ListReservationFilters = Omit<ReservationListFilters, 'search'>;
+
 /** El listado de reservas de la Recepcionista (C1, T009), con los filtros ya validados (T007). */
 export interface ListReservations {
+  /**
+   * El listado de C1. Con `search`, primero el código; si no coincide ninguna, el documento o el nombre
+   * (plan, "La búsqueda en `listReservations`").
+   * @param search El texto de `search` ya validado por el DTO (formato), o `null` sin búsqueda.
+   * @throws BusinessError `INVALID_RESERVATION_CODE` o `NAME_SEARCH_TOO_SHORT` (`resolveSearchCriteria`, antes
+   * de consultar la base), o `RESERVATION_NOT_FOUND` si una referencia `RSV-` no existe.
+   */
   execute(
-    filters: ReservationListFilters,
+    filters: ListReservationFilters,
     page: number,
+    search: string | null,
   ): Promise<ReservationListResult>;
 }

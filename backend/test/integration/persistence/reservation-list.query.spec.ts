@@ -12,6 +12,7 @@ import { TypeOrmOtaRepository } from '../../../src/infrastructure/out/persistenc
 import { TypeOrmReservationQuery } from '../../../src/infrastructure/out/persistence/repositories/reservation-query.repository.js';
 import { TypeOrmReservationRepository } from '../../../src/infrastructure/out/persistence/repositories/reservation.repository.js';
 import {
+  aGuest,
   aDirectReservation,
   aDirectRoom,
   anOta,
@@ -29,6 +30,7 @@ const NO_FILTERS: ReservationListFilters = {
   inConflict: false,
   stayRange: null,
   order: 'desc',
+  search: null,
 };
 
 describe('TypeOrmReservationQuery.listReservations contra PostgreSQL real (check-view-reservation, T005)', () => {
@@ -400,6 +402,123 @@ describe('TypeOrmReservationQuery.listReservations contra PostgreSQL real (check
           [without.id, false],
         ]);
       });
+    });
+  });
+
+  describe('la búsqueda (T015 y T020)', () => {
+    it('CODE: la referencia sin distinguir mayúsculas', async () => {
+      const wanted = await direct({ reservationRef: 'RSV-3F9A1C7B' });
+      await direct({ reservationRef: 'RSV-0A1B2C3D' });
+
+      const page = await list({
+        search: { kind: 'CODE', code: 'rsv-3f9a1c7b' },
+      });
+
+      expect(refsOf(page)).toEqual([wanted.reservationRef]);
+    });
+
+    it('CODE: el código de la OTA, y también una referencia igual a ese código en otra reserva: las dos', async () => {
+      const ota = await otas.insert(anOta());
+      const byCode = await reservations.insert(
+        anOtaReservation(ota.id, {
+          ota: otaTerms(ota.id, { externalConfirmationCode: 'ab-77' }),
+        }),
+      );
+      await booking(ota);
+
+      const page = await list({ search: { kind: 'CODE', code: 'AB-77' } });
+
+      expect(refsOf(page)).toEqual([byCode.reservationRef]);
+    });
+
+    it('CODE ignora los demás filtros: estado, canal, agencia, conflicto y estadía', async () => {
+      const wanted = await direct({ reservationRef: 'RSV-3F9A1C7B' });
+
+      const page = await list({
+        status: 'CANCELLED',
+        source: 'OTA',
+        otaId: randomUUID(),
+        inConflict: true,
+        stayRange: { dateFrom: '2001-01-01', dateTo: '2001-01-02' },
+        search: { kind: 'CODE', code: 'RSV-3F9A1C7B' },
+      });
+
+      expect(refsOf(page)).toEqual([wanted.reservationRef]);
+    });
+
+    it('DOCUMENT: el documento exacto del titular, no uno que lo contiene', async () => {
+      const wanted = await direct({
+        guest: aGuest({ documentNumber: '1144093552' }),
+      });
+      await direct({ guest: aGuest({ documentNumber: '11440935520' }) });
+
+      const page = await list({
+        search: { kind: 'DOCUMENT', documentNumber: '1144093552' },
+      });
+
+      expect(refsOf(page)).toEqual([wanted.reservationRef]);
+    });
+
+    it('DOCUMENT se combina con los demás filtros', async () => {
+      await direct({
+        status: 'CANCELLED',
+        guest: aGuest({ documentNumber: '1144093552' }),
+      });
+      const active = await direct({
+        guest: aGuest({ documentNumber: '1144093552' }),
+      });
+
+      const page = await list({
+        status: 'ACTIVE',
+        search: { kind: 'DOCUMENT', documentNumber: '1144093552' },
+      });
+
+      expect(refsOf(page)).toEqual([active.reservationRef]);
+    });
+
+    it('NAME: parte del nombre completo, sin distinguir mayúsculas ni tildes', async () => {
+      const wanted = await direct({
+        guest: aGuest({ firstName: 'José', lastName: 'Muñoz Peña' }),
+      });
+      await direct({ guest: aGuest({ firstName: 'Ana', lastName: 'Pérez' }) });
+
+      for (const name of ['jose', 'MUNOZ', 'Peñ', 'pena']) {
+        expect(refsOf(await list({ search: { kind: 'NAME', name } }))).toEqual([
+          wanted.reservationRef,
+        ]);
+      }
+    });
+
+    it('NAME se combina con los demás filtros', async () => {
+      await direct({
+        startDate: '2026-11-01',
+        endDate: '2026-11-03',
+        guest: aGuest({ firstName: 'Ana', lastName: 'Pérez' }),
+      });
+      const inRange = await direct({
+        startDate: '2026-12-01',
+        endDate: '2026-12-03',
+        guest: aGuest({ firstName: 'Ana', lastName: 'Pérez' }),
+      });
+
+      const page = await list({
+        stayRange: { dateFrom: '2026-12-01', dateTo: '2026-12-01' },
+        search: { kind: 'NAME', name: 'perez' },
+      });
+
+      expect(refsOf(page)).toEqual([inRange.reservationRef]);
+    });
+
+    it('el total cuenta con la misma búsqueda', async () => {
+      for (let i = 0; i < 12; i++) {
+        await direct({ guest: aGuest({ lastName: 'Ospina' }) });
+      }
+      await direct({ guest: aGuest({ lastName: 'Zuluaga' }) });
+
+      const page = await list({ search: { kind: 'NAME', name: 'ospina' } });
+
+      expect(page.totalItems).toBe(12);
+      expect(page.items).toHaveLength(10);
     });
   });
 
