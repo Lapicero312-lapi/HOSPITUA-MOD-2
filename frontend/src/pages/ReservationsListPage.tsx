@@ -37,7 +37,7 @@ export default function ReservationsListPage() {
   });
   const summary = useQuery({
     queryKey: ['day-summary'],
-    queryFn: getDaySummary,
+    queryFn: () => getDaySummary(),
   });
   const otas = useQuery({ queryKey: ['otas'], queryFn: listOtas });
 

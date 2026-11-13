@@ -9,6 +9,22 @@ import { PERIOD_TOO_LARGE } from './error-codes.js';
 const DATE_FORMAT = /^\d{4}-\d{2}-\d{2}$/;
 const DAY_IN_MILLISECONDS = 24 * 60 * 60 * 1000;
 
+/** Lo que no es texto: no tiene la forma `AAAA-MM-DD`, así que el validador responde `INVALID_DATE`. */
+const NOT_A_DATE = 'no es una fecha';
+
+/**
+ * Una fecha del periodo, del cuerpo de A o de los parámetros de B, tal como la revisa
+ * `assertValidSirePeriod`, que decide el orden de los errores: ausente (`undefined` o `null`) cuenta como
+ * que falta, y lo que no es texto (por ejemplo, un parámetro repetido, que llega como lista), como una
+ * fecha inválida.
+ */
+export function periodDate(value: unknown): string | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  return typeof value === 'string' ? value : NOT_A_DATE;
+}
+
 /**
  * El periodo de la exportación y del listado (plan, A y B: "Mismas reglas del periodo"), sin ejecutar
  * ninguna consulta. Revisa en el orden del plan: obligatorio, fechas reales, orden y máximo. Las dos

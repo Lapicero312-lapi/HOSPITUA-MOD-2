@@ -4,12 +4,16 @@ import { RequireUser } from './components/RequireUser.tsx';
 import { HomePage } from './pages/HomePage.tsx';
 import LoginPage from './pages/LoginPage.tsx';
 import { NotFoundPage } from './pages/NotFoundPage.tsx';
+import { OtasPage } from './pages/otas/OtasPage.tsx';
+import { RatesPage } from './pages/rates/RatesPage.tsx';
+import { CancelReservationPage } from './pages/reservations/cancel/CancelReservationPage.tsx';
+import { ReservationDetailPage } from './pages/reservations/ReservationDetailPage.tsx';
+import { ReservationsPage } from './pages/reservations/ReservationsPage.tsx';
+import { RoomsPage } from './pages/rooms/RoomsPage.tsx';
 import { RouteErrorPage } from './pages/RouteErrorPage.tsx';
-import CancelReservationPage from './pages/CancelReservationPage.tsx';
+import { SirePage } from './pages/sire/SirePage.tsx';
 import ModifyReservationPage from './pages/ModifyReservationPage.tsx';
 import NewDirectReservationPage from './pages/NewDirectReservationPage.tsx';
-import ReservationDetailPage from './pages/ReservationDetailPage.tsx';
-import ReservationsListPage from './pages/ReservationsListPage.tsx';
 import PendingPage from './pages/PendingPage.tsx';
 
 /**
@@ -28,11 +32,17 @@ export const routes: RouteObject[] = [
     errorElement: <RouteErrorPage />,
     children: [
       { index: true, element: <HomePage /> },
-      { path: 'reservas', element: <ReservationsListPage /> },
+      { path: 'reservas', element: <ReservationsPage /> },
       { path: 'reservas/nueva', element: <NewDirectReservationPage /> },
-      { path: 'reservas/:ref', element: <ReservationDetailPage /> },
+      {
+        path: 'reservas/:reservationRef',
+        element: <ReservationDetailPage />,
+      },
       { path: 'reservas/:ref/modificar', element: <ModifyReservationPage /> },
-      { path: 'reservas/:ref/cancelar', element: <CancelReservationPage /> },
+      {
+        path: 'reservas/:reservationRef/cancelar',
+        element: <CancelReservationPage />,
+      },
       {
         path: 'reservas/:ref/habitacion',
         element: <PendingPage title="Asignar habitación" />,
@@ -41,16 +51,10 @@ export const routes: RouteObject[] = [
         path: 'huespedes',
         element: <PendingPage title="Huéspedes alojados" />,
       },
-      { path: 'sire', element: <PendingPage title="Exportar SIRE" /> },
-      {
-        path: 'habitaciones',
-        element: <PendingPage title="Habitaciones" />,
-      },
-      { path: 'tarifas', element: <PendingPage title="Tarifas" /> },
-      {
-        path: 'agencias',
-        element: <PendingPage title="Agencias OTA" />,
-      },
+      { path: 'sire', element: <SirePage /> },
+      { path: 'habitaciones', element: <RoomsPage /> },
+      { path: 'tarifas', element: <RatesPage /> },
+      { path: 'agencias', element: <OtasPage /> },
       { path: '*', element: <NotFoundPage /> },
     ],
   },

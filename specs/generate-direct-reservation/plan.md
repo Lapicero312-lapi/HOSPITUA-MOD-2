@@ -143,8 +143,8 @@ tarifas que el solicitante vio:
   },
   "notes": "Llegada después de las 8 p. m.",
   "expectedRates": [
-    { "position": 1, "lodgingAmount": "750000.00" },
-    { "position": 2, "lodgingAmount": "750000.00" }
+    { "position": 1, "lodgingAmount": "750000.00", "currency": "COP" },
+    { "position": 2, "lodgingAmount": "750000.00", "currency": "COP" }
   ]
 }
 ```
@@ -153,7 +153,8 @@ tarifas que el solicitante vio:
   `documentNumber` y `nationality` (texto libre con el nombre del país; el huésped es extranjero si no es
   exactamente `Colombia`) son obligatorios; `contactPhone` y `contactEmail` son opcionales.
 - `notes`: opcional, máximo 500 caracteres.
-- `expectedRates`: el `lodgingAmount` de cada habitación que vio el solicitante, por `position`. El
+- `expectedRates`: el `lodgingAmount` y la `currency` de cada habitación que vio el solicitante en la
+  vista previa, por `position`. El
   servidor **vuelve a cotizar** y compara (decisión D1); si difiere, `RATE_CHANGED`. **Nunca se guarda un
   monto enviado por el cliente.**
 
@@ -608,7 +609,8 @@ y por caída del Módulo 3.
        - `categoryRoom`, con el validador de `consult-room-inventory` (`INVALID_CATEGORY`);
        - cada `roomId` que venga debe ser un UUID (`INVALID_ROOM_ID`);
        - solo en B, `expectedRates` debe traer una entrada por habitación, con `position` de 1 a n sin
-         repetir y `lodgingAmount` como decimal positivo de dos decimales. Si no, `RATE_CHANGED`: la
+         repetir, `lodgingAmount` como decimal positivo de dos decimales y `currency` de 3 letras
+         mayúsculas (`verifyQuotes` compara el valor y la moneda). Si no, `RATE_CHANGED`: la
          pantalla vuelve a cotizar.
     2. **Habitaciones:**
        - `rooms` que no es una lista, o con 0 o más de 10 entradas: `INVALID_ROOM_COUNT`;
@@ -631,6 +633,125 @@ y por caída del Módulo 3.
 
        Los textos del titular se guardan sin los espacios de los extremos, y un teléfono o un correo vacío
        queda en `null`.
+11. **`PreviewDirectReservation` (T007).** Puerto de entrada en
+    `ports/in/preview-direct-reservation.port.ts`:
+
+    ```typescript
+    type DirectReservationPreview = {
+      categoryRoom: string;
+      availability: AvailabilityResult;          // el de VerifyAvailability.check
+      assignedRooms: { position: number; room: Room; guestCount: number }[];
+      quoteRequests: RoomQuoteRequest[];         // key = la posición como texto ("1", "2"…)
+      quotes: RoomQuote[];
+      guestCount: number;                        // la suma de las habitaciones
+    };
+
+    interface PreviewDirectReservation {
+      // @throws BusinessError con los códigos de la tabla C.
+      execute(body: unknown): Promise<DirectReservationPreview>;
+    }
+    ```
+
+    Pasos, en el orden de la regla 2; el primero que falla da el error:
+    1. `readPreviewRequest(body, clock.today())` (punto 10).
+    2. Una sola llamada a `VerifyAvailability.check` con la categoría y las fechas, sin `limit`: la
+       respuesta muestra todas las habitaciones de la categoría.
+    3. **Asignación**, por `position` (el orden de `rooms`, desde 1):
+       - una entrada con `roomId` que no está en el resultado (no existe o es de otra categoría) da
+         `INVALID_ROOM_ID`;
+       - una entrada con `roomId` que no está disponible da `ROOM_NOT_AVAILABLE` con su `roomNumber`;
+       - las entradas sin `roomId` reciben, en su orden, las de menor `roomNumber` con `assignRooms`,
+         sin repetir las elegidas por `roomId`. Si no alcanzan, `NO_AVAILABILITY`.
+    4. **Capacidad:** un `guestCount` mayor que el `maxCapacity` de su habitación da
+       `GUEST_COUNT_EXCEEDS_CAPACITY`.
+    5. `quoteRooms` con una solicitud por habitación y el contexto `NEW_RESERVATION`. No se llama si
+       falló un paso anterior (regla 3).
+
+    Los pasos 2 a 4 van en una función que también usa `CreateDirectReservation` (T008).
+    `DirectReservationsController` convierte el resultado en el JSON de A con `toAvailabilityDto` y
+    `toQuotesDto(quotes, quoteRequests, true)`, y responde `200`.
+12. **`CreateDirectReservation` (T008).** Puerto de entrada en
+    `ports/in/create-direct-reservation.port.ts`:
+
+    ```typescript
+    interface CreateDirectReservation {
+      // @throws BusinessError con los códigos de la tabla C.
+      execute(body: unknown): Promise<ReservationDetail>;   // el de GetReservationDetail (C3)
+    }
+    ```
+
+    Pasos, en el orden de la regla 2; el primero que falla da el error:
+    1. `readCreationRequest(body, clock.today())` (punto 10). La `currency` de cada `expectedRates` se
+       revisa en el paso 1, con el `lodgingAmount`.
+    2. Disponibilidad, asignación y capacidad: la misma función de la vista previa (punto 11, pasos 2 a 4),
+       con una consulta nueva a `VerifyAvailability.check`, también de los mantenimientos (regla 9).
+    3. `verifyQuotes` con una solicitud por habitación (`key` = la posición como texto, contexto
+       `NEW_RESERVATION`) y, por `key`, el `lodgingAmount` y la `currency` de `expectedRates`. Guarda las
+       cotizaciones nuevas, nunca los montos que envió el cliente.
+    4. `Reservation.createDirect` (punto 8) con un titular nuevo, las `notes` y, por habitación, la
+       habitación asignada, su `guestCount` y su cotización (`lodgingAmount` y `quoteId`).
+    5. `withNewReservationRef` (regla 7): cada intento abre su propia transacción con `TransactionRunner` e
+       inserta la reserva con `ReservationRepository.insert`.
+    6. Después del `COMMIT`, `GetReservationDetail.execute(reservationRef)` (regla 6 del plan base): la
+       respuesta tiene la misma forma que C3, con su `updatedAt`.
+
+    `DirectReservationsController` responde `201` con `Location: /api/reservations/{reservationRef}` y el
+    cuerpo de `toReservationDetailBody`.
+
+    Lo agregan sus tareas: el reintento ante `RoomOverlapError` y `AVAILABILITY_TAKEN` (T009), las
+    llamadas a `DailyListChangeRecorder` y a `AriChangeRecorder` dentro de la transacción (T010) y la
+    `Idempotency-Key` (T019). Hasta T009, un solape rechazado por la base responde
+    `REQUEST_NOT_PROCESSED`.
+13. **OpenAPI (T017).** `/api/docs` documenta A y B **como responden hoy**:
+    - **A:** el cuerpo con su ejemplo, la respuesta `200` con el ejemplo de A, y la `400` con un ejemplo por
+      cada código que A puede responder. A no recibe titular, observaciones ni tarifas, así que no lleva sus
+      errores (`RATE_CHANGED`, `NOTES_TOO_LONG`, `GUEST_DATA_REQUIRED`, `INVALID_DOCUMENT_TYPE`,
+      `INVALID_CHARACTERS` ni `INVALID_EMAIL`). Sí lleva `CURRENCY_MISMATCH`: el total de la vista previa lo
+      suma `reservationTotal` (B3 de `calculate-dynamic-rate`), que lo responde si el Módulo 3 cotiza las
+      habitaciones en monedas distintas.
+    - **B:** el cuerpo con su ejemplo, la respuesta `201` con la cabecera `Location` y el detalle con la forma
+      de C3 de `check-view-reservation`, y la `400` con un ejemplo por cada código que B puede responder.
+    - **Los ejemplos de error** van en el orden de la regla 2 (punto 10), después los de la disponibilidad y
+      la asignación (punto 11) y al final los de la cotización y `REQUEST_NOT_PROCESSED`.
+    - **Lo que todavía no existe no se documenta:** la cabecera `Idempotency-Key` con
+      `IDEMPOTENCY_KEY_REQUIRED` e `IDEMPOTENCY_KEY_REUSED` los agrega T019, y `AVAILABILITY_TAKEN`, T009,
+      cuando los programen.
+    - **Las clases:** las de C3 van en `reservation-detail.dto.ts`, junto a `toReservationDetailBody`, para
+      que la documentación de `GET /api/reservations/{reservationRef}` (T037 de `check-view-reservation`)
+      las reutilice; las de `availability` y `quotes`, en los archivos de sus DTO compartidos.
+14. **Reintento de asignación (T009).** Si en el paso 5 del punto 12 `insert` lanza `RoomOverlapError`
+    (otra solicitud tomó una de las habitaciones entre la verificación y el `COMMIT`), esa transacción ya
+    se revirtió. Entonces:
+    1. vuelve a consultar `VerifyAvailability.check` y a asignar con `assignDirectRooms` (punto 11, pasos
+       2 a 4);
+    2. conserva las cotizaciones del paso 3, que son por posición y categoría, no por habitación;
+    3. intenta de nuevo en una transacción nueva, hasta `ASSIGNMENT_MAX_RETRIES` (3) reintentos.
+
+    Si la nueva asignación ya no alcanza, si una habitación pedida por `roomId` ya no está libre, si
+    alguna no tiene capacidad o si se agotan los reintentos, responde `AVAILABILITY_TAKEN`, "Ya no hay
+    disponibilidad para las fechas solicitadas." (D3).
+15. **`Idempotency-Key` (T019).** Cómo se cumple lo de B ("Idempotencia", FR-008):
+    - **La cabecera:** `DirectReservationsController` la lee y la pasa a
+      `CreateDirectReservation.execute(body, idempotencyKey)`. Si falta o no es un UUID,
+      `IDEMPOTENCY_KEY_REQUIRED`, antes del paso 1 del punto 12 (sin consultar nada).
+    - **El cuerpo:** `requestHash` es el SHA-256 en hexadecimal (64 caracteres, la columna `request_hash`)
+      del cuerpo en JSON con las claves ordenadas, así el mismo cuerpo con las claves en otro orden es el
+      mismo.
+    - **Antes del paso 1:** `IdempotencyKeyRepository.find(key)` (puerto de salida nuevo, sobre
+      `idempotency_key`). Si existe y tiene menos de 24 horas:
+      - con el mismo `requestHash`, responde `201` con el detalle de esa reserva (`GetReservationDetail`), sin
+        validar, verificar ni cotizar otra vez;
+      - con otro, `IDEMPOTENCY_KEY_REUSED`.
+
+      Si existe pero venció, se trata como una clave nueva.
+    - **En la transacción del paso 5:** `IdempotencyKeyRepository.save(tx, { key, requestHash,
+      reservationId })`, después de insertar la reserva; una fila vencida con la misma clave se reemplaza.
+      Si otra solicitud con la misma clave confirmó primero (la clave primaria la rechaza), se revierte y se
+      responde como en "Antes del paso 1".
+    - **La limpieza:** `IdempotencyKeyRepository.deleteExpired(before)` borra las filas con `created_at`
+      anterior a `before`. `CloseDay` la llama al terminar, con `Clock.now()` menos 24 horas (punto 13 de
+      `update-reservation`: "el borrado de las `idempotency_key` vencidas, que se agrega con su
+      repositorio").
 
 ## Puntos abiertos
 

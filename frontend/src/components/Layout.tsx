@@ -18,20 +18,6 @@ const NAV: [string, string][] = [
   ['/tarifas', 'Tarifas'],
   ['/agencias', 'Agencias OTA'],
 ];
-const TITLES: [RegExp, string][] = [
-  [/^\/reservas\/nueva/, 'Nueva reserva directa'],
-  [/^\/reservas\/[^/]+\/modificar/, 'Modificar reserva'],
-  [/^\/reservas\/[^/]+\/cancelar/, 'Cancelar reserva'],
-  [/^\/reservas\/[^/]+\/habitacion/, 'Asignar habitación'],
-  [/^\/reservas\/[^/]+/, 'Detalle de reserva'],
-  [/^\/reservas/, 'Reservas'],
-  [/^\/huespedes/, 'Huéspedes alojados'],
-  [/^\/sire/, 'Exportar SIRE'],
-  [/^\/habitaciones/, 'Habitaciones'],
-  [/^\/tarifas/, 'Tarifas'],
-  [/^\/agencias/, 'Agencias OTA'],
-];
-
 export default function Layout() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -44,8 +30,6 @@ export default function Layout() {
   const open = openPath === pathname;
 
   if (!user) return <Navigate to="/login" replace />;
-
-  const title = TITLES.find(([re]) => re.test(pathname))?.[1] ?? 'Reservas';
 
   const logout = () => {
     signOut();
@@ -96,7 +80,6 @@ export default function Layout() {
               ☰ Menú
             </button>
             <div className="crumbs">HOSPITUA · Recepción</div>
-            <h1>{title}</h1>
           </div>
           <div className="who">
             <Avatar name={user} />

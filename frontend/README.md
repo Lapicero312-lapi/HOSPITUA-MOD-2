@@ -10,8 +10,8 @@ pnpm dev              # http://localhost:5173 (entre con cualquier nombre)
 pnpm test             # pruebas de utilidades
 pnpm build            # typecheck + build
 ```
-Pasar al backend real: copie `.env.example` a `.env` y ponga `VITE_USE_MOCKS=false` (el proxy de Vite
-reenvía `/api` a `VITE_API_PROXY`).
+Pasar al backend real: copie `.env.example` a `.env`, ponga `VITE_USE_MOCKS=false` y configure
+`VITE_API_PROXY` con la URL del backend (Vite carga esa variable desde `.env` y reenvía `/api`).
 
 ## Versión 2 (wireframe «Recepcionista (Módulo 2)»)
 Tomada de `HOSPITUA_-_Recepcionista__Modulo_2_.html` + `style.css` + `app.js`: identidad índigo (con modo oscuro),

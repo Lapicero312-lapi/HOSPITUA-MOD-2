@@ -249,12 +249,14 @@ tarifas que el solicitante vio:
   "startDate": "2026-10-12",
   "endDate": "2026-10-15",
   "rooms": [ { "roomId": "uuid-201", "guestCount": 2 }, { "roomId": "uuid-305", "guestCount": 1 } ],
-  "expectedRates": [ { "roomId": "uuid-305", "lodgingAmount": "1440000.00" } ]
+  "expectedRates": [ { "roomId": "uuid-305", "lodgingAmount": "1440000.00", "currency": "COP" } ]
 }
 ```
 
-- `expectedRates`: el `lodgingAmount` de cada habitación recotizada que vio el solicitante. Es obligatorio
-  cuando la vista previa tuvo `requiresConfirmation: true`.
+- `expectedRates`: el `lodgingAmount` y la `currency` de cada habitación recotizada que vio el
+  solicitante (el `lodgingAmount` de `quotes.rooms` de B1). Es obligatorio cuando la vista previa tuvo
+  `requiresConfirmation: true`. Lleva la moneda, como en la creación de la reserva directa, porque
+  `verifyQuotes` compara el monto y la moneda (regla 9).
 - El servidor **vuelve a validar y cotizar** y compara con `expectedRates` (decisión D1). Si difieren,
   400 `RATE_CHANGED`. **Nunca se guarda un monto enviado por el cliente.**
 - **Respuesta 200**: el detalle de la reserva actualizada, con la forma de `check-view-reservation`
@@ -282,6 +284,7 @@ tarifas que el solicitante vio:
 | `RECALCULATION_UNAVAILABLE` | El Módulo 3 no responde al recotizar | "No se pudo calcular la nueva tarifa en este momento. Intente más tarde." |
 | `RATE_CHANGED` | La tarifa cambió entre la vista previa y la confirmación | "La tarifa cambió, vuelva a cotizar." |
 | `INVENTORY_UNAVAILABLE`, `MAINTENANCE_CHECK_UNAVAILABLE`, `INVALID_ROOM_ID` | Fallos del Módulo 1 o `roomId` inexistente | Los de `consult-room-inventory` y `consult-maintenance-calendar` |
+| `INVALID_GUEST_COUNT`, `GUEST_DATA_REQUIRED`, `INVALID_DOCUMENT_TYPE`, `INVALID_EMAIL` | `guestCount` que no es un número entero, o un titular incompleto, con un tipo de documento que no existe o con el correo mal formado (regla 7 de la modificación) | Los de `generate-direct-reservation` |
 
 **B3. `PATCH /api/reservations/{reservationRef}/room-assignment`** (FR-025): asigna habitación a las
 habitaciones sin asignar de una reserva de Booking en conflicto. Cabecera `X-User`.
@@ -330,8 +333,16 @@ interface ReservationStatusService {
   transition(tx: Transaction, reservation: Reservation, target: ReservationStatus, reason: StatusReason): Promise<Reservation>;
   // Cambia el stayStatus de una habitación, recalcula blocks_inventory y la guarda.
   transitionStay(tx: Transaction, reservation: Reservation, roomId: string, target: StayStatus): Promise<Reservation>;
+  // Cierre del día de una reserva IN_PROGRESS: pasa a NOT_ARRIVED todas sus habitaciones en EXPECTED,
+  // también las que no tienen habitación asignada, y la guarda. El status no cambia (FR-019).
+  markNotArrived(tx: Transaction, reservation: Reservation): Promise<Reservation>;
 }
 ```
+
+- `markNotArrived` existe porque `transitionStay` elige la habitación por su `roomId`, y una reserva de
+  Booking en conflicto puede estar `IN_PROGRESS` con una habitación sin asignar (`roomId` vacío) que
+  también debe pasar a `NOT_ARRIVED`. Con una reserva que no está en `IN_PROGRESS`, lanza
+  `INVALID_STATUS_TRANSITION`: en `ACTIVE` o `PENDING` lo hace `transition(NO_SHOW)`.
 
 **Transiciones permitidas** (las vive el dominio; cualquier otra se rechaza):
 
@@ -366,8 +377,16 @@ después, operationalDate?)` (de `check-view-reservation`) **dentro de su transa
 modificación y en el No-Show total. No lo llama en el Check-In ni en el Check-Out (FR-017 de ese caso de
 uso).
 
-**C3. Registro de huéspedes**: llama a `RegisterGuestMovements.register(tx, …)` de `process-guest-data`
-en el Check-In y en el Check-Out.
+**C3. Registro de huéspedes**: llama a `RegisterGuestMovements.register(tx, command)` de
+`process-guest-data` (su contrato B1) en el Check-In y en el Check-Out, **dentro de su transacción**,
+después del cambio de estado y antes de insertar el `messageId` en `processed_message` (D3 y D4).
+Acordado con el plan de `process-guest-data` (su T011):
+
+- `command` lleva `reservationId` (el `id` de la reserva bloqueada), y el `roomId`, el `movementType` y el
+  `movementDate` del mensaje. También lleva la lista `guests` tal como la deja el validador de estructura
+  de `process-guest-data`, que el consumidor aplica **antes de abrir la transacción**.
+- Devuelve el `RegistrationSummary`, que el consumidor deja en el log, solo con cifras.
+- Si algo falla después, se revierte todo, incluidos los huéspedes registrados.
 
 **C4. `ApplyOtaChange`** (FR-024; lo llama `generate-ota-reservation` con una revisión `modified`):
 
@@ -426,7 +445,8 @@ de negocio".
 | **Cambiada de la misma categoría** | Una quitada y una agregada de la misma categoría: la nueva **hereda** la tarifa (`roomGrossAmount`, `quoteId` y `currency`) de la quitada, sin recotizar, si las fechas no cambian |
 | **Cambiada de categoría** | Una quitada y una agregada de distinta categoría: la nueva se cotiza |
 
-3. **Qué se valida y en qué orden** (la primera falla responde):
+3. **Qué se valida y en qué orden** (la primera falla responde). Antes del paso 1 se revisa la **forma** del
+   cuerpo, sin consultar nada (regla 7):
    1. Reserva existente, `DIRECT` y en `ACTIVE` o `PENDING`.
    2. `updatedAt` coincide.
    3. Fechas: entrada no anterior al día operativo en curso (Clock, no una fecha fija) y salida posterior.
@@ -434,7 +454,7 @@ de negocio".
       el Módulo 1 (`ConsultRoomInventory.byRoomId`).
    5. `guestCount` de cada habitación: al menos 1 y no mayor que su `maxCapacity` (la de la reserva es la
       suma).
-   6. Titular sin `nationality`, y datos y `notes` con caracteres válidos y `notes` de máximo 500.
+   6. Titular sin `nationality`, y datos y `notes` con caracteres válidos y `notes` de máximo 500 (regla 7).
    7. Disponibilidad (`VerifyAvailability`, con `excludeReservationRef`): de **todas las habitaciones que
       quedan** si cambian las fechas, y solo de las **agregadas o cambiadas** en los demás casos. Si una
       falla, se rechaza el cambio completo.
@@ -450,6 +470,173 @@ de negocio".
 6. **Titular**: corrige el `guest` de **esta** reserva (cada reserva tiene su propio titular, plan base),
    con todos sus datos salvo `nationality`. No afecta a otras reservas ni a `guest_data`: la modificación
    solo se permite antes del Check-In.
+7. **Validador del cuerpo de cambio (T008)**, en `modification-request.validator.ts`: dos funciones puras
+   que no consultan nada; B1 y B2 las usan igual. Solo un campo que **no viene** deja el dato como está; un
+   `null` es un valor más, salvo en `notes`, donde borra las observaciones. Un cuerpo que no es un objeto
+   cuenta como `{}`.
+   - **`readModificationRequest(body)`: la forma, antes del paso 1** (como el paso 1 de
+     `generate-direct-reservation`). Lo que no tiene la forma esperada responde con el código del paso al que
+     pertenece, en este orden:
+     1. `startDate` o `endDate` que no es texto: `INVALID_RESERVATION_DATES`. El texto lo revisa el paso 3.
+     2. `rooms` que no es una lista: `INVALID_ROOM_COUNT`. En cada habitación, en el orden en que llegan: un
+        `roomId` que no es un UUID, `INVALID_ROOM_ID`; un `guestCount` que no es un número entero,
+        `INVALID_GUEST_COUNT`. El `roomId` queda en minúsculas, para que el paso 4 vea repetido el mismo UUID
+        escrito con mayúsculas. La cantidad de habitaciones, las repetidas y las personas de menos de 1 las
+        revisan los pasos 4 y 5.
+     3. `updatedAt` que no es texto no da error aquí: no coincide en el paso 2 (`CONCURRENT_UPDATE`), como en
+        `cancel-reservation`.
+   - **`readHolderAndNotes(body)`: el paso 6**, en este orden:
+     1. El titular trae el campo `nationality`, con cualquier valor: `NATIONALITY_NOT_EDITABLE`.
+     2. El titular, si viene, trae **todos** sus datos salvo `nationality` (los reemplaza, regla 6), con las
+        reglas de la creación (puntos 9 y 10 de `generate-direct-reservation`): `firstName`, `lastName`,
+        `documentType` y `documentNumber` obligatorios (`GUEST_DATA_REQUIRED`); el documento como en la
+        creación (`INVALID_DOCUMENT_TYPE` o `INVALID_CHARACTERS`); y cada texto sin caracteres de control y
+        que quepa en su columna (`INVALID_CHARACTERS`). Se guardan sin los espacios de los extremos, y el
+        teléfono y el correo vacíos quedan en `null`.
+     3. `notes` que no es texto, o con caracteres de control que no son el salto de línea ni la tabulación:
+        `INVALID_CHARACTERS`.
+     4. `notes` de más de 500 caracteres: `NOTES_TOO_LONG` (`checkNotes` del dominio).
+     5. `contactEmail` sin la forma `algo@dominio.ext`, sin espacios: `INVALID_EMAIL`.
+8. **`PreviewModification` (T009)**, puerto en `ports/in/preview-modification.port.ts`. No guarda nada y no
+   abre ninguna transacción:
+
+   ```typescript
+   type ModificationPreview = {
+     reservationRef: string;
+     changes: {
+       dates: boolean;                               // startDate o endDate distintas de las actuales
+       roomsAdded: string[];                         // roomId de las agregadas (diffRooms.added)
+       roomsRemoved: string[];                       // roomId de las quitadas (diffRooms.removed)
+       roomsSwapped: { from: string; to: string }[]; // roomId de las cambiadas, de la misma o de otra categoría
+       guestCountChanged: boolean;                   // cambia la suma, o las personas de una conservada
+       guestChanged: boolean;                        // el titular viene y algún dato difiere del actual
+       notesChanged: boolean;                        // notes viene y difiere de las actuales
+     };
+     requiresConfirmation: boolean;                  // hay habitaciones recotizadas
+     availability: RoomAvailability[];               // las verificadas, en el orden de la solicitud; [] si ninguna
+     quotes: { quotes: RoomQuote[]; requests: RoomQuoteRequest[]; total: Money } | null;
+     reservation: { startDate: string; endDate: string; guestCount: number };
+   };
+
+   interface PreviewModification {
+     // @throws BusinessError con los códigos de la tabla de errores de B.
+     execute(reservationRef: string, body: unknown): Promise<ModificationPreview>;
+   }
+   ```
+
+   Pasos, en el orden de la regla 3; el primero que falla responde:
+   1. **Forma:** `readModificationRequest(body)` (regla 7).
+   2. **La reserva:** `ReservationLookup.findByRef`. Si no existe (también con una referencia mal formada),
+      `RESERVATION_NOT_FOUND`; si es `OTA`, `OTA_RESERVATION_READ_ONLY`; si no está en `ACTIVE` ni
+      `PENDING`, `STATUS_NOT_EDITABLE`.
+   3. **`updatedAt`:** el enviado y el de la reserva son el mismo instante (`isSameInstant`, como en
+      `cancel-reservation`); si no, o si no vino, `CONCURRENT_UPDATE`.
+   4. **Fechas:** las enviadas o, si no vienen, las actuales; `checkStayDates` con `Clock.today()`. Se
+      revisan aunque no cambien.
+   5. **Habitaciones:** si `rooms` no viene, quedan las actuales y no se hacen los pasos 5 y 6 (no se
+      consulta al Módulo 1). Si viene, `checkRoomList` y después `ConsultRoomInventory.byRoomId` de cada
+      una (`INVALID_ROOM_ID` o `INVENTORY_UNAVAILABLE`), que da su categoría y su `maxCapacity`.
+   6. **Personas:** `checkGuestCounts` con la `maxCapacity` de cada una.
+   7. **Titular y observaciones:** `readHolderAndNotes(body)` (regla 7).
+   8. **Disponibilidad:** `diffRooms(actuales, pedidas)`. Si cambian las fechas, se verifican todas las que
+      quedan; si no, solo las agregadas y las nuevas de las cambiadas (de cualquier categoría). Cada una con
+      `VerifyAvailability.check({ roomId, startDate, endDate, excludeReservationRef })`. Con todas las
+      respuestas, se recorren en el orden de la solicitud: la primera que falla, con un error o no
+      disponible (`ROOM_NOT_AVAILABLE` con su número), rechaza el cambio completo.
+
+   Las consultas al Módulo 1 de los pasos 5 y 8 van **en paralelo con el tope `MAINTENANCE_CONCURRENCY`**
+   (el de las consultas al Módulo 1, 5 por defecto), como en `check-room-availability`, para cumplir la
+   NFR-001 (recotizar en menos de 3 s): con 10 habitaciones y el Módulo 1 a 150 ms, de a una tardarían unos
+   4,5 s solo en esos dos pasos. Se esperan todas las respuestas, aunque una falle, y si fallan varias
+   responde la primera en el orden de la solicitud, no la que contestó antes: así el error es siempre el
+   mismo.
+   9. **Cotización:** `roomsNeedingQuote`. Si sale vacía, `quotes` es `null` y `requiresConfirmation` es
+      `false`, sin llamar al Módulo 3. Si no, `quoteRooms` con una solicitud por habitación (`key` = su
+      `roomId`, contexto `RECALCULATION`), todo o nada (`RECALCULATION_UNAVAILABLE`).
+   10. **Total:** `reservationTotal` de todas las habitaciones que quedan: la cotización nueva de las
+       recotizadas, la tarifa de la quitada en las cambiadas de la misma categoría (la heredan) y la propia
+       en las conservadas (regla 2 y punto 5 de "Puntos que este plan propone").
+
+   `ReservationsController` responde `200` en `POST /api/reservations/{reservationRef}/modification-preview`:
+   `availability.rooms` con `roomId`, `roomNumber`, `available` y `reason`; `quotes` con
+   `toQuotesDto(quotes, requests, false)` de `calculate-dynamic-rate` más el `total`; y los demás campos tal
+   cual. `ConfirmModification` (T010) repite los pasos 1 a 8 y cambia `quoteRooms` por `verifyQuotes`.
+9. **`ConfirmModification` (T010, T011 y T012)**, puerto en `ports/in/confirm-modification.port.ts`, con su
+   símbolo `CONFIRM_MODIFICATION`. `UpdateReservationModule` lo registra y lo exporta (regla 4 del plan
+   base):
+
+   ```typescript
+   interface ConfirmModification {
+     // @throws BusinessError con los códigos de la tabla de errores de B.
+     execute(reservationRef: string, body: unknown): Promise<ReservationDetail>;  // la de C3, después del COMMIT
+   }
+   ```
+
+   **Los pasos 1 a 8 son los de la vista previa (regla 8), en el mismo código.** Se sacan de
+   `PreviewModificationService` a una pieza que usan los dos servicios, para que B1 y B2 validen igual y
+   respondan el mismo error. La habitación pedida guarda también el `roomNumber` que da
+   `ConsultRoomInventory.byRoomId`, porque la nueva lo necesita en `reservation_room`.
+
+   **`expectedRates`:**
+   - Su forma se revisa en el paso 1, después de `readModificationRequest`, con una función solo de B2,
+     `readExpectedRates(body)`. Si no viene, es una lista vacía. Si no es una lista, o un elemento no trae
+     un `roomId` de texto, un `lodgingAmount` con dos decimales (`1440000.00`) y mayor que 0, y una
+     `currency` de 3 letras mayúsculas, responde `RATE_CHANGED`, como la creación de la reserva directa:
+     no hay otro código para unas tarifas mal enviadas.
+   - El `roomId` queda en minúsculas, como en `rooms`, para que coincida con la `key` de su cotización.
+   - Las de habitaciones que no se recotizan se ignoran. Si no hay nada que recotizar, no se llama al
+     Módulo 3 y `expectedRates` no se usa.
+
+   **Paso 9, la cotización:** las mismas solicitudes que la vista previa (`roomsNeedingQuote`, `key` = el
+   `roomId`, contexto `RECALCULATION`), con `verifyQuotes(expectedRates, solicitudes)` en vez de
+   `quoteRooms`. Una tarifa distinta, en monto o moneda, o la de una habitación recotizada que no vino:
+   `RATE_CHANGED`. Se guardan las cotizaciones nuevas, nunca un monto del cliente (decisión D1).
+
+   **Sin cambios no se guarda.** Si las fechas, las habitaciones (con sus personas), el titular y las
+   observaciones quedan igual, responde el detalle tal como está: no cambia el `updatedAt` ni avisa al
+   Módulo 1.
+
+   **Paso 10, la reserva que queda (T011),** con `Reservation.withModification`, que arma la reserva nueva
+   y comprueba las invariantes de `restore`:
+   - **las fechas** enviadas, o las actuales;
+   - **cada habitación**, en el orden de la solicitud:
+     - una **conservada** guarda su fila (`id`), su `roomNumber` y su `stayStatus`, con el `guestCount`
+       nuevo;
+     - una **agregada** o la nueva de una **cambiada** es una fila nueva, en `EXPECTED`, con el `roomId`, el
+       `roomNumber` y la categoría que da el Módulo 1;
+     - **su tarifa**, en el orden de `totalOf` de la vista previa:
+       1. si se recotizó, la cotización nueva (`lodgingAmount`, `quoteId` y moneda), también en una
+          conservada cuando cambian las fechas;
+       2. si no, en una cambiada de la misma categoría, la de la quitada (`roomGrossAmount`, `quoteId` y
+          moneda), sin llamar al Módulo 3;
+       3. si no, en una conservada, la suya;
+   - **el titular**, si vino, con su mismo `id` y su `nationality`, y los seis datos nuevos (regla 6);
+   - **`notes`**: si no viene, quedan; con `null`, se borran;
+   - el `guest_count` de la reserva es la suma, y las copias de las fechas y `blocks_inventory` de cada
+     habitación las calcula el repositorio al guardar (D3).
+
+   **Paso 11, la transacción (T010 y T012):**
+   1. `ReservationLookup.findForUpdate` (`SELECT … FOR UPDATE`). Si ya no existe, `RESERVATION_NOT_FOUND`.
+   2. El `updatedAt` enviado contra el de la reserva bloqueada (`isSameInstant`): si no es el mismo,
+      `CONCURRENT_UPDATE`. Así pierde la segunda de dos confirmaciones, y también una confirmación contra un
+      Check-In o una cancelación que llegaron entre la verificación y la transacción.
+   3. La reserva que queda se arma sobre la **bloqueada**, y se guarda con `ReservationRepository.update`.
+   4. `DailyListChangeRecorder.record(tx, bloqueada, guardada)`: `ADDED`, `UPDATED` o `REMOVED` según la
+      lista del día, en la misma transacción.
+
+   Después del `COMMIT`, `GetReservationDetail.execute` (regla 6 del plan base): la respuesta `200` tiene la
+   forma de C3, con el `updatedAt` nuevo.
+
+   **La restricción anti-solape (T012).** Si `update` lanza `RoomOverlapError`, la transacción ya se
+   revirtió entera. Responde `ROOM_NOT_AVAILABLE` con el número de la habitación que chocó: se buscan, con
+   `ReservationLookup.findBlockingRooms` (sin la propia reserva), las habitaciones verificadas en el paso 8
+   que ahora ocupa otra reserva, y se toma la primera en el orden de la solicitud. Si la consulta no
+   encuentra ninguna (la otra ya se canceló), se nombra la primera habitación verificada.
+
+   **Lo que no hace esta regla:** el aviso a Channex (`AriChangeRecorder`) lo agrega T028 (C5).
+
+   `ReservationsController` responde `200` en `PATCH /api/reservations/{reservationRef}` con
+   `toReservationDetailBody`. Como en B1, no lee `X-Client` ni `X-User`.
 
 ### Check-In (FR-015)
 
@@ -460,7 +647,7 @@ Orden de las verificaciones, dentro de una transacción con `SELECT … FOR UPDA
 | 1 | `messageId` ya procesado (`processed_message`) | Duplicado: se confirma sin efectos |
 | 2 | La reserva existe | Log "La reserva notificada no existe en el sistema de reservas." y se confirma |
 | 3 | El `roomId` pertenece a la reserva | Log "La habitación notificada no pertenece a la reserva." y se confirma |
-| 4 | La habitación ya está `CHECKED_IN` | Duplicado idempotente: se confirma sin efectos |
+| 4 | La habitación ya está `CHECKED_IN` | Duplicado idempotente: se confirma sin efectos en la reserva y registra el mensaje con su `sequenceNumber` (punto 6) |
 | 5 | La reserva está en `ACTIVE` o `IN_PROGRESS` | Log "La reserva no admite un Check-In en su estado actual." y se confirma |
 | 6 | La habitación está en `EXPECTED` (no `NOT_ARRIVED` ni `CHECKED_OUT`) | Log con el estado y se confirma |
 
@@ -469,7 +656,8 @@ Si pasa todo: `EXPECTED → CHECKED_IN`; si es la primera, reserva `ACTIVE → I
 
 ### Check-Out (FR-017)
 
-Mismas verificaciones 1 a 4 (con `CHECKED_OUT` como duplicado), y luego:
+Mismas verificaciones 1 a 4 (con `CHECKED_OUT` como duplicado, que también registra el mensaje con su
+`sequenceNumber`), y luego:
 
 | # | Verificación | Si falla |
 |---|---|---|
@@ -607,8 +795,11 @@ sequenceDiagram
     end
     K->>DB: BEGIN y SELECT reserva por reservationRef FOR UPDATE
     K->>DB: ¿messageId ya procesado?
-    alt duplicado o habitación ya CHECKED_IN
+    alt mismo messageId
         K->>DB: COMMIT sin efectos
+        K-->>Q: ack
+    else habitación ya CHECKED_IN (otro messageId)
+        K->>DB: registrar sequenceNumber y COMMIT, sin efectos en la reserva
         K-->>Q: ack
     else reserva inexistente, habitación ajena, estado inválido o habitación no EXPECTED
         K->>DB: registrar sequenceNumber y COMMIT
@@ -616,7 +807,7 @@ sequenceDiagram
     else todo válido
         K->>S: transitionStay(EXPECTED a CHECKED_IN)
         K->>S: transition(ACTIVE a IN_PROGRESS) si es la primera habitación
-        K->>G: register(tx, ENTRY, fecha, guests)
+        K->>G: register(tx, reserva.id, roomId, ENTRY, fecha, guests)
         K->>DB: INSERT processed_message y COMMIT
         K-->>Q: ack
     end
@@ -635,8 +826,11 @@ sequenceDiagram
 
     M1->>K: habitacion.checkout (vía RabbitMQ)
     K->>DB: BEGIN y SELECT reserva FOR UPDATE
-    alt duplicado, o habitación ya CHECKED_OUT
+    alt mismo messageId
         K->>DB: COMMIT sin efectos
+        K-->>M1: ack
+    else habitación ya CHECKED_OUT (otro messageId)
+        K->>DB: registrar sequenceNumber y COMMIT, sin efectos en la reserva
         K-->>M1: ack
     else reserva inexistente o ajena, reserva no IN_PROGRESS, o habitación no CHECKED_IN
         K->>DB: registrar sequenceNumber y COMMIT
@@ -646,7 +840,7 @@ sequenceDiagram
         alt no queda habitación en EXPECTED ni CHECKED_IN
             K->>S: transition(IN_PROGRESS a COMPLETED)
         end
-        K->>G: register(tx, DEPARTURE, fecha, guests)
+        K->>G: register(tx, reserva.id, roomId, DEPARTURE, fecha, guests)
         K->>DB: INSERT processed_message y COMMIT
         K-->>M1: ack
     end
@@ -667,7 +861,7 @@ sequenceDiagram
     alt otra instancia lo tiene
         A-->>J: se salta esta ejecución
     end
-    J->>U: execute(operationalDate = el día que terminó)
+    J->>U: closePendingDays(hoy): execute(operationalDate) por cada día pendiente, el que terminó incluido
     loop por lotes de CLOSE_DAY_BATCH_SIZE
         U->>DB: reservas del día en ACTIVE, PENDING o IN_PROGRESS
         loop una transacción por reserva
@@ -702,8 +896,8 @@ sequenceDiagram
 - **Control de concurrencia**: `reservation.updated_at` con microsegundos, más `SELECT … FOR UPDATE` para
   serializar la modificación con una notificación de Check-In o Check-Out de la misma reserva.
 - **`processed_message`** se inserta en la misma transacción que el cambio. Para no marcar saltos falsos,
-  también se inserta el `sequenceNumber` de las notificaciones rechazadas que se confirman (ver "Puntos
-  que este plan propone").
+  también se inserta el `sequenceNumber` de las notificaciones rechazadas que se confirman y de los
+  duplicados por estado de la habitación (ver "Puntos que este plan propone").
 - Índice que necesita el control de secuencia: `processed_message(queue, sequence_number)`.
 
 **Máquina de estados** (la implementa `ReservationStatusService`):
@@ -737,9 +931,9 @@ traducción del plan base:
 | Caso del spec | Comportamiento del consumidor |
 |---|---|
 | Notificación válida (200) | Aplica el cambio, registra el `messageId` y confirma el mensaje |
-| Duplicado: mismo `messageId`, o habitación ya en `CHECKED_IN` (Check-In) o `CHECKED_OUT` (Check-Out) (200 idempotente) | Confirma sin efectos |
+| Duplicado: mismo `messageId`, o habitación ya en `CHECKED_IN` (Check-In) o `CHECKED_OUT` (Check-Out) (200 idempotente) | Confirma sin efectos en la reserva. El duplicado por estado (otro `messageId`) registra el mensaje con su `sequenceNumber` (punto 6); el mismo `messageId` ya está registrado |
 | Reserva inexistente, estado que no admite el evento, habitación ajena, `NOT_ARRIVED`, sin ingreso (400) | **Confirma sin cambiar nada**, deja el caso en el log (sin datos personales) con el mensaje del spec y **no reintenta** |
-| Payload ilegible, sin `reservationRef` o `roomId`, o con caracteres maliciosos (400 de payload inválido) | **Dead-letter queue**, sin procesar; log "El payload de notificación es inválido. Falta el identificador de la reserva o de la habitación." |
+| Payload ilegible, sin `reservationRef` o `roomId`, o con caracteres maliciosos (400 de payload inválido) | **Dead-letter queue**, sin procesar; log sin datos personales: "El payload de notificación es inválido. Falta el identificador de la reserva o de la habitación." si falta la `reservationRef` o el `roomId`; con caracteres no permitidos, "Caracteres no válidos en los datos de los huéspedes.", y con cualquier otro problema de estructura, "Payload inválido." (los del validador de `process-guest-data`, acordados en su T011) |
 | Fallo temporal (base de datos caída) | Sin `commit`, reintento con espera creciente y, agotados los reintentos, dead-letter queue |
 | Salto de `sequenceNumber` | Advertencia en el log; se sigue procesando |
 
@@ -952,10 +1146,16 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
 5. **El total** de la reserva se muestra en la vista previa (la suma de lo que quedaría) sin tarifa
    anterior ni diferencia, porque el spec habla de "actualizar el total".
 6. **Se registra el `sequenceNumber` de las notificaciones rechazadas que se confirman** en
-   `processed_message` para no marcar saltos falsos.
+   `processed_message` para no marcar saltos falsos. **También el de los duplicados por estado de la
+   habitación** (ya `CHECKED_IN` en el Check-In, o ya `CHECKED_OUT` en el Check-Out): llegan con otro
+   `messageId`, y si no quedaran registrados, el mensaje siguiente avisaría un salto que no existe (por
+   ejemplo, se registra el 4, el 5 es un duplicado por estado, y al llegar el 6 se esperaría el 5). El
+   duplicado por el mismo `messageId` no hace falta registrarlo, porque ya está. "Sin efectos" quiere
+   decir sin cambios en la reserva ni en sus habitaciones.
 7. **`status_reason` con códigos** (`CHECK_IN`, `CHECK_OUT`, `DAY_CLOSE_NO_SHOW`, …); el plan base lo deja
    como texto libre.
-8. **Recuperación del cierre al arrancar** sin una tabla de control: se vuelve a ejecutar (es idempotente).
+8. **Recuperación del cierre al arrancar** sin una tabla de control: se vuelve a ejecutar (es idempotente)
+   para cada día anterior que todavía tenga algo que cerrar (punto 14).
 9. **Al asignar habitación (B3), una sin capacidad suficiente se rechaza** con
    `GUEST_COUNT_EXCEEDS_CAPACITY`: el spec solo pide verificar la disponibilidad, pero asignarla dejaría un
    conflicto que ya no se podría resolver.
@@ -988,6 +1188,77 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
 
     `notes` de más de 500 caracteres es `NOTES_TOO_LONG` (paso 6). Como el dominio lanza estos códigos, sus
     mensajes están en `domain/shared/error-codes.ts`.
+13. **`CloseDay` (T021 y T023).** Puerto de entrada en `ports/in/close-day.port.ts`:
+
+    ```typescript
+    type CloseDaySummary = {
+      operationalDate: string;
+      noShow: number;       // ACTIVE o PENDING que pasaron a NO_SHOW
+      notArrived: number;   // IN_PROGRESS con habitaciones que pasaron a NOT_ARRIVED y siguen IN_PROGRESS
+      completed: number;    // IN_PROGRESS con habitaciones que pasaron a NOT_ARRIVED y quedaron COMPLETED
+      ignored: number;      // todo el grupo ingresó, o la reserva cambió antes de bloquearla
+      failed: number;       // su transacción se revirtió (FR-022)
+    };
+
+    interface CloseDay {
+      // El día operativo que terminó, en AAAA-MM-DD. Nunca lanza por una reserva: la cuenta en failed.
+      execute(operationalDate: string): Promise<CloseDaySummary>;
+      // Cierra, del más antiguo al más reciente, cada día anterior a `today` que todavía tiene algo que
+      // cerrar (T022, punto 14). Si uno se detiene por un error al seleccionar, lanza y no sigue.
+      closePendingDays(today: string): Promise<CloseDaySummary[]>;
+    }
+    ```
+
+    Pasos de `execute`:
+    1. **Selección por lotes:** `ReservationQueryPort.findToClose(operationalDate, afterRef, limit)` devuelve
+       las `reservationRef` de las reservas con `startDate` igual al día y en `ACTIVE`, `PENDING` o
+       `IN_PROGRESS`, ordenadas por `reservationRef`, mayores que `afterRef` y como mucho `limit`
+       (`CLOSE_DAY_BATCH_SIZE`). El lote siguiente empieza después de la última referencia del anterior:
+       no se pagina con `OFFSET`, porque las reservas ya cerradas salen de la selección y correrían las
+       páginas.
+    2. **Una transacción por reserva:** bloquea la reserva con `ReservationRepository.lockByRef` y vuelve a
+       revisar su estado y su `startDate`, porque pudo cambiar entre la selección y el bloqueo. Si ya no
+       existe, cambió de fecha o ya no está en `ACTIVE`, `PENDING` ni `IN_PROGRESS`, se ignora.
+    3. **`ACTIVE` o `PENDING`:** `transition(NO_SHOW, DAY_CLOSE_NO_SHOW)` (también pasa sus habitaciones a
+       `NOT_ARRIVED`); `DailyListChangeRecorder.record(tx, antes, después, operationalDate)` con el día
+       cerrado, no con el de hoy (T023; el aviso `REMOVED` por `NO_SHOW` sale solo si la reserva pertenecía
+       a la lista); y, si es de Booking (`source = OTA`), `OtaNoShowReporter.record(tx, reserva)`.
+    4. **`IN_PROGRESS` con alguna habitación en `EXPECTED`:** `markNotArrived` y, si ya no le queda ninguna
+       `CHECKED_IN`, `transition(COMPLETED, DAY_CLOSE_PARTIAL)`. No avisa a la lista (punto abierto 1).
+       Si no le queda ninguna en `EXPECTED`, se ignora (escenario 4).
+    5. **Un error en una reserva** revierte solo su transacción, deja una advertencia en el log con su
+       `reservationRef` y el motivo (sin datos personales) y se sigue con la siguiente (FR-022). Un error
+       al seleccionar un lote sí detiene el cierre: es la pérdida de la base de datos, que maneja
+       `CloseDayJob` (T022).
+    6. Al terminar, deja en el log el resumen, solo con cifras, y lo devuelve.
+
+    Quedan fuera de `CloseDay`: la hora, el bloqueo asesor, la recuperación al arrancar y las alertas de
+    zona horaria y de pérdida de la base de datos (`CloseDayJob`, T022); el aviso a `AriChangeRecorder`
+    (T028); y el borrado de las `idempotency_key` vencidas, que se agrega con su repositorio
+    (`generate-direct-reservation`, T019).
+
+    `CLOSE_DAY_BATCH_SIZE` llega por inyección (`@Inject(CLOSE_DAY_BATCH_SIZE)`), desde la configuración
+    validada.
+14. **`CloseDayJob` (T022)**, en `infrastructure/in/jobs/close-day.job.ts`, registrado en `JobsModule`.
+    - **Cuándo:** a las 00:00:30 (`'30 0 0 * * *'`, `timeZone: 'America/Bogota'`) y al arrancar la
+      aplicación (la recuperación), con el bloqueo asesor `close-day`. Si otra instancia lo tiene, se
+      salta esa ejecución. El arranque espera la recuperación y el apagado espera la ejecución en curso,
+      como `DailyListJob`.
+    - **Qué cierra:** `CloseDay.closePendingDays(Clock.today())`, no solo el día anterior. Con
+      `ReservationQueryPort.findDaysToClose(today)` busca los días anteriores a `today` que tienen
+      reservas en `ACTIVE` o `PENDING`, o en `IN_PROGRESS` con alguna habitación en `EXPECTED`, y llama a
+      `execute` con cada uno, del más antiguo al más reciente. Así "la recuperación al arrancar lo
+      completa" también cuando el servidor estuvo apagado varios días, y la siguiente ejecución completa
+      un cierre que se detuvo por la base de datos aunque la aplicación no se haya reiniciado. El día de
+      hoy nunca se cierra: su llegada todavía puede ocurrir.
+    - **Zona horaria (caso borde):** el día sale siempre del `Clock`, que usa `America/Bogota`, y el
+      planificador también. Si en el momento de la ejecución el desfase del servidor con UTC no es el de
+      `America/Bogota`, deja la alerta de negocio en un log de nivel `error`, con la zona del servidor, y
+      sigue con la del hotel.
+    - **Pérdida de la base de datos (caso borde):** si `closePendingDays` o el bloqueo lanzan, deja una
+      alerta de nivel `error` sin el texto del error (no expone detalles de infraestructura) y termina sin
+      propagarlo. Cada reserva va en su propia transacción, así que ninguna queda a medias, y la siguiente
+      ejecución (al arrancar o a las 00:00:30) cierra lo que faltó.
 
 ## Puntos abiertos
 

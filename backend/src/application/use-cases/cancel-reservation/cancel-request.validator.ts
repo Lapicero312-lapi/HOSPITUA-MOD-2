@@ -71,3 +71,42 @@ export function checkAcknowledged(acknowledged: unknown): void {
     );
   }
 }
+
+/** El cuerpo de A ya leído, con los tipos que espera `CancelReservation`. */
+export type ReceptionCancellationBody = {
+  /** Solo `true` exacto confirma: `"true"` o la falta del dato no (paso 3, `CANCELLATION_NOT_CONFIRMED`). */
+  acknowledged: boolean;
+  /** `undefined` si no vino como texto: entonces no coincide (paso 4, `CONCURRENT_UPDATE`). */
+  expectedUpdatedAt: string | undefined;
+  reason: string | null;
+};
+
+/**
+ * El cuerpo de `POST /api/reservations/{reservationRef}/cancellation` (contrato A), sin consultar la base.
+ * Solo lee los tipos: las reglas las aplica `CancelReservation`, en el orden de la regla 3. Un motivo que no
+ * es texto es `INVALID_CHARACTERS`, pero después de revisar la referencia, que va primero (paso 1).
+ * @throws BusinessError `RESERVATION_REF_REQUIRED`, `INVALID_RESERVATION_CODE` o `INVALID_CHARACTERS`.
+ */
+export function readReceptionCancellationBody(
+  reservationRef: string,
+  body: unknown,
+): ReceptionCancellationBody {
+  const fields = isRecord(body) ? body : {};
+  const { acknowledged, updatedAt, reason } = fields;
+  if (reason !== undefined && reason !== null && typeof reason !== 'string') {
+    checkCancelRequest(reservationRef, null);
+    throw new BusinessError(
+      INVALID_CHARACTERS.code,
+      INVALID_CHARACTERS.message,
+    );
+  }
+  return {
+    acknowledged: acknowledged === true,
+    expectedUpdatedAt: typeof updatedAt === 'string' ? updatedAt : undefined,
+    reason: reason ?? null,
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}

@@ -23,6 +23,7 @@ import type {
 import { TypeOrmReservationRepository } from '../../../src/infrastructure/out/persistence/repositories/reservation.repository.js';
 import { aDirectReservation, aDirectRoom } from '../../support/builders.js';
 import { integrationEnv, truncateAllTables } from '../support/database.js';
+import { FakeDailyListPublisherModule } from '../support/fake-daily-list-publisher.js';
 
 /**
  * Pruebas de integración de `check-room-availability` (T012, escenarios 1 a 7 de la historia 1): los
@@ -163,6 +164,7 @@ describe('VerifyAvailability contra PostgreSQL real y el Módulo 1 simulado (T01
         PersistenceModule,
         ClockModule,
         Module1ClientModule,
+        FakeDailyListPublisherModule,
         CheckRoomAvailabilityModule,
       ],
       // Un proveedor de fuera del módulo que lo inyecta, como un flujo de reserva: `moduleRef.get` lo

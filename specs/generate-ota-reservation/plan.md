@@ -170,13 +170,26 @@ Módulo 1; regla 6 del plan base); los pasos 6 a 10 van en **una transacción**:
 5. Consulta la disponibilidad de cada categoría (`VerifyAvailability.check`) y asigna con `assignRooms` la
    de menor `roomNumber`, sin repetir. Las que no tengan habitación libre quedan **sin asignar**
    (`room_id` vacío, `blocks_inventory = false`).
-6. Crea la `Reservation` en `ACTIVE`, con `source = OTA`, `ota_id` de Booking.com y el titular nuevo.
-7. Calcula la comisión con `RegisterOtaConfirmationAndCommission.calculate`, con el porcentaje fijo de la
-   agencia, y escribe su auditoría. Si la agencia todavía no tiene porcentaje, `calculate` lo calcula con el
-   `ota_commission` de esta revisión y este caso de uso lo guarda con `ManageOta.setCommissionPercentage`, en
-   la misma transacción. Si la revisión no trae
-   `ota_commission`, o trae uno que da un porcentaje fuera de 0 a 100, no guarda nada ni confirma la
-   revisión, y lo registra en el log (FR-004 de `register-ota-information-commission`).
+6. **La comisión** (B1 de `register-ota-information-commission`), antes de crear la reserva, porque
+   `Reservation.createOta` la recibe ya calculada en `ota`:
+   - `RegisterOtaConfirmationAndCommission.calculate({ otaId, grossAmount, reportedCommission,
+     externalConfirmationCode })`, con el `otaId` de Booking.com, el `grossAmount` y el `otaCommission` del
+     mapeador (`reportedCommission`, `null` si la revisión no lo trae) y el `ota_reservation_code`.
+     `calculate` no persiste: usa el porcentaje fijo de la agencia o, si todavía no lo tiene, lo calcula con
+     esta revisión (`learnedPercentage: true`).
+   - Si `learnedPercentage` es `true`, `ManageOta.setCommissionPercentage(tx, otaId,
+     commissionPercentage)` lo guarda en la agencia, en esta misma transacción.
+   - Si `calculate` lanza (`OTA_NOT_FOUND`, `COMMISSION_NOT_REPORTED`, `INVALID_COMMISSION_PERCENTAGE` o
+     `DUPLICATE_CONFIRMATION_CODE`), se revierte la transacción: **no guarda nada ni confirma** la revisión,
+     y lo registra en el log con el `revisionId` y el código, sin datos personales (FR-004 de
+     `register-ota-information-commission`). La revisión queda en el feed y se vuelve a intentar en la
+     siguiente lectura; un `DUPLICATE_CONFIRMATION_CODE` (otra revisión creó la reserva entre el paso 2 y
+     este) se procesa entonces como `modified` (paso 2).
+7. **La reserva y su auditoría**: crea la `Reservation` con `createOta` en `ACTIVE`, con `source = OTA`,
+   el titular nuevo y en `ota` el `otaId`, el `ota_reservation_code`, el `grossAmount` y, de
+   `CommissionResult`, el `commissionPercentage`, el `commissionAmount` y el `commissionStatus`
+   (`CALCULATED`); la inserta y después llama a `recordAudit(tx, reservation.id, result, 'Booking.com')`,
+   que deja la fila `CALCULATED` de `commission_audit` (regla 6 de `register-ota-information-commission`).
 8. Si hay habitaciones sin asignar, marca `NO_ROOM_AVAILABLE`; si alguna supera su `maxCapacity`,
    `CAPACITY_EXCEEDED` (si hay varios motivos, el primero en este orden: `NO_ROOM_AVAILABLE`,
    `CAPACITY_EXCEEDED`, `CHANGE_NOT_APPLICABLE`).
@@ -248,6 +261,8 @@ interface OtaBookingRevisionRepository {
   markAcked(revisionId: string): Promise<void>;
   // T007: las que quedaron sin ack, de la más antigua a la más reciente (índice parcial de processed_at).
   findPendingAck(): Promise<ProcessedRevision[]>;
+  // T011b: el booking_id de las revisiones de esa reserva (es el mismo en todas), o null si no tiene.
+  findBookingIdOf(reservationId: string, tx?: Transaction): Promise<string | null>;
 }
 ```
 
@@ -301,7 +316,7 @@ sequenceDiagram
             U->>U: relacionar tipos de habitación con categorías
             U->>V: check(categoría, fechas)
             U->>U: assignRooms; las que no caben, sin asignar
-            U->>DB: BEGIN; reserva ACTIVE, habitaciones, titular, comisión, conflicto, avisos, revisión; COMMIT
+            U->>DB: BEGIN; comisión (calculate y, si la aprende, setCommissionPercentage); reserva ACTIVE con su comisión, habitaciones, titular y conflicto; recordAudit; avisos; revisión; COMMIT
             J->>P: ackBookingRevision(id)
             P->>CX: POST /booking_revisions/{id}/ack
             J->>DB: acked_at
@@ -507,6 +522,103 @@ revisión se confirma.
 
    `ChannexSyncJob` corre cada `CHANNEX_SYNC_INTERVAL_SECONDS`, con el bloqueo asesor `channex-sync`, y no
    hace nada mientras `ChannexSetupState.isReady()` sea `false`.
+8. **`OtaNoShowReporter` y `PublishPendingNoShows` (T011b).** Puertos de entrada en `ports/in/`:
+
+   ```typescript
+   interface OtaNoShowReporter {
+     // Regla 9: deja el reporte PENDING en la transacción del cierre del día.
+     record(tx: Transaction, reservation: Reservation): Promise<void>;
+   }
+
+   type NoShowPublication = { reported: number; rejected: number; pending: number };
+
+   interface PublishPendingNoShows {
+     // A3: envía las pendientes, de la más antigua a la más reciente.
+     publish(): Promise<NoShowPublication>;
+   }
+   ```
+
+   - **`record`** toma el `booking_id` de las revisiones de esa reserva
+     (`OtaBookingRevisionRepository.findBookingIdOf(reservationId, tx)`; es el mismo en todas) e inserta la
+     fila `PENDING` con `attempts = 0`. Si la reserva ya tiene su fila, no hace nada. Con una reserva que no
+     es `OTA`, o que no tiene ninguna revisión, lanza `Error` (es un dato que no debería existir): el cierre
+     del día revierte esa reserva, deja la advertencia y sigue con las demás (FR-022 de
+     `update-reservation`).
+   - **`OtaNoShowReportRepository`** (`application/ports/out/`), sobre `ota_no_show_report`:
+     `insertPending(tx, reservationId, bookingId)`; `findPending()` (por `created_at`, con el índice
+     parcial); `markReported(reservationId, at)` (`REPORTED`, `reported_at = at`); `markRejected(reservationId)`
+     (`REJECTED`); y `countAttempt(reservationId)` (sigue `PENDING`). Los tres últimos suman un intento y solo
+     cambian una fila que sigue `PENDING`.
+   - **`publish`**, por cada pendiente, llama a `ChannexPort.reportNoShow(bookingId)`:
+     - `200`: `markReported` con la hora del `Clock`.
+     - `404` o `422` (`ChannexRejectedError`): `markRejected` y una advertencia en el log; no se reintenta.
+     - Otro `4xx` (`ChannexRejectedError`): `countAttempt` y sigue con la siguiente; es de ese reporte, así
+       que se reintenta en el ciclo siguiente.
+     - `401`, `403`, `429`, `5xx` o sin respuesta (`ChannexUnauthorizedError`, `ChannexRateLimitedError` o
+       `ChannexUnavailableError`): `countAttempt` y **se detiene**: las demás fallarían igual, y con un `429`
+       hay que respetar la pausa. Todas siguen `PENDING` y se reintentan en el ciclo siguiente.
+
+     Las advertencias llevan el `reservationId` y el código de Channex, sin datos personales.
+   - **`ChannexSyncJob`** llama a `publish` en cada ciclo, después de la lectura del feed (y, cuando
+     exista, del envío de la disponibilidad de `configure-ota`), con el mismo bloqueo asesor. Lo llama
+     aunque la lectura del feed haya fallado: el reporte no depende del feed.
+9. **`ProcessBookingFeed` y `ProcessBookingRevision` (T006, T007, T010 y T011c).** Puertos de entrada en
+   `ports/in/`:
+
+   ```typescript
+   type RevisionOutcome =
+     | { kind: 'ACKNOWLEDGE' }               // aplicada, en conflicto o ignorada: se confirma (A2)
+     | { kind: 'RETRY'; reason: string };    // no se guardó: queda en el feed, sin ack
+
+   interface ProcessBookingRevision {
+     process(revision: BookingRevision): Promise<RevisionOutcome>;
+   }
+
+   interface ProcessBookingFeed {
+     // Un ciclo: repite los ack pendientes, lee el feed, procesa en orden y confirma.
+     run(): Promise<void>;
+   }
+   ```
+
+   - **`ProcessBookingFeed.run` (T007).** Primero repite los `ack` de
+     `OtaBookingRevisionRepository.findPendingAck()`. Después llama a `ReadBookingFeed.read()` y, si da
+     `READ`, procesa las revisiones en el orden del feed. Con cada `ACKNOWLEDGE` llama a
+     `ChannexPort.ackBookingRevision(id)` y, si Channex responde, a `markAcked`. Si el `ack` falla, la fila
+     queda con `acked_at` vacío y se repite en el ciclo siguiente (regla 2). Si una revisión da `RETRY`, o
+     lanza un error inesperado (que se registra sin datos personales), se saltan las siguientes del mismo
+     `bookingId` en esa lectura (regla 3). `ChannexSyncJob` llama a `ProcessBookingFeed.run()` en lugar de
+     `ReadBookingFeed.read()`, con el mismo bloqueo, y después a `PublishPendingNoShows.publish()`.
+   - **`ProcessBookingRevision.process`.** La agencia es la de `ManageOta.register({ name: 'Booking.com' })`,
+     como en el punto 7, y la hora de la revisión es `Clock.now()`.
+     1. Si `findById(revision.id)` ya la tiene: `ACKNOWLEDGE` (paso 1 de B1).
+     2. `mapBookingRevision`: si es ilegible, `RETRY` con el motivo.
+     3. Busca la reserva con `ReservationRepository.findByOtaConfirmationCode(otaId, code)`, un método nuevo
+        de lectura que devuelve la reserva o `null`.
+     4. Según `status`:
+        - **`new` (T006).** Si la reserva ya existe, se trata como `modified`. Si no, los pasos 3 a 10 de B1:
+          - relaciona cada habitación con `OtaRoomTypeMappingRepository.findByChannexRoomType`; si falta una
+            relación o el tipo llega vacío, `RETRY`;
+          - `datesDifferPerRoom` es verdadero si alguna habitación trae `checkinDate` o `checkoutDate`
+            distintos de las fechas de la reserva (FR-012, T011c);
+          - llama una vez a `VerifyAvailability.check` por cada categoría distinta, y `assignRooms` asigna la
+            de menor `roomNumber`, sin repetir;
+          - con `calculate`, un `BusinessError` da `RETRY` con el `revisionId` y el código;
+          - en una transacción: `setCommissionPercentage` si aprende el porcentaje; `createOta` con
+            `newReservationRef` y otra referencia si choca (hasta 5 veces); `insert`; `recordAudit`;
+            `DailyListChangeRecorder.record(tx, null, reserva)`; `AriChangeRecorder.record` con cada
+            categoría y las fechas; y `record` de la revisión, `APPLIED` o `CONFLICT` según tenga o no
+            conflicto;
+          - `RoomOverlapError` da `RETRY`; `DuplicateOtaBookingRevisionError` da `ACKNOWLEDGE`.
+        - **`cancelled` (T010):** B3.
+          - Si la reserva no existe o ya está `CANCELLED`: `record` `IGNORED`.
+          - Si está en `ACTIVE` o `PENDING`, en una transacción: `CancelReservation.cancel(tx, {
+            reservationRef, channel: 'OTA_API', processedBy: 'Booking.com', reason: null })` y `record`
+            `APPLIED`.
+          - Si está en `IN_PROGRESS`, `COMPLETED` o `NO_SHOW`: el conflicto `CHANGE_NOT_APPLICABLE` con
+            `ReservationRepository.update`, y `record` `CONFLICT`.
+          - En todos estos casos responde `ACKNOWLEDGE`.
+        - **`modified`:** hasta T009, `RETRY` con el motivo "pendiente de ApplyOtaChange (T009)"; queda en el
+          feed sin `ack`.
 
 ## Puntos abiertos
 

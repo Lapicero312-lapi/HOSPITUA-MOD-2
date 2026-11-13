@@ -1,8 +1,8 @@
 /**
  * Códigos de error que solo usa `cancel-reservation`, con los mensajes literales de la tabla C de su plan
  * (los del spec cuando existen). Los que comparte con otros casos de uso están en
- * `domain/shared/error-codes.ts`; `CONCURRENT_UPDATE` y `USER_REQUIRED` ya los lanzan el repositorio de
- * reservas y la lectura de `X-User`.
+ * `domain/shared/error-codes.ts`, entre ellos `CONCURRENT_UPDATE`; `USER_REQUIRED` ya lo lanza la lectura
+ * de `X-User`.
  * Se lanzan con `new BusinessError(STATUS_NOT_CANCELLABLE.code, STATUS_NOT_CANCELLABLE.message)`.
  */
 

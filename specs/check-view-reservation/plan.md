@@ -195,6 +195,7 @@ Un único cuadro de búsqueda (`search`) cubre código de reserva, código de la
   "guestCount": 3,
   "notes": "",
   "createdAt": "2026-10-01T09:14:00-05:00",
+  "updatedAt": "2026-10-08T15:42:10.123456-05:00",
   "conflict": null,
   "rooms": [
     {
@@ -219,11 +220,56 @@ Un único cuadro de búsqueda (`search`) cubre código de reserva, código de la
 - `conflict` tiene la misma forma que en C1; una habitación sin asignar trae `roomId` y `roomNumber` en
   `null`. Cada habitación trae su `roomId` (historia 2, escenario 1).
 - En reservas de Booking el titular puede venir sin `documentType` ni `documentNumber` (`null`).
+- `updatedAt` va en hora de Colombia y con microsegundos. Es el control de concurrencia que la pantalla
+  envía al cancelar (`cancel-reservation`, A) y al modificar (`update-reservation`, B1 y B2): "el que la
+  pantalla leyó de la reserva".
 - `cancellation` solo viene en reservas `CANCELLED` por solicitud explícita:
   `{ "cancellationDate", "channel", "reason", "processedBy" }`. El No-Show no tiene `Cancellation`.
 - Si la reserva no existe: `400` `RESERVATION_NOT_FOUND`, "La reserva no existe." (regla del plan base:
   los recursos inexistentes son 400). Si `reservationRef` no cumple el formato permitido:
   `400` `INVALID_RESERVATION_CODE`.
+
+**`GetReservationDetail` (T016 y T017).** El puerto de entrada está en
+`application/use-cases/check-view-reservation/ports/in/get-reservation-detail.port.ts`, con su símbolo
+`GET_RESERVATION_DETAIL`. `CheckViewReservationModule` lo registra.
+
+```typescript
+interface GetReservationDetail {
+  // C3 para la Recepcionista.
+  // @throws BusinessError INVALID_RESERVATION_CODE si reservationRef no es "RSV-" y 8 hexadecimales en mayúscula
+  //   (sin consultar la base, T017), o RESERVATION_NOT_FOUND si no existe.
+  execute(reservationRef: string): Promise<ReservationDetail>;
+}
+
+type ReservationDetail = {
+  reservation: Reservation;        // completa, con habitaciones, titular y conflicto
+  nights: number;                  // noches entre startDate y endDate
+  otaName: string | null;          // solo en reservas OTA
+  cancellation: Cancellation | null;
+};
+
+interface CancellationRepository {   // se agrega un método
+  // La cancelación de la reserva, o null si no tiene.
+  findByReservationId(reservationId: string): Promise<Cancellation | null>;
+}
+```
+
+Pasos de `execute`:
+
+1. Revisa el formato de `reservationRef` antes de tocar la base.
+2. Busca la reserva con `ReservationRepository.findByRef`. Si no existe, lanza `RESERVATION_NOT_FOUND`.
+3. En una reserva `OTA`, lee el nombre de la agencia con `OtaRepository.findById`.
+4. En una reserva `CANCELLED`, lee su `Cancellation` con `findByReservationId`. En los demás estados,
+   `cancellation` es `null`; el No-Show no tiene `Cancellation`.
+
+El cuerpo de C3 lo arma un DTO en `infrastructure/in/rest/`, sin reglas de negocio:
+
+- el dinero va como texto con dos decimales;
+- `createdAt` y `cancellationDate` van en hora de Colombia con segundos (`colombiaTime`);
+- una habitación sin asignar trae `roomId` y `roomNumber` en `null`;
+- `notes` va tal cual: `null` cuando la reserva no tiene observaciones.
+
+La ruta admite `RECEPTIONIST`. Con `MODULE3` responde `400` `INVALID_CLIENT` hasta que llegue C4 (T032).
 
 ### C4. `GET /api/reservations/{reservationRef}` (Módulo 3): consulta para liquidar (FR-022)
 
@@ -306,6 +352,61 @@ Cualquier otro parámetro (`search`, `status`, `source`, `page`...) con `X-Clien
 El `400` es `INVALID_CLIENT`. No es una regla de seguridad: solo indica que esa ruta no tiene una
 respuesta para ese llamador.
 
+### OpenAPI (T037) y pruebas de contrato (T034)
+
+Lo que las tareas no dicen y este plan fija:
+
+**Una ruta, dos llamadores.** OpenAPI admite una sola operación por ruta y método, así que
+`GET /api/reservations` (C1 y C5) y `GET /api/reservations/{reservationRef}` (C3 y C4) son una operación
+cada una:
+
+- la cabecera `X-Client` es obligatoria y lista solo los valores que admite la ruta (`RECEPTIONIST` y
+  `MODULE1`; `RECEPTIONIST` y `MODULE3`; en `day-summary`, solo `RECEPTIONIST`);
+- la descripción de la operación dice qué responde a cada llamador;
+- la respuesta `200` es `oneOf` de las dos formas, con el ejemplo del plan de cada llamador;
+- `GET /api/reservations` documenta los parámetros de C1 y `roomId`, y cada uno dice con qué llamador va.
+  `dateFrom` y `dateTo` no se marcan obligatorios: solo lo son con `MODULE1`, y su descripción lo dice.
+
+**Los errores.** La respuesta `400` de cada ruta lleva un ejemplo por cada código que responde hoy, en el
+orden en que se revisan. Va primero `INVALID_CLIENT`, porque la cabecera se lee antes que todo, y al final
+`REQUEST_NOT_PROCESSED`. El `summary` de cada ejemplo dice a qué llamador corresponde.
+
+- **`GET /api/reservations`:**
+  - los de C1, en su orden de validación;
+  - `RESERVATION_NOT_FOUND`, que sale después de buscar el código;
+  - los propios de C5: `UNSUPPORTED_PARAMETER` e `INVALID_ROOM_ID`. Los de las fechas tienen el mismo
+    código y el mismo mensaje en C1 y en C5, así que van una sola vez.
+- **`GET /api/reservations/day-summary`:** `INVALID_CLIENT` y `REQUEST_NOT_PROCESSED`.
+- **`GET /api/reservations/{reservationRef}`:**
+  - la `400`: `INVALID_CLIENT`, `INVALID_RESERVATION_CODE` y el `RESERVATION_NOT_FOUND` de la
+    Recepcionista;
+  - la `404` va aparte, con el `RESERVATION_NOT_FOUND` del Módulo 3.
+
+**Las clases.** Las respuestas se documentan como clases, en el archivo de su DTO:
+
+| Respuesta | Clase | Archivo |
+|---|---|---|
+| C1 | `ReservationListDto` y sus partes | `reservation-list.dto.ts` (nuevo) |
+| C2 | `DaySummaryDto` | `day-summary.dto.ts` (nuevo) |
+| C3 | `ReservationDetailDto` (T017 de `generate-direct-reservation`) | `reservation-detail.dto.ts` |
+| C4 | `ReservationBillingDto` (`ReservationBillingBody` pasa a ser esa clase) | `reservation-billing.dto.ts` |
+| C5 | `StayRangeDto` y sus partes (`StayRangeBody` pasa a ser esa clase) | `stay-range-query.dto.ts` |
+
+La cancelación de la misma ruta (A de `cancel-reservation`) ya está documentada.
+
+**Las pruebas de contrato (T034)**, "forma exacta y `404`" (ver "Pruebas por escenario"), van en
+`test/contract/reservations.contract.spec.ts`. Como las demás de `test/contract/`, no usan la base: el
+controlador es el real, con el filtro global y los casos de uso simulados. Comprueban:
+
+- **C4:**
+  - con los datos de los dos ejemplos del plan, el cuerpo es exactamente el del ejemplo, sin otras claves;
+  - `otaCommissionPercentage` sale como número en el texto de la respuesta, no como texto;
+  - una reserva que no existe responde `404` con el cuerpo de error.
+- **C5:**
+  - con los datos del ejemplo, el cuerpo es exactamente `{ "items": [...] }`, sin campos de paginación;
+  - sin reservas, `{ "items": [] }`.
+- **Las dos:** la respuesta es `application/json`, y otro `X-Client` responde `400` `INVALID_CLIENT`.
+
 ## Algoritmo de búsqueda
 
 Una sola función de aplicación, `ResolveSearchCriteria`, convierte `search` en un criterio (así el
@@ -328,6 +429,33 @@ resultado es el mismo para la pantalla y para los demás casos de uso, FR-007):
    los demás filtros.
 
 Nunca se envían documento y nombre a la vez: el paso 5 o el 6, no ambos.
+
+**`resolveSearchCriteria(search)` (T006).** Es una función pura en
+`application/use-cases/check-view-reservation/resolve-search-criteria.ts`, que hace los pasos 1, 2, 4, 5 y 6
+sin consultar la base:
+
+```typescript
+type SearchCriteria = {
+  // El texto normalizado (paso 1), para la coincidencia exacta del paso 3 sin distinguir mayúsculas.
+  code: string;
+  // Qué hacer si el paso 3 no encuentra nada.
+  fallback:
+    | { kind: 'NOT_FOUND' }                          // paso 4: empieza con RSV-
+    | { kind: 'DOCUMENT'; documentNumber: string }   // paso 5: tiene al menos un dígito
+    | { kind: 'NAME'; name: string };                // paso 6: sin dígitos
+};
+
+// @throws BusinessError INVALID_RESERVATION_CODE (paso 2) o NAME_SEARCH_TOO_SHORT (paso 6).
+function resolveSearchCriteria(search: string): SearchCriteria;
+```
+
+- **El paso 3** (buscar el código en paralelo) lo hace la T015 con `code`. Si no encuentra coincidencias,
+  aplica `fallback`.
+- **`NAME_SEARCH_TOO_SHORT` se lanza en la función, antes de buscar el código.** Es el último paso del orden
+  de validación de C1, y todo C1 se valida antes de tocar la base. Por eso la llama `ListReservations`,
+  después de que el DTO validó los demás filtros, y así se respeta el orden.
+- **El paso 4 va antes que el 6**, así que `RSV-ABC` sin dígitos da `NOT_FOUND` y no
+  `NAME_SEARCH_TOO_SHORT`.
 
 ## Mensajería hacia el Módulo 1
 
@@ -639,6 +767,168 @@ La publicación es de T025, T026 y T029.
    ruta REST para eso.
 6. Si la publicación falla, la operación que originó el cambio **no se revierte** (FR-020).
 
+### Publicar los mensajes (`DailyListPublisher` y `PublishPendingDailyMessages`, T025 y T026)
+
+El puerto de salida está en `application/ports/out/daily-list-publisher.ts`, con su símbolo
+`DAILY_LIST_PUBLISHER`. Lo implementa `RabbitDailyListPublisher` (`infrastructure/out/messaging/`), que
+provee `MessagingModule` (global). El puerto de entrada está en
+`application/use-cases/check-view-reservation/ports/in/publish-pending-daily-messages.port.ts`, con su
+símbolo `PUBLISH_PENDING_DAILY_MESSAGES`. `CheckViewReservationModule` lo registra y lo exporta (regla 4).
+
+```typescript
+interface DailyListPublisher {        // application/ports/out/
+  // Publica un mensaje y espera la confirmación de RabbitMQ.
+  // Lanza un error si no hay conexión, si RabbitMQ lo rechaza o si no confirma en 5 s.
+  publish(message: { messageId: string; kind: 'LIST' | 'UPDATE'; payload: object }): Promise<void>;
+}
+
+interface PublishPendingDailyMessages {
+  // Publica en orden los mensajes pendientes que ya pueden salir.
+  // Devuelve cuántos publicó.
+  execute(): Promise<number>;
+}
+
+interface DailyMessageRepository {    // se agregan tres métodos
+  // Los mensajes PENDING y FAILED, por operational_date y sequence_number ascendentes, hasta `limit`.
+  findUnpublished(limit: number): Promise<UnpublishedDailyMessage[]>;
+  // publish_status = PUBLISHED y published_at.
+  markPublished(messageId: string, publishedAt: Date): Promise<void>;
+  // Guarda attempts y next_attempt_at; con status FAILED, next_attempt_at queda vacío.
+  recordFailure(messageId: string, attempts: number, status: 'PENDING' | 'FAILED', nextAttemptAt: Date | null): Promise<void>;
+}
+
+// UnpublishedDailyMessage: messageId, operationalDate, sequenceNumber, kind, payload, publishStatus ('PENDING' | 'FAILED'), attempts y nextAttemptAt.
+```
+
+**`RabbitDailyListPublisher` (T025).**
+
+- Publica el `payload` tal como está guardado. El exchange es `hospitua.events` y la routing key depende
+  del tipo:
+  - `LIST` va con `reserva.lista-del-dia`;
+  - `UPDATE` va con `reserva.lista-del-dia.actualizacion`.
+- El mensaje sale persistente, con `content_type` `application/json` y `message_id` igual al
+  `messageId` del cuerpo.
+- Espera la confirmación de publicación. Si RabbitMQ no confirma en 5 s, cuenta como fallo (plan base,
+  "Conexión").
+- Publica de a un mensaje y por el mismo canal, así que nunca hay dos en vuelo. El orden lo decide
+  `PublishPendingDailyMessages`.
+
+**`execute` de `PublishPendingDailyMessages` (T026).** No abre una transacción: cada mensaje se marca
+por separado, apenas RabbitMQ lo confirma.
+
+1. Lee los no publicados con `findUnpublished(100)`. Si no hay ninguno, devuelve el total publicado.
+2. Los recorre en orden y se detiene en el primero que no puede salir:
+   - uno `FAILED`, porque los siguientes esperan detrás (punto 4 de "Publicación en orden");
+   - uno con `nextAttemptAt` posterior a `Clock.now()`.
+3. Publica cada uno con `DailyListPublisher.publish`:
+   - **Si sale bien**, lo marca con `markPublished(messageId, Clock.now())` y sigue con el siguiente.
+   - **Si falla**, suma un intento.
+     - Con menos de 10 intentos, guarda `PENDING` y el `nextAttemptAt`: `Clock.now()` más la espera de
+       ese intento (5 s, 15 s, 45 s, 2 min y, del quinto en adelante, 5 min).
+     - En el décimo, guarda `FAILED` y registra la alerta: un log de nivel `error` con el `messageId`,
+       la `operationalDate` y el `sequenceNumber`, sin el `payload` (tiene datos personales).
+     - En los dos casos se detiene ahí.
+4. Si publicó los 100, vuelve al paso 1.
+
+El error de la publicación no se propaga: queda en el log (sin datos personales) y en los intentos. Así
+nunca revierte la operación que originó el mensaje (FR-020).
+
+**Quién lo llama (T029).** La tarea de cada 10 s (`PublishPendingJob`), con el bloqueo asesor
+`daily-list-publish`, y la publicación inmediata después de confirmar la transacción y después de
+generar la lista. Las dos pasan por el mismo bloqueo, para que dos ejecuciones no publiquen a la vez y
+se desordenen.
+
+Cómo se arma (T029):
+
+- **El bloqueo va dentro de `PublishPendingDailyMessages`.** `execute()` corre con el bloqueo asesor
+  `daily-list-publish` por un puerto de salida nuevo, `ExclusiveRunner` (`runExclusive(name, work):
+  Promise<boolean>`, en `application/ports/out/`), que la persistencia implementa con
+  `pg_try_advisory_lock`, como el `AdvisoryLock` de las tareas. Si otra ejecución lo tiene, devuelve `0`
+  sin publicar y lo anota; la que lo tiene, al soltarlo, vuelve a leer una vez, para que ningún mensaje
+  confirmado mientras tanto espere a la tarea de 10 s (NFR-005).
+- **`PublishPendingJob`** (`infrastructure/in/jobs/`, en `JobsModule`) llama a `execute()` cada 10 s. Un
+  error inesperado queda en el log de nivel `error`, sin el texto del error, y no se propaga.
+- **La publicación inmediata.** `TransactionRunner` suma `afterCommit(tx, work)`: corre `work` cuando la
+  transacción se confirma (nunca si se revierte), sin esperarlo y con su error en el log.
+  `DailyListChangeRecorder.record` lo usa cuando guarda un mensaje, y `GenerateDailyList` llama a
+  `execute()` después de su transacción si generó la lista.
+
+### Consulta del Módulo 3 (`GetReservationForBilling`, T032)
+
+Lo que C4 no dice y este plan fija:
+
+**Puerto de entrada**, en `ports/in/get-reservation-for-billing.port.ts`:
+
+```typescript
+type ReservationForBilling = {
+  reservationRef: string;
+  channel: 'DIRECT' | 'OTA';
+  quoteIds: string[];   // el quoteId de cada habitación que lo tiene, en el orden de las habitaciones; [] en OTA
+  ota: { otaId: string; confirmationCode: string; commissionPercentage: string } | null;  // solo en OTA
+};
+
+interface GetReservationForBilling {
+  // @throws BusinessError INVALID_RESERVATION_CODE (formato, sin consultar la base, como C3)
+  // o RESERVATION_NOT_FOUND.
+  execute(reservationRef: string): Promise<ReservationForBilling>;
+}
+```
+
+- Lee la reserva como `GetReservationDetail` (C3), con la misma validación del formato (T017).
+- **El controlador**: `GET /api/reservations/{reservationRef}` admite `RECEPTIONIST` y `MODULE3`. Con
+  `MODULE3` llama a `GetReservationForBilling` y arma el JSON de C4: `otaId`, `otaConfirmationCode` y
+  `otaCommissionPercentage` solo si `channel` es `OTA`, con el porcentaje como número JSON
+  (`Number(commissionPercentage)`).
+- **El 404**: el controlador convierte `RESERVATION_NOT_FOUND` en un `ApiError` con estado `404` (la única
+  excepción del plan base, "Errores"). `INVALID_RESERVATION_CODE` sigue en `400`.
+
+### Consulta del Módulo 1 (`FindReservationsByStayRange`, T033)
+
+Lo que C5 no dice y este plan fija:
+
+**Puerto de entrada**, en `ports/in/find-reservations-by-stay-range.port.ts`:
+
+```typescript
+type StayRangeQuery = { dateFrom: string; dateTo: string; roomId: string | null };
+
+type StayRangeReservation = {
+  reservationRef: string;
+  status: 'PENDING' | 'ACTIVE' | 'IN_PROGRESS';
+  startDate: string;
+  endDate: string;
+  rooms: { roomId: string | null; roomNumber: string | null; categoryRoom: string }[];
+};
+
+interface FindReservationsByStayRange {
+  execute(query: StayRangeQuery): Promise<StayRangeReservation[]>;
+}
+```
+
+**Consulta**, `ReservationQueryPort.findByStayRange(dateFrom, dateTo, roomId)`:
+
+- Reservas en `PENDING`, `ACTIVE` o `IN_PROGRESS` con `start_date <= dateTo` y `end_date > dateFrom`.
+- Con `roomId`, solo las que tienen esa habitación entre las suyas, en cualquier `stayStatus`. Cada reserva
+  trae todas sus habitaciones.
+- Orden: `startDate` y después `reservationRef`, ascendentes; las habitaciones, por `roomNumber`.
+- Una habitación sin asignar (reserva de Booking en conflicto) sale con `roomId` y `roomNumber` en `null`.
+- Sin coincidencias: `200` con `{ "items": [] }`. No lleva `message`.
+
+**DTO del Módulo 1**, `readStayRangeQuery(query)` en `infrastructure/in/rest/`. Revisa en este orden; el
+primero que falla responde:
+
+1. Un parámetro que no es `dateFrom`, `dateTo` ni `roomId`: `UNSUPPORTED_PARAMETER`, con el mensaje "El
+   parámetro {nombre} no se admite en esta consulta." Si hay varios, nombra el primero en orden alfabético.
+2. Falta `dateFrom`, falta `dateTo` o faltan las dos: `INCOMPLETE_DATE_RANGE`.
+3. Las fechas, con las mismas reglas y mensajes de C1: `INVALID_DATE`, `INVALID_DATE_RANGE` y
+   `DATE_RANGE_TOO_LARGE`.
+4. `roomId` que no es un UUID: `INVALID_ROOM_ID`.
+
+Un parámetro repetido (`?dateFrom=…&dateFrom=…`) cuenta como valor no válido de ese parámetro.
+
+**Ruta:** `GET /api/reservations` admite `RECEPTIONIST` y `MODULE1`. Con `MODULE1`, el controlador lee la
+consulta con `readStayRangeQuery` y llama a `FindReservationsByStayRange`; con `RECEPTIONIST` sigue
+igual (C1).
+
 ### Tareas programadas (zona horaria `America/Bogota`, con bloqueo asesor)
 
 | Tarea | Horario | Qué hace |
@@ -880,6 +1170,41 @@ interface ReservationQueryPort {
   `migratory_movement` unido a `guest_data`, con la regla de `isForeign`: nacionalidad que no es
   `Colombia` ni vacía.
 
+**La búsqueda en `listReservations` (T015, T020 y T021).** `ReservationListFilters` suma un campo:
+
+```typescript
+type ReservationListFilters = {
+  // … los de T005
+  // null sin search. Lo arma ListReservations con resolveSearchCriteria (T006).
+  search:
+    | { kind: 'CODE'; code: string }                // paso 3 del algoritmo
+    | { kind: 'DOCUMENT'; documentNumber: string }  // paso 5
+    | { kind: 'NAME'; name: string }                // paso 6
+    | null;
+};
+```
+
+- **`CODE`**: `lower(reservation_ref) = lower(code)` **o** `lower(external_confirmation_code) = lower(code)`,
+  en una sola consulta: así se buscan las dos coincidencias a la vez (paso 3), con el índice único de
+  `reservation_ref` y el de T001. Ignora los demás filtros (`status`, `source`, `otaId`, `inConflict` y
+  `stayRange`); conserva el orden y la paginación.
+- **`DOCUMENT`**: `guest.document_number = documentNumber`, exacto (FR-004), combinado con los demás
+  filtros.
+- **`NAME`**: `immutable_unaccent(lower(first_name || ' ' || last_name)) LIKE '%' ||
+  immutable_unaccent(lower(name)) || '%'`, la expresión del índice GIN, combinada con los demás filtros. El
+  texto solo trae letras, dígitos y guion (paso 2), así que no lleva comodines.
+
+**`ListReservations` con `search`** (las tres tareas):
+1. `resolveSearchCriteria(search)`, después de validar los demás filtros, como hoy (T006). Así
+   `NAME_SEARCH_TOO_SHORT` (T021) e `INVALID_RESERVATION_CODE` salen antes de consultar la base.
+2. `listReservations` con `{ kind: 'CODE', code }`. Si `totalItems > 0`, esa es la respuesta (T015).
+3. Si no hay coincidencias, el `fallback`:
+   - `NOT_FOUND`: `RESERVATION_NOT_FOUND` (paso 4);
+   - `DOCUMENT` o `NAME`: `listReservations` con ese criterio y los demás filtros (T020).
+
+El ajuste a la última página válida (T011) y el mensaje de la respuesta vacía son los mismos que sin
+`search`.
+
 ### `migrationStatus` (FR-005b)
 
 Función pura en el dominio: `deriveMigrationStatus(status, hasForeignMovement)`.
@@ -985,6 +1310,24 @@ tarea cuando le toca.
 `update-reservation`).** Devuelve la reserva completa, como `findByRef`, y la deja bloqueada
 (`SELECT … FOR UPDATE`) hasta que termine `tx`; `null` si no existe. `ReservationLookupService` delega en
 `ReservationRepository.lockByRef`.
+
+**`ReservationLookup.blockingRoomsByCategory(categoryRoom, dateFrom, dateTo)` (T016c; es también la T004 de
+`configure-ota`).** Devuelve una entrada por cada noche de `[dateFrom, dateTo)`, en orden de fecha, con los
+`roomId` de esa categoría que esa noche ocupan inventario. El día de salida no se ocupa, igual que en
+`ari_pending_change`. `ReservationLookupService` delega en `ReservationQueryPort.blockingRoomsByCategory`, y
+la consulta va en `TypeOrmReservationQuery`, sobre `reservation_room`.
+
+```typescript
+// Una entrada por noche, también las que no tienen ninguna ocupada (roomIds vacío).
+blockingRoomsByCategory(categoryRoom: string, dateFrom: string, dateTo: string): Promise<{ date: string; roomIds: string[] }[]>;
+```
+
+- Cuenta las habitaciones con `blocks_inventory = true` y `category_room = categoryRoom` cuya estadía
+  `[start_date, end_date)` incluye esa noche. Es el mismo criterio de `findBlockingRooms`. Las
+  habitaciones sin asignar no aparecen, porque no bloquean inventario.
+- Cada `roomId` aparece una sola vez por noche, en orden.
+- Con `dateFrom` igual o posterior a `dateTo`, devuelve `[]` sin consultar la base.
+- No recibe transacción: es solo lectura y la usa la tarea de Channex fuera de una.
 
 **Integración con otros casos de uso**: `cancel-reservation`, `update-reservation`,
 `generate-direct-reservation` y `generate-ota-reservation` llaman a `DailyListChangeRecorder.record(tx,

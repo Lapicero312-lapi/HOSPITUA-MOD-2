@@ -1,3 +1,7 @@
+/*
+ * Pantalla de inicio: los accesos a las pantallas, como tarjetas. Todo cuelga de `.home-links`, así no
+ * cambia ninguna otra pantalla.
+ */
 .home-links {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
@@ -29,6 +33,7 @@
     transform 120ms ease;
 }
 
+/* Una flecha dibujada con bordes: no es texto, así que no cambia el nombre del enlace. */
 .home-link::after {
   content: '';
   flex-shrink: 0;

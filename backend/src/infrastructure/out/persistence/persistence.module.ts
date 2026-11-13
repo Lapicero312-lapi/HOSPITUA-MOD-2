@@ -2,12 +2,14 @@ import { Global, Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { COMMISSION_AUDIT_REPOSITORY } from '../../../application/ports/out/commission-audit.repository.js';
+import { GUEST_STAY_QUERY } from '../../../application/ports/out/guest-stay.query.js';
 import { GUEST_DATA_REPOSITORY } from '../../../application/ports/out/guest-data.repository.js';
 import { GUEST_REPOSITORY } from '../../../application/ports/out/guest.repository.js';
 import { DAILY_MESSAGE_REPOSITORY } from '../../../application/ports/out/daily-message.repository.js';
 import { DAILY_SEQUENCE_REPOSITORY } from '../../../application/ports/out/daily-sequence.repository.js';
 import { MIGRATORY_MOVEMENT_REPOSITORY } from '../../../application/ports/out/migratory-movement.repository.js';
 import { OTA_BOOKING_REVISION_REPOSITORY } from '../../../application/ports/out/ota-booking-revision.repository.js';
+import { OTA_NO_SHOW_REPORT_REPOSITORY } from '../../../application/ports/out/ota-no-show-report.repository.js';
 import { OTA_REPOSITORY } from '../../../application/ports/out/ota.repository.js';
 import { ARI_PENDING_CHANGE_REPOSITORY } from '../../../application/ports/out/ari-pending-change.repository.js';
 import { OTA_ROOM_TYPE_MAPPING_REPOSITORY } from '../../../application/ports/out/ota-room-type-mapping.repository.js';
@@ -24,11 +26,13 @@ import { TypeOrmDailyMessageRepository } from './repositories/daily-message.repo
 import { TypeOrmDailySequenceRepository } from './repositories/daily-sequence.repository.js';
 import { TypeOrmCommissionAuditRepository } from './repositories/commission-audit.repository.js';
 import { TypeOrmGuestDataRepository } from './repositories/guest-data.repository.js';
+import { TypeOrmGuestStayQuery } from './repositories/guest-stay.query.js';
 import { TypeOrmGuestRepository } from './repositories/guest.repository.js';
 import { TypeOrmAriPendingChangeRepository } from './repositories/ari-pending-change.repository.js';
 import { TypeOrmOtaRoomTypeMappingRepository } from './repositories/ota-room-type-mapping.repository.js';
 import { TypeOrmMigratoryMovementRepository } from './repositories/migratory-movement.repository.js';
 import { TypeOrmOtaBookingRevisionRepository } from './repositories/ota-booking-revision.repository.js';
+import { TypeOrmOtaNoShowReportRepository } from './repositories/ota-no-show-report.repository.js';
 import { TypeOrmOtaRepository } from './repositories/ota.repository.js';
 import { TypeOrmReservationQuery } from './repositories/reservation-query.repository.js';
 import { TypeOrmReservationRepository } from './repositories/reservation.repository.js';
@@ -61,6 +65,7 @@ import { TypeOrmTransactionRunner } from './typeorm-transaction.js';
     { provide: RESERVATION_QUERY_PORT, useClass: TypeOrmReservationQuery },
     { provide: GUEST_REPOSITORY, useClass: TypeOrmGuestRepository },
     { provide: GUEST_DATA_REPOSITORY, useClass: TypeOrmGuestDataRepository },
+    { provide: GUEST_STAY_QUERY, useClass: TypeOrmGuestStayQuery },
     {
       provide: MIGRATORY_MOVEMENT_REPOSITORY,
       useClass: TypeOrmMigratoryMovementRepository,
@@ -81,6 +86,10 @@ import { TypeOrmTransactionRunner } from './typeorm-transaction.js';
     {
       provide: OTA_BOOKING_REVISION_REPOSITORY,
       useClass: TypeOrmOtaBookingRevisionRepository,
+    },
+    {
+      provide: OTA_NO_SHOW_REPORT_REPOSITORY,
+      useClass: TypeOrmOtaNoShowReportRepository,
     },
     {
       provide: OTA_ROOM_TYPE_MAPPING_REPOSITORY,
@@ -106,12 +115,14 @@ import { TypeOrmTransactionRunner } from './typeorm-transaction.js';
     RESERVATION_QUERY_PORT,
     GUEST_REPOSITORY,
     GUEST_DATA_REPOSITORY,
+    GUEST_STAY_QUERY,
     MIGRATORY_MOVEMENT_REPOSITORY,
     OTA_REPOSITORY,
     DAILY_SEQUENCE_REPOSITORY,
     DAILY_MESSAGE_REPOSITORY,
     COMMISSION_AUDIT_REPOSITORY,
     OTA_BOOKING_REVISION_REPOSITORY,
+    OTA_NO_SHOW_REPORT_REPOSITORY,
     OTA_ROOM_TYPE_MAPPING_REPOSITORY,
     ARI_PENDING_CHANGE_REPOSITORY,
     PROCESSED_MESSAGE_REPOSITORY,

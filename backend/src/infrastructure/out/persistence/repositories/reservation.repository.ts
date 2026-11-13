@@ -16,6 +16,7 @@ import {
 import type { Transaction } from '../../../../application/ports/out/transaction.js';
 import type { Reservation } from '../../../../domain/reservation/reservation.js';
 import { BusinessError } from '../../../../domain/shared/business-error.js';
+import { CONCURRENT_UPDATE } from '../../../../domain/shared/error-codes.js';
 import {
   reservationToDomain,
   reservationToRows,
@@ -166,10 +167,7 @@ async function updateReservationRow(
     true,
   );
   if (result.affected !== 1) {
-    throw new BusinessError(
-      'CONCURRENT_UPDATE',
-      'Esta reserva ya fue actualizada o cancelada recientemente',
-    );
+    throw new BusinessError(CONCURRENT_UPDATE.code, CONCURRENT_UPDATE.message);
   }
 }
 

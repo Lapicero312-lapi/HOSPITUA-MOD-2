@@ -38,7 +38,7 @@ export default function NewDirectReservationPage() {
   const qc = useQueryClient();
   const summary = useQuery({
     queryKey: ['day-summary'],
-    queryFn: getDaySummary,
+    queryFn: () => getDaySummary(),
   });
   const rooms = useQuery({ queryKey: ['rooms'], queryFn: listRooms });
   const today = summary.data?.operationalDate ?? '';

@@ -35,9 +35,10 @@ describe('Rutas', () => {
       screen.getByRole('heading', { name: 'Recepción' }),
     ).toBeInTheDocument();
     const homeLinks = within(screen.getByRole('list'));
-    expect(
-      homeLinks.getByRole('link', { name: 'Consultar reservas' }),
-    ).toHaveAttribute('href', '/reservas');
+    expect(homeLinks.getByRole('link', { name: 'Reservas' })).toHaveAttribute(
+      'href',
+      '/reservas',
+    );
     expect(
       homeLinks.getByRole('link', { name: 'Habitaciones' }),
     ).toHaveAttribute('href', '/habitaciones');

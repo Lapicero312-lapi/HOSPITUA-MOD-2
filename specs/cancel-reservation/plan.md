@@ -109,7 +109,7 @@ interface CancelReservation {
 - Si está en `IN_PROGRESS`, `COMPLETED` o `NO_SHOW`, B no cancela y devuelve el estado a
   `generate-ota-reservation`, que marca el conflicto `CHANGE_NOT_APPLICABLE`.
 
-### C. Errores 400 (los mismos para A y B; el mensaje es el literal del spec cuando existe)
+### C. Errores 400 (los mismos para A y B, salvo `STATUS_NOT_CANCELLABLE`; el mensaje es el literal del spec cuando existe)
 
 | `errorCode` | Cuándo | `message` |
 |---|---|---|
@@ -117,7 +117,7 @@ interface CancelReservation {
 | `INVALID_RESERVATION_CODE` | La referencia no cumple el formato `RSV-` más 8 hexadecimales | "Debe proveer un código de reserva válido para la consulta." |
 | `RESERVATION_NOT_FOUND` | La reserva no existe | "La reserva no existe." |
 | `OTA_RESERVATION_CANCEL_VIA_API` | La Recepcionista intenta cancelar una reserva de OTA | "La cancelación de una reserva de OTA debe llegar desde Booking." |
-| `STATUS_NOT_CANCELLABLE` | La reserva está en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` o `NO_SHOW` | "El estado actual de la reserva no admite cancelación." |
+| `STATUS_NOT_CANCELLABLE` | Solo en A: la reserva está en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` o `NO_SHOW`. En B no es un error: `cancel` devuelve la reserva sin tocarla (contrato B) | "El estado actual de la reserva no admite cancelación." |
 | `CANCELLATION_NOT_CONFIRMED` | La Recepcionista no envía `acknowledged: true` | "Debe confirmar que entiende que la cancelación no se puede deshacer." |
 | `CONCURRENT_UPDATE` | `updatedAt` no coincide: otra cancelación o cambio simultáneo | "Esta reserva ya fue actualizada o cancelada recientemente" |
 | `REASON_TOO_LONG` | `reason` de más de 500 caracteres | "El motivo no puede superar 500 caracteres." |
@@ -411,11 +411,39 @@ canal y `REMOVED`); una con llegada futura (sin aviso); y los intentos sobre `IN
       OTA, recibe `OTA_RESERVATION_CANCEL_VIA_API`. Una cancelación de Booking sobre una reserva directa no
       debería ocurrir, porque `generate-ota-reservation` la busca por su código: es un error del programa y
       responde `REQUEST_NOT_PROCESSED`.
-    - **Paso 4:** `expectedUpdatedAt` se compara como instante, con sus microsegundos, no como texto.
+    - **Paso 4:** `expectedUpdatedAt` se compara como instante, con sus microsegundos, no como texto. En A
+      es obligatorio: si no llega, no coincide y la respuesta es `CONCURRENT_UPDATE`.
     - **La `Cancellation`:** toma su `cancellationDate` de `Clock.now()`. Si la restricción única la
       rechaza, la respuesta es `CONCURRENT_UPDATE`.
 
     Devuelve la reserva ya cancelada.
+
+    `execute(command)` (T008) es la cancelación de la Recepcionista (A y D1): hace lo mismo que `cancel`, en
+    una transacción propia, y devuelve los datos de la respuesta 200 de A:
+
+    ```typescript
+    execute(command: CancelReservationCommand): Promise<CancellationResult>;
+
+    type CancellationResult = {
+      reservationRef: string;
+      status: 'CANCELLED';
+      cancellation: {
+        cancellationId: string;
+        cancellationDate: Date;     // la capa REST lo escribe en hora de Colombia
+        channel: CancellationChannel;
+        reason: string | null;
+        processedBy: string;
+        status: 'COMPLETED';
+      };
+    };
+    ```
+11. **OpenAPI (T015).** `/api/docs` documenta A, la única ruta: el parámetro `reservationRef`, la cabecera
+    `X-User` (obligatoria), el cuerpo con `updatedAt` y `acknowledged` obligatorios y `reason` opcional, la
+    respuesta `200` con el ejemplo de A y la `400` con un ejemplo por cada código de la tabla C, en el orden de
+    la regla 3, y por `INVALID_USER` (`X-User` de más de 100 caracteres), la otra respuesta de la cabecera. B no
+    aparece en `/api/docs`, porque no tiene ruta: es el puerto `CancelReservation`, que
+    `generate-ota-reservation` llama por dentro. Lo que T015 dice de B queda en la descripción de A: Booking
+    cancela por el feed de Channex, y por eso A responde `OTA_RESERVATION_CANCEL_VIA_API` a una reserva de OTA.
 
 ## Puntos abiertos
 

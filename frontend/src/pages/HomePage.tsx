@@ -10,12 +10,22 @@ export function HomePage() {
       <ul className="home-links">
         <li>
           <Link className="home-link" to="/reservas">
-            Consultar reservas
+            Reservas
+          </Link>
+        </li>
+        <li>
+          <Link className="home-link" to="/sire">
+            Exportar SIRE
           </Link>
         </li>
         <li>
           <Link className="home-link" to="/habitaciones">
             Habitaciones
+          </Link>
+        </li>
+        <li>
+          <Link className="home-link" to="/tarifas">
+            Tarifas
           </Link>
         </li>
         <li>

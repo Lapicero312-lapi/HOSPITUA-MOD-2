@@ -38,4 +38,16 @@ export interface ReservationStatusPort {
     roomId: string,
     target: StayStatus,
   ): Promise<Reservation>;
+
+  /**
+   * El cierre del día de una reserva `IN_PROGRESS` (plan, punto 13): pasa a `NOT_ARRIVED` todas sus
+   * habitaciones en `EXPECTED`, también las que no tienen habitación asignada (`transitionStay` las elige
+   * por `roomId`), y guarda la reserva. El `status` no cambia.
+   * @throws BusinessError `INVALID_STATUS_TRANSITION` si la reserva no está en `IN_PROGRESS`, o
+   * `CONCURRENT_UPDATE`.
+   */
+  markNotArrived(
+    tx: Transaction,
+    reservation: Reservation,
+  ): Promise<Reservation>;
 }

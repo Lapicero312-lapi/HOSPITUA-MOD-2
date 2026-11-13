@@ -73,9 +73,9 @@ El JSON exacto está en [`update-reservation/plan.md`](../update-reservation/pla
 **B1. Registrar los huéspedes de una notificación** (`RegisterGuestMovements`):
 
 ```typescript
-interface GuestPayload {
-  firstName: string; lastName: string; documentType: string; documentNumber: string;
-  birthDate: string; nationality: string; originPlace?: string; destinationPlace?: string;
+interface GuestPayload {                 // tal como llega: cualquier dato puede faltar (regla 3)
+  firstName?: string; lastName?: string; documentType?: string; documentNumber?: string;
+  birthDate?: string; nationality?: string; originPlace?: string; destinationPlace?: string;
 }
 
 interface RegisterGuestMovementsCommand {
@@ -101,6 +101,20 @@ interface RegisterGuestMovements {
 
 - **Corre dentro de la transacción del consumidor**: recibe la transacción abierta y no hace `commit`.
 - El `RegistrationSummary` se lo devuelve a `update-reservation`, que lo usa para su respuesta de log.
+- **Los datos de cada huésped son opcionales en el tipo**: si fueran obligatorios, `register` no podría
+  omitir al huésped al que le falta uno (regla 3). Llegan tal como los deja el validador de estructura.
+- **Quién llama y con qué** (T011, acordado con el plan de `update-reservation`, C3, D3 y D4):
+  1. El consumidor de Check-In o de Check-Out revisa la estructura con el validador de este caso de
+     uso **antes de abrir la transacción** (paso 1 de las reglas de registro). Un mensaje inutilizable
+     va a la dead-letter queue sin llegar a `register`.
+  2. Abre la transacción, bloquea la reserva por su `reservationRef` y aplica sus verificaciones y el
+     cambio de estado.
+  3. Llama a `register` con `reservationId` (el `id` de la reserva bloqueada), el `roomId`, el
+     `movementType` y el `movementDate` del mensaje y la lista `guests` revisada.
+  4. Inserta el `messageId` en `processed_message` y confirma. Si algo falla, se revierte todo, incluidos
+     los huéspedes registrados, y el consumidor reintenta.
+- `RegisterGuestMovements` es un puerto **de entrada** de este caso de uso, que su módulo exporta:
+  `update-reservation` lo inyecta, como `cancel-reservation` inyecta `ReservationStatusService`.
 
 **B2. Seleccionar extranjeros para el SIRE** (`SelectForeignMovements`, la usa `export-sire-file`):
 
@@ -118,7 +132,7 @@ interface SireMovement {
 
 interface SelectForeignMovements {
   byPeriod(from: string, to: string): Promise<SireMovement[]>;        // FR-008
-  byMovementId(movementId: string): Promise<SireMovement | null>;     // exportación de un movimiento individual
+  byMovementId(movementId: string): Promise<SireMovement | null>;     // descarga individual y vista previa
 }
 ```
 
@@ -128,6 +142,14 @@ interface SelectForeignMovements {
   (`ENTRY` antes que `DEPARTURE`). Un periodo sin extranjeros devuelve `[]`; `export-sire-file` informa que
   no hay nada que reportar.
 - Sin ningún dato modificado ni completado (SC-002).
+- `byMovementId` devuelve `null` si el movimiento no existe, es de un colombiano o el `movementId` no es
+  un UUID; `export-sire-file` lo responde como `MOVEMENT_NOT_FOUND` (su tabla D: "no existe, es de un
+  colombiano o tiene formato inválido").
+- **Cómo lo usa `export-sire-file`** (T014, acordado con su plan): toma `SireMovement` tal cual, sin
+  volver a filtrar ni a ordenar (sus reglas 1 y 6). El archivo y la vista previa (A y C) pasan cada
+  movimiento a `formatSireLine`. El listado (B) muestra `movementId`, `reservationRef`, `movementType`,
+  `movementDate` y, del huésped, `documentType`, `documentNumber`, `nationality` y `fullName`, que es
+  `firstName` y `lastName` separados por un espacio.
 
 ### C. REST del Módulo 2: vista de huéspedes alojados
 
@@ -226,7 +248,9 @@ reserva.
 Orden de las operaciones de `register`, todo en la transacción del llamador:
 
 1. **Validar la estructura** de la notificación (ver "Errores"). Si es inutilizable, se rechaza **antes**
-   de registrar nada.
+   de registrar nada. Lo hace el consumidor de `update-reservation` con el validador de este caso de uso,
+   **antes de abrir la transacción** (D1, y D3 y D4 de `update-reservation`): `register` recibe la lista
+   ya revisada y empieza en el paso 2.
 2. **Quitar repetidos**: si el mismo `documentNumber` viene dos veces en la lista, se procesa una vez
    (el primero).
 3. **Omitir** (y registrar una alerta sin datos personales) al huésped al que le falte un campo que la
@@ -384,7 +408,7 @@ traducción del plan base:
 |---|---|
 | Registro correcto (200) | Se registra y se confirma el mensaje; el Check-In o el Check-Out se conserva (FR-006) |
 | Notificación repetida (200 idempotente) | Se confirma sin duplicar ni modificar nada |
-| Payload sin `reservationRef`, sin `roomId`, sin `guests`, de formato ilegible o con caracteres maliciosos (400) | A la dead-letter queue, **sin registrar nada**; log sin datos personales: "Caracteres no válidos en los datos de los huéspedes." o "Payload inválido." |
+| Payload sin `reservationRef`, sin `roomId`, sin `guests`, de formato ilegible o con caracteres maliciosos (400) | A la dead-letter queue, **sin registrar nada**; log sin datos personales, el mismo en los dos planes (T011): "El payload de notificación es inválido. Falta el identificador de la reserva o de la habitación." si falta la `reservationRef` o el `roomId` (el del spec de `update-reservation`); "Caracteres no válidos en los datos de los huéspedes." con caracteres no permitidos; y "Payload inválido." con cualquier otro problema de estructura |
 | Reserva inexistente o en un estado que no admite el evento | Lo decide `update-reservation` (log y confirmación, sin reintento) |
 | Un huésped al que le falta un dato que la base exige | Se **omite solo a ese huésped**, se registra una alerta y se procesa el resto |
 | Fallo temporal (base de datos caída, por ejemplo) | Sin `commit`, reintento con espera creciente y, agotados, dead-letter queue (el reproceso es seguro: es idempotente) |
@@ -521,7 +545,9 @@ frontend/src/pages/guest-stays/              # vista de huéspedes alojados y su
 
 - **Depende de**: el plan base (esquema de `guest_data` y `migratory_movement`, mensajería).
 - **Se integra con**: `update-reservation` (consumidor de las colas, que llama a `RegisterGuestMovements`)
-  y `export-sire-file` (consume `SelectForeignMovements`). Los tres deben acordar la transacción única.
+  y `export-sire-file` (consume `SelectForeignMovements`). La transacción única quedó acordada con
+  `update-reservation` (T011; ver B1, "Quién llama y con qué"). `export-sire-file` solo lee, fuera de
+  esa transacción (T014; ver B2).
 - **Orden**: T001–T005 → US1 (T006–T011) → US2 (T012–T014) → US3 (T015–T019) → Polish. Va antes de
   `update-reservation` y de `export-sire-file`.
 
@@ -566,7 +592,7 @@ frontend/src/pages/guest-stays/              # vista de huéspedes alojados y su
 
 | # | Pendiente | Con quién |
 |---|---|---|
-| 1 | Transacción única entre `update-reservation` (estado y `processed_message`) y este caso de uso: confirmarlo en el plan de `update-reservation` | Equipo del Módulo 2 |
+| 1 | **Resuelto (T011).** La transacción única entre `update-reservation` (estado y `processed_message`) y este caso de uso quedó acordada en el plan de `update-reservation` (C3, D3 y D4) y en B1 ("Quién llama y con qué") | — |
 | 2 | Tamaño máximo de un mensaje (cantidad de huéspedes) para protegerse de payloads desmedidos | Módulo 1 |
 | 3 | Si la nacionalidad llega con otra escritura ("COLOMBIA", "colombiana"), hoy se trataría como extranjera. Confirmar con el Módulo 1 que siempre envía `Colombia` | Módulo 1 |
 

@@ -141,3 +141,82 @@ describe('Reservation.withStayStatus', () => {
     expect(changed.rooms[0].blocksInventory('IN_PROGRESS')).toBe(false);
   });
 });
+
+describe('Reservation.withNotArrivedRooms (cierre del día de una reserva IN_PROGRESS, FR-019)', () => {
+  it('pasa a NOT_ARRIVED las habitaciones en EXPECTED y deja las demás y el status como estaban', () => {
+    const arrived = aDirectRoom({ stayStatus: 'CHECKED_IN' });
+    const missing = aDirectRoom({ roomNumber: '202' });
+    const reservation = aDirectReservation({
+      status: 'IN_PROGRESS',
+      statusReason: 'CHECK_IN',
+      rooms: [arrived, missing],
+    });
+
+    const closed = reservation.withNotArrivedRooms();
+
+    expect(closed.rooms.map((room) => room.stayStatus)).toEqual([
+      'CHECKED_IN',
+      'NOT_ARRIVED',
+    ]);
+    expect(closed.status).toBe('IN_PROGRESS');
+    expect(closed.statusReason).toBe('CHECK_IN');
+    expect(reservation.rooms[1].stayStatus).toBe('EXPECTED');
+  });
+
+  it('también pasa a NOT_ARRIVED una habitación sin asignar (reserva de Booking en conflicto), que no tiene roomId', () => {
+    const arrived = anOtaRoom({ stayStatus: 'CHECKED_IN' });
+    const unassigned = anOtaRoom({ roomId: null, roomNumber: null });
+    const reservation = anOtaReservation(randomUUID(), {
+      status: 'IN_PROGRESS',
+      statusReason: 'CHECK_IN',
+      rooms: [arrived, unassigned],
+      conflict: { reason: 'NO_ROOM_AVAILABLE', detectedAt: new Date() },
+    });
+
+    const closed = reservation.withNotArrivedRooms();
+
+    expect(closed.rooms.map((room) => room.stayStatus)).toEqual([
+      'CHECKED_IN',
+      'NOT_ARRIVED',
+    ]);
+  });
+
+  it('una habitación que pasa a NOT_ARRIVED deja de ocupar inventario (D3)', () => {
+    const missing = aDirectRoom();
+    const reservation = aDirectReservation({
+      status: 'IN_PROGRESS',
+      rooms: [aDirectRoom({ stayStatus: 'CHECKED_IN' }), missing],
+    });
+
+    const closed = reservation.withNotArrivedRooms();
+
+    expect(reservation.rooms[1].blocksInventory('IN_PROGRESS')).toBe(true);
+    expect(closed.rooms[1].blocksInventory('IN_PROGRESS')).toBe(false);
+  });
+
+  it('sin habitaciones en EXPECTED no cambia ninguna', () => {
+    const reservation = aDirectReservation({
+      status: 'IN_PROGRESS',
+      rooms: [
+        aDirectRoom({ stayStatus: 'CHECKED_IN' }),
+        aDirectRoom({ stayStatus: 'CHECKED_OUT' }),
+      ],
+    });
+
+    expect(
+      reservation.withNotArrivedRooms().rooms.map((room) => room.stayStatus),
+    ).toEqual(['CHECKED_IN', 'CHECKED_OUT']);
+  });
+
+  it.each(['ACTIVE', 'PENDING', 'COMPLETED', 'CANCELLED', 'NO_SHOW'] as const)(
+    'con una reserva en %s es INVALID_STATUS_TRANSITION: solo IN_PROGRESS se cierra así',
+    (status) => {
+      expect(() =>
+        aDirectReservation({
+          status,
+          rooms: [aDirectRoom({ stayStatus: 'CHECKED_OUT' })],
+        }).withNotArrivedRooms(),
+      ).toThrow(INVALID);
+    },
+  );
+});

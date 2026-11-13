@@ -43,7 +43,7 @@ export default function ModifyReservationPage() {
   const rooms = useQuery({ queryKey: ['rooms'], queryFn: listRooms });
   const summary = useQuery({
     queryKey: ['day-summary'],
-    queryFn: getDaySummary,
+    queryFn: () => getDaySummary(),
   });
   const back = (
     <Link className="crumbnav" to={`/reservas/${ref}`}>

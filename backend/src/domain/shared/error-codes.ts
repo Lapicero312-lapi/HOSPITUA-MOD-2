@@ -170,6 +170,27 @@ export const NOTES_TOO_LONG = {
   message: 'Las observaciones no pueden superar 500 caracteres.',
 } as const;
 
+/** `documentType` no es `RC`, `TI`, `CC`, `CE`, `PAS` ni `NIT`. Lo usan la creación y la modificación de la reserva. */
+export const INVALID_DOCUMENT_TYPE = {
+  code: 'INVALID_DOCUMENT_TYPE',
+  message: 'El tipo de documento no es válido.',
+} as const;
+
+/**
+ * `guestCount` de una habitación no es un número entero (en la creación, tampoco uno negativo; el `0` es
+ * `GUEST_COUNT_TOO_LOW`). Lo usan `generate-direct-reservation` y `update-reservation`.
+ */
+export const INVALID_GUEST_COUNT = {
+  code: 'INVALID_GUEST_COUNT',
+  message: 'La cantidad de personas debe ser un número entero mayor que cero.',
+} as const;
+
+/** `contactEmail` del titular con formato inválido. Lo usan la creación y la modificación de la reserva. */
+export const INVALID_EMAIL = {
+  code: 'INVALID_EMAIL',
+  message: 'El correo electrónico no es válido.',
+} as const;
+
 /** El `guestCount` de una habitación es mayor que su `maxCapacity`. */
 export const GUEST_COUNT_EXCEEDS_CAPACITY = {
   code: 'GUEST_COUNT_EXCEEDS_CAPACITY',
@@ -191,4 +212,13 @@ export const ROOM_NOT_AVAILABLE = {
 export const GUEST_DATA_REQUIRED = {
   code: 'GUEST_DATA_REQUIRED',
   message: 'Los datos del titular son obligatorios.',
+} as const;
+
+/**
+ * Otro cambio de la reserva ganó: su `updatedAt` ya no es el que se leyó (plan base, control de
+ * concurrencia). Lo lanzan el repositorio de reservas y `cancel-reservation` (regla 3, paso 4).
+ */
+export const CONCURRENT_UPDATE = {
+  code: 'CONCURRENT_UPDATE',
+  message: 'Esta reserva ya fue actualizada o cancelada recientemente',
 } as const;

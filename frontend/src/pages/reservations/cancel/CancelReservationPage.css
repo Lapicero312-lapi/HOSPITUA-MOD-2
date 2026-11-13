@@ -1,0 +1,145 @@
+/*
+ * Pantalla "Cancelar reserva". Todo cuelga de `.cancel`, así no cambia ninguna otra pantalla. Usa los
+ * colores base de `index.css`: un panel con la reserva y otro con la confirmación.
+ */
+
+.cancel {
+  --cancel-radius: 12px;
+  --cancel-shadow:
+    0 1px 2px rgba(31, 41, 51, 0.04), 0 8px 24px rgba(31, 41, 51, 0.06);
+  --cancel-error-background: #fef3f2;
+  max-width: 48rem;
+}
+
+.cancel-back {
+  display: inline-block;
+  margin-bottom: 1rem;
+  text-decoration: none;
+}
+
+.cancel-title {
+  margin: 0 0 1rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.cancel-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  padding: 1.25rem;
+  background-color: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--cancel-radius);
+  box-shadow: var(--cancel-shadow);
+}
+
+.cancel-panel h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.cancel-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 1rem;
+  margin: 0;
+}
+
+.cancel-field dt,
+.cancel-label {
+  color: var(--color-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.cancel-field dd {
+  margin: 0.125rem 0 0;
+  overflow-wrap: anywhere;
+}
+
+.cancel-panel textarea {
+  padding: 0.5rem 0.625rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  color: var(--color-text);
+  font: inherit;
+  resize: vertical;
+}
+
+.cancel-check {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 600;
+}
+
+.cancel-buttons {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.cancel-confirm {
+  padding: 0.5rem 1rem;
+  background-color: var(--color-error);
+  border: 1px solid var(--color-error);
+  border-radius: 8px;
+  color: var(--color-background);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.cancel-confirm:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.cancel-done {
+  margin: 0;
+  font-weight: 600;
+}
+
+.cancel-state {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 2.5rem 0;
+  color: var(--color-muted);
+}
+
+.cancel-state--loading::before {
+  content: '';
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: cancel-spin 0.8s linear infinite;
+}
+
+@keyframes cancel-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cancel-state--loading::before {
+    animation: none;
+  }
+}
+
+.cancel-panel .error-message {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  background-color: var(--cancel-error-background);
+  border-left: 4px solid var(--color-error);
+}
