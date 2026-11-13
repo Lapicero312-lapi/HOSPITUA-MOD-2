@@ -7,6 +7,7 @@ import { NotFoundPage } from './pages/NotFoundPage.tsx';
 import { OtasPage } from './pages/otas/OtasPage.tsx';
 import { RatesPage } from './pages/rates/RatesPage.tsx';
 import { CancelReservationPage } from './pages/reservations/cancel/CancelReservationPage.tsx';
+import { ModifyReservationPage } from './pages/reservations/modify/ModifyReservationPage.tsx';
 import { ReservationDetailPage } from './pages/reservations/ReservationDetailPage.tsx';
 import { ReservationsPage } from './pages/reservations/ReservationsPage.tsx';
 import { RoomsPage } from './pages/rooms/RoomsPage.tsx';
@@ -41,6 +42,10 @@ export const routes: RouteObject[] = [
       {
         path: 'reservas/:reservationRef/cancelar',
         element: <CancelReservationPage />,
+      },
+      {
+        path: 'reservas/:reservationRef/modificar',
+        element: <ModifyReservationPage />,
       },
       { path: '*', element: <NotFoundPage /> },
     ],
