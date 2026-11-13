@@ -1093,6 +1093,9 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
 | US3 | 4 todo ingresó | Se ignora |
 | US3 | 5 fallo aislado | Una reserva corrupta no detiene el lote |
 | NFR-003 | Idempotencia | El cierre dos veces el mismo día no cambia nada |
+| NFR-001 | Tiempo de la recotización (T030) | La vista previa (B1) de una reserva de 10 habitaciones que cambia las fechas, con el Módulo 1 simulado a 150 ms y el Módulo 3 a 300 ms (los de las pruebas de tiempo de `check-room-availability` y `calculate-dynamic-rate`), en menos de 3 s. Se mide la vista previa porque es la recotización que ve el solicitante; la confirmación repite los mismos pasos con `verifyQuotes` (regla 9) |
+| NFR-002 | Tiempo del Check-In (T030) | `ProcessCheckIn` de una habitación con 10 huéspedes (cinco extranjeros y cinco colombianos, como en la prueba de tiempo de `process-guest-data`), con su movimiento de entrada cada uno, en menos de 500 ms |
+| NFR-003 | Tiempo del cierre del día (T030) | `CloseDay` de un día con 1000 reservas `ACTIVE` que no se presentaron, en menos de 1 minuto. Las reservas se cargan con SQL, porque son datos de la prueba: lo que se mide es el cierre |
 | US3 | Casos borde del cierre | Zona horaria del servidor distinta de `America/Bogota`: se usa la del hotel y se emite la alerta de negocio; pérdida de la conexión a la base de datos a mitad del lote: el cierre se detiene con una alerta sin detalles de infraestructura, ninguna reserva queda a medias y la recuperación al arrancar lo completa |
 | Contrato | Mensajes | Forma exacta de Check-In y Check-Out y mensaje repetido con el mismo `messageId` |
 
