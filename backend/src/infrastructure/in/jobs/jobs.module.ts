@@ -9,6 +9,7 @@ import { ChannexSetupJob } from './channex-setup.job.js';
 import { ChannexSyncJob } from './channex-sync.job.js';
 import { CloseDayJob } from './close-day.job.js';
 import { DailyListJob } from './daily-list.job.js';
+import { PublishPendingJob } from './publish-pending.job.js';
 
 /**
  * Planificador de las tareas programadas (`@nestjs/schedule`), su bloqueo asesor y las tareas. Necesita
@@ -28,6 +29,7 @@ import { DailyListJob } from './daily-list.job.js';
     ChannexSetupJob,
     ChannexSyncJob,
     DailyListJob,
+    PublishPendingJob,
     CloseDayJob,
   ],
   exports: [AdvisoryLock],

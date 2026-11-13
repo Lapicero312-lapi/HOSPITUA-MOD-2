@@ -21,6 +21,10 @@ import {
 import { messageProjection } from './message-projection.js';
 import { colombiaTime } from './message-time.js';
 import type { GenerateDailyList } from './ports/in/generate-daily-list.port.js';
+import {
+  PUBLISH_PENDING_DAILY_MESSAGES,
+  type PublishPendingDailyMessages,
+} from './ports/in/publish-pending-daily-messages.port.js';
 
 /** La lista siempre es el primer mensaje del día (plan, "Mensajería hacia el Módulo 1"). */
 const LIST_SEQUENCE = 1;
@@ -43,6 +47,8 @@ export class GenerateDailyListService implements GenerateDailyList {
     private readonly messages: DailyMessageRepository,
     @Inject(CLOCK)
     private readonly clock: Clock,
+    @Inject(PUBLISH_PENDING_DAILY_MESSAGES)
+    private readonly publication: PublishPendingDailyMessages,
   ) {}
 
   execute(operationalDate: string = this.clock.today()): Promise<boolean> {
@@ -97,6 +103,8 @@ export class GenerateDailyListService implements GenerateDailyList {
         tx,
       );
       await this.sequences.markListGenerated(operationalDate, tx);
+      // La lista sale apenas se confirme (T029, NFR-004).
+      this.transactions.afterCommit(tx, () => this.publication.execute());
       return true;
     });
   }

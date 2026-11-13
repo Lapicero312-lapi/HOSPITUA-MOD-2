@@ -47,7 +47,7 @@ describe('Al arrancar la aplicación sin la lista del día generada', () => {
     await dataSource?.destroy();
   });
 
-  it('genera la lista del día en curso (vacía, secuencia 1, PENDING) y no la repite al volver a arrancar', async () => {
+  it('genera la lista del día en curso (vacía, secuencia 1), la publica al confirmarla (T029) y no la repite al volver a arrancar', async () => {
     const today = todayInBogota();
 
     await startAndStop();
@@ -69,7 +69,8 @@ describe('Al arrancar la aplicación sin la lista del día generada', () => {
         operational_date: today,
         sequence_number: 1,
         message_kind: 'LIST',
-        publish_status: 'PENDING',
+        // La publicación inmediata (T029): el apagado la espera, así que ya salió.
+        publish_status: 'PUBLISHED',
         total_reservations: 0,
       },
     ]);

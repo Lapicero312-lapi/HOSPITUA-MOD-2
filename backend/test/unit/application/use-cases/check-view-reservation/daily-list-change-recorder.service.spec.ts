@@ -21,6 +21,7 @@ import {
   anOtaRoom,
   otaTerms,
 } from '../../../../support/builders.js';
+import type { TransactionRunner } from '../../../../../src/application/ports/out/transaction.js';
 
 /** El día operativo y la hora del ejemplo de UPDATED del plan: 2026-10-09 a las 09:15 de Colombia. */
 const TODAY = '2026-10-09';
@@ -126,13 +127,24 @@ function recorderWith(
       Promise.resolve(otas.find((ota) => ota.id === id) ?? null),
     ),
   };
+  const afterCommit = vi.fn<TransactionRunner['afterCommit']>();
+  const publication = { execute: vi.fn(() => Promise.resolve(0)) };
   const recorder = new DailyListChangeRecorderService(
     sequences as unknown as DailySequenceRepository,
     messages as unknown as DailyMessageRepository,
     otaRepository as unknown as OtaRepository,
     clock,
+    { afterCommit } as unknown as TransactionRunner,
+    publication,
   );
-  return { recorder, sequences, messages, otaRepository };
+  return {
+    recorder,
+    sequences,
+    messages,
+    otaRepository,
+    afterCommit,
+    publication,
+  };
 }
 
 /** El único mensaje que se guardó. */
@@ -412,5 +424,33 @@ describe('DailyListChangeRecorder (plan, "Anotar un cambio" y D3)', () => {
     expect(sequences.lockOrCreateDay.mock.calls[0][1]).toBe(TX);
     expect(sequences.setLastSequence.mock.calls[0][2]).toBe(TX);
     expect(messages.insert.mock.calls[0][1]).toBe(TX);
+  });
+
+  describe('la publicación inmediata (T029)', () => {
+    it('al guardar un mensaje, deja la publicación para cuando se confirme la transacción', async () => {
+      const { recorder, afterCommit, publication } = recorderWith();
+
+      await recorder.record(TX, null, planReservation());
+
+      expect(afterCommit).toHaveBeenCalledTimes(1);
+      const [tx, work] = afterCommit.mock.calls[0];
+      expect(tx).toBe(TX);
+      // Todavía no publica: eso pasa después del COMMIT.
+      expect(publication.execute).not.toHaveBeenCalled();
+      await work();
+      expect(publication.execute).toHaveBeenCalledTimes(1);
+    });
+
+    it('sin mensaje no deja ninguna publicación', async () => {
+      const { recorder, afterCommit } = recorderWith();
+
+      await recorder.record(
+        TX,
+        null,
+        planReservation({ startDate: '2026-10-16', endDate: '2026-10-18' }),
+      );
+
+      expect(afterCommit).not.toHaveBeenCalled();
+    });
   });
 });
