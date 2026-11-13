@@ -27,6 +27,7 @@ import {
 import { AppModule } from '../../../../../src/app.module.js';
 import { configureApp } from '../../../../../src/configure-app.js';
 import { Money } from '../../../../../src/domain/shared/money.js';
+import { DataSource } from 'typeorm';
 import { ROOM_201, ROOM_202 } from '../../../../support/rooms.js';
 
 /**
@@ -222,5 +223,73 @@ describe('POST /api/reservations/direct (e2e)', () => {
     ).expect(400);
 
     expect(res.body.errorCode).toBe('GUEST_DATA_REQUIRED');
+  });
+
+  describe('los avisos, en la misma transacción (T010)', () => {
+    const database = () => app.get(DataSource);
+
+    const ariChanges = (from: string) =>
+      database().query(
+        `SELECT category_room, to_char(date_from, 'YYYY-MM-DD') AS date_from,
+                to_char(date_to, 'YYYY-MM-DD') AS date_to
+         FROM ari_pending_change WHERE date_from = $1`,
+        [from],
+      );
+
+    const dailyMessagesOf = (reservationRef: string) =>
+      database().query(
+        `SELECT m.update_type FROM daily_list_message m
+         JOIN reservation r ON r.id = m.reservation_id
+         WHERE r.reservation_ref = $1`,
+        [reservationRef],
+      );
+
+    it('deja la marca para Channex con la categoría y las noches, y con llegada futura no avisa a la lista', async () => {
+      const res = await create(aBody('2031-08-01', '2031-08-04')).expect(201);
+
+      expect(await ariChanges('2031-08-01')).toEqual([
+        {
+          category_room: 'DOBLE',
+          date_from: '2031-08-01',
+          date_to: '2031-08-04',
+        },
+      ]);
+      expect(await dailyMessagesOf(res.body.reservationRef)).toEqual([]);
+    });
+
+    it('con llegada hoy y la lista del día ya enviada, avisa ADDED (regla 8)', async () => {
+      await database().query(
+        `INSERT INTO daily_sequence (operational_date, last_sequence, list_generated)
+         VALUES ($1, 1, true)
+         ON CONFLICT (operational_date) DO UPDATE SET list_generated = true`,
+        [TODAY],
+      );
+
+      const res = await create(
+        aBody(TODAY, '2031-06-10', {
+          rooms: [{ guestCount: 2 }],
+          expectedRates: [
+            { position: 1, lodgingAmount: '750000.00', currency: 'COP' },
+          ],
+        }),
+      ).expect(201);
+
+      expect(await dailyMessagesOf(res.body.reservationRef)).toEqual([
+        { update_type: 'ADDED' },
+      ]);
+    });
+
+    it('si la creación falla, no queda ninguna marca para Channex', async () => {
+      await create(
+        aBody('2031-08-20', '2031-08-22', {
+          expectedRates: [
+            { position: 1, lodgingAmount: '1.00', currency: 'COP' },
+            { position: 2, lodgingAmount: '750000.00', currency: 'COP' },
+          ],
+        }),
+      ).expect(400);
+
+      expect(await ariChanges('2031-08-20')).toEqual([]);
+    });
   });
 });

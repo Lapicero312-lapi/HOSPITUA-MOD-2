@@ -52,6 +52,10 @@ import {
   type ReservationListResult,
 } from '../../../application/use-cases/check-view-reservation/ports/in/list-reservations.port.js';
 import {
+  PREVIEW_MODIFICATION,
+  type PreviewModification,
+} from '../../../application/use-cases/update-reservation/ports/in/preview-modification.port.js';
+import {
   RESERVATION_SOURCES,
   RESERVATION_STATUSES,
 } from '../../../domain/shared/enums.js';
@@ -88,6 +92,10 @@ import {
   ReservationDetailDto,
   toReservationDetailBody,
 } from './reservation-detail.dto.js';
+import {
+  type ModificationPreviewBody,
+  toModificationPreviewBody,
+} from './reservation-modification.dto.js';
 import { readReservationListQuery } from './reservation-list-query.dto.js';
 import {
   LIST_ERROR_EXAMPLES,
@@ -196,6 +204,8 @@ export class ReservationsController {
     private readonly getReservationForBilling: GetReservationForBilling,
     @Inject(FIND_RESERVATIONS_BY_STAY_RANGE)
     private readonly findByStayRange: FindReservationsByStayRange,
+    @Inject(PREVIEW_MODIFICATION)
+    private readonly previewModification: PreviewModification,
   ) {}
 
   /**
@@ -438,5 +448,22 @@ export class ReservationsController {
       expectedUpdatedAt,
     });
     return toReservationCancellationBody(result);
+  }
+
+  /**
+   * B1 de `update-reservation`, `POST /api/reservations/{reservationRef}/modification-preview`: la vista
+   * previa de la modificación de una reserva directa (D1 y regla 8). No guarda nada. Responde `200` con los
+   * cambios, la disponibilidad verificada, las tarifas recotizadas y el total; los errores de la tabla de B
+   * salen por el filtro global como `400`.
+   */
+  @Post(':reservationRef/modification-preview')
+  @HttpCode(200)
+  async modificationPreview(
+    @Param('reservationRef') reservationRef: string,
+    @Body() body: unknown,
+  ): Promise<ModificationPreviewBody> {
+    return toModificationPreviewBody(
+      await this.previewModification.execute(reservationRef, body),
+    );
   }
 }
