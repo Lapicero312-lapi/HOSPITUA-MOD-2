@@ -6,6 +6,7 @@ import {
   HttpCode,
   Inject,
   Param,
+  Patch,
   Post,
   Query,
 } from '@nestjs/common';
@@ -51,6 +52,10 @@ import {
   type ListReservations,
   type ReservationListResult,
 } from '../../../application/use-cases/check-view-reservation/ports/in/list-reservations.port.js';
+import {
+  CONFIRM_MODIFICATION,
+  type ConfirmModification,
+} from '../../../application/use-cases/update-reservation/ports/in/confirm-modification.port.js';
 import {
   PREVIEW_MODIFICATION,
   type PreviewModification,
@@ -206,6 +211,8 @@ export class ReservationsController {
     private readonly findByStayRange: FindReservationsByStayRange,
     @Inject(PREVIEW_MODIFICATION)
     private readonly previewModification: PreviewModification,
+    @Inject(CONFIRM_MODIFICATION)
+    private readonly confirmModification: ConfirmModification,
   ) {}
 
   /**
@@ -464,6 +471,23 @@ export class ReservationsController {
   ): Promise<ModificationPreviewBody> {
     return toModificationPreviewBody(
       await this.previewModification.execute(reservationRef, body),
+    );
+  }
+
+  /**
+   * B2 de `update-reservation`, `PATCH /api/reservations/{reservationRef}`: la confirmación de la
+   * modificación de una reserva directa (D2 y regla 9). Repite las validaciones de la vista previa, vuelve a
+   * cotizar y compara con `expectedRates`, y guarda con el aviso a la lista del día. Responde `200` con el
+   * detalle de la reserva (C3 de `check-view-reservation`) y su `updatedAt` nuevo; los errores de la tabla de
+   * B salen por el filtro global como `400`.
+   */
+  @Patch(':reservationRef')
+  async confirmModificationOf(
+    @Param('reservationRef') reservationRef: string,
+    @Body() body: unknown,
+  ): Promise<ReservationDetailBody> {
+    return toReservationDetailBody(
+      await this.confirmModification.execute(reservationRef, body),
     );
   }
 }
