@@ -27,13 +27,19 @@ export interface IdempotencyKeyRepository {
   find(key: string): Promise<StoredIdempotencyKey | null>;
 
   /**
-   * La guarda en la transacción de la reserva. Una fila vencida (creada antes de `expiredBefore`) con la
-   * misma clave se reemplaza.
+   * La guarda en la transacción de la reserva, con `createdAt` (`Clock.now()`): el vencimiento se decide
+   * con el mismo reloj que la guardó. Una fila vencida (creada en `expiredBefore` o antes) con la misma
+   * clave se reemplaza.
    * @throws DuplicateIdempotencyKeyError si ya hay una fila vigente con esa clave.
    */
   save(
     tx: Transaction,
-    entry: { key: string; requestHash: string; reservationId: string },
+    entry: {
+      key: string;
+      requestHash: string;
+      reservationId: string;
+      createdAt: Date;
+    },
     expiredBefore: Date,
   ): Promise<void>;
 

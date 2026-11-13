@@ -38,20 +38,32 @@ export class TypeOrmIdempotencyKeyRepository implements IdempotencyKeyRepository
 
   async save(
     tx: Transaction,
-    entry: { key: string; requestHash: string; reservationId: string },
+    entry: {
+      key: string;
+      requestHash: string;
+      reservationId: string;
+      createdAt: Date;
+    },
     expiredBefore: Date,
   ): Promise<void> {
-    // Solo reemplaza una fila vencida: si la que existe sigue vigente, no se escribe ninguna.
+    // Solo reemplaza una fila vencida: si la que existe sigue vigente, no se escribe ninguna. La hora es la
+    // del reloj de la aplicación, no `now()` de la base, para que `find` y el vencimiento usen la misma.
     const rows: unknown[] = await managerFor(this.dataSource, tx).query(
-      `INSERT INTO idempotency_key (key, request_hash, reservation_id)
-       VALUES ($1, $2, $3)
+      `INSERT INTO idempotency_key (key, request_hash, reservation_id, created_at)
+       VALUES ($1, $2, $3, $4)
        ON CONFLICT (key) DO UPDATE
          SET request_hash = EXCLUDED.request_hash,
              reservation_id = EXCLUDED.reservation_id,
-             created_at = now()
-         WHERE idempotency_key.created_at < $4
+             created_at = EXCLUDED.created_at
+         WHERE idempotency_key.created_at <= $5
        RETURNING key`,
-      [entry.key, entry.requestHash, entry.reservationId, expiredBefore],
+      [
+        entry.key,
+        entry.requestHash,
+        entry.reservationId,
+        entry.createdAt,
+        expiredBefore,
+      ],
     );
     if (rows.length === 0) {
       throw new DuplicateIdempotencyKeyError();

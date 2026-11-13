@@ -142,7 +142,7 @@ export class CreateDirectReservationService implements CreateDirectReservation {
     return this.detail.execute(stored.reservationRef);
   }
 
-  /** Una clave creada antes de este instante ya venció (24 horas, D16). */
+  /** Una clave creada en este instante o antes ya venció: vale menos de 24 horas (D16). */
   private expiredBefore(): Date {
     return new Date(this.clock.now().getTime() - IDEMPOTENCY_TTL_MS);
   }
@@ -210,7 +210,12 @@ export class CreateDirectReservationService implements CreateDirectReservation {
         // La clave va en la misma transacción: si la reserva se revierte, la clave tampoco queda (B).
         await this.idempotency.save(
           tx,
-          { key: idempotencyKey, requestHash, reservationId: reservation.id },
+          {
+            key: idempotencyKey,
+            requestHash,
+            reservationId: reservation.id,
+            createdAt: this.clock.now(),
+          },
           this.expiredBefore(),
         );
         return reservation;

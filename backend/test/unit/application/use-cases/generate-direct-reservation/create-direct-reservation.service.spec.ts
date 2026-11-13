@@ -545,7 +545,7 @@ describe('CreateDirectReservation (plan de generate-direct-reservation, B, D2 y 
       expect(check).not.toHaveBeenCalled();
     });
 
-    it('se guarda en la transacción de la reserva, en minúsculas y con el hash del cuerpo', async () => {
+    it('se guarda en la transacción de la reserva, en minúsculas, con el hash del cuerpo y la hora de Clock.now()', async () => {
       const { real, saveKey, insert } = aService();
 
       await real.execute(REQUEST, KEY.toUpperCase());
@@ -556,6 +556,7 @@ describe('CreateDirectReservation (plan de generate-direct-reservation, B, D2 y 
         key: KEY,
         requestHash: expect.stringMatching(/^[0-9a-f]{64}$/) as string,
         reservationId: inserted(insert).id,
+        createdAt: NOW,
       });
       expect(expiredBefore).toEqual(new Date('2026-10-08T15:00:00.000Z'));
     });
@@ -590,7 +591,26 @@ describe('CreateDirectReservation (plan de generate-direct-reservation, B, D2 y 
       expect(insert).not.toHaveBeenCalled();
     });
 
-    it('una clave vencida (de hace más de 24 horas) cuenta como nueva', async () => {
+    it('una clave de hace 1 ms menos de 24 horas sigue vigente: con otro cuerpo, IDEMPOTENCY_KEY_REUSED', async () => {
+      const storedKeys = new Map<string, StoredIdempotencyKey>([
+        [
+          KEY,
+          {
+            requestHash: 'otro',
+            reservationRef: 'RSV-0LD00000',
+            createdAt: new Date('2026-10-08T15:00:00.001Z'),
+          },
+        ],
+      ]);
+      const { real, insert } = aService({ storedKeys });
+
+      expect(await errorOf(real.execute(REQUEST, KEY))).toBe(
+        'IDEMPOTENCY_KEY_REUSED',
+      );
+      expect(insert).not.toHaveBeenCalled();
+    });
+
+    it('una clave de hace exactamente 24 horas ya venció y cuenta como nueva', async () => {
       const storedKeys = new Map<string, StoredIdempotencyKey>([
         [
           KEY,
