@@ -212,7 +212,7 @@ function GuestStayDetailDialog({
               </button>
               <Link
                 className="btn primary"
-                to={`/reservations/${encodeURIComponent(query.data.reservationRef)}`}
+                to={`/reservas/${encodeURIComponent(query.data.reservationRef)}`}
               >
                 Ver reserva
               </Link>
@@ -255,7 +255,7 @@ function GuestStayRow({
       <td>
         <Link
           className="btn sm"
-          to={`/reservations/${encodeURIComponent(stay.reservationRef)}`}
+          to={`/reservas/${encodeURIComponent(stay.reservationRef)}`}
         >
           {stay.reservationRef}
         </Link>

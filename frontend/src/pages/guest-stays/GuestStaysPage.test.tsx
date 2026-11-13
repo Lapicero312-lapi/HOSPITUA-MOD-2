@@ -91,6 +91,14 @@ describe('GuestStaysPage', () => {
         'En el hotel',
       ),
     ).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('row', { name: /John Smith/ })).getByRole(
+        'link',
+        {
+          name: 'RSV-3F9A1C7B',
+        },
+      ),
+    ).toHaveAttribute('href', '/reservas/RSV-3F9A1C7B');
     expect(screen.getByText('09/10/2026')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Ver detalle' })).toBeEnabled();
     expect(
@@ -215,7 +223,7 @@ describe('GuestStaysPage', () => {
     expect(within(dialog).getByText('Entrada')).toBeInTheDocument();
     expect(
       within(dialog).getByRole('link', { name: 'Ver reserva' }),
-    ).toHaveAttribute('href', '/reservations/RSV-3F9A1C7B');
+    ).toHaveAttribute('href', '/reservas/RSV-3F9A1C7B');
   });
 
   it('muestra una raya por cada dato vacío del detalle', async () => {
