@@ -19,6 +19,7 @@ import { integrationEnv, truncateAllTables } from '../support/database.js';
 
 /**
  * T036 de `check-view-reservation`: la prueba de carga.
+ * - NFR-001: la búsqueda por código responde en menos de 500 ms (plan, trazabilidad: T001, T002 y T036).
  * - NFR-002: "una página del listado, con cualquier combinación de filtros y cualquier orden, debe
  *   responder en menos de 1 segundo con hasta 50 000 reservas registradas".
  * - NFR-004: "la lista del día debe quedar publicada en menos de 1 minuto desde las 00:00 del día
@@ -40,6 +41,7 @@ const clock: Clock = {
 const RESERVATIONS = 50_000;
 const ARRIVALS = 500;
 const PAGE_LIMIT_MS = 1_000;
+const CODE_SEARCH_LIMIT_MS = 500;
 const LIST_LIMIT_MS = 60_000;
 
 const server = setupServer();
@@ -139,7 +141,7 @@ describe('Consultar reservas: prueba de carga (T036, NFR-002 y NFR-004)', () => 
     ['sin filtros, la primera página', {}],
     [
       'sin filtros, la última página, en orden ascendente',
-      { page: '5000', sort: 'asc' },
+      { page: '5000', order: 'asc' },
     ],
     ['por estado', { status: 'PENDING' }],
     ['por canal', { source: 'DIRECT' }],
@@ -162,6 +164,60 @@ describe('Consultar reservas: prueba de carga (T036, NFR-002 y NFR-004)', () => 
       const { result: res, elapsed } = await timed(() => list(query));
 
       expect(res.status).toBe(200);
+      expect(elapsed).toBeLessThan(PAGE_LIMIT_MS);
+    },
+  );
+
+  it('el orden ascendente sí se aplica: la última página trae las llegadas más recientes', async () => {
+    const asc = await list({ page: '5000', order: 'asc' }).expect(200);
+    const desc = await list({ page: '1' }).expect(200);
+
+    // La última página en ascendente es la primera en descendente, en orden inverso.
+    expect(asc.body.items.at(-1).reservationRef).toBe(
+      desc.body.items[0].reservationRef,
+    );
+  });
+
+  it(`NFR-001: la búsqueda por código responde en menos de ${CODE_SEARCH_LIMIT_MS} ms`, async () => {
+    const query = { search: 'RSV-A0003039' };
+    await list(query).expect(200);
+
+    const { result: res, elapsed } = await timed(() => list(query));
+
+    expect(res.body.totalItems).toBe(1);
+    expect(elapsed).toBeLessThan(CODE_SEARCH_LIMIT_MS);
+  });
+
+  it.each<[string, Record<string, string>, number]>([
+    ['por documento exacto', { search: 'A0003039' }, 1],
+    [
+      'por nombre parcial, que coincide con todas',
+      { search: 'Apellido' },
+      RESERVATIONS,
+    ],
+    [
+      'por nombre, combinada con estado y estadía',
+      {
+        search: 'apellido',
+        status: 'ACTIVE',
+        dateFrom: '2029-01-01',
+        dateTo: '2029-12-31',
+      },
+      -1,
+    ],
+  ])(
+    `NFR-002: la búsqueda %s responde en menos de ${PAGE_LIMIT_MS / 1000} s`,
+    async (_, query, total) => {
+      await list(query).expect(200);
+
+      const { result: res, elapsed } = await timed(() => list(query));
+
+      expect(res.status).toBe(200);
+      if (total >= 0) {
+        expect(res.body.totalItems).toBe(total);
+      } else {
+        expect(res.body.totalItems).toBeGreaterThan(0);
+      }
       expect(elapsed).toBeLessThan(PAGE_LIMIT_MS);
     },
   );
