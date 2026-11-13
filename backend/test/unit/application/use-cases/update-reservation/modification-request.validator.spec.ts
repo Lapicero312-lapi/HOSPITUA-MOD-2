@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  readExpectedRates,
   readHolderAndNotes,
   readModificationRequest,
 } from '../../../../../src/application/use-cases/update-reservation/modification-request.validator.js';
@@ -23,6 +24,7 @@ const MESSAGES: Record<string, string> = {
   INVALID_CHARACTERS: 'El formato de los datos contiene caracteres no válidos.',
   NOTES_TOO_LONG: 'Las observaciones no pueden superar 500 caracteres.',
   INVALID_EMAIL: 'El correo electrónico no es válido.',
+  RATE_CHANGED: 'La tarifa cambió, vuelva a cotizar.',
 };
 
 /** El titular del ejemplo del cuerpo de cambio del plan (contrato B). */
@@ -622,6 +624,75 @@ describe('Validador del cuerpo de cambio (regla 7 de la modificación de update-
           undefined,
         );
       });
+    });
+  });
+
+  describe('readExpectedRates: la forma de expectedRates en la confirmación (B2, regla 9)', () => {
+    /** La tarifa vista del ejemplo de B2 del plan. */
+    const SEEN = {
+      roomId: ROOM_305,
+      lodgingAmount: '1440000.00',
+      currency: 'COP',
+    };
+    const ratesError = (expectedRates: unknown) =>
+      errorOf(() => readExpectedRates(change({ expectedRates })));
+
+    it('lee el ejemplo de B2', () => {
+      expect(readExpectedRates(change({ expectedRates: [SEEN] }))).toEqual([
+        SEEN,
+      ]);
+    });
+
+    it('sin expectedRates, una lista vacía; también con un cuerpo que no es un objeto', () => {
+      expect(readExpectedRates(CHANGE)).toEqual([]);
+      expect(readExpectedRates(null)).toEqual([]);
+      expect(readExpectedRates([SEEN])).toEqual([]);
+    });
+
+    it('el roomId queda en minúsculas, como en rooms', () => {
+      expect(
+        readExpectedRates(
+          change({
+            expectedRates: [{ ...SEEN, roomId: ROOM_305.toUpperCase() }],
+          }),
+        ),
+      ).toEqual([SEEN]);
+    });
+
+    it('solo los tres campos, aunque el elemento traiga más', () => {
+      expect(
+        readExpectedRates(
+          change({ expectedRates: [{ ...SEEN, quoteId: 'Q-1' }] }),
+        ),
+      ).toEqual([SEEN]);
+    });
+
+    it.each<[string, unknown]>([
+      ['no es una lista', SEEN],
+      ['es null', null],
+      ['un elemento que no es un objeto', ['1440000.00']],
+      ['un roomId que no es texto', [{ ...SEEN, roomId: 305 }]],
+      ['sin roomId', [{ lodgingAmount: '1440000.00', currency: 'COP' }]],
+      ['un monto como número', [{ ...SEEN, lodgingAmount: 1440000 }]],
+      ['un monto sin decimales', [{ ...SEEN, lodgingAmount: '1440000' }]],
+      ['un monto con un decimal', [{ ...SEEN, lodgingAmount: '1440000.0' }]],
+      ['un monto con tres decimales', [{ ...SEEN, lodgingAmount: '1.000' }]],
+      ['un monto negativo', [{ ...SEEN, lodgingAmount: '-1.00' }]],
+      ['un monto en cero', [{ ...SEEN, lodgingAmount: '0.00' }]],
+      ['sin moneda', [{ roomId: ROOM_305, lodgingAmount: '1440000.00' }]],
+      ['una moneda en minúsculas', [{ ...SEEN, currency: 'cop' }]],
+      ['una moneda de 4 letras', [{ ...SEEN, currency: 'COPS' }]],
+      ['el segundo mal y el primero bien', [SEEN, { ...SEEN, currency: 'x' }]],
+    ])('%s: RATE_CHANGED', (_case, expectedRates) => {
+      expect(ratesError(expectedRates)).toEqual(expected('RATE_CHANGED'));
+    });
+
+    it('el monto más chico válido es 0.01', () => {
+      expect(
+        readExpectedRates(
+          change({ expectedRates: [{ ...SEEN, lodgingAmount: '0.01' }] }),
+        ),
+      ).toEqual([{ ...SEEN, lodgingAmount: '0.01' }]);
     });
   });
 });
