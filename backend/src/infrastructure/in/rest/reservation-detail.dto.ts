@@ -12,7 +12,16 @@ import {
   RESERVATION_STATUSES,
   STAY_STATUSES,
 } from '../../../domain/shared/enums.js';
+import {
+  INVALID_RESERVATION_CODE,
+  RESERVATION_NOT_FOUND,
+} from '../../../domain/shared/error-codes.js';
+import {
+  REQUEST_NOT_PROCESSED,
+  REQUEST_NOT_PROCESSED_MESSAGE,
+} from '../../shared/api-error.js';
 import { MoneyDto as MoneySchema } from './money.dto.js';
+import { errorExample, INVALID_CLIENT_EXAMPLE } from './openapi-examples.js';
 
 /*
  * El cuerpo de C3 (plan de `check-view-reservation`), tal como lo recibe la pantalla. Son clases, y no tipos,
@@ -257,3 +266,68 @@ function moneyBody(money: {
 }): MoneyBody {
   return { amount: money.amountWithCents, currency: money.currency };
 }
+
+/** El ejemplo de C3 del plan (el `roomId` "a4c2…" del plan, completo). */
+export const RESERVATION_DETAIL_EXAMPLE: ReservationDetailBody = {
+  reservationRef: 'RSV-3F9A1C7B',
+  status: 'ACTIVE',
+  source: 'DIRECT',
+  externalConfirmationCode: null,
+  otaName: null,
+  startDate: '2026-10-23',
+  endDate: '2026-10-25',
+  nights: 2,
+  guestCount: 3,
+  notes: '',
+  createdAt: '2026-10-01T09:14:00-05:00',
+  updatedAt: '2026-10-08T15:42:10.123456-05:00',
+  conflict: null,
+  rooms: [
+    {
+      roomId: 'a4c2e6f8-1b3d-4e5f-8a7b-9c0d1e2f3a4b',
+      roomNumber: '204',
+      categoryRoom: 'DOBLE',
+      guestCount: 3,
+      roomGrossAmount: { amount: '713000.00', currency: 'COP' },
+      stayStatus: 'EXPECTED',
+    },
+  ],
+  guest: {
+    firstName: 'Valentina',
+    lastName: 'Ospina',
+    documentType: 'CC',
+    documentNumber: '1144093552',
+    nationality: 'Colombia',
+    contactPhone: '+57 300 000 0000',
+    contactEmail: 'valentina@correo.com',
+  },
+  cancellation: null,
+};
+
+const DETAIL_PATH = '/api/reservations/RSV-3F9A1C7B';
+
+/**
+ * Los errores `400` de `GET /api/reservations/{reservationRef}`, en el orden en que se revisan. La `404` del
+ * Módulo 3 va aparte (plan, "OpenAPI (T037) y pruebas de contrato (T034)").
+ */
+export const DETAIL_ERROR_EXAMPLES = {
+  INVALID_CLIENT: INVALID_CLIENT_EXAMPLE(DETAIL_PATH),
+  [INVALID_RESERVATION_CODE.code]: errorExample(
+    '/api/reservations/RSV-123',
+    'Los dos: la referencia no es `RSV-` y 8 hexadecimales en mayúscula',
+    INVALID_RESERVATION_CODE.code,
+    INVALID_RESERVATION_CODE.message,
+  ),
+  [RESERVATION_NOT_FOUND.code]: errorExample(
+    '/api/reservations/RSV-FFFFFFFF',
+    'Recepcionista: la reserva no existe (para el Módulo 3 es la `404`)',
+    RESERVATION_NOT_FOUND.code,
+    RESERVATION_NOT_FOUND.message,
+  ),
+  [REQUEST_NOT_PROCESSED]: errorExample(
+    DETAIL_PATH,
+    'Los dos: una excepción inesperada',
+    REQUEST_NOT_PROCESSED,
+    REQUEST_NOT_PROCESSED_MESSAGE,
+  ),
+};
