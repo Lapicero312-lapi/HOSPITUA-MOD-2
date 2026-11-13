@@ -6,6 +6,7 @@ import {
   HttpCode,
   Inject,
   Param,
+  Patch,
   Post,
   Query,
 } from '@nestjs/common';
@@ -51,6 +52,10 @@ import {
   type ListReservations,
   type ReservationListResult,
 } from '../../../application/use-cases/check-view-reservation/ports/in/list-reservations.port.js';
+import {
+  ASSIGN_ROOM,
+  type AssignRoom,
+} from '../../../application/use-cases/update-reservation/ports/in/assign-room.port.js';
 import {
   PREVIEW_MODIFICATION,
   type PreviewModification,
@@ -206,6 +211,8 @@ export class ReservationsController {
     private readonly findByStayRange: FindReservationsByStayRange,
     @Inject(PREVIEW_MODIFICATION)
     private readonly previewModification: PreviewModification,
+    @Inject(ASSIGN_ROOM)
+    private readonly assignRoom: AssignRoom,
   ) {}
 
   /**
@@ -464,6 +471,23 @@ export class ReservationsController {
   ): Promise<ModificationPreviewBody> {
     return toModificationPreviewBody(
       await this.previewModification.execute(reservationRef, body),
+    );
+  }
+
+  /**
+   * B3 de `update-reservation`, `PATCH /api/reservations/{reservationRef}/room-assignment`: la Recepcionista
+   * asigna habitación a las sin asignar de una reserva de Booking en conflicto (FR-025, punto 16). `X-User`
+   * es obligatorio (`USER_REQUIRED` o `INVALID_USER`) y no se guarda. Responde `200` con el detalle de C3;
+   * los errores salen por el filtro global como `400`.
+   */
+  @Patch(':reservationRef/room-assignment')
+  async assignRoomOf(
+    @Param('reservationRef') reservationRef: string,
+    @UserHeader() _user: string,
+    @Body() body: unknown,
+  ): Promise<ReservationDetailBody> {
+    return toReservationDetailBody(
+      await this.assignRoom.execute(reservationRef, body),
     );
   }
 }
