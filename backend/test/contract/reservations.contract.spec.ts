@@ -17,6 +17,7 @@ import {
   type ReservationForBilling,
 } from '../../src/application/use-cases/check-view-reservation/ports/in/get-reservation-for-billing.port.js';
 import { LIST_RESERVATIONS } from '../../src/application/use-cases/check-view-reservation/ports/in/list-reservations.port.js';
+import { PREVIEW_MODIFICATION } from '../../src/application/use-cases/update-reservation/ports/in/preview-modification.port.js';
 import { BusinessError } from '../../src/domain/shared/business-error.js';
 import { RESERVATION_NOT_FOUND } from '../../src/domain/shared/error-codes.js';
 import { ReservationsController } from '../../src/infrastructure/in/rest/reservations.controller.js';
@@ -123,6 +124,7 @@ describe('Contrato de C4 y C5 (T034 de check-view-reservation)', () => {
         { provide: GET_DAY_SUMMARY, useValue: {} },
         { provide: GET_RESERVATION_DETAIL, useValue: {} },
         { provide: CANCEL_RESERVATION, useValue: {} },
+        { provide: PREVIEW_MODIFICATION, useValue: {} },
       ],
     }).compile();
     app = moduleRef.createNestApplication({ logger: false });
