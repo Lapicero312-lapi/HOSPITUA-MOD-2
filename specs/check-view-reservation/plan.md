@@ -783,6 +783,35 @@ nunca revierte la operación que originó el mensaje (FR-020).
 generar la lista. Las dos pasan por el mismo bloqueo, para que dos ejecuciones no publiquen a la vez y
 se desordenen.
 
+### Consulta del Módulo 3 (`GetReservationForBilling`, T032)
+
+Lo que C4 no dice y este plan fija:
+
+**Puerto de entrada**, en `ports/in/get-reservation-for-billing.port.ts`:
+
+```typescript
+type ReservationForBilling = {
+  reservationRef: string;
+  channel: 'DIRECT' | 'OTA';
+  quoteIds: string[];   // el quoteId de cada habitación que lo tiene, en el orden de las habitaciones; [] en OTA
+  ota: { otaId: string; confirmationCode: string; commissionPercentage: string } | null;  // solo en OTA
+};
+
+interface GetReservationForBilling {
+  // @throws BusinessError INVALID_RESERVATION_CODE (formato, sin consultar la base, como C3)
+  // o RESERVATION_NOT_FOUND.
+  execute(reservationRef: string): Promise<ReservationForBilling>;
+}
+```
+
+- Lee la reserva como `GetReservationDetail` (C3), con la misma validación del formato (T017).
+- **El controlador**: `GET /api/reservations/{reservationRef}` admite `RECEPTIONIST` y `MODULE3`. Con
+  `MODULE3` llama a `GetReservationForBilling` y arma el JSON de C4: `otaId`, `otaConfirmationCode` y
+  `otaCommissionPercentage` solo si `channel` es `OTA`, con el porcentaje como número JSON
+  (`Number(commissionPercentage)`).
+- **El 404**: el controlador convierte `RESERVATION_NOT_FOUND` en un `ApiError` con estado `404` (la única
+  excepción del plan base, "Errores"). `INVALID_RESERVATION_CODE` sigue en `400`.
+
 ### Consulta del Módulo 1 (`FindReservationsByStayRange`, T033)
 
 Lo que C5 no dice y este plan fija:
@@ -1070,6 +1099,41 @@ interface ReservationQueryPort {
 - `hasForeignMovement` se resuelve con un solo `EXISTS` para las 10 reservas de la página, sobre
   `migratory_movement` unido a `guest_data`, con la regla de `isForeign`: nacionalidad que no es
   `Colombia` ni vacía.
+
+**La búsqueda en `listReservations` (T015, T020 y T021).** `ReservationListFilters` suma un campo:
+
+```typescript
+type ReservationListFilters = {
+  // … los de T005
+  // null sin search. Lo arma ListReservations con resolveSearchCriteria (T006).
+  search:
+    | { kind: 'CODE'; code: string }                // paso 3 del algoritmo
+    | { kind: 'DOCUMENT'; documentNumber: string }  // paso 5
+    | { kind: 'NAME'; name: string }                // paso 6
+    | null;
+};
+```
+
+- **`CODE`**: `lower(reservation_ref) = lower(code)` **o** `lower(external_confirmation_code) = lower(code)`,
+  en una sola consulta: así se buscan las dos coincidencias a la vez (paso 3), con el índice único de
+  `reservation_ref` y el de T001. Ignora los demás filtros (`status`, `source`, `otaId`, `inConflict` y
+  `stayRange`); conserva el orden y la paginación.
+- **`DOCUMENT`**: `guest.document_number = documentNumber`, exacto (FR-004), combinado con los demás
+  filtros.
+- **`NAME`**: `immutable_unaccent(lower(first_name || ' ' || last_name)) LIKE '%' ||
+  immutable_unaccent(lower(name)) || '%'`, la expresión del índice GIN, combinada con los demás filtros. El
+  texto solo trae letras, dígitos y guion (paso 2), así que no lleva comodines.
+
+**`ListReservations` con `search`** (las tres tareas):
+1. `resolveSearchCriteria(search)`, después de validar los demás filtros, como hoy (T006). Así
+   `NAME_SEARCH_TOO_SHORT` (T021) e `INVALID_RESERVATION_CODE` salen antes de consultar la base.
+2. `listReservations` con `{ kind: 'CODE', code }`. Si `totalItems > 0`, esa es la respuesta (T015).
+3. Si no hay coincidencias, el `fallback`:
+   - `NOT_FOUND`: `RESERVATION_NOT_FOUND` (paso 4);
+   - `DOCUMENT` o `NAME`: `listReservations` con ese criterio y los demás filtros (T020).
+
+El ajuste a la última página válida (T011) y el mensaje de la respuesta vacía son los mismos que sin
+`search`.
 
 ### `migrationStatus` (FR-005b)
 

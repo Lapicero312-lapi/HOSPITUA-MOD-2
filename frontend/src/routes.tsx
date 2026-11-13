@@ -7,6 +7,7 @@ import { NotFoundPage } from './pages/NotFoundPage.tsx';
 import { OtasPage } from './pages/otas/OtasPage.tsx';
 import { RatesPage } from './pages/rates/RatesPage.tsx';
 import { CancelReservationPage } from './pages/reservations/cancel/CancelReservationPage.tsx';
+import { ReservationDetailPage } from './pages/reservations/ReservationDetailPage.tsx';
 import { ReservationsPage } from './pages/reservations/ReservationsPage.tsx';
 import { RoomsPage } from './pages/rooms/RoomsPage.tsx';
 import { RouteErrorPage } from './pages/RouteErrorPage.tsx';
@@ -33,6 +34,10 @@ export const routes: RouteObject[] = [
       { path: 'habitaciones', element: <RoomsPage /> },
       { path: 'tarifas', element: <RatesPage /> },
       { path: 'agencias', element: <OtasPage /> },
+      {
+        path: 'reservas/:reservationRef',
+        element: <ReservationDetailPage />,
+      },
       {
         path: 'reservas/:reservationRef/cancelar',
         element: <CancelReservationPage />,

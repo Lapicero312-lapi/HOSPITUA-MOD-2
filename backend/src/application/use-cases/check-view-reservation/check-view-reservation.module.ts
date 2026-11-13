@@ -12,13 +12,15 @@ import { GET_DAY_SUMMARY } from './ports/in/get-day-summary.port.js';
 import { GET_RESERVATION_DETAIL } from './ports/in/get-reservation-detail.port.js';
 import { LIST_RESERVATIONS } from './ports/in/list-reservations.port.js';
 import { RESERVATION_LOOKUP } from './ports/in/reservation-lookup.port.js';
+import { PUBLISH_PENDING_DAILY_MESSAGES } from './ports/in/publish-pending-daily-messages.port.js';
+import { PublishPendingDailyMessagesService } from './publish-pending-daily-messages.service.js';
 import { ReservationLookupService } from './reservation-lookup.service.js';
 
 /**
  * Los servicios de `check-view-reservation` (plan base, regla 4 de la arquitectura). Usa
  * `RESERVATION_QUERY_PORT`, `TRANSACTION_RUNNER`, `DAILY_SEQUENCE_REPOSITORY`, `DAILY_MESSAGE_REPOSITORY`,
- * `OTA_REPOSITORY`, `RESERVATION_REPOSITORY` y `CANCELLATION_REPOSITORY` de `PersistenceModule` y `CLOCK`
- * de `ClockModule`, que son globales.
+ * `OTA_REPOSITORY`, `RESERVATION_REPOSITORY` y `CANCELLATION_REPOSITORY` de `PersistenceModule`, `CLOCK`
+ * de `ClockModule` y `DAILY_LIST_PUBLISHER` de `MessagingModule`, que son globales.
  */
 @Module({
   providers: [
@@ -35,6 +37,10 @@ import { ReservationLookupService } from './reservation-lookup.service.js';
       provide: FIND_RESERVATIONS_BY_STAY_RANGE,
       useClass: FindReservationsByStayRangeService,
     },
+    {
+      provide: PUBLISH_PENDING_DAILY_MESSAGES,
+      useClass: PublishPendingDailyMessagesService,
+    },
   ],
   exports: [
     RESERVATION_LOOKUP,
@@ -44,6 +50,7 @@ import { ReservationLookupService } from './reservation-lookup.service.js';
     GENERATE_DAILY_LIST,
     GET_RESERVATION_DETAIL,
     FIND_RESERVATIONS_BY_STAY_RANGE,
+    PUBLISH_PENDING_DAILY_MESSAGES,
   ],
 })
 export class CheckViewReservationModule {}
