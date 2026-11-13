@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { DataSource } from 'typeorm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { DailyMessage } from '../../../src/application/ports/out/daily-message.repository.js';
@@ -251,6 +252,147 @@ describe('Repositorios de la lista del día contra PostgreSQL real', () => {
         ),
       ).rejects.toThrow();
       expect(await savedMessages()).toHaveLength(1);
+    });
+
+    describe('la publicación (T026)', () => {
+      /** Un mensaje de `day` con la secuencia `sequenceNumber`, guardado en PENDING. */
+      const save = async (day: string, sequenceNumber: number) => {
+        const messageId = randomUUID();
+        await transactions.run((tx) =>
+          messages.insert(
+            anUpdate({
+              messageId,
+              operationalDate: day,
+              sequenceNumber,
+              payload: { messageId, sequenceNumber, operationalDate: day },
+            }),
+            tx,
+          ),
+        );
+        return messageId;
+      };
+
+      const statusOf = async (messageId: string) => {
+        const [row]: {
+          publish_status: string;
+          attempts: number;
+          next_attempt_at: string | null;
+          published_at: string | null;
+        }[] = await dataSource.query(
+          `SELECT publish_status, attempts,
+                  to_char(next_attempt_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS next_attempt_at,
+                  to_char(published_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS published_at
+           FROM daily_list_message WHERE message_id = $1`,
+          [messageId],
+        );
+        return row;
+      };
+
+      it('findUnpublished: los PENDING y FAILED, por día y secuencia, sin los PUBLISHED, con todos sus datos', async () => {
+        const tomorrow = await save('2026-10-10', 2);
+        const third = await save(TODAY, 3);
+        const second = await save(TODAY, 2);
+        const published = await save(TODAY, 4);
+        await messages.markPublished(published, new Date());
+        await messages.recordFailure(third, 10, 'FAILED', null);
+        const next = new Date('2026-10-09T15:00:05.000Z');
+        await messages.recordFailure(second, 1, 'PENDING', next);
+
+        expect(await messages.findUnpublished(10)).toEqual([
+          {
+            messageId: second,
+            operationalDate: TODAY,
+            sequenceNumber: 2,
+            kind: 'UPDATE',
+            payload: {
+              messageId: second,
+              sequenceNumber: 2,
+              operationalDate: TODAY,
+            },
+            publishStatus: 'PENDING',
+            attempts: 1,
+            nextAttemptAt: next,
+          },
+          expect.objectContaining({
+            messageId: third,
+            publishStatus: 'FAILED',
+            attempts: 10,
+            nextAttemptAt: null,
+          }),
+          expect.objectContaining({
+            messageId: tomorrow,
+            operationalDate: '2026-10-10',
+            publishStatus: 'PENDING',
+            attempts: 0,
+            nextAttemptAt: null,
+          }),
+        ]);
+      });
+
+      it('findUnpublished: como mucho limit', async () => {
+        const first = await save(TODAY, 2);
+        await save(TODAY, 3);
+
+        expect(
+          (await messages.findUnpublished(1)).map(({ messageId }) => messageId),
+        ).toEqual([first]);
+      });
+
+      it('markPublished: PUBLISHED con la hora de publicación', async () => {
+        const messageId = await save(TODAY, 2);
+        const at = new Date('2026-10-09T15:00:00.123Z');
+
+        await messages.markPublished(messageId, at);
+
+        expect(await statusOf(messageId)).toEqual({
+          publish_status: 'PUBLISHED',
+          attempts: 0,
+          next_attempt_at: null,
+          published_at: '2026-10-09T15:00:00.123Z',
+        });
+      });
+
+      it('recordFailure: en PENDING guarda los intentos y el siguiente intento', async () => {
+        const messageId = await save(TODAY, 2);
+
+        await messages.recordFailure(
+          messageId,
+          3,
+          'PENDING',
+          new Date('2026-10-09T15:00:45.000Z'),
+        );
+
+        expect(await statusOf(messageId)).toEqual({
+          publish_status: 'PENDING',
+          attempts: 3,
+          next_attempt_at: '2026-10-09T15:00:45.000Z',
+          published_at: null,
+        });
+      });
+
+      it('recordFailure: con FAILED el siguiente intento queda vacío', async () => {
+        const messageId = await save(TODAY, 2);
+        await messages.recordFailure(
+          messageId,
+          9,
+          'PENDING',
+          new Date('2026-10-09T15:05:00.000Z'),
+        );
+
+        await messages.recordFailure(
+          messageId,
+          10,
+          'FAILED',
+          new Date('2026-10-09T15:10:00.000Z'),
+        );
+
+        expect(await statusOf(messageId)).toEqual({
+          publish_status: 'FAILED',
+          attempts: 10,
+          next_attempt_at: null,
+          published_at: null,
+        });
+      });
     });
   });
 });
