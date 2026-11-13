@@ -719,6 +719,17 @@ y por caída del Módulo 3.
     - **Las clases:** las de C3 van en `reservation-detail.dto.ts`, junto a `toReservationDetailBody`, para
       que la documentación de `GET /api/reservations/{reservationRef}` (T037 de `check-view-reservation`)
       las reutilice; las de `availability` y `quotes`, en los archivos de sus DTO compartidos.
+14. **Reintento de asignación (T009).** Si en el paso 5 del punto 12 `insert` lanza `RoomOverlapError`
+    (otra solicitud tomó una de las habitaciones entre la verificación y el `COMMIT`), esa transacción ya
+    se revirtió. Entonces:
+    1. vuelve a consultar `VerifyAvailability.check` y a asignar con `assignDirectRooms` (punto 11, pasos
+       2 a 4);
+    2. conserva las cotizaciones del paso 3, que son por posición y categoría, no por habitación;
+    3. intenta de nuevo en una transacción nueva, hasta `ASSIGNMENT_MAX_RETRIES` (3) reintentos.
+
+    Si la nueva asignación ya no alcanza, si una habitación pedida por `roomId` ya no está libre, si
+    alguna no tiene capacidad o si se agotan los reintentos, responde `AVAILABILITY_TAKEN`, "Ya no hay
+    disponibilidad para las fechas solicitadas." (D3).
 
 ## Puntos abiertos
 
