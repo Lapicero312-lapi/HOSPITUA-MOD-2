@@ -25,6 +25,8 @@ function startMain(env = {}) {
   delete base.PORT;
   delete base.MODULE1_SIMULATOR_PORT;
   delete base.MODULE3_SIMULATOR_PORT;
+  // Sin RabbitMQ: estas pruebas son del HTTP, y la conexión la prueba `module1-rabbitmq.test.js`.
+  delete base.RABBITMQ_URL;
   return spawn(process.execPath, [MAIN], {
     env: { ...base, ...env },
     stdio: 'ignore',
