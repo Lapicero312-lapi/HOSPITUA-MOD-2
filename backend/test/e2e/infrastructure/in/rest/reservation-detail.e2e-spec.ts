@@ -168,8 +168,56 @@ describe('GET /api/reservations/{reservationRef} (e2e, C3)', () => {
     },
   );
 
-  it.each(['MODULE1', 'MODULE3', 'OTRO'])(
-    'con X-Client %s responde 400 INVALID_CLIENT (C4 llega con T032)',
+  describe('con X-Client: MODULE3, la consulta para liquidar (C4, T032)', () => {
+    it('una reserva directa: su canal y el quoteId de cada habitación, sin más datos', async () => {
+      const res = await detail(direct.reservationRef, 'MODULE3').expect(200);
+
+      expect(res.body).toEqual({
+        reservationRef: direct.reservationRef,
+        channel: 'DIRECT',
+        quoteIds: direct.rooms.map((room) => room.rate?.quoteId),
+      });
+      expect(res.body.quoteIds).not.toContain(undefined);
+    });
+
+    it('una reserva de Booking: sin cotizaciones, con la agencia, su código y el porcentaje como número', async () => {
+      const res = await detail(ota.reservationRef, 'MODULE3').expect(200);
+
+      expect(res.body).toEqual({
+        reservationRef: ota.reservationRef,
+        channel: 'OTA',
+        quoteIds: [],
+        otaId: ota.ota?.otaId,
+        otaConfirmationCode: ota.ota?.externalConfirmationCode,
+        otaCommissionPercentage: 15,
+      });
+    });
+
+    it('una referencia que no existe responde 404 RESERVATION_NOT_FOUND: la única 404 del Módulo 2', async () => {
+      const res = await detail('RSV-FFFFFFFF', 'MODULE3').expect(404);
+
+      expect(res.body).toMatchObject({
+        errorCode: 'RESERVATION_NOT_FOUND',
+        message: 'La reserva no existe.',
+        path: '/api/reservations/RSV-FFFFFFFF',
+      });
+    });
+
+    it('una referencia con otro formato responde 400 INVALID_RESERVATION_CODE, sin consultar la base', async () => {
+      const res = await detail('RSV-123', 'MODULE3').expect(400);
+
+      expect(res.body.errorCode).toBe('INVALID_RESERVATION_CODE');
+    });
+
+    it('para la Recepcionista, una referencia que no existe sigue en 400', async () => {
+      const res = await detail('RSV-FFFFFFFF').expect(400);
+
+      expect(res.body.errorCode).toBe('RESERVATION_NOT_FOUND');
+    });
+  });
+
+  it.each(['MODULE1', 'OTRO'])(
+    'con X-Client %s responde 400 INVALID_CLIENT',
     async (client) => {
       const res = await detail(direct.reservationRef, client).expect(400);
 
