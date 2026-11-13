@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
 import { after, before, beforeEach, describe, it } from 'node:test';
 import { module1Handler } from '../src/module1.js';
+import { connectModule1Messaging } from '../src/module1-messaging.js';
 import {
   describeDailyListMessage,
   movementMessage,
@@ -237,4 +239,44 @@ describe('Sin RabbitMQ (sin RABBITMQ_URL)', () => {
       await simulator.stop();
     }
   });
+});
+
+describe('Un corte de RabbitMQ con el simulador corriendo', () => {
+  /** Una conexión y un canal simulados: emiten eventos como los de `amqplib`. */
+  function fakeRabbitMq() {
+    const channel = Object.assign(new EventEmitter(), {
+      assertExchange: async () => undefined,
+      assertQueue: async () => undefined,
+      bindQueue: async () => undefined,
+      consume: async () => undefined,
+    });
+    const connection = Object.assign(new EventEmitter(), {
+      createConfirmChannel: async () => channel,
+    });
+    return { connection, channel };
+  }
+
+  for (const [what, pick] of /** @type {const} */ ([
+    ['la conexión', 'connection'],
+    ['el canal', 'channel'],
+  ])) {
+    it(`un error y el cierre de ${what} quedan en el log, sin terminar el proceso`, async () => {
+      const rabbit = fakeRabbitMq();
+      /** @type {string[]} */
+      const lines = [];
+      await connectModule1Messaging(
+        'amqp://localhost',
+        (line) => lines.push(line),
+        async () => /** @type {never} */ (rabbit.connection),
+      );
+
+      // Sin un oyente de 'error', emit lanzaría y Node terminaría el proceso.
+      rabbit[pick].emit('error', new Error('Unexpected close'));
+      rabbit[pick].emit('close');
+
+      assert.equal(lines.length, 2);
+      assert.ok(lines[0].includes('falló (Unexpected close)'), lines[0]);
+      assert.match(lines[1], /se cerró/);
+    });
+  }
 });
