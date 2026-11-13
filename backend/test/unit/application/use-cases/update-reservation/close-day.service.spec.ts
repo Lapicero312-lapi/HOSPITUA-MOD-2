@@ -23,6 +23,10 @@ import {
   anOtaReservation,
   anOtaRoom,
 } from '../../../../support/builders.js';
+import type { IdempotencyKeyRepository } from '../../../../../src/application/ports/out/idempotency-key.repository.js';
+
+/** El instante del cierre: las Idempotency-Key de antes de 24 horas ya vencieron. */
+const NOW = new Date('2026-10-10T05:00:30.000Z');
 
 /** El día que se cierra (el que terminó) y el siguiente. */
 const DAY = '2026-10-09';
@@ -92,6 +96,9 @@ function aClose(stored: Reservation[], batchSize = 100) {
     .fn<OtaNoShowReporter['record']>()
     .mockResolvedValue(undefined);
   const run = vi.fn(<T>(work: (tx: Transaction) => Promise<T>) => work(tx));
+  const deleteExpired = vi
+    .fn<IdempotencyKeyRepository['deleteExpired']>()
+    .mockResolvedValue(0);
   const service = new CloseDayService(
     { findToClose, findDaysToClose } as unknown as ReservationQueryPort,
     reservations,
@@ -100,9 +107,12 @@ function aClose(stored: Reservation[], batchSize = 100) {
     { record: reportNoShow },
     { run } as unknown as TransactionRunner,
     batchSize,
+    { find: vi.fn(), save: vi.fn(), deleteExpired },
+    { today: () => '2026-10-10', now: () => NOW },
   );
   return {
     service,
+    deleteExpired,
     findToClose,
     findDaysToClose,
     update,
@@ -612,6 +622,27 @@ describe('CloseDayService (plan de update-reservation, "Cierre del día", D5 y p
 
       await expect(service.closePendingDays(NEXT)).resolves.toEqual([]);
       expect(update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('el borrado de las Idempotency-Key vencidas (T019 de generate-direct-reservation)', () => {
+    it('al terminar, borra las de antes de 24 horas', async () => {
+      const { service, deleteExpired } = aClose([]);
+
+      await service.execute('2026-10-09');
+
+      expect(deleteExpired).toHaveBeenCalledExactlyOnceWith(
+        new Date('2026-10-09T05:00:30.000Z'),
+      );
+    });
+
+    it('si el borrado falla, el cierre termina igual y devuelve su resumen', async () => {
+      const { service, deleteExpired } = aClose([]);
+      deleteExpired.mockRejectedValue(new Error('se cayó la conexión'));
+
+      await expect(service.execute('2026-10-09')).resolves.toMatchObject({
+        operationalDate: '2026-10-09',
+      });
     });
   });
 });

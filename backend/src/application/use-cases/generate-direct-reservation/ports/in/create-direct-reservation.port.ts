@@ -12,5 +12,8 @@ export interface CreateDirectReservation {
    * @returns El detalle de la reserva creada, con la forma de C3 de `check-view-reservation`.
    * @throws BusinessError con los códigos de la tabla C.
    */
-  execute(body: unknown): Promise<ReservationDetail>;
+  /**
+   * @param idempotencyKey La cabecera `Idempotency-Key` (punto 15): obligatoria y UUID.
+   */
+  execute(body: unknown, idempotencyKey: unknown): Promise<ReservationDetail>;
 }

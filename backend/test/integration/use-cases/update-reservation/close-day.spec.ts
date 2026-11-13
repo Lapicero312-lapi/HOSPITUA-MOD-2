@@ -27,6 +27,7 @@ import { TypeOrmOtaNoShowReportRepository } from '../../../../src/infrastructure
 import { TypeOrmOtaRepository } from '../../../../src/infrastructure/out/persistence/repositories/ota.repository.js';
 import { TypeOrmReservationQuery } from '../../../../src/infrastructure/out/persistence/repositories/reservation-query.repository.js';
 import { TypeOrmReservationRepository } from '../../../../src/infrastructure/out/persistence/repositories/reservation.repository.js';
+import { TypeOrmIdempotencyKeyRepository } from '../../../../src/infrastructure/out/persistence/repositories/idempotency-key.repository.js';
 import { TypeOrmTransactionRunner } from '../../../../src/infrastructure/out/persistence/typeorm-transaction.js';
 import {
   aDirectReservation,
@@ -169,6 +170,8 @@ describe('CloseDay contra PostgreSQL real (T021 y T023)', () => {
       new TypeOrmTransactionRunner(dataSource),
       // Lotes pequeños, para que se recorran varios con la base real.
       2,
+      new TypeOrmIdempotencyKeyRepository(dataSource),
+      CLOCK,
     );
   });
 

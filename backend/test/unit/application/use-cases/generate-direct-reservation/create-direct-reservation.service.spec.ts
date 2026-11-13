@@ -1,4 +1,10 @@
+import { randomUUID } from 'node:crypto';
 import { describe, expect, it, vi } from 'vitest';
+import {
+  DuplicateIdempotencyKeyError,
+  type IdempotencyKeyRepository,
+  type StoredIdempotencyKey,
+} from '../../../../../src/application/ports/out/idempotency-key.repository.js';
 import type { RoomQuote } from '../../../../../src/application/integration/room-quote.js';
 import type { Clock } from '../../../../../src/application/ports/out/clock.js';
 import {
@@ -29,6 +35,9 @@ import { ROOM_201, ROOM_202 } from '../../../../support/rooms.js';
 
 /** El día operativo del ejemplo del plan. */
 const TODAY = '2026-10-09';
+/** El instante de las pruebas: las claves vencen a las 24 horas de él. */
+const NOW = new Date('2026-10-09T15:00:00.000Z');
+const KEY = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
 const TX = { tx: 'la de la creación' } as unknown as Transaction;
 
 /** La solicitud del ejemplo de B. */
@@ -78,10 +87,13 @@ function aService(
     availability?: AvailabilityResult;
     insert?: ReservationRepository['insert'];
     recordDailyList?: DailyListChangeRecorder['record'];
+    /** Las claves ya guardadas, por clave. */
+    storedKeys?: Map<string, StoredIdempotencyKey>;
+    saveKey?: IdempotencyKeyRepository['save'];
   } = {},
 ) {
   const calls: string[] = [];
-  const clock: Clock = { today: () => TODAY, now: () => new Date() };
+  const clock: Clock = { today: () => TODAY, now: () => NOW };
   const check = vi.fn<VerifyAvailability['check']>(() => {
     calls.push('check');
     return Promise.resolve(options.availability ?? BOTH_FREE);
@@ -124,7 +136,24 @@ function aService(
     calls.push('ari');
     return Promise.resolve();
   });
-  const service = new CreateDirectReservationService(
+  const storedKeys =
+    options.storedKeys ?? new Map<string, StoredIdempotencyKey>();
+  const findKey = vi.fn<IdempotencyKeyRepository['find']>((key) =>
+    Promise.resolve(storedKeys.get(key) ?? null),
+  );
+  const saveKey = vi.fn<IdempotencyKeyRepository['save']>(
+    options.saveKey ??
+      ((_tx, entry) => {
+        calls.push('saveKey');
+        storedKeys.set(entry.key, {
+          requestHash: entry.requestHash,
+          reservationRef: 'RSV-DE5A11ED',
+          createdAt: NOW,
+        });
+        return Promise.resolve();
+      }),
+  );
+  const real = new CreateDirectReservationService(
     clock,
     { check },
     { quoteRooms, verifyQuotes },
@@ -133,9 +162,18 @@ function aService(
     { execute: detailOf },
     { record: recordDailyList },
     { record: recordAvailability },
+    { find: findKey, save: saveKey, deleteExpired: vi.fn() },
   );
+  // Las pruebas de la creación mandan siempre una clave nueva, como la pantalla.
+  const service = {
+    execute: (body: unknown) => real.execute(body, randomUUID()),
+  };
   return {
     service,
+    real,
+    findKey,
+    saveKey,
+    storedKeys,
     calls,
     check,
     verifyQuotes,
@@ -174,6 +212,7 @@ describe('CreateDirectReservation (plan de generate-direct-reservation, B, D2 y 
       'insert',
       'dailyList',
       'ari',
+      'saveKey',
       'COMMIT',
       `detail ${reservation.reservationRef}`,
     ]);
@@ -487,6 +526,107 @@ describe('CreateDirectReservation (plan de generate-direct-reservation, B, D2 y 
         inserted(insert, 1),
       );
       expect(recordAvailability).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('la Idempotency-Key (punto 15, T019)', () => {
+    it.each([
+      ['sin la cabecera', undefined],
+      ['vacía', ''],
+      ['que no es un UUID', 'una-clave'],
+      ['repetida en la cabecera', [KEY, KEY]],
+    ])('%s: IDEMPOTENCY_KEY_REQUIRED, sin consultar nada', async (_, key) => {
+      const { real, check, findKey } = aService();
+
+      expect(await errorOf(real.execute(REQUEST, key))).toBe(
+        'IDEMPOTENCY_KEY_REQUIRED',
+      );
+      expect(findKey).not.toHaveBeenCalled();
+      expect(check).not.toHaveBeenCalled();
+    });
+
+    it('se guarda en la transacción de la reserva, en minúsculas y con el hash del cuerpo', async () => {
+      const { real, saveKey, insert } = aService();
+
+      await real.execute(REQUEST, KEY.toUpperCase());
+
+      const [tx, entry, expiredBefore] = saveKey.mock.calls[0];
+      expect(tx).toBe(TX);
+      expect(entry).toEqual({
+        key: KEY,
+        requestHash: expect.stringMatching(/^[0-9a-f]{64}$/) as string,
+        reservationId: inserted(insert).id,
+      });
+      expect(expiredBefore).toEqual(new Date('2026-10-08T15:00:00.000Z'));
+    });
+
+    it('escenario 8: la misma clave con el mismo cuerpo responde la misma reserva, sin validar, verificar ni cotizar otra vez', async () => {
+      const { real, check, verifyQuotes, insert, detailOf } = aService();
+      await real.execute(REQUEST, KEY);
+      check.mockClear();
+      verifyQuotes.mockClear();
+      insert.mockClear();
+      detailOf.mockClear();
+
+      // El mismo cuerpo, con las claves en otro orden: es el mismo.
+      const reordered = Object.fromEntries(Object.entries(REQUEST).reverse());
+      const detail = await real.execute(reordered, KEY);
+
+      expect(detail).toEqual({ reservationRef: 'RSV-DE5A11ED' });
+      expect(detailOf).toHaveBeenCalledExactlyOnceWith('RSV-DE5A11ED');
+      expect(check).not.toHaveBeenCalled();
+      expect(verifyQuotes).not.toHaveBeenCalled();
+      expect(insert).not.toHaveBeenCalled();
+    });
+
+    it('la misma clave con otro cuerpo: IDEMPOTENCY_KEY_REUSED, sin crear nada', async () => {
+      const { real, insert } = aService();
+      await real.execute(REQUEST, KEY);
+      insert.mockClear();
+
+      expect(
+        await errorOf(real.execute({ ...REQUEST, notes: 'Otra nota' }, KEY)),
+      ).toBe('IDEMPOTENCY_KEY_REUSED');
+      expect(insert).not.toHaveBeenCalled();
+    });
+
+    it('una clave vencida (de hace más de 24 horas) cuenta como nueva', async () => {
+      const storedKeys = new Map<string, StoredIdempotencyKey>([
+        [
+          KEY,
+          {
+            requestHash: 'otro',
+            reservationRef: 'RSV-0LD00000',
+            createdAt: new Date('2026-10-08T15:00:00.000Z'),
+          },
+        ],
+      ]);
+      const { real, insert } = aService({ storedKeys });
+
+      await real.execute(REQUEST, KEY);
+
+      expect(insert).toHaveBeenCalledTimes(1);
+    });
+
+    it('si otra solicitud con la misma clave confirmó primero, responde su reserva', async () => {
+      const storedKeys = new Map<string, StoredIdempotencyKey>();
+      const { real, detailOf } = aService({
+        storedKeys,
+        saveKey: (_tx, entry) => {
+          // La otra solicitud se guardó entre la consulta y el COMMIT.
+          storedKeys.set(entry.key, {
+            requestHash: entry.requestHash,
+            reservationRef: 'RSV-0THE2000',
+            createdAt: NOW,
+          });
+          return Promise.reject(new DuplicateIdempotencyKeyError());
+        },
+      });
+
+      const detail = await real.execute(REQUEST, KEY);
+
+      expect(detail).toEqual({ reservationRef: 'RSV-0THE2000' });
+      expect(detailOf).toHaveBeenLastCalledWith('RSV-0THE2000');
     });
   });
 });

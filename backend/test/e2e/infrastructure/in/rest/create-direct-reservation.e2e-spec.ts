@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
@@ -96,7 +97,11 @@ describe('POST /api/reservations/direct (e2e)', () => {
   let app: INestApplication<App>;
 
   const create = (body: object) =>
-    request(app.getHttpServer()).post('/api/reservations/direct').send(body);
+    request(app.getHttpServer())
+      .post('/api/reservations/direct')
+      // Una clave nueva por solicitud: la creación la exige (punto 15, T019).
+      .set('Idempotency-Key', randomUUID())
+      .send(body);
 
   const preview = (startDate: string, endDate: string) =>
     request(app.getHttpServer())
@@ -290,6 +295,64 @@ describe('POST /api/reservations/direct (e2e)', () => {
       ).expect(400);
 
       expect(await ariChanges('2031-08-20')).toEqual([]);
+    });
+  });
+
+  describe('la Idempotency-Key (escenario 8, T019)', () => {
+    const createWith = (body: object, key?: string) => {
+      const req = request(app.getHttpServer()).post('/api/reservations/direct');
+      return (key === undefined ? req : req.set('Idempotency-Key', key)).send(
+        body,
+      );
+    };
+
+    it('escenario 8: el doble envío con la misma clave responde la misma reserva, sin crear otra ni volver a cotizar', async () => {
+      const key = randomUUID();
+      const body = aBody('2031-09-01', '2031-09-03');
+
+      const first = await createWith(body, key).expect(201);
+      createQuote.mockClear();
+      const second = await createWith(body, key).expect(201);
+
+      expect(second.body).toEqual(first.body);
+      expect(second.headers.location).toBe(first.headers.location);
+      expect(createQuote).not.toHaveBeenCalled();
+      const [{ count }]: { count: number }[] = await app
+        .get(DataSource)
+        .query(
+          `SELECT count(*)::int AS count FROM reservation WHERE start_date = '2031-09-01'`,
+        );
+      expect(count).toBe(1);
+    });
+
+    it('la misma clave con otro cuerpo: 400 IDEMPOTENCY_KEY_REUSED', async () => {
+      const key = randomUUID();
+      await createWith(aBody('2031-09-10', '2031-09-12'), key).expect(201);
+
+      const res = await createWith(
+        aBody('2031-09-10', '2031-09-12', { notes: 'Otra nota' }),
+        key,
+      ).expect(400);
+
+      expect(res.body).toMatchObject({
+        errorCode: 'IDEMPOTENCY_KEY_REUSED',
+        message: 'La solicitud ya se usó con otros datos.',
+      });
+    });
+
+    it.each([
+      ['sin la cabecera', undefined],
+      ['con una que no es un UUID', 'doble-clic'],
+    ])('%s: 400 IDEMPOTENCY_KEY_REQUIRED', async (_, key) => {
+      const res = await createWith(
+        aBody('2031-09-20', '2031-09-22'),
+        key,
+      ).expect(400);
+
+      expect(res.body).toMatchObject({
+        errorCode: 'IDEMPOTENCY_KEY_REQUIRED',
+        message: 'Falta el identificador de la solicitud.',
+      });
     });
   });
 });

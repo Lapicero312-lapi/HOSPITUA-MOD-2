@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import type { OpenAPIObject } from '@nestjs/swagger';
 import { Test } from '@nestjs/testing';
@@ -170,7 +171,11 @@ describe('OpenAPI de la reserva directa (T017 de generate-direct-reservation)', 
   };
 
   const post = (path: string, body: object) =>
-    request(app.getHttpServer()).post(path).send(body);
+    request(app.getHttpServer())
+      .post(path)
+      // Una clave nueva por solicitud: la creación la exige (punto 15, T019); la vista previa no la lee.
+      .set('Idempotency-Key', randomUUID())
+      .send(body);
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
