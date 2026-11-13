@@ -783,6 +783,21 @@ nunca revierte la operación que originó el mensaje (FR-020).
 generar la lista. Las dos pasan por el mismo bloqueo, para que dos ejecuciones no publiquen a la vez y
 se desordenen.
 
+Cómo se arma (T029):
+
+- **El bloqueo va dentro de `PublishPendingDailyMessages`.** `execute()` corre con el bloqueo asesor
+  `daily-list-publish` por un puerto de salida nuevo, `ExclusiveRunner` (`runExclusive(name, work):
+  Promise<boolean>`, en `application/ports/out/`), que la persistencia implementa con
+  `pg_try_advisory_lock`, como el `AdvisoryLock` de las tareas. Si otra ejecución lo tiene, devuelve `0`
+  sin publicar y lo anota; la que lo tiene, al soltarlo, vuelve a leer una vez, para que ningún mensaje
+  confirmado mientras tanto espere a la tarea de 10 s (NFR-005).
+- **`PublishPendingJob`** (`infrastructure/in/jobs/`, en `JobsModule`) llama a `execute()` cada 10 s. Un
+  error inesperado queda en el log de nivel `error`, sin el texto del error, y no se propaga.
+- **La publicación inmediata.** `TransactionRunner` suma `afterCommit(tx, work)`: corre `work` cuando la
+  transacción se confirma (nunca si se revierte), sin esperarlo y con su error en el log.
+  `DailyListChangeRecorder.record` lo usa cuando guarda un mensaje, y `GenerateDailyList` llama a
+  `execute()` después de su transacción si generó la lista.
+
 ### Consulta del Módulo 3 (`GetReservationForBilling`, T032)
 
 Lo que C4 no dice y este plan fija:
