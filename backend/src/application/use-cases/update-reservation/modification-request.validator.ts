@@ -9,6 +9,7 @@ import {
   INVALID_RESERVATION_DATES,
   INVALID_ROOM_COUNT,
   INVALID_ROOM_ID,
+  RATE_CHANGED,
 } from '../../../domain/shared/error-codes.js';
 import { isValidRoomId } from '../consult-room-inventory/room-id.validator.js';
 import { readGuestDocument } from '../generate-direct-reservation/guest-document.validator.js';
@@ -20,6 +21,10 @@ type ErrorCode = { readonly code: string; readonly message: string };
 const EMAIL_FORMAT = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 /** Un carácter de control (`\p{Cc}`). */
 const CONTROL_CHARACTER = /\p{Cc}/u;
+/** Un monto con dos decimales (`1440000.00`), como en la creación de la reserva directa. */
+const AMOUNT_FORMAT = /^\d+\.\d{2}$/;
+/** Una moneda: 3 letras mayúsculas (`COP`), con la que `verifyQuotes` compara. */
+const CURRENCY_FORMAT = /^[A-Z]{3}$/;
 /** Un carácter de control que no es el salto de línea ni la tabulación: los que `notes` admite. */
 const CONTROL_CHARACTER_IN_NOTES = /[^\P{Cc}\n\t]/u;
 
@@ -105,6 +110,45 @@ export function readHolderAndNotes(body: unknown): HolderAndNotes {
     throw errorOf(INVALID_EMAIL);
   }
   return { guest, notes };
+}
+
+/** La tarifa que vio el solicitante de una habitación recotizada (B2): su `roomId`, en minúsculas. */
+export type ExpectedRate = {
+  roomId: string;
+  lodgingAmount: string;
+  currency: string;
+};
+
+/**
+ * `expectedRates` de la confirmación (B2), en el paso 1, después de `readModificationRequest` (regla 9). Si
+ * no viene, una lista vacía. El `roomId` queda en minúsculas, como en `rooms`, para que coincida con la `key`
+ * de su cotización.
+ * @throws BusinessError `RATE_CHANGED` si no es una lista, o si un elemento no trae un `roomId` de texto, un
+ * `lodgingAmount` con dos decimales mayor que 0 y una `currency` de 3 letras mayúsculas: como en la creación
+ * de la reserva directa, no hay otro código para unas tarifas mal enviadas.
+ */
+export function readExpectedRates(body: unknown): ExpectedRate[] {
+  const { expectedRates } = asRecord(body);
+  if (expectedRates === undefined) {
+    return [];
+  }
+  if (!Array.isArray(expectedRates)) {
+    throw errorOf(RATE_CHANGED);
+  }
+  return expectedRates.map((entry: unknown) => {
+    const { roomId, lodgingAmount, currency } = asRecord(entry);
+    if (
+      typeof roomId !== 'string' ||
+      typeof lodgingAmount !== 'string' ||
+      !AMOUNT_FORMAT.test(lodgingAmount) ||
+      Number(lodgingAmount) <= 0 ||
+      typeof currency !== 'string' ||
+      !CURRENCY_FORMAT.test(currency)
+    ) {
+      throw errorOf(RATE_CHANGED);
+    }
+    return { roomId: roomId.toLowerCase(), lodgingAmount, currency };
+  });
 }
 
 /** Una fecha que vino tiene que ser texto (también `null` cuenta como fecha vacía). */
