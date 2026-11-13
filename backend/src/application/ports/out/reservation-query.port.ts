@@ -33,7 +33,21 @@ export type ReservationListFilters = {
   stayRange: { dateFrom: string; dateTo: string } | null;
   /** Por `start_date` y, si empatan, por `reservation_ref`, en el mismo sentido. */
   order: 'asc' | 'desc';
+  /**
+   * La búsqueda ya resuelta (`check-view-reservation`, "La búsqueda en `listReservations`", T015 y T020);
+   * `null` sin `search`. Con `CODE` se ignoran los demás filtros; con `DOCUMENT` y `NAME`, se combinan.
+   */
+  search: ReservationSearch | null;
 };
+
+/** Un criterio de búsqueda del listado, de los pasos 3, 5 y 6 del algoritmo de búsqueda. */
+export type ReservationSearch =
+  /** `reservation_ref` o `external_confirmation_code` exactos, sin distinguir mayúsculas. */
+  | { kind: 'CODE'; code: string }
+  /** El documento del titular, exacto (FR-004). */
+  | { kind: 'DOCUMENT'; documentNumber: string }
+  /** Parte del nombre completo del titular, sin distinguir mayúsculas ni tildes. */
+  | { kind: 'NAME'; name: string };
 
 /** Una reserva de la página, con lo que hace falta para armar su fila (T010). */
 export type ReservationListItem = {

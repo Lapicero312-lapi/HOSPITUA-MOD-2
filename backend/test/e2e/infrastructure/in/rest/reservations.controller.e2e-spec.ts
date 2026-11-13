@@ -125,6 +125,54 @@ describe('GET /api/reservations (e2e)', () => {
     });
   });
 
+  describe('con search (T015, T020 y T021)', () => {
+    it('por código: la referencia encuentra su reserva aunque los demás filtros no la incluyan', async () => {
+      const first = await list({ sort: 'asc' }).expect(200);
+      const ref: string = first.body.items[0].reservationRef;
+
+      const res = await list({
+        search: ref.toLowerCase(),
+        dateFrom: '2001-01-01',
+        dateTo: '2001-01-02',
+        status: 'CANCELLED',
+      }).expect(200);
+
+      expect(
+        res.body.items.map(
+          (row: { reservationRef: string }) => row.reservationRef,
+        ),
+      ).toEqual([ref]);
+    });
+
+    it('por documento exacto, combinado con las fechas', async () => {
+      const res = await list({ search: 'E2E-LIST-3' }).expect(200);
+
+      expect(res.body.totalItems).toBe(1);
+      expect(res.body.items[0].guest.documentNumber).toBe('E2E-LIST-3');
+    });
+
+    it('por nombre parcial, sin mayúsculas, combinado con las fechas', async () => {
+      const res = await list({ search: 'OSPI' }).expect(200);
+
+      expect(res.body).toMatchObject({ totalItems: 12, totalPages: 2 });
+    });
+
+    it('una referencia RSV- que no existe responde 400 RESERVATION_NOT_FOUND', async () => {
+      const res = await list({ search: 'RSV-FFFFFFFF' }).expect(400);
+
+      expect(res.body.errorCode).toBe('RESERVATION_NOT_FOUND');
+    });
+
+    it('un nombre de menos de 3 caracteres responde 400 NAME_SEARCH_TOO_SHORT', async () => {
+      const res = await list({ search: 'Os' }).expect(400);
+
+      expect(res.body).toMatchObject({
+        errorCode: 'NAME_SEARCH_TOO_SHORT',
+        message: 'La búsqueda por nombre requiere al menos 3 caracteres.',
+      });
+    });
+  });
+
   describe('con X-Client: MODULE1, la consulta por fechas (C5, T033)', () => {
     it('responde 200 con todas las reservas del rango, sin paginar, de la llegada más antigua a la más reciente y con la forma de C5', async () => {
       const res = await list({}, 'MODULE1').expect(200);
