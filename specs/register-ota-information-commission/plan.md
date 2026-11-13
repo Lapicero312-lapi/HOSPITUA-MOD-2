@@ -245,7 +245,8 @@ interface RegisterOtaConfirmationAndCommission {
   El porcentaje de la comisión informada se calcula igual que el de la primera reserva
   (`reportedCommission ÷ grossAmount × 100`, dos decimales, `ROUND_HALF_UP`) y se compara con el fijo.
 - `recalculate` tampoco persiste: quien llama (`ApplyOtaChange`) guarda los importes nuevos y llama a
-  `recordAudit`, que deja la fila `CALCULATED` con ellos.
+  `recordAudit`, que deja la fila `CALCULATED` con ellos. Lo programa la T026 de `update-reservation` (punto 15 de su plan), que es
+  quien lo usa.
 - **`recordAudit` (T007)** inserta la fila con `CommissionAuditRepository.record`, en la transacción `tx`
   de quien llama, con:
   - acción `CALCULATED`, canal `OTA_API` y el `performedBy` que recibe;
