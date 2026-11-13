@@ -32,6 +32,7 @@ import {
 import { AppModule } from '../../../../../src/app.module.js';
 import { configureApp } from '../../../../../src/configure-app.js';
 import type { Reservation } from '../../../../../src/domain/reservation/reservation.js';
+import { CloseDayJob } from '../../../../../src/infrastructure/in/jobs/close-day.job.js';
 import { Money } from '../../../../../src/domain/shared/money.js';
 import {
   aDirectReservation,
@@ -153,6 +154,10 @@ describe('POST /api/reservations/{reservationRef}/modification-preview (e2e)', (
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(CLOCK)
       .useValue(clock)
+      // Con el reloj fijo, el cierre del día no corre al arrancar: en la base compartida cerraría las
+      // reservas que otras e2e guardaron antes de ese día (recuperación de T022 de update-reservation).
+      .overrideProvider(CloseDayJob)
+      .useValue({})
       .overrideProvider(MODULE1_PORT)
       .useValue(module1)
       .overrideProvider(MODULE3_PORT)
