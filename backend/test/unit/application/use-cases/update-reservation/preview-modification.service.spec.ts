@@ -906,6 +906,14 @@ describe('PreviewModificationService (plan de update-reservation, B1, D1 y regla
       expect(preview.changes.notesChanged).toBe(changed);
     });
 
+    it('sin notes en el cuerpo, una reserva con observaciones: notesChanged false (regla 7, el dato queda como está)', async () => {
+      const { service } = aPreview();
+
+      const preview = await service.execute('RSV-3F9A1C7B', change());
+
+      expect(preview.changes.notesChanged).toBe(false);
+    });
+
     it('las personas cambian de una habitación a otra sin cambiar la suma: guestCountChanged igual es true', async () => {
       const { service } = aPreview();
 
