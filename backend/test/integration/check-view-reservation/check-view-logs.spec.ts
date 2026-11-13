@@ -22,6 +22,14 @@ import {
   type ReservationRepository,
 } from '../../../src/application/ports/out/reservation.repository.js';
 import {
+  DAILY_LIST_PUBLISHER,
+  type DailyListPublisher,
+} from '../../../src/application/ports/out/daily-list-publisher.js';
+import {
+  PUBLISH_PENDING_DAILY_MESSAGES,
+  type PublishPendingDailyMessages,
+} from '../../../src/application/use-cases/check-view-reservation/ports/in/publish-pending-daily-messages.port.js';
+import {
   GENERATE_DAILY_LIST,
   type GenerateDailyList,
 } from '../../../src/application/use-cases/check-view-reservation/ports/in/generate-daily-list.port.js';
@@ -40,7 +48,9 @@ import { integrationEnv, truncateAllTables } from '../support/database.js';
  * "Logs y correlación": "de la solicitud solo se registran el método, el patrón de la ruta y `X-Client`;
  * nunca cabeceras, cuerpo ni consulta"). El titular sale en las respuestas del listado (C1) y del detalle (C3),
  * llega en la consulta de la búsqueda (`search`) y va en la lista del día
- * para el Módulo 1. Se recorre cada camino, los que terminan bien y los que fallan, y se revisa todo lo que
+ * para el Módulo 1: al generarla y al publicarla, cuando sale, cuando falla y en el décimo intento, con la
+ * alerta de FAILED (plan, "Publicar los mensajes": la alerta va "sin el payload (tiene datos personales)" y el
+ * error queda "en el log (sin datos personales)"). Se recorre cada camino, los que terminan bien y los que fallan, y se revisa todo lo que
  * se escribió.
  *
  * La aplicación completa, con PostgreSQL y RabbitMQ reales y sus logs como en producción, pero en el nivel
@@ -275,5 +285,81 @@ describe('Consultar reservas: los logs no escriben datos personales del titular 
     // El mensaje sí lo trae: así se sabe que se revisa una lista con datos.
     expect(JSON.stringify(payload)).toContain(HOLDER.documentNumber);
     expectNoPersonalData();
+  });
+
+  describe('la publicación de la lista del día (T026)', () => {
+    /** Genera la lista de hoy, con la reserva del titular. */
+    async function generateList(): Promise<void> {
+      await app.get<GenerateDailyList>(GENERATE_DAILY_LIST).execute(TODAY);
+    }
+
+    const listMessage = async () => {
+      const [row]: { publish_status: string; attempts: number }[] = await app
+        .get(DataSource)
+        .query(
+          `SELECT publish_status, attempts FROM daily_list_message
+           WHERE operational_date = $1 AND message_kind = 'LIST'`,
+          [TODAY],
+        );
+      return row;
+    };
+
+    const publish = () =>
+      app
+        .get<PublishPendingDailyMessages>(PUBLISH_PENDING_DAILY_MESSAGES)
+        .execute();
+
+    /** RabbitMQ rechaza la publicación, con un error que cita el mensaje entero si se lo dejara pasar. */
+    function rabbitRejecting(): void {
+      const publisher = app.get<DailyListPublisher>(DAILY_LIST_PUBLISHER);
+      vi.spyOn(publisher, 'publish').mockImplementation((message) =>
+        Promise.reject(
+          new Error(`RabbitMQ no confirmó en 5 s (${message.messageId})`),
+        ),
+      );
+    }
+
+    it('la publicación que sale: el log no trae al titular', async () => {
+      await generateList();
+
+      await publish();
+
+      expect((await listMessage()).publish_status).toBe('PUBLISHED');
+      expectNoPersonalData();
+    });
+
+    it('una publicación que falla: el aviso del reintento queda en el log, sin el payload', async () => {
+      await generateList();
+      rabbitRejecting();
+
+      await publish();
+
+      expect(await listMessage()).toEqual({
+        publish_status: 'PENDING',
+        attempts: 1,
+      });
+      // El aviso sí se escribió: la prueba no pasa por no haber nada que revisar.
+      expect(allLogs()).toContain('no se pudo publicar');
+      expectNoPersonalData();
+    });
+
+    it('el décimo intento: la alerta de FAILED queda en el log, sin el payload', async () => {
+      await generateList();
+      await app.get(DataSource).query(
+        `UPDATE daily_list_message SET attempts = 9
+           WHERE operational_date = $1 AND message_kind = 'LIST'`,
+        [TODAY],
+      );
+      rabbitRejecting();
+
+      await publish();
+
+      expect(await listMessage()).toEqual({
+        publish_status: 'FAILED',
+        attempts: 10,
+      });
+      expect(allLogs()).toContain('pasa a FAILED');
+      expectNoPersonalData();
+    });
   });
 });
