@@ -22,6 +22,7 @@ import {
   type GenerateDailyList,
 } from '../../../src/application/use-cases/check-view-reservation/ports/in/generate-daily-list.port.js';
 import { configureApp } from '../../../src/configure-app.js';
+import { PublishPendingJob } from '../../../src/infrastructure/in/jobs/publish-pending.job.js';
 import { aDirectReservation, aDirectRoom } from '../../support/builders.js';
 import { integrationEnv, truncateAllTables } from '../support/database.js';
 
@@ -29,6 +30,8 @@ import { integrationEnv, truncateAllTables } from '../support/database.js';
  * T029 de `check-view-reservation`: la publicación inmediata, con la aplicación completa y PostgreSQL y
  * RabbitMQ reales. La lista del día sale apenas se confirma su generación, y una actualización, apenas se
  * confirma el cambio que la origina: en menos de 5 s (NFR-005), sin esperar a la tarea de cada 10 s.
+ * La tarea está apagada, para que solo pueda publicar la inmediata; el respaldo se prueba en
+ * `publish-pending-job.spec.ts`.
  */
 
 /** El día operativo de la prueba. */
@@ -80,6 +83,8 @@ describe('Publicación inmediata de la lista del día (T029, NFR-004 y NFR-005)'
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(CLOCK)
       .useValue(clock)
+      .overrideProvider(PublishPendingJob)
+      .useValue({})
       .compile();
     app = moduleRef.createNestApplication({ logger: false });
     configureApp(app);

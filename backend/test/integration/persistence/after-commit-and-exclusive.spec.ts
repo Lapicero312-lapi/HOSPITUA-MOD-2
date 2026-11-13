@@ -195,16 +195,70 @@ describe('TransactionRunner.afterCommit y ExclusiveRunner contra PostgreSQL real
       await holding;
     });
 
-    it('suelta el bloqueo aunque el trabajo falle', async () => {
-      await expect(
-        exclusive.runExclusive('prueba-t029-c', () =>
-          Promise.reject(new Error('falló')),
-        ),
-      ).rejects.toThrow('falló');
+    /**
+     * Si el bloqueo quedó libre, visto desde otra sesión. La conexión se toma **antes** de `runExclusive`,
+     * para que el runner no la reutilice: en la misma sesión el bloqueo asesor es reentrante y daría `true`
+     * aunque nunca se hubiera soltado.
+     */
+    async function freeFromAnotherSession(
+      name: string,
+      run: () => Promise<unknown>,
+    ): Promise<boolean> {
+      const other = dataSource.createQueryRunner();
+      await other.connect();
+      try {
+        await run();
+        const [{ locked }]: { locked: boolean }[] = await other.query(
+          'SELECT pg_try_advisory_lock(hashtext($1)) AS locked',
+          [name],
+        );
+        if (locked) {
+          await other.query('SELECT pg_advisory_unlock(hashtext($1))', [name]);
+        }
+        return locked;
+      } finally {
+        await other.release();
+      }
+    }
 
+    it('al terminar bien, el bloqueo queda libre para otra sesión', async () => {
       expect(
-        await exclusive.runExclusive('prueba-t029-c', () => Promise.resolve()),
+        await freeFromAnotherSession('prueba-t029-d', () =>
+          exclusive.runExclusive('prueba-t029-d', () => Promise.resolve()),
+        ),
       ).toBe(true);
+    });
+
+    it('suelta el bloqueo aunque el trabajo falle: queda libre para otra sesión', async () => {
+      expect(
+        await freeFromAnotherSession('prueba-t029-c', () =>
+          expect(
+            exclusive.runExclusive('prueba-t029-c', () =>
+              Promise.reject(new Error('falló')),
+            ),
+          ).rejects.toThrow('falló'),
+        ),
+      ).toBe(true);
+    });
+
+    it('mientras lo tiene, otra sesión no lo consigue: la comprobación sí distingue un bloqueo tomado', async () => {
+      let release: () => void = () => {};
+      const holding = exclusive.runExclusive(
+        'prueba-t029-e',
+        () =>
+          new Promise<void>((resolve) => {
+            release = resolve;
+          }),
+      );
+
+      const freeWhileHolding = await freeFromAnotherSession(
+        'prueba-t029-e',
+        settle,
+      );
+      release();
+      await holding;
+
+      expect(freeWhileHolding).toBe(false);
     });
   });
 });

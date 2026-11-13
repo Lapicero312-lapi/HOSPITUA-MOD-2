@@ -201,6 +201,14 @@ describe('cancel-reservation: escenarios 1 a 6 de la historia 1 (T011)', () => {
           status: 'COMPLETED',
         },
       ]);
+      // El REMOVED sale apenas se confirma la cancelación (T029): se espera a que la publicación termine.
+      await vi.waitFor(
+        async () =>
+          expect((await world.listUpdates())[0]?.publish_status).toBe(
+            'PUBLISHED',
+          ),
+        { timeout: 5_000, interval: 50 },
+      );
       expect(await world.listUpdates()).toMatchObject([
         {
           sequence_number: 2,
