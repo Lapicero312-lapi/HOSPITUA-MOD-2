@@ -17,6 +17,7 @@ import {
   openTestDataSource,
   truncateAllTables,
 } from '../../support/database.js';
+import { FakeDailyListPublisherModule } from '../../support/fake-daily-list-publisher.js';
 
 /** El día operativo y la hora del ejemplo de UPDATED del plan: 2026-10-09 a las 09:15 de Colombia. */
 const TODAY = '2026-10-09';
@@ -187,6 +188,7 @@ describe('CheckViewReservationModule', () => {
         AppConfigModule,
         PersistenceModule,
         ClockModule,
+        FakeDailyListPublisherModule,
         CheckViewReservationModule,
       ],
       providers: [

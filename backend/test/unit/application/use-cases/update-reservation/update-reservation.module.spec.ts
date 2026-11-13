@@ -7,6 +7,7 @@ import { CHANNEX_SETUP_STATE } from '../../../../../src/application/ports/out/ch
 import { CHANNEX_PORT } from '../../../../../src/application/ports/out/channex.port.js';
 import { CLOCK } from '../../../../../src/application/ports/out/clock.js';
 import { COMMISSION_AUDIT_REPOSITORY } from '../../../../../src/application/ports/out/commission-audit.repository.js';
+import { DAILY_LIST_PUBLISHER } from '../../../../../src/application/ports/out/daily-list-publisher.js';
 import { DAILY_MESSAGE_REPOSITORY } from '../../../../../src/application/ports/out/daily-message.repository.js';
 import { DAILY_SEQUENCE_REPOSITORY } from '../../../../../src/application/ports/out/daily-sequence.repository.js';
 import { GUEST_DATA_REPOSITORY } from '../../../../../src/application/ports/out/guest-data.repository.js';
@@ -35,8 +36,8 @@ import { UpdateReservationModule } from '../../../../../src/application/use-case
 /**
  * Lo que ponen `PersistenceModule`, `ClockModule`, `ChannexClientModule` y `CloseDayConfigModule`, que son
  * globales: no se usan en esta prueba. Los de huéspedes los necesita `ProcessGuestDataModule` (por
- * `REGISTER_GUEST_MOVEMENTS`); los de la lista del día, `CheckViewReservationModule` (por
- * `DAILY_LIST_CHANGE_RECORDER`); y los de Channex y las agencias, `GenerateOtaReservationModule` (por
+ * `REGISTER_GUEST_MOVEMENTS`); los de la lista del día y su publicador, `CheckViewReservationModule` (por
+ * `DAILY_LIST_CHANGE_RECORDER` y `PublishPendingDailyMessages`); y los de Channex y las agencias, `GenerateOtaReservationModule` (por
  * `OTA_NO_SHOW_REPORTER`).
  */
 const GLOBALS = [
@@ -49,6 +50,7 @@ const GLOBALS = [
   GUEST_STAY_QUERY,
   DAILY_SEQUENCE_REPOSITORY,
   DAILY_MESSAGE_REPOSITORY,
+  DAILY_LIST_PUBLISHER,
   OTA_REPOSITORY,
   CANCELLATION_REPOSITORY,
   COMMISSION_AUDIT_REPOSITORY,

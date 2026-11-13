@@ -7,6 +7,7 @@ import { CHANNEX_SETUP_STATE } from '../../../../../src/application/ports/out/ch
 import { CHANNEX_PORT } from '../../../../../src/application/ports/out/channex.port.js';
 import { CLOCK } from '../../../../../src/application/ports/out/clock.js';
 import { COMMISSION_AUDIT_REPOSITORY } from '../../../../../src/application/ports/out/commission-audit.repository.js';
+import { DAILY_LIST_PUBLISHER } from '../../../../../src/application/ports/out/daily-list-publisher.js';
 import { DAILY_MESSAGE_REPOSITORY } from '../../../../../src/application/ports/out/daily-message.repository.js';
 import { DAILY_SEQUENCE_REPOSITORY } from '../../../../../src/application/ports/out/daily-sequence.repository.js';
 import { GUEST_DATA_REPOSITORY } from '../../../../../src/application/ports/out/guest-data.repository.js';
@@ -30,13 +31,15 @@ import { CLOSE_DAY_BATCH_SIZE } from '../../../../../src/application/use-cases/u
  * `UpdateReservationModule` agrega el Check-In e importa `ProcessGuestDataModule` (sus repositorios y
  * `GUEST_STAY_QUERY`, #508). `ConfigureOtaModule` pide los de Channex y los de las agencias (T009).
  * `UpdateReservationModule` agrega el cierre del día (T021): `CLOSE_DAY_BATCH_SIZE`, y los repositorios de
- * las revisiones y de los no-shows de `GenerateOtaReservationModule` (T011b).
+ * las revisiones y de los no-shows de `GenerateOtaReservationModule` (T011b). `CheckViewReservationModule`
+ * agrega `PublishPendingDailyMessages`, que pide el publicador de la lista del día (T026).
  */
 const GLOBAL_TOKENS = [
   RESERVATION_REPOSITORY,
   RESERVATION_QUERY_PORT,
   DAILY_SEQUENCE_REPOSITORY,
   DAILY_MESSAGE_REPOSITORY,
+  DAILY_LIST_PUBLISHER,
   OTA_REPOSITORY,
   CANCELLATION_REPOSITORY,
   CLOCK,
