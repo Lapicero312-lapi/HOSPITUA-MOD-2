@@ -562,6 +562,63 @@ revisión se confirma.
    - **`ChannexSyncJob`** llama a `publish` en cada ciclo, después de la lectura del feed (y, cuando
      exista, del envío de la disponibilidad de `configure-ota`), con el mismo bloqueo asesor. Lo llama
      aunque la lectura del feed haya fallado: el reporte no depende del feed.
+9. **`ProcessBookingFeed` y `ProcessBookingRevision` (T006, T007, T010 y T011c).** Puertos de entrada en
+   `ports/in/`:
+
+   ```typescript
+   type RevisionOutcome =
+     | { kind: 'ACKNOWLEDGE' }               // aplicada, en conflicto o ignorada: se confirma (A2)
+     | { kind: 'RETRY'; reason: string };    // no se guardó: queda en el feed, sin ack
+
+   interface ProcessBookingRevision {
+     process(revision: BookingRevision): Promise<RevisionOutcome>;
+   }
+
+   interface ProcessBookingFeed {
+     // Un ciclo: repite los ack pendientes, lee el feed, procesa en orden y confirma.
+     run(): Promise<void>;
+   }
+   ```
+
+   - **`ProcessBookingFeed.run` (T007).** Primero repite los `ack` de
+     `OtaBookingRevisionRepository.findPendingAck()`. Después llama a `ReadBookingFeed.read()` y, si da
+     `READ`, procesa las revisiones en el orden del feed. Con cada `ACKNOWLEDGE` llama a
+     `ChannexPort.ackBookingRevision(id)` y, si Channex responde, a `markAcked`. Si el `ack` falla, la fila
+     queda con `acked_at` vacío y se repite en el ciclo siguiente (regla 2). Si una revisión da `RETRY`, o
+     lanza un error inesperado (que se registra sin datos personales), se saltan las siguientes del mismo
+     `bookingId` en esa lectura (regla 3). `ChannexSyncJob` llama a `ProcessBookingFeed.run()` en lugar de
+     `ReadBookingFeed.read()`, con el mismo bloqueo, y después a `PublishPendingNoShows.publish()`.
+   - **`ProcessBookingRevision.process`.** La agencia es la de `ManageOta.register({ name: 'Booking.com' })`,
+     como en el punto 7, y la hora de la revisión es `Clock.now()`.
+     1. Si `findById(revision.id)` ya la tiene: `ACKNOWLEDGE` (paso 1 de B1).
+     2. `mapBookingRevision`: si es ilegible, `RETRY` con el motivo.
+     3. Busca la reserva con `ReservationRepository.findByOtaConfirmationCode(otaId, code)`, un método nuevo
+        de lectura que devuelve la reserva o `null`.
+     4. Según `status`:
+        - **`new` (T006).** Si la reserva ya existe, se trata como `modified`. Si no, los pasos 3 a 10 de B1:
+          - relaciona cada habitación con `OtaRoomTypeMappingRepository.findByChannexRoomType`; si falta una
+            relación o el tipo llega vacío, `RETRY`;
+          - `datesDifferPerRoom` es verdadero si alguna habitación trae `checkinDate` o `checkoutDate`
+            distintos de las fechas de la reserva (FR-012, T011c);
+          - llama una vez a `VerifyAvailability.check` por cada categoría distinta, y `assignRooms` asigna la
+            de menor `roomNumber`, sin repetir;
+          - con `calculate`, un `BusinessError` da `RETRY` con el `revisionId` y el código;
+          - en una transacción: `setCommissionPercentage` si aprende el porcentaje; `createOta` con
+            `newReservationRef` y otra referencia si choca (hasta 5 veces); `insert`; `recordAudit`;
+            `DailyListChangeRecorder.record(tx, null, reserva)`; `AriChangeRecorder.record` con cada
+            categoría y las fechas; y `record` de la revisión, `APPLIED` o `CONFLICT` según tenga o no
+            conflicto;
+          - `RoomOverlapError` da `RETRY`; `DuplicateOtaBookingRevisionError` da `ACKNOWLEDGE`.
+        - **`cancelled` (T010):** B3.
+          - Si la reserva no existe o ya está `CANCELLED`: `record` `IGNORED`.
+          - Si está en `ACTIVE` o `PENDING`, en una transacción: `CancelReservation.cancel(tx, {
+            reservationRef, channel: 'OTA_API', processedBy: 'Booking.com', reason: null })` y `record`
+            `APPLIED`.
+          - Si está en `IN_PROGRESS`, `COMPLETED` o `NO_SHOW`: el conflicto `CHANGE_NOT_APPLICABLE` con
+            `ReservationRepository.update`, y `record` `CONFLICT`.
+          - En todos estos casos responde `ACKNOWLEDGE`.
+        - **`modified`:** hasta T009, `RETRY` con el motivo "pendiente de ApplyOtaChange (T009)"; queda en el
+          feed sin `ack`.
 
 ## Puntos abiertos
 
