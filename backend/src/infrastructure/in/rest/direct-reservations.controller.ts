@@ -10,6 +10,7 @@ import {
 import {
   ApiBadRequestResponse,
   ApiBody,
+  ApiHeader,
   ApiCreatedResponse,
   ApiOkResponse,
   ApiOperation,
@@ -102,6 +103,13 @@ export class DirectReservationsController {
   @ApiOperation({
     summary:
       'Crea una reserva directa en `ACTIVE`: vuelve a verificar la disponibilidad, a asignar y a cotizar, compara con las tarifas que vio el solicitante y la guarda. Nunca guarda un monto enviado por el cliente.',
+  })
+  @ApiHeader({
+    name: 'Idempotency-Key',
+    required: true,
+    description:
+      'Un UUID por formulario (punto 15, T019): con la misma clave y el mismo cuerpo, en las últimas 24 horas, responde la misma reserva sin crear otra; con otro cuerpo, `IDEMPOTENCY_KEY_REUSED`.',
+    schema: { type: 'string', format: 'uuid' },
   })
   @ApiBody({
     type: DirectReservationCreationRequestDto,
