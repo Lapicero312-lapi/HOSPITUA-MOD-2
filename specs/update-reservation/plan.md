@@ -1093,6 +1093,9 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
 | US3 | 4 todo ingresó | Se ignora |
 | US3 | 5 fallo aislado | Una reserva corrupta no detiene el lote |
 | NFR-003 | Idempotencia | El cierre dos veces el mismo día no cambia nada |
+| NFR-001 | Tiempo de la recotización (T030) | La vista previa (B1) de una reserva de 10 habitaciones que cambia las fechas, con el Módulo 1 simulado a 150 ms y el Módulo 3 a 300 ms (los de las pruebas de tiempo de `check-room-availability` y `calculate-dynamic-rate`), en menos de 3 s. Se mide la vista previa porque es la recotización que ve el solicitante; la confirmación repite los mismos pasos con `verifyQuotes` (regla 9) |
+| NFR-002 | Tiempo del Check-In (T030) | `ProcessCheckIn` de una habitación con 10 huéspedes (cinco extranjeros y cinco colombianos, como en la prueba de tiempo de `process-guest-data`), con su movimiento de entrada cada uno, en menos de 500 ms |
+| NFR-003 | Tiempo del cierre del día (T030) | `CloseDay` de un día con 1000 reservas `ACTIVE` que no se presentaron, en menos de 1 minuto. Las reservas se cargan con SQL, porque son datos de la prueba: lo que se mide es el cierre |
 | US3 | Casos borde del cierre | Zona horaria del servidor distinta de `America/Bogota`: se usa la del hotel y se emite la alerta de negocio; pérdida de la conexión a la base de datos a mitad del lote: el cierre se detiene con una alerta sin detalles de infraestructura, ninguna reserva queda a medias y la recuperación al arrancar lo completa |
 | Contrato | Mensajes | Forma exacta de Check-In y Check-Out y mensaje repetido con el mismo `messageId` |
 
@@ -1259,6 +1262,57 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
       alerta de nivel `error` sin el texto del error (no expone detalles de infraestructura) y termina sin
       propagarlo. Cada reserva va en su propia transacción, así que ninguna queda a medias, y la siguiente
       ejecución (al arrancar o a las 00:00:30) cierra lo que faltó.
+15. **`ApplyOtaChange` (T026)**, puerto en `ports/in/apply-ota-change.port.ts`, con su símbolo
+    `APPLY_OTA_CHANGE`. `UpdateReservationModule` lo registra y lo exporta; importa
+    `RegisterOtaInformationCommissionModule` (la comisión) y `ConfigureOtaModule` (`AriChangeRecorder`).
+
+    ```typescript
+    type OtaChangePlan = {
+      reservation: Reservation;      // la que leyó prepare, con su updatedAt
+      change: OtaChange;
+      rooms: {                       // una por cada habitación de change.rooms, en su orden
+        keptRoomId: string | null;   // la fila que se conserva, con la misma habitación
+        room: { roomId: string; roomNumber: string } | null;  // null: sin asignar
+        categoryRoom: string;
+        guestCount: number;
+      }[];
+      conflictReason: 'NO_ROOM_AVAILABLE' | 'CAPACITY_EXCEEDED' | null;
+      commission: CommissionResult | null;  // null si el valor no cambió
+    };
+    ```
+
+    **`prepare`** (no escribe nada):
+    1. Solo una reserva `OTA` en `ACTIVE` o `PENDING`; otra es un error del programa (B2 de
+       `generate-ota-reservation` decide antes).
+    2. `VerifyAvailability.check` una vez por cada categoría de `change.rooms`, con las fechas nuevas y
+       `excludeReservationRef`.
+    3. Cada habitación de `change.rooms`, en su orden, dentro de su categoría:
+       1. **se conserva** una habitación asignada de la reserva que sigue libre, la de menor `roomNumber`
+          (misma fila);
+       2. si no, **se reasigna** con `assignRooms` (la libre de menor `roomNumber`, sin repetir): fila nueva;
+       3. si no, queda **sin asignar**: fila nueva, sin habitación.
+    4. El conflicto, en el orden de `createOta`: `NO_ROOM_AVAILABLE` si queda alguna sin asignar; si no,
+       `CAPACITY_EXCEEDED` si alguna asignada tiene menos `maxCapacity` que sus personas; si no, ninguno.
+    5. La comisión: si `grossAmount` cambió (monto o moneda),
+       `RegisterOtaConfirmationAndCommission.recalculate(reserva, grossAmount)`, con el porcentaje congelado
+       de la reserva. Si no cambió, no se recalcula. **`recalculate` lo agrega esta tarea**: el plan de
+       `register-ota-information-commission` lo define y ninguna de sus tareas lo programa.
+
+    **`apply(tx, plan)`** (solo escribe):
+    1. `ReservationLookup.findForUpdate`. Si su `updatedAt` ya no es el que leyó `prepare`,
+       `CONCURRENT_UPDATE`: quien llama no confirma la revisión y la procesa de nuevo.
+    2. `Reservation.withOtaChange`: las fechas, las habitaciones del plan (las nuevas en `EXPECTED`, sin
+       tarifa), las observaciones, el titular (nombre, apellido, correo, teléfono y nacionalidad; el
+       documento no cambia), el `grossAmount` y la comisión nueva si la hay, y el conflicto: sin motivo, se
+       quita; con el mismo motivo que ya tenía, conserva su `detectedAt`; con otro, `detectedAt` es
+       `Clock.now()`.
+    3. `ReservationRepository.update`. Un `RoomOverlapError` sale tal cual: quien llama no confirma la
+       revisión.
+    4. Si se recalculó, `recordAudit(tx, id, comisión, 'Booking.com')` (regla 6 de
+       `register-ota-information-commission`).
+    5. `DailyListChangeRecorder.record(tx, bloqueada, guardada)`.
+    6. `AriChangeRecorder.record` con cada categoría de antes en las fechas de antes (lo que se libera) y
+       cada categoría de después en las fechas nuevas (lo que se ocupa), sin repetir.
 
 ## Puntos abiertos
 
