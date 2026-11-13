@@ -15,6 +15,7 @@ import { ProcessCheckInService } from './process-check-in.service.js';
 import { PreviewModificationService } from './preview-modification.service.js';
 import { ProcessCheckOutService } from './process-check-out.service.js';
 import { ReservationStatusService } from './reservation-status.service.js';
+import { ConfigureOtaModule } from '../configure-ota/configure-ota.module.js';
 
 /**
  * Los servicios de `update-reservation` (plan base, regla 4 de la arquitectura). Exporta
@@ -24,7 +25,7 @@ import { ReservationStatusService } from './reservation-status.service.js';
  * `REGISTER_GUEST_MOVEMENTS`, `CheckViewReservationModule` por `DAILY_LIST_CHANGE_RECORDER` y
  * `RESERVATION_LOOKUP`, `GenerateOtaReservationModule` por `OTA_NO_SHOW_REPORTER`, y
  * `ConsultRoomInventoryModule`, `CheckRoomAvailabilityModule` y `CalculateDynamicRateModule` por los puertos
- * de la modificación (regla 8). Usa
+ * de la modificación (regla 8), y `ConfigureOtaModule` por `ARI_CHANGE_RECORDER` (punto 17). Usa
  * `RESERVATION_REPOSITORY`, `RESERVATION_QUERY_PORT`, `PROCESSED_MESSAGE_REPOSITORY` y `TRANSACTION_RUNNER`
  * de `PersistenceModule`, y `CLOSE_DAY_BATCH_SIZE` de `CloseDayConfigModule`, que son globales.
  */
@@ -36,6 +37,7 @@ import { ReservationStatusService } from './reservation-status.service.js';
     ConsultRoomInventoryModule,
     CheckRoomAvailabilityModule,
     CalculateDynamicRateModule,
+    ConfigureOtaModule,
   ],
   providers: [
     { provide: RESERVATION_STATUS, useClass: ReservationStatusService },

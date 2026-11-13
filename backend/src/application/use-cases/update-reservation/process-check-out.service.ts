@@ -18,6 +18,10 @@ import {
   type RegisterGuestMovements,
   type RegistrationSummary,
 } from '../process-guest-data/ports/in/register-guest-movements.port.js';
+import {
+  ARI_CHANGE_RECORDER,
+  type AriChangeRecorder,
+} from '../configure-ota/ports/in/ari-change-recorder.port.js';
 import type {
   CheckOutNotification,
   CheckOutOutcome,
@@ -73,6 +77,8 @@ export class ProcessCheckOutService implements ProcessCheckOut {
     private readonly status: ReservationStatusPort,
     @Inject(REGISTER_GUEST_MOVEMENTS)
     private readonly guests: RegisterGuestMovements,
+    @Inject(ARI_CHANGE_RECORDER)
+    private readonly ariChanges: AriChangeRecorder,
   ) {}
 
   execute(notification: CheckOutNotification): Promise<CheckOutOutcome> {
@@ -160,6 +166,19 @@ export class ProcessCheckOutService implements ProcessCheckOut {
       notification.roomId,
       'CHECKED_OUT',
     );
+    // Punto 17: la habitación que sale libera su inventario, para Channex.
+    const room = current.rooms.find(
+      ({ roomId }) => roomId === notification.roomId,
+    );
+    if (room !== undefined) {
+      await this.ariChanges.record(tx, [
+        {
+          categoryRoom: room.categoryRoom,
+          dateFrom: current.startDate,
+          dateTo: current.endDate,
+        },
+      ]);
+    }
     const stillInStay = current.rooms.some(
       ({ stayStatus }) =>
         stayStatus === 'EXPECTED' || stayStatus === 'CHECKED_IN',

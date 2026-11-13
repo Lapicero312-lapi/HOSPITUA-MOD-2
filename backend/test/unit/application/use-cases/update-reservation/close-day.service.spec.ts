@@ -1,3 +1,4 @@
+import type { AriChangeRecorder } from '../../../../../src/application/use-cases/configure-ota/ports/in/ari-change-recorder.port.js';
 import { randomUUID } from 'node:crypto';
 import { Logger } from '@nestjs/common';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -92,6 +93,7 @@ function aClose(stored: Reservation[], batchSize = 100) {
     .fn<OtaNoShowReporter['record']>()
     .mockResolvedValue(undefined);
   const run = vi.fn(<T>(work: (tx: Transaction) => Promise<T>) => work(tx));
+  const ari = vi.fn<AriChangeRecorder['record']>().mockResolvedValue(undefined);
   const service = new CloseDayService(
     { findToClose, findDaysToClose } as unknown as ReservationQueryPort,
     reservations,
@@ -100,9 +102,11 @@ function aClose(stored: Reservation[], batchSize = 100) {
     { record: reportNoShow },
     { run } as unknown as TransactionRunner,
     batchSize,
+    { record: ari },
   );
   return {
     service,
+    ari,
     findToClose,
     findDaysToClose,
     update,
@@ -180,6 +184,25 @@ describe('CloseDayService (plan de update-reservation, "Cierre del día", D5 y p
       );
     });
 
+    it('punto 17 (T028): el No-Show avisa a Channex con cada categoría de la reserva y sus fechas, una sola vez por categoría', async () => {
+      const reservation = arriving({
+        rooms: [
+          aDirectRoom({ roomNumber: '201', categoryRoom: 'DOBLE' }),
+          aDirectRoom({ roomNumber: '202', categoryRoom: 'DOBLE' }),
+          aDirectRoom({ roomNumber: '305', categoryRoom: 'SUITE' }),
+        ],
+      });
+      const { service, ari } = aClose([reservation]);
+
+      await service.execute(DAY);
+
+      expect(ari).toHaveBeenCalledTimes(1);
+      expect(ari.mock.calls[0][1]).toEqual([
+        { categoryRoom: 'DOBLE', dateFrom: DAY, dateTo: '2026-10-11' },
+        { categoryRoom: 'SUITE', dateFrom: DAY, dateTo: '2026-10-11' },
+      ]);
+    });
+
     it('una directa no deja reporte de no-show', async () => {
       const { service, reportNoShow } = aClose([arriving()]);
 
@@ -248,6 +271,43 @@ describe('CloseDayService (plan de update-reservation, "Cierre del día", D5 y p
       expect(record).not.toHaveBeenCalled();
       expect(reportNoShow).not.toHaveBeenCalled();
       expect(summary).toMatchObject({ notArrived: 1, completed: 0 });
+    });
+
+    it('punto 17 (T028): solo las que pasan a NOT_ARRIVED avisan a Channex', async () => {
+      const reservation = arriving({
+        status: 'IN_PROGRESS',
+        rooms: [
+          aDirectRoom({
+            roomNumber: '201',
+            categoryRoom: 'DOBLE',
+            stayStatus: 'CHECKED_IN',
+          }),
+          aDirectRoom({
+            roomNumber: '305',
+            categoryRoom: 'SUITE',
+            stayStatus: 'EXPECTED',
+          }),
+        ],
+      });
+      const { service, ari } = aClose([reservation]);
+
+      await service.execute(DAY);
+
+      expect(ari.mock.calls[0][1]).toEqual([
+        { categoryRoom: 'SUITE', dateFrom: DAY, dateTo: '2026-10-11' },
+      ]);
+    });
+
+    it('si todo el grupo ingresó (se ignora), no avisa a Channex', async () => {
+      const reservation = arriving({
+        status: 'IN_PROGRESS',
+        rooms: [aDirectRoom({ stayStatus: 'CHECKED_IN' })],
+      });
+      const { service, ari } = aClose([reservation]);
+
+      await service.execute(DAY);
+
+      expect(ari).not.toHaveBeenCalled();
     });
 
     it('si ya no le queda ninguna CHECKED_IN, pasa a COMPLETED con DAY_CLOSE_PARTIAL', async () => {

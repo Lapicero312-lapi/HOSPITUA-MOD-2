@@ -1,3 +1,4 @@
+import type { AriChangeRecorder } from '../../../../../src/application/use-cases/configure-ota/ports/in/ari-change-recorder.port.js';
 import { Logger } from '@nestjs/common';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type {
@@ -147,12 +148,14 @@ function serviceWith({
   const register = vi
     .fn<RegisterGuestMovements['register']>()
     .mockResolvedValue(SUMMARY);
+  const ari = vi.fn<AriChangeRecorder['record']>().mockResolvedValue(undefined);
   const service = new ProcessCheckOutService(
     transactions,
     reservations,
     { isProcessed, record, highestSequenceNumber },
     new ReservationStatusService(reservations),
     { register },
+    { record: ari },
   );
   /** Cada versión guardada de la reserva: su estado y el de la 201 y la 202. */
   const saved = () =>
@@ -163,6 +166,7 @@ function serviceWith({
     }));
   return {
     service,
+    ari,
     runs,
     lockByRef,
     update,
@@ -233,6 +237,32 @@ describe('ProcessCheckOutService (plan de update-reservation, "Check-Out (FR-017
           stays: ['CHECKED_OUT', 'CHECKED_OUT'],
         },
       ]);
+    });
+
+    it('punto 17 (T028): la habitación que sale avisa a Channex con su categoría y las fechas de la reserva, en la misma transacción', async () => {
+      const reservation = aReservation('IN_PROGRESS');
+      const { service, ari } = serviceWith({ reservation });
+
+      await service.execute(notification());
+
+      expect(ari).toHaveBeenCalledWith(TX, [
+        {
+          categoryRoom: reservation.rooms[0].categoryRoom,
+          dateFrom: reservation.startDate,
+          dateTo: reservation.endDate,
+        },
+      ]);
+    });
+
+    it('un Check-Out rechazado o repetido no avisa a Channex', async () => {
+      const rejected = serviceWith({ reservation: aReservation('COMPLETED') });
+      const repeated = serviceWith({ processed: [MESSAGE_ID] });
+
+      await rejected.service.execute(notification());
+      await repeated.service.execute(notification());
+
+      expect(rejected.ari).not.toHaveBeenCalled();
+      expect(repeated.ari).not.toHaveBeenCalled();
     });
 
     it('escenario 7: una habitación NOT_ARRIVED no impide pasar a COMPLETED', async () => {
