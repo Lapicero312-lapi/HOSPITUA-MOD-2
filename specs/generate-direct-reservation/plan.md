@@ -730,6 +730,28 @@ y por caída del Módulo 3.
     Si la nueva asignación ya no alcanza, si una habitación pedida por `roomId` ya no está libre, si
     alguna no tiene capacidad o si se agotan los reintentos, responde `AVAILABILITY_TAKEN`, "Ya no hay
     disponibilidad para las fechas solicitadas." (D3).
+15. **`Idempotency-Key` (T019).** Cómo se cumple lo de B ("Idempotencia", FR-008):
+    - **La cabecera:** `DirectReservationsController` la lee y la pasa a
+      `CreateDirectReservation.execute(body, idempotencyKey)`. Si falta o no es un UUID,
+      `IDEMPOTENCY_KEY_REQUIRED`, antes del paso 1 del punto 12 (sin consultar nada).
+    - **El cuerpo:** `requestHash` es el SHA-256 en hexadecimal (64 caracteres, la columna `request_hash`)
+      del cuerpo en JSON con las claves ordenadas, así el mismo cuerpo con las claves en otro orden es el
+      mismo.
+    - **Antes del paso 1:** `IdempotencyKeyRepository.find(key)` (puerto de salida nuevo, sobre
+      `idempotency_key`). Si existe y tiene menos de 24 horas:
+      - con el mismo `requestHash`, responde `201` con el detalle de esa reserva (`GetReservationDetail`), sin
+        validar, verificar ni cotizar otra vez;
+      - con otro, `IDEMPOTENCY_KEY_REUSED`.
+
+      Si existe pero venció, se trata como una clave nueva.
+    - **En la transacción del paso 5:** `IdempotencyKeyRepository.save(tx, { key, requestHash,
+      reservationId })`, después de insertar la reserva; una fila vencida con la misma clave se reemplaza.
+      Si otra solicitud con la misma clave confirmó primero (la clave primaria la rechaza), se revierte y se
+      responde como en "Antes del paso 1".
+    - **La limpieza:** `IdempotencyKeyRepository.deleteExpired(before)` borra las filas con `created_at`
+      anterior a `before`. `CloseDay` la llama al terminar, con `Clock.now()` menos 24 horas (punto 13 de
+      `update-reservation`: "el borrado de las `idempotency_key` vencidas, que se agrega con su
+      repositorio").
 
 ## Puntos abiertos
 

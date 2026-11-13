@@ -1,3 +1,4 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { UNSUPPORTED_PARAMETER } from '../../../application/use-cases/check-view-reservation/error-codes.js';
 import type {
   StayRangeQuery,
@@ -18,8 +19,81 @@ import {
 /** Los únicos parámetros de la consulta del Módulo 1 (C5). */
 const SUPPORTED_PARAMETERS = ['dateFrom', 'dateTo', 'roomId'];
 
+/*
+ * La respuesta de C5 como clases, para que OpenAPI la describa (plan, "OpenAPI (T037) y pruebas de contrato
+ * (T034)").
+ */
+
+/** Una habitación de la reserva en C5: todas las de la reserva, aunque se filtre por `roomId`. */
+export class StayRangeRoomDto {
+  @ApiProperty({
+    type: String,
+    format: 'uuid',
+    nullable: true,
+    description: '`null` en una habitación de Booking sin asignar.',
+    example: 'a4c2e6f8-1b3d-4e5f-8a7b-9c0d1e2f3a4b',
+  })
+  roomId: string | null;
+
+  @ApiProperty({ type: String, nullable: true, example: '204' })
+  roomNumber: string | null;
+
+  @ApiProperty({ example: 'DOBLE' })
+  categoryRoom: string;
+}
+
+/** Una reserva vigente en C5, sin datos financieros ni del huésped. */
+export class StayRangeReservationDto {
+  @ApiProperty({ pattern: '^RSV-[0-9A-F]{8}$', example: 'RSV-3F9A1C7B' })
+  reservationRef: string;
+
+  @ApiProperty({
+    enum: ['PENDING', 'ACTIVE', 'IN_PROGRESS'],
+    example: 'ACTIVE',
+  })
+  status: StayRangeReservation['status'];
+
+  @ApiProperty({ format: 'date', example: '2026-10-23' })
+  startDate: string;
+
+  @ApiProperty({ format: 'date', example: '2026-10-25' })
+  endDate: string;
+
+  @ApiProperty({ type: [StayRangeRoomDto] })
+  rooms: StayRangeRoomDto[];
+}
+
 /** La respuesta de `GET /api/reservations` con `X-Client: MODULE1` (C5): sin paginar. */
-export type StayRangeBody = { items: StayRangeReservation[] };
+export class StayRangeDto {
+  @ApiProperty({
+    type: [StayRangeReservationDto],
+    description:
+      'Las reservas `PENDING`, `ACTIVE` o `IN_PROGRESS` cuya estadía se cruza con el rango, de la llegada más antigua a la más reciente.',
+  })
+  items: StayRangeReservationDto[];
+}
+
+/** La respuesta de C5: la misma clase. */
+export type StayRangeBody = StayRangeDto;
+
+/** El ejemplo de C5 del plan (el `roomId` "a4c2…" del plan, completo). */
+export const STAY_RANGE_EXAMPLE: StayRangeBody = {
+  items: [
+    {
+      reservationRef: 'RSV-3F9A1C7B',
+      status: 'ACTIVE',
+      startDate: '2026-10-23',
+      endDate: '2026-10-25',
+      rooms: [
+        {
+          roomId: 'a4c2e6f8-1b3d-4e5f-8a7b-9c0d1e2f3a4b',
+          roomNumber: '204',
+          categoryRoom: 'DOBLE',
+        },
+      ],
+    },
+  ],
+};
 
 /**
  * Revisa los parámetros de la consulta del Módulo 1 antes de consultar, en el orden del plan ("Consulta
