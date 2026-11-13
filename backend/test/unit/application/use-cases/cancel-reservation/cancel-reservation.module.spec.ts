@@ -1,12 +1,18 @@
 import { Global, Module } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { describe, expect, it } from 'vitest';
+import { MAINTENANCE_CONCURRENCY } from '../../../../../src/application/shared/maintenance-concurrency.js';
+import { MODULE1_PORT } from '../../../../../src/application/ports/out/module1.port.js';
+import { MODULE3_PORT } from '../../../../../src/application/ports/out/module3.port.js';
+import { QUOTE_CONCURRENCY } from '../../../../../src/application/use-cases/calculate-dynamic-rate/ports/in/calculate-dynamic-rate.port.js';
+import { RATE_REFERENCE } from '../../../../../src/application/use-cases/calculate-dynamic-rate/ports/in/get-reference-rates.port.js';
 import { ARI_PENDING_CHANGE_REPOSITORY } from '../../../../../src/application/ports/out/ari-pending-change.repository.js';
 import { CANCELLATION_REPOSITORY } from '../../../../../src/application/ports/out/cancellation.repository.js';
 import { CHANNEX_SETUP_STATE } from '../../../../../src/application/ports/out/channex-setup-state.js';
 import { CHANNEX_PORT } from '../../../../../src/application/ports/out/channex.port.js';
 import { CLOCK } from '../../../../../src/application/ports/out/clock.js';
 import { COMMISSION_AUDIT_REPOSITORY } from '../../../../../src/application/ports/out/commission-audit.repository.js';
+import { DAILY_LIST_PUBLISHER } from '../../../../../src/application/ports/out/daily-list-publisher.js';
 import { DAILY_MESSAGE_REPOSITORY } from '../../../../../src/application/ports/out/daily-message.repository.js';
 import { DAILY_SEQUENCE_REPOSITORY } from '../../../../../src/application/ports/out/daily-sequence.repository.js';
 import { GUEST_DATA_REPOSITORY } from '../../../../../src/application/ports/out/guest-data.repository.js';
@@ -30,13 +36,16 @@ import { CLOSE_DAY_BATCH_SIZE } from '../../../../../src/application/use-cases/u
  * `UpdateReservationModule` agrega el Check-In e importa `ProcessGuestDataModule` (sus repositorios y
  * `GUEST_STAY_QUERY`, #508). `ConfigureOtaModule` pide los de Channex y los de las agencias (T009).
  * `UpdateReservationModule` agrega el cierre del día (T021): `CLOSE_DAY_BATCH_SIZE`, y los repositorios de
- * las revisiones y de los no-shows de `GenerateOtaReservationModule` (T011b).
+ * las revisiones y de los no-shows de `GenerateOtaReservationModule` (T011b). `CheckViewReservationModule`
+ * agrega `PublishPendingDailyMessages`, que pide el publicador de la lista del día (T026). La vista previa de
+ * la modificación (T009) suma los de los Módulos 1 y 3 y la tarifa de referencia de `CalculateDynamicRateModule`.
  */
 const GLOBAL_TOKENS = [
   RESERVATION_REPOSITORY,
   RESERVATION_QUERY_PORT,
   DAILY_SEQUENCE_REPOSITORY,
   DAILY_MESSAGE_REPOSITORY,
+  DAILY_LIST_PUBLISHER,
   OTA_REPOSITORY,
   CANCELLATION_REPOSITORY,
   CLOCK,
@@ -52,6 +61,11 @@ const GLOBAL_TOKENS = [
   OTA_BOOKING_REVISION_REPOSITORY,
   OTA_NO_SHOW_REPORT_REPOSITORY,
   CLOSE_DAY_BATCH_SIZE,
+  MODULE1_PORT,
+  MAINTENANCE_CONCURRENCY,
+  MODULE3_PORT,
+  QUOTE_CONCURRENCY,
+  RATE_REFERENCE,
 ];
 
 /** Lo que ponen `PersistenceModule` y `ClockModule`, que son globales: la base no se usa en esta prueba. */

@@ -7,6 +7,7 @@ import {
   type ReservationLookup,
 } from '../../../src/application/use-cases/check-view-reservation/ports/in/reservation-lookup.port.js';
 import { integrationEnv, truncateAllTables } from '../support/database.js';
+import { FakeDailyListPublisherModule } from '../support/fake-daily-list-publisher.js';
 
 /**
  * Prueba de tiempo de `generate-direct-reservation` (T015), NFR-001: "El procesamiento de la verificación
@@ -111,6 +112,7 @@ describe('generate-direct-reservation: el cruce local con 50 000 reservas en men
         AppConfigModule,
         PersistenceModule,
         ClockModule,
+        FakeDailyListPublisherModule,
         CheckViewReservationModule,
       ],
     }).compile();
