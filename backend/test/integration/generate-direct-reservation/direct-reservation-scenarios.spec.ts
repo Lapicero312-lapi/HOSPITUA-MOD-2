@@ -1,7 +1,7 @@
 import type { INestApplication } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
-import { http, HttpResponse } from 'msw';
+import { delay, http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
@@ -95,7 +95,7 @@ describe('Generar reserva directa: escenarios 1 a 7 y 9 de la historia 1 (T011)'
   /** Las habitaciones con mantenimiento en la estadía pedida. */
   let inMaintenance: string[] = [];
   let quoteCalls = 0;
-  let module3Down = false;
+  let module3Slow = false;
 
   const create = (body: object) =>
     request(app.getHttpServer()).post('/api/reservations/direct').send(body);
@@ -152,13 +152,16 @@ describe('Generar reserva directa: escenarios 1 a 7 y 9 de la historia 1 (T011)'
     );
   }
 
-  /** El Módulo 3: `LODGING` por la estadía, con un `quoteId` nuevo cada vez; o caído. */
+  /**
+   * El Módulo 3: `LODGING` por la estadía, con un `quoteId` nuevo cada vez. Con `module3Slow`, tarda más que
+   * `MODULE3_TIMEOUT_MS` (3 s) antes de responder esa misma cotización válida: un tiempo agotado, no un error.
+   */
   function module3Answering(): void {
     server.use(
-      http.post(`${module3Url}/pricing/quotes`, () => {
+      http.post(`${module3Url}/pricing/quotes`, async () => {
         quoteCalls += 1;
-        if (module3Down) {
-          return HttpResponse.json({}, { status: 503 });
+        if (module3Slow) {
+          await delay(3_500);
         }
         return HttpResponse.json({
           quoteId: `00000000-0000-4000-8000-${String(quoteCalls).padStart(12, '0')}`,
@@ -193,7 +196,7 @@ describe('Generar reserva directa: escenarios 1 a 7 y 9 de la historia 1 (T011)'
     today = '2032-09-28';
     inMaintenance = [];
     quoteCalls = 0;
-    module3Down = false;
+    module3Slow = false;
     await truncateAllTables(dataSource);
     module1Answering();
     module3Answering();
@@ -267,8 +270,8 @@ describe('Generar reserva directa: escenarios 1 a 7 y 9 de la historia 1 (T011)'
     expect(quoteCalls).toBe(0);
   });
 
-  it('escenario 3: el Módulo 3 no responde: 400 PRICING_UNAVAILABLE con el literal del spec, y no se guarda nada', async () => {
-    module3Down = true;
+  it('escenario 3: el Módulo 3 no responde a tiempo: 400 PRICING_UNAVAILABLE con el literal del spec, y no se guarda nada', async () => {
+    module3Slow = true;
 
     const res = await create(aBody('2032-10-10', '2032-10-12')).expect(400);
 
