@@ -95,8 +95,8 @@ export class ReservationsController {
 
   /**
    * C1, `GET /api/reservations` para la Recepcionista (`X-Client: RECEPTIONIST`): el listado con filtros,
-   * orden y paginación. Los filtros se validan antes de consultar, en el orden del plan (T007). La
-   * búsqueda (`search`) se valida, pero todavía no filtra: la agregan T015 y T020.
+   * orden y paginación. Los filtros se validan antes de consultar, en el orden del plan (T007). Con
+   * `search`, primero el código y, si no coincide ninguna, el documento o el nombre (T015 y T020).
    *
    * C5, la misma ruta con `X-Client: MODULE1`: las reservas vigentes cuya estadía se cruza con un rango de
    * fechas y, si viene `roomId`, las de esa habitación (FR-023, T033). Sus parámetros los revisa
@@ -112,12 +112,8 @@ export class ReservationsController {
         await this.findByStayRange.execute(readStayRangeQuery(query)),
       );
     }
-    const {
-      search: _search,
-      page,
-      ...filters
-    } = readReservationListQuery(query);
-    return this.listReservations.execute(filters, page);
+    const { search, page, ...filters } = readReservationListQuery(query);
+    return this.listReservations.execute(filters, page, search);
   }
 
   /**
