@@ -1,52 +1,192 @@
+import { ApiProperty } from '@nestjs/swagger';
 import type { ReservationDetail } from '../../../application/use-cases/check-view-reservation/ports/in/get-reservation-detail.port.js';
 import {
   colombiaTime,
   colombiaTimeWithMicroseconds,
 } from '../../../application/use-cases/check-view-reservation/message-time.js';
+import {
+  CANCELLATION_CHANNELS,
+  CONFLICT_REASONS,
+  DOCUMENT_TYPES,
+  RESERVATION_SOURCES,
+  RESERVATION_STATUSES,
+  STAY_STATUSES,
+} from '../../../domain/shared/enums.js';
+import { MoneyDto as MoneySchema } from './money.dto.js';
+
+/*
+ * El cuerpo de C3 (plan de `check-view-reservation`), tal como lo recibe la pantalla. Son clases, y no tipos,
+ * para que OpenAPI lo describa (plan base, "Contratos REST"): lo usa la respuesta 201 de la creación de la
+ * reserva directa (T017 de `generate-direct-reservation`, punto 13) y lo puede reutilizar la documentación
+ * de `GET /api/reservations/{reservationRef}` (T037 de `check-view-reservation`).
+ */
+
+/** La reserva de Booking en conflicto: el motivo y desde cuándo (la misma forma que en C1). */
+export class ReservationConflictDto {
+  @ApiProperty({ enum: CONFLICT_REASONS, example: 'NO_ROOM_AVAILABLE' })
+  reason: string;
+
+  @ApiProperty({ type: String, format: 'date-time' })
+  detectedAt: Date;
+}
+
+/** Una habitación de la reserva en C3. */
+export class ReservationDetailRoomDto {
+  @ApiProperty({
+    type: String,
+    format: 'uuid',
+    nullable: true,
+    description: '`null` en una habitación de Booking sin asignar.',
+  })
+  roomId: string | null;
+
+  @ApiProperty({ type: String, nullable: true, example: '201' })
+  roomNumber: string | null;
+
+  @ApiProperty({ example: 'DOBLE' })
+  categoryRoom: string;
+
+  @ApiProperty({ example: 2 })
+  guestCount: number;
+
+  @ApiProperty({
+    type: MoneySchema,
+    nullable: true,
+    description: 'La tarifa, informativa; `null` en una reserva de Booking.',
+  })
+  roomGrossAmount: MoneyBody | null;
+
+  @ApiProperty({ enum: STAY_STATUSES, example: 'EXPECTED' })
+  stayStatus: string;
+}
+
+/** El titular de la reserva en C3. */
+export class ReservationDetailGuestDto {
+  @ApiProperty({ example: 'Valentina' })
+  firstName: string;
+
+  @ApiProperty({ example: 'Ospina' })
+  lastName: string;
+
+  @ApiProperty({
+    type: String,
+    enum: DOCUMENT_TYPES,
+    nullable: true,
+    example: 'CC',
+  })
+  documentType: string | null;
+
+  @ApiProperty({ type: String, nullable: true, example: '1144093552' })
+  documentNumber: string | null;
+
+  @ApiProperty({ type: String, nullable: true, example: 'Colombia' })
+  nationality: string | null;
+
+  @ApiProperty({ type: String, nullable: true, example: '+57 300 000 0000' })
+  contactPhone: string | null;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    example: 'valentina@correo.com',
+  })
+  contactEmail: string | null;
+}
+
+/** La cancelación de la reserva en C3, si la tiene. */
+export class ReservationDetailCancellationDto {
+  @ApiProperty({
+    description: 'En hora de Colombia, con segundos.',
+    example: '2026-10-09T10:15:20-05:00',
+  })
+  cancellationDate: string;
+
+  @ApiProperty({ enum: CANCELLATION_CHANNELS, example: 'RECEPTION' })
+  channel: string;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    example: 'El huésped cambió de planes',
+  })
+  reason: string | null;
+
+  @ApiProperty({ example: 'laura.mendez' })
+  processedBy: string;
+}
+
+/** El cuerpo de C3 (plan de `check-view-reservation`), tal como lo recibe la pantalla. */
+export class ReservationDetailDto {
+  @ApiProperty({ pattern: '^RSV-[0-9A-F]{8}$', example: 'RSV-3F9A1C7B' })
+  reservationRef: string;
+
+  @ApiProperty({ enum: RESERVATION_STATUSES, example: 'ACTIVE' })
+  status: string;
+
+  @ApiProperty({ enum: RESERVATION_SOURCES, example: 'DIRECT' })
+  source: string;
+
+  @ApiProperty({ type: String, nullable: true, example: null })
+  externalConfirmationCode: string | null;
+
+  @ApiProperty({ type: String, nullable: true, example: null })
+  otaName: string | null;
+
+  @ApiProperty({ format: 'date', example: '2026-10-12' })
+  startDate: string;
+
+  @ApiProperty({ format: 'date', example: '2026-10-15' })
+  endDate: string;
+
+  @ApiProperty({ example: 3 })
+  nights: number;
+
+  @ApiProperty({ example: 4 })
+  guestCount: number;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    example: 'Llegada después de las 8 p. m.',
+  })
+  notes: string | null;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: 'En hora de Colombia, con segundos.',
+    example: '2026-10-09T09:14:00-05:00',
+  })
+  createdAt: string | null;
+
+  /** La versión de la reserva: lo que la pantalla envía al cancelar y al modificar. */
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description:
+      'La versión de la reserva, en hora de Colombia y con microsegundos: lo que la pantalla envía al cancelar y al modificar.',
+    example: '2026-10-09T09:14:00.123456-05:00',
+  })
+  updatedAt: string | null;
+
+  @ApiProperty({ type: ReservationConflictDto, nullable: true })
+  conflict: ReservationConflictDto | null;
+
+  @ApiProperty({ type: [ReservationDetailRoomDto] })
+  rooms: ReservationDetailRoomDto[];
+
+  @ApiProperty({ type: ReservationDetailGuestDto })
+  guest: ReservationDetailGuestDto;
+
+  @ApiProperty({ type: ReservationDetailCancellationDto, nullable: true })
+  cancellation: ReservationDetailCancellationDto | null;
+}
+
+/** El cuerpo de C3 (plan de `check-view-reservation`), tal como lo recibe la pantalla. */
+export type ReservationDetailBody = ReservationDetailDto;
 
 /** El dinero como texto decimal con dos decimales y su moneda (plan base, "Dinero"). */
 type MoneyBody = { amount: string; currency: string };
-
-/** El cuerpo de C3 (plan de `check-view-reservation`), tal como lo recibe la pantalla. */
-export type ReservationDetailBody = {
-  reservationRef: string;
-  status: string;
-  source: string;
-  externalConfirmationCode: string | null;
-  otaName: string | null;
-  startDate: string;
-  endDate: string;
-  nights: number;
-  guestCount: number;
-  notes: string | null;
-  createdAt: string | null;
-  /** La versión de la reserva: lo que la pantalla envía al cancelar y al modificar. */
-  updatedAt: string | null;
-  conflict: { reason: string; detectedAt: Date } | null;
-  rooms: {
-    roomId: string | null;
-    roomNumber: string | null;
-    categoryRoom: string;
-    guestCount: number;
-    roomGrossAmount: MoneyBody | null;
-    stayStatus: string;
-  }[];
-  guest: {
-    firstName: string;
-    lastName: string;
-    documentType: string | null;
-    documentNumber: string | null;
-    nationality: string | null;
-    contactPhone: string | null;
-    contactEmail: string | null;
-  };
-  cancellation: {
-    cancellationDate: string;
-    channel: string;
-    reason: string | null;
-    processedBy: string;
-  } | null;
-};
 
 /**
  * El cuerpo de C3 a partir de `GetReservationDetail` (plan, "`GetReservationDetail`"), sin reglas de
