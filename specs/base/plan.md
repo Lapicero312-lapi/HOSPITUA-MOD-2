@@ -593,10 +593,15 @@ planes:
   días. Las cotizaciones dan una tarifa fija por categoría y por noche, con un `quoteId` nuevo en cada
   respuesta. Respetan los errores de los contratos: 404 si la habitación no existe y 400 si el `roomId` o
   las fechas son inválidos.
-- **No simula** las colas de RabbitMQ (los avisos de Check-In y Check-Out del Módulo 1) ni nada de
-  Channex.
+- **El Módulo 1 por RabbitMQ (demo):** si recibe `RABBITMQ_URL`, el simulador del Módulo 1 también publica
+  los avisos de Check-In y Check-Out (`habitacion.checkin` y `habitacion.checkout`, con la forma de los
+  contratos de `update-reservation`) cuando se le piden por HTTP: `POST /simulate/check-in` y
+  `POST /simulate/check-out`, con `reservationRef`, `roomId` y los huéspedes. Además consume
+  `m1.reservas.diarias.queue` y deja en su log la lista del día y sus actualizaciones. Para eso usa
+  `amqplib`, su única dependencia.
+- **Channex no se simula:** la demo usa Channex staging, con la clave de `backend/.env`.
 - **Es solo para la demo y el desarrollo:** no forma parte del Módulo 2 ni se usa en sus pruebas, que
-  siguen con `msw`. Está escrito en Node 22 sin dependencias.
+  siguen con `msw`. Está escrito en Node 22, con `amqplib` como única dependencia.
 
 ### Despliegue de la demo (Render)
 
