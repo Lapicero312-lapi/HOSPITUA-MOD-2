@@ -319,6 +319,22 @@ describe('Pantalla "Modificar" (T014 de update-reservation)', () => {
     ).toBeInTheDocument();
   });
 
+  it('al cambiar solo las personas de una habitación envía las habitaciones', async () => {
+    previewAnswer = () => jsonResponse(NO_QUOTE);
+    const user = userEvent.setup();
+    renderAt();
+
+    const guests = await screen.findByLabelText('Personas en la habitación 1');
+    await user.clear(guests);
+    await user.type(guests, '1');
+
+    await screen.findByText('La tarifa no cambia.');
+    expect(bodyOf(previewCalls().at(-1)!)).toEqual({
+      updatedAt: UPDATED_AT,
+      rooms: [{ roomId: 'r201', guestCount: 1 }],
+    });
+  });
+
   it('al cambiar las fechas envía las dos', async () => {
     const user = userEvent.setup();
     renderAt();
