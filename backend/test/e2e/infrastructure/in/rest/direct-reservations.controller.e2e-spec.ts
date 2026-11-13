@@ -27,6 +27,7 @@ import {
 } from '../../../../../src/application/ports/out/module3.port.js';
 import { AppModule } from '../../../../../src/app.module.js';
 import { configureApp } from '../../../../../src/configure-app.js';
+import { CloseDayJob } from '../../../../../src/infrastructure/in/jobs/close-day.job.js';
 import { Money } from '../../../../../src/domain/shared/money.js';
 import { ROOM_201, ROOM_202 } from '../../../../support/rooms.js';
 
@@ -97,6 +98,10 @@ describe('POST /api/reservations/direct/preview (e2e)', () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
       .overrideProvider(CLOCK)
       .useValue(clock)
+      // Con el reloj fijo, el cierre del día no corre al arrancar: en la base compartida cerraría las
+      // reservas que otras e2e guardaron antes de ese día (recuperación de T022 de update-reservation).
+      .overrideProvider(CloseDayJob)
+      .useValue({})
       .overrideProvider(MODULE1_PORT)
       .useValue(module1)
       .overrideProvider(MODULE3_PORT)
