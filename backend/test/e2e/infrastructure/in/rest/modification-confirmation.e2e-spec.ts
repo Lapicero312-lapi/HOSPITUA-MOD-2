@@ -358,6 +358,25 @@ describe('PATCH /api/reservations/{reservationRef} (e2e)', () => {
     expect(await roomRowsOf(reservation)).toHaveLength(1);
   });
 
+  it('una recotización sin expectedRates: 400 RATE_CHANGED, porque el solicitante no confirmó la tarifa (FR-003), y no guarda nada', async () => {
+    const reservation = await aStoredReservation();
+    const before = await reservationRowOf(reservation);
+
+    const res = await confirm(
+      reservation.reservationRef,
+      bodyFor(reservation.updatedAt, {
+        rooms: [
+          { roomId: ROOM_201.id, guestCount: 2 },
+          { roomId: ROOM_202.id, guestCount: 1 },
+        ],
+      }),
+    ).expect(400);
+
+    expect(res.body).toMatchObject({ errorCode: 'RATE_CHANGED' });
+    expect(await reservationRowOf(reservation)).toEqual(before);
+    expect(await roomRowsOf(reservation)).toHaveLength(1);
+  });
+
   it('cambiar la 201 por la 202 (la misma categoría): no llama al Módulo 3 y la 202 hereda la tarifa y el quoteId', async () => {
     const reservation = await aStoredReservation();
 

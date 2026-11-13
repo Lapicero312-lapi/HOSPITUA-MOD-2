@@ -264,14 +264,12 @@ export function quoteRequests(
   startDate: string,
   endDate: string,
 ): RoomQuoteRequest[] {
-  return toQuote.map(
-    ({ roomId, categoryRoom }): RoomQuoteRequest => ({
-      key: roomId,
-      categoryRoom,
-      startDate,
-      endDate,
-    }),
-  );
+  return toQuote.map(({ roomId, categoryRoom }): RoomQuoteRequest => ({
+    key: roomId,
+    categoryRoom,
+    startDate,
+    endDate,
+  }));
 }
 
 /**
@@ -324,10 +322,7 @@ export function totalOf(
 export function changesOf(checked: CheckedModification): ModificationChanges {
   const { reservation, diff, roomsAfter, guest, notes } = checked;
   const roomIdOf = (room: ReservationRoom): string => room.roomId ?? '';
-  const guestCount = roomsAfter.reduce(
-    (sum, room) => sum + room.guestCount,
-    0,
-  );
+  const guestCount = roomsAfter.reduce((sum, room) => sum + room.guestCount, 0);
   return {
     dates: checked.datesChanged,
     roomsAdded: diff.added.map(({ roomId }) => roomId),
