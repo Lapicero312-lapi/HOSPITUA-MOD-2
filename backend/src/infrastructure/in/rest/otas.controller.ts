@@ -1,4 +1,9 @@
 import { Controller, Get, Inject, Param } from '@nestjs/common';
+import {
+  ApiBadRequestResponse,
+  ApiOkResponse,
+  ApiOperation,
+} from '@nestjs/swagger';
 import { colombiaTime } from '../../../application/use-cases/check-view-reservation/message-time.js';
 import {
   GET_OTA,
@@ -9,6 +14,13 @@ import {
   type ListOtas,
   type OtaOverview,
 } from '../../../application/use-cases/register-ota-information-commission/ports/in/list-otas.port.js';
+import { ApiErrorBody } from '../../shared/api-error.js';
+import {
+  OTA_ERROR_EXAMPLES,
+  OTA_EXAMPLE,
+  OtaDto,
+  OtaListDto,
+} from './ota-commissions.openapi.js';
 
 /** Una agencia en A3. */
 type OtaBody = {
@@ -38,6 +50,14 @@ export class OtasController {
 
   /** A3, `GET /api/otas`: todas las agencias, ordenadas por `name`, y cuántas son. */
   @Get()
+  @ApiOperation({
+    summary:
+      'Las agencias, ordenadas por nombre, con su conexión y sus reservas vigentes. Solo lectura; una desconectada sigue apareciendo.',
+  })
+  @ApiOkResponse({
+    type: OtaListDto,
+    example: { items: [OTA_EXAMPLE], total: 1 },
+  })
   async list(): Promise<{ items: OtaBody[]; total: number }> {
     const items = (await this.listOtas.execute()).map(toBody);
     return { items, total: items.length };
@@ -48,6 +68,15 @@ export class OtasController {
    * 400 `OTA_NOT_FOUND`.
    */
   @Get(':otaId')
+  @ApiOperation({
+    summary: 'Una agencia, con los mismos campos que en la lista.',
+  })
+  @ApiOkResponse({ type: OtaDto, example: OTA_EXAMPLE })
+  @ApiBadRequestResponse({
+    type: ApiErrorBody,
+    description: 'La agencia no existe.',
+    examples: OTA_ERROR_EXAMPLES,
+  })
   async get(@Param('otaId') otaId: string): Promise<OtaBody> {
     return toBody(await this.getOta.execute(otaId));
   }
