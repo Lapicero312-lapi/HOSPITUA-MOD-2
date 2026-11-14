@@ -86,6 +86,12 @@ export const SearchIcon = (p: IconProps) => (
   </Icon>
 );
 
+export const PlusIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M12 5v14M5 12h14" />
+  </Icon>
+);
+
 export const SunIcon = (p: IconProps) => (
   <Icon {...p}>
     <circle cx="12" cy="12" r="4" />
@@ -142,23 +148,63 @@ export const CornerDownLeftIcon = (p: IconProps) => (
   </Icon>
 );
 
-/** El logo de HOSPITUA: la H con la puerta entreabierta. */
-export function BrandGlyph({ size = 26 }: { size?: number }) {
-  return (
-    <svg
-      aria-hidden="true"
-      width={size}
-      height={size}
-      viewBox="0 0 64 64"
-      focusable="false"
-    >
-      <rect width="64" height="64" rx="14" fill="#F4F3EF" />
-      <path
-        fill="#1F4B50"
-        d="M13 9h11.5v18.5h15V9H51v46H39.5V36.5h-15V55H13z"
-      />
-      <path fill="#2C6B6C" d="M26.4 37.9 37.4 35.4V55l-11-2.3z" />
-      <circle cx="29.6" cy="45.6" r="1.15" fill="#F4F3EF" />
-    </svg>
-  );
-}
+/* Iconos del paquete hospitua v2 (04_CUSTOM_SVG_ICON_PACK), mismos trazos. */
+
+export const DoorCheckInIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M13 4h3a2 2 0 0 1 2 2v14" />
+    <path d="M2 20h20" />
+    <path d="M13 20V4L5 6v14" />
+    <circle cx="10" cy="12" r="0.8" />
+    <path d="M17 12h4m-2-2 2 2-2 2" />
+  </Icon>
+);
+
+export const DoorCheckOutIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <path d="M13 4h3a2 2 0 0 1 2 2v14" />
+    <path d="M2 20h20" />
+    <path d="M13 20V4L5 6v14" />
+    <path d="M21 12h-4m2-2-2 2 2 2" />
+  </Icon>
+);
+
+export const ChannelBookingIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="4" y="3" width="16" height="18" rx="3" />
+    <path d="M9 8h4a2 2 0 0 1 0 4H9V8Zm0 4h4.5a2 2 0 0 1 0 4H9v-4Z" />
+  </Icon>
+);
+
+export const ChannelDirectIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M3.6 9h16.8M3.6 15h16.8" />
+    <path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18Z" />
+  </Icon>
+);
+
+export const RackTimelineIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="3" y="4" width="18" height="16" rx="2" />
+    <line x1="9" y1="4" x2="9" y2="20" />
+    <rect x="11" y="7" width="7" height="3" rx="1" />
+    <rect x="12" y="13" width="6" height="3" rx="1" />
+  </Icon>
+);
+
+export const KeycardIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <rect x="3" y="5" width="18" height="14" rx="2.5" />
+    <rect x="6" y="9" width="4" height="3" rx="0.5" />
+    <path d="M14 9.5a3.5 3.5 0 0 1 0 5" />
+    <path d="M16.5 8a6 6 0 0 1 0 8" />
+  </Icon>
+);
+
+export const ShiftBadgeIcon = (p: IconProps) => (
+  <Icon {...p}>
+    <circle cx="12" cy="8" r="4" />
+    <path d="M5 20a7 7 0 0 1 14 0" />
+  </Icon>
+);

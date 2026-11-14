@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import { NAV_ITEMS } from '../components/navigation.tsx';
+import { AnimatedLogo, type DoorState } from '../components/brand.tsx';
+import {
+  CalendarIcon,
+  DoorCheckInIcon,
+  KeycardIcon,
+} from '../components/icons.tsx';
+import backdrop from '../assets/login-backdrop-petroleum-grid.png';
 
 const ZONE = 'America/Bogota';
 
@@ -25,33 +31,27 @@ const PARTS = new Intl.DateTimeFormat('en-GB', {
   hourCycle: 'h23',
 });
 
-/** Qué parte del día de Colombia ya pasó (0 a 1). */
-function dayProgress(now: Date): number {
+/** Qué parte del día de Colombia ya pasó, de 0 a 100. */
+function dayPercent(now: Date): number {
   const [hours, minutes] = PARTS.format(now).split(':').map(Number);
-  return (hours * 60 + minutes) / (24 * 60);
+  return Math.round(((hours * 60 + minutes) / (24 * 60)) * 100);
 }
 
-const RING_RADIUS = 34;
-const RING_LENGTH = 2 * Math.PI * RING_RADIUS;
-
 /**
- * El panel derecho del login: retícula con un foco que sigue al cursor y una composición de tarjetas
- * translúcidas que levitan e inclinan con paralaje. Es decorativo (`aria-hidden`): solo muestra la hora
- * de Colombia y el avance de la jornada.
+ * El panel derecho del login (The Threshold Experience del paquete visual): Dark Petroleum con la
+ * retícula arquitectónica, un foco que sigue al cursor, la tarjeta llave digital con inclinación 3D y
+ * brillo dorado, y tres píldoras que flotan. Es decorativo (`aria-hidden`) y solo muestra datos reales:
+ * la hora y el día de Colombia y el avance de la jornada.
  */
-export function LoginVisual() {
+export function LoginVisual({ door }: { door: DoorState }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const frame = useRef(0);
   const [now, setNow] = useState(() => new Date());
-  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 1000);
-    // El anillo se llena después de montar, para que se vea la animación.
-    const start = window.setTimeout(() => setReady(true), 250);
     return () => {
       window.clearInterval(timer);
-      window.clearTimeout(start);
       cancelAnimationFrame(frame.current);
     };
   }, []);
@@ -67,121 +67,88 @@ export function LoginVisual() {
       const box = panel.getBoundingClientRect();
       const x = clientX - box.left;
       const y = clientY - box.top;
-      const nx = x / box.width - 0.5;
-      const ny = y / box.height - 0.5;
       panel.style.setProperty('--mx', `${x}px`);
       panel.style.setProperty('--my', `${y}px`);
-      panel.style.setProperty('--ry', `${(nx * 6).toFixed(2)}deg`);
-      panel.style.setProperty('--rx', `${(-ny * 6).toFixed(2)}deg`);
-      panel.dataset.active = 'true';
+      panel.style.setProperty(
+        '--ry',
+        `${((x / box.width - 0.5) * 14).toFixed(2)}deg`,
+      );
+      panel.style.setProperty(
+        '--rx',
+        `${((y / box.height - 0.5) * -14).toFixed(2)}deg`,
+      );
     });
   };
 
   const reset = () => {
-    const panel = panelRef.current;
-    if (!panel) {
-      return;
-    }
     cancelAnimationFrame(frame.current);
-    panel.style.setProperty('--rx', '0deg');
-    panel.style.setProperty('--ry', '0deg');
-    panel.dataset.active = 'false';
+    panelRef.current?.style.setProperty('--rx', '0deg');
+    panelRef.current?.style.setProperty('--ry', '0deg');
   };
 
-  const progress = dayProgress(now);
-  const percent = Math.round(progress * 100);
+  const date = DATE.format(now);
 
   return (
     <div
       ref={panelRef}
-      className="login-visual"
+      className="threshold"
       aria-hidden="true"
       onPointerMove={track}
       onPointerLeave={reset}
+      style={{ '--backdrop': `url(${backdrop})` } as CSSProperties}
     >
-      <div className="login-grid" />
-      <div className="login-spotlight" />
+      <div className="threshold-backdrop" />
+      <div className="threshold-grid" />
+      <div className="threshold-spotlight" />
 
-      <div className="login-stage">
-        <div className="login-stack">
-          {/* Jornada: el avance del día */}
-          <div
-            className="glass glass--ring"
-            style={{ '--float-delay': '-1.5s' } as CSSProperties}
-          >
-            <span className="glass-label">Jornada</span>
-            <div className="ring">
-              <svg width="84" height="84" viewBox="0 0 84 84">
-                <circle
-                  className="ring-track"
-                  cx="42"
-                  cy="42"
-                  r={RING_RADIUS}
-                />
-                <circle
-                  className="ring-value"
-                  cx="42"
-                  cy="42"
-                  r={RING_RADIUS}
-                  strokeDasharray={RING_LENGTH}
-                  strokeDashoffset={
-                    ready ? RING_LENGTH * (1 - progress) : RING_LENGTH
-                  }
-                />
-              </svg>
-              <span className="ring-text">
-                {percent}
-                <small>%</small>
-              </span>
-            </div>
-            <span className="glass-caption">del día transcurrido</span>
+      <div className="threshold-stage">
+        <div className="pill pill--top">
+          <span className="pill-icon">
+            <DoorCheckInIcon size={16} />
+          </span>
+          <span>
+            <span className="pill-label">Día operativo</span>
+            <span className="pill-value pill-value--date">{date}</span>
+          </span>
+        </div>
+
+        <div className="keycard">
+          <span className="keycard-shimmer" />
+          <div className="keycard-row">
+            <AnimatedLogo door={door} variant="dark" size={26} />
+            <span className="keycard-tag">Front desk</span>
           </div>
-
-          {/* Reloj */}
-          <div className="glass glass--clock">
-            <div className="glass-row">
-              <span className="glass-label">Hora de Colombia</span>
-              <span className="glass-live">
-                <span className="live-dot" />
+          <div className="keycard-row keycard-row--chip">
+            <span className="keycard-chip">
+              <span />
+              <span />
+            </span>
+            <KeycardIcon size={26} className="keycard-wave" />
+          </div>
+          <div className="keycard-foot">
+            <span className="keycard-terminal">
+              Terminal recepción · Módulo 2
+            </span>
+            <span className="keycard-row">
+              <span className="keycard-time">{TIME.format(now)}</span>
+              <span className="keycard-live">
+                <span className="keycard-live-dot" />
                 En línea
               </span>
-            </div>
-            <span className="glass-time">{TIME.format(now)}</span>
-            <span className="glass-date">{DATE.format(now)}</span>
-            <div className="glass-bars">
-              {Array.from({ length: 24 }, (_, hour) => (
-                <span
-                  key={hour}
-                  className={
-                    hour < Math.floor(progress * 24)
-                      ? 'is-past'
-                      : hour === Math.floor(progress * 24)
-                        ? 'is-now'
-                        : undefined
-                  }
-                />
-              ))}
-            </div>
+            </span>
           </div>
+        </div>
 
-          {/* Módulos */}
-          <div
-            className="glass glass--modules"
-            style={{ '--float-delay': '-3s' } as CSSProperties}
-          >
-            <span className="glass-label">En un solo lienzo</span>
-            <ul>
-              {NAV_ITEMS.filter((item) => item.to !== '/').map((item) => {
-                const ItemIcon = item.icon;
-                return (
-                  <li key={item.to}>
-                    <ItemIcon size={14} /> {item.label}
-                    <span className="glass-dot" />
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
+        <div className="pill pill--bottom">
+          <span className="pill-icon">
+            <CalendarIcon size={16} />
+          </span>
+          <span>
+            <span className="pill-label">Jornada</span>
+            <span className="pill-value">
+              {dayPercent(now)} % del día transcurrido
+            </span>
+          </span>
         </div>
       </div>
     </div>

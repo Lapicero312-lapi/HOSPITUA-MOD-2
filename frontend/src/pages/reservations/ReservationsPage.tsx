@@ -2,7 +2,13 @@ import { useQuery } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { ErrorMessage } from '../../components/ErrorMessage.tsx';
-import { SearchIcon } from '../../components/icons.tsx';
+import {
+  ChannelBookingIcon,
+  ChannelDirectIcon,
+  DoorCheckInIcon,
+  DoorCheckOutIcon,
+  SearchIcon,
+} from '../../components/icons.tsx';
 import { listOtas } from '../../services/otas.ts';
 import {
   getDaySummary,
@@ -176,11 +182,17 @@ function DaySummaryPanel() {
       aria-label={`Resumen del día ${formatDate(summary.data.operationalDate)}`}
     >
       <div className="reservations-summary-item">
-        <dt>Llegadas esperadas hoy</dt>
+        <dt>
+          <DoorCheckInIcon size={14} className="reservations-kpi-icon" />
+          Llegadas esperadas hoy
+        </dt>
         <dd>{summary.data.expectedArrivals}</dd>
       </div>
       <div className="reservations-summary-item">
-        <dt>Salidas esperadas hoy</dt>
+        <dt>
+          <DoorCheckOutIcon size={14} className="reservations-kpi-icon" />
+          Salidas esperadas hoy
+        </dt>
         <dd>{summary.data.expectedDepartures}</dd>
       </div>
       <div className="reservations-summary-item reservations-summary-item--date">
@@ -462,10 +474,22 @@ function ReservationRow({ reservation }: { reservation: ReservationListItem }) {
       </td>
       <td>
         {reservation.source === 'DIRECT' ? (
-          'Directo'
+          <span className="reservations-channel">
+            <ChannelDirectIcon
+              size={14}
+              className="reservations-channel-icon"
+            />
+            Directo
+          </span>
         ) : (
           <>
-            OTA
+            <span className="reservations-channel">
+              <ChannelBookingIcon
+                size={14}
+                className="reservations-channel-icon"
+              />
+              OTA
+            </span>
             {reservation.otaName !== null && (
               <span className="reservations-secondary ui-secondary">
                 {reservation.otaName}

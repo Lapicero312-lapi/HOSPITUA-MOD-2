@@ -105,16 +105,17 @@
 }
 
 /* Estados con tinta semántica */
+/* Confirmada: dorado; En curso (en casa): petróleo (tokens de hospitua) */
 .reservations-status--active {
-  --tone-bg: var(--positive-bg);
-  --tone-border: var(--positive-border);
-  --tone-fg: var(--positive-fg);
-}
-
-.reservations-status--in_progress {
   --tone-bg: var(--info-bg);
   --tone-border: var(--info-border);
   --tone-fg: var(--info-fg);
+}
+
+.reservations-status--in_progress {
+  --tone-bg: var(--positive-bg);
+  --tone-border: var(--positive-border);
+  --tone-fg: var(--positive-fg);
 }
 
 .reservations-status--pending {
@@ -197,4 +198,27 @@
   .reservations-clear {
     margin-left: 0;
   }
+}
+
+/* Iconos del paquete hospitua: puerta de llegada/salida y canal */
+.reservations-summary dt {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.reservations-kpi-icon {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+.reservations-channel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.reservations-channel-icon {
+  flex-shrink: 0;
+  color: var(--text-3);
 }

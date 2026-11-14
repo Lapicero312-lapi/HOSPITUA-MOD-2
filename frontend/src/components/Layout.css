@@ -5,7 +5,7 @@
  */
 
 .shell {
-  --rail-w: 210px;
+  --rail-w: 220px;
   display: flex;
   width: 100vw;
   height: 100vh;
@@ -46,14 +46,31 @@
   min-width: 0;
 }
 
-.rail-brand-name {
-  overflow: hidden;
-  color: var(--text-1);
-  font-size: 0.8125rem;
+.rail-brand-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.1;
+}
+
+.rail-brand-wordmark {
+  color: var(--brand-petroleum);
+  font-size: 1.0625rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+:root[data-theme='dark'] .rail-brand-wordmark {
+  color: var(--brand-ivory);
+}
+
+.rail-brand-sub {
+  margin-top: 2px;
+  color: var(--text-3);
+  font-size: 0.625rem;
   font-weight: 600;
-  letter-spacing: -0.01em;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
 .rail-close {
@@ -112,12 +129,24 @@
   background-color: rgba(255, 255, 255, 0.04);
 }
 
-/* Activo: una píldora sutil con la superficie primaria */
+/* Activo: una píldora sutil con la superficie primaria y la guía dorada de marca */
 .rail-link.active {
   background-color: var(--surface);
   border-color: var(--border);
   box-shadow: var(--shadow-control), var(--highlight);
   color: var(--text-1);
+  font-weight: 600;
+}
+
+.rail-link.active::before {
+  content: '';
+  position: absolute;
+  top: 9px;
+  bottom: 9px;
+  left: -1px;
+  width: 2px;
+  border-radius: 2px;
+  background-color: var(--elegant);
 }
 
 .rail-link.active .rail-link-icon {
@@ -152,23 +181,55 @@
 }
 
 .rail-avatar {
+  position: relative;
   display: inline-grid;
   flex-shrink: 0;
   place-items: center;
-  width: 26px;
-  height: 26px;
-  border: 1px solid var(--border);
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
-  background-color: var(--surface);
-  color: var(--text-1);
-  font-size: 0.625rem;
-  font-weight: 600;
+  background-color: var(--brand-petroleum);
+  box-shadow:
+    0 0 0 2px var(--canvas),
+    0 0 0 3px var(--elegant-soft);
+  color: var(--brand-ivory);
+  font-size: 0.6875rem;
+  font-weight: 700;
   letter-spacing: 0.02em;
+}
+
+.rail-avatar-dot {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 8px;
+  height: 8px;
+  border: 2px solid var(--canvas);
+  border-radius: 50%;
+  background-color: var(--brand-green);
+}
+
+.rail-user-info {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.rail-user-shift {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--elegant);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .rail-user-text {
   display: -webkit-box;
-  flex: 1;
   min-width: 0;
   overflow: hidden;
   color: var(--text-2);
@@ -185,9 +246,9 @@
 
 /* Rail colapsado (en tablet horizontal, siempre) */
 @media (min-width: 768px) {
-  .shell[data-rail='collapsed'] .rail-brand-name,
+  .shell[data-rail='collapsed'] .rail-brand-text,
   .shell[data-rail='collapsed'] .rail-link-label,
-  .shell[data-rail='collapsed'] .rail-user-text,
+  .shell[data-rail='collapsed'] .rail-user-info,
   .shell[data-rail='collapsed'] .rail-section {
     display: none;
   }
@@ -278,7 +339,7 @@
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   gap: 1rem;
-  min-height: 54px;
+  min-height: 64px;
   padding: 0 1rem 0 1.25rem;
   background-color: var(--surface-float);
   border-bottom: 1px solid var(--border);
@@ -622,7 +683,7 @@
   }
 
   .topbar {
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
     gap: 0.5rem;
     padding: 0 0.75rem 0 1rem;
   }
@@ -650,5 +711,37 @@
 
   .canvas-main {
     padding: 1rem 1rem 2rem;
+  }
+}
+
+/* Acción principal de la cabecera */
+.topbar-new {
+  min-height: 34px;
+  padding: 0 0.75rem;
+}
+
+@media (max-width: 1279px) {
+  .topbar .live-clock-date {
+    display: none;
+  }
+}
+
+@media (max-width: 767px) {
+  .topbar-right {
+    display: flex;
+  }
+
+  .topbar .live-clock {
+    display: none;
+  }
+
+  .topbar-new {
+    width: 38px;
+    min-height: 38px;
+    padding: 0;
+  }
+
+  .topbar-new-text {
+    display: none;
   }
 }
