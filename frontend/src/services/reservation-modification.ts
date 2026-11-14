@@ -99,7 +99,8 @@ export type ModificationPreview = {
       roomId: string;
       roomNumber: string;
       available: boolean;
-      reason: string | null;
+      /** Por qué no está disponible: reservada en esas fechas o en mantenimiento. */
+      reason: 'RESERVED' | 'MAINTENANCE' | null;
     }[];
   };
   /** Solo las habitaciones recotizadas, por `roomId` en `key`; `null` si el cambio no recotiza. */

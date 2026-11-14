@@ -32,6 +32,18 @@ const OTA_MESSAGE =
 const STATUS_MESSAGE =
   'El estado actual de la reserva no admite modificaciones.';
 
+/**
+ * Los errores de B2 que obligan a volver a pedir la vista previa: la tarifa o la disponibilidad que se
+ * vieron ya no valen. Los demás se reintentan con lo mismo.
+ */
+const REQUOTE_ERRORS = new Set(['RATE_CHANGED', 'ROOM_NOT_AVAILABLE']);
+
+/** El motivo de una habitación no disponible de B1 (`VerifyAvailability`), en palabras. */
+const UNAVAILABLE_REASONS: Record<'RESERVED' | 'MAINTENANCE', string> = {
+  RESERVED: 'Reservada en esas fechas',
+  MAINTENANCE: 'En mantenimiento',
+};
+
 /** Solo una reserva `PENDING` o `ACTIVE` se puede modificar (`STATUS_NOT_EDITABLE`). */
 const EDITABLE = new Set(['PENDING', 'ACTIVE']);
 
@@ -192,10 +204,17 @@ function ModificationForm({
       await queryClient.invalidateQueries({ queryKey: ['reservations'] });
       await navigate(`/reservas/${reservationRef}`);
     },
+    onError: (error) => {
+      if (error instanceof ApiError && REQUOTE_ERRORS.has(error.errorCode)) {
+        void preview.refetch();
+      }
+    },
   });
-  const stale =
-    confirmation.error instanceof ApiError &&
-    confirmation.error.errorCode === 'CONCURRENT_UPDATE';
+  // Otra persona cambió la reserva: lo dice B1 o B2, y en los dos casos se ofrece volver a cargarla.
+  const stale = [preview.error, confirmation.error].some(
+    (error) =>
+      error instanceof ApiError && error.errorCode === 'CONCURRENT_UPDATE',
+  );
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -203,6 +222,7 @@ function ModificationForm({
       ready &&
       preview.isSuccess &&
       !preview.isPlaceholderData &&
+      !preview.isFetching &&
       !confirmation.isPending
     ) {
       confirmation.mutate({
@@ -319,7 +339,9 @@ function ModificationForm({
                       ? '—'
                       : check.available
                         ? 'Disponible'
-                        : (check.reason ?? 'No disponible')}
+                        : check.reason === null
+                          ? 'No disponible'
+                          : UNAVAILABLE_REASONS[check.reason]}
                   </td>
                   <td>
                     {rooms.length > 1 && (
@@ -396,6 +418,7 @@ function ModificationForm({
               !ready ||
               !preview.isSuccess ||
               preview.isPlaceholderData ||
+              preview.isFetching ||
               confirmation.isPending
             }
           >

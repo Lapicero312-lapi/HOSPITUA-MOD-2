@@ -134,7 +134,7 @@ const errorResponse = (errorCode: string, message: string, path: string) =>
 
 /** Lo que responde cada ruta en la prueba. */
 let reservationAnswer: () => Response;
-let previewAnswer: () => Response;
+let previewAnswer: () => Response | Promise<Response>;
 let confirmAnswer: () => Response;
 
 const PREVIEW_PATH = `/api/reservations/${REF}/modification-preview`;
@@ -449,27 +449,149 @@ describe('Pantalla "Modificar" (T014 de update-reservation)', () => {
     ).toBeDisabled();
   });
 
-  it('si la tarifa cambió, muestra el mensaje y no ofrece volver a cargar', async () => {
+  it('si la tarifa cambió al confirmar, vuelve a pedir la vista previa (sin dejar guardar mientras) y el segundo PATCH lleva la tarifa nueva', async () => {
+    let confirmations = 0;
     confirmAnswer = () =>
-      errorResponse(
-        'RATE_CHANGED',
-        'La tarifa cambió, vuelva a cotizar.',
-        DETAIL_PATH,
-      );
+      ++confirmations === 1
+        ? errorResponse(
+            'RATE_CHANGED',
+            'La tarifa cambió, vuelva a cotizar.',
+            DETAIL_PATH,
+          )
+        : jsonResponse(RESERVATION);
     const user = userEvent.setup();
-    renderAt();
+    const router = renderAt();
 
     await addSuite(user);
     await screen.findByText('1.440.000,00 COP');
+    const previews = previewCalls().length;
+    // La tarifa que cotizará B1 desde ahora, en pausa hasta que la prueba la suelte.
+    let release = () => {};
+    const quoted = new Promise<void>((resolve) => (release = resolve));
+    previewAnswer = () =>
+      quoted.then(() =>
+        jsonResponse(
+          JSON.parse(
+            JSON.stringify(PREVIEW).replaceAll('1440000.00', '1500000.00'),
+          ),
+        ),
+      );
     await user.click(screen.getByRole('button', { name: 'Guardar cambios' }));
 
     expect(
       await screen.findByText('La tarifa cambió, vuelva a cotizar.'),
     ).toBeInTheDocument();
     expect(
+      screen.getByRole('button', { name: 'Guardar cambios' }),
+    ).toBeDisabled();
+    expect(
       screen.queryByRole('button', { name: 'Volver a cargar la reserva' }),
     ).not.toBeInTheDocument();
+    release();
+    expect(await screen.findByText('1.500.000,00 COP')).toBeInTheDocument();
+    expect(previewCalls()).toHaveLength(previews + 1);
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Guardar cambios' }),
+      ).toBeEnabled(),
+    );
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }));
+
+    await waitFor(() =>
+      expect(router.state.location.pathname).toBe(`/reservas/${REF}`),
+    );
+    expect(bodyOf(confirmCalls()[1]).expectedRates).toEqual([
+      { roomId: 'r305', lodgingAmount: '1500000.00', currency: 'COP' },
+    ]);
   });
+
+  it('si la habitación dejó de estar libre al confirmar, vuelve a pedir la vista previa, que muestra el error y no deja guardar', async () => {
+    const taken = () =>
+      errorResponse(
+        'ROOM_NOT_AVAILABLE',
+        'La habitación 305 no está disponible para el rango de fechas solicitado.',
+        DETAIL_PATH,
+      );
+    confirmAnswer = taken;
+    const user = userEvent.setup();
+    renderAt();
+
+    await addSuite(user);
+    await screen.findByText('1.440.000,00 COP');
+    const previews = previewCalls().length;
+    previewAnswer = taken;
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }));
+
+    await waitFor(() => expect(previewCalls()).toHaveLength(previews + 1));
+    await waitFor(() =>
+      expect(screen.queryByText('1.440.000,00 COP')).not.toBeInTheDocument(),
+    );
+    expect(
+      screen.getAllByText(
+        'La habitación 305 no está disponible para el rango de fechas solicitado.',
+      ).length,
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getByRole('button', { name: 'Guardar cambios' }),
+    ).toBeDisabled();
+  });
+
+  it('si otra persona la cambió y lo dice la vista previa, también ofrece volver a cargarla', async () => {
+    previewAnswer = () =>
+      errorResponse(
+        'CONCURRENT_UPDATE',
+        'Esta reserva ya fue actualizada o cancelada recientemente',
+        PREVIEW_PATH,
+      );
+    const user = userEvent.setup();
+    renderAt();
+
+    await addSuite(user);
+
+    expect(
+      await screen.findByText(
+        'Esta reserva ya fue actualizada o cancelada recientemente',
+      ),
+    ).toBeInTheDocument();
+    reservationAnswer = () =>
+      jsonResponse({
+        ...RESERVATION,
+        updatedAt: '2026-10-08T16:00:00.000000-05:00',
+      });
+    await user.click(
+      screen.getByRole('button', { name: 'Volver a cargar la reserva' }),
+    );
+
+    await waitFor(() =>
+      expect(screen.queryByLabelText('Habitación 2')).not.toBeInTheDocument(),
+    );
+    expect(screen.getByText('No hay cambios.')).toBeInTheDocument();
+  });
+
+  it.each([
+    ['RESERVED', 'Reservada en esas fechas'],
+    ['MAINTENANCE', 'En mantenimiento'],
+  ])(
+    'una habitación no disponible por %s muestra el motivo en palabras',
+    async (reason, text) => {
+      previewAnswer = () =>
+        jsonResponse({
+          ...PREVIEW,
+          availability: {
+            rooms: [
+              { roomId: 'r305', roomNumber: '305', available: false, reason },
+            ],
+          },
+        });
+      const user = userEvent.setup();
+      renderAt();
+
+      await addSuite(user);
+
+      expect(await screen.findByText(text)).toBeInTheDocument();
+      expect(screen.queryByText(reason)).not.toBeInTheDocument();
+    },
+  );
 
   it('si otra persona la cambió, ofrece volver a cargarla y el formulario empieza con los datos de ahora', async () => {
     confirmAnswer = () =>
