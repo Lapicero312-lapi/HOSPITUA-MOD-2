@@ -77,7 +77,7 @@ describe('main.js sin PORT: cada simulador en su puerto de desarrollo', () => {
     const { status, body } = await call(4001, '/api/rooms');
 
     assert.equal(status, 200);
-    assert.equal(body.length, 4);
+    assert.equal(body.length, 20);
   });
 
   it('el Módulo 3 responde en el 4003, el de MODULE3_BASE_URL en desarrollo', async () => {
@@ -110,7 +110,7 @@ describe('main.js con PORT (Render): los dos módulos en ese único puerto', () 
     const { status, body } = await call(PORT, '/api/rooms');
 
     assert.equal(status, 200);
-    assert.equal(body.length, 4);
+    assert.equal(body.length, 20);
   });
 
   it('el Módulo 3 responde en el mismo PORT', async () => {
@@ -155,7 +155,7 @@ describe('main.js con RABBITMQ_URL a un puerto cerrado: RabbitMQ no tumba los si
     const { status, body } = await call(PORT, '/api/rooms');
 
     assert.equal(status, 200);
-    assert.equal(body.length, 4);
+    assert.equal(body.length, 20);
   });
 
   it('la cotización del Módulo 3 responde', async () => {
