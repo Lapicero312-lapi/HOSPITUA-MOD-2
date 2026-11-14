@@ -5,9 +5,11 @@ import { ConsultRoomInventoryModule } from '../consult-room-inventory/consult-ro
 import { RegisterOtaInformationCommissionModule } from '../register-ota-information-commission/register-ota-information-commission.module.js';
 import { AriChangeRecorderService } from './ari-change-recorder.service.js';
 import { EnsureChannexSetupService } from './ensure-channex-setup.service.js';
+import { HandleInventoryNoticeService } from './handle-inventory-notice.service.js';
 import { HandleMaintenanceNoticeService } from './handle-maintenance-notice.service.js';
 import { ARI_CHANGE_RECORDER } from './ports/in/ari-change-recorder.port.js';
 import { ENSURE_CHANNEX_SETUP } from './ports/in/ensure-channex-setup.port.js';
+import { HANDLE_INVENTORY_NOTICE } from './ports/in/handle-inventory-notice.port.js';
 import { HANDLE_MAINTENANCE_NOTICE } from './ports/in/handle-maintenance-notice.port.js';
 import { PUBLISH_DAILY_AVAILABILITY } from './ports/in/publish-daily-availability.port.js';
 import { PUBLISH_PENDING_AVAILABILITY } from './ports/in/publish-pending-availability.port.js';
@@ -22,7 +24,7 @@ import { VerifyChannexPropertyService } from './verify-channex-property.service.
  * Los servicios de `configure-ota` (plan base, regla 4 de la arquitectura). Usa `CHANNEX_PORT` y
  * `CHANNEX_SETUP_STATE` de `ChannexClientModule`, `CLOCK` de `ClockModule` y
  * `ARI_PENDING_CHANGE_REPOSITORY`, `PROCESSED_MESSAGE_REPOSITORY`, `TRANSACTION_RUNNER` y
- * `OTA_ROOM_TYPE_MAPPING_REPOSITORY` de `PersistenceModule`, que son globales; `ManageOta` y
+ * `OTA_ROOM_TYPE_MAPPING_REPOSITORY` y `EXCLUSIVE_RUNNER` (el aviso E2) de `PersistenceModule`, que son globales; `ManageOta` y
  * `OtaConnectionTracker` de `register-ota-information-commission`, `ConsultRoomInventory` de
  * `consult-room-inventory` (`SyncRoomTypes`, T007, y la disponibilidad, T010), y `ReservationLookup` de
  * `check-view-reservation` y `ConsultMaintenanceCalendar` de `consult-maintenance-calendar` (la
@@ -50,6 +52,10 @@ import { VerifyChannexPropertyService } from './verify-channex-property.service.
       useClass: HandleMaintenanceNoticeService,
     },
     {
+      provide: HANDLE_INVENTORY_NOTICE,
+      useClass: HandleInventoryNoticeService,
+    },
+    {
       provide: PUBLISH_PENDING_AVAILABILITY,
       useClass: PublishPendingAvailabilityService,
     },
@@ -63,6 +69,7 @@ import { VerifyChannexPropertyService } from './verify-channex-property.service.
     ENSURE_CHANNEX_SETUP,
     ARI_CHANGE_RECORDER,
     HANDLE_MAINTENANCE_NOTICE,
+    HANDLE_INVENTORY_NOTICE,
     SYNC_ROOM_TYPES,
     PUBLISH_PENDING_AVAILABILITY,
     PUBLISH_DAILY_AVAILABILITY,

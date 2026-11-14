@@ -22,13 +22,17 @@ import {
   PROCESS_BOOKING_FEED,
   type ProcessBookingFeed,
 } from '../../../application/use-cases/generate-ota-reservation/ports/in/process-booking-feed.port.js';
+import { CHANNEX_LOCK } from '../../../application/use-cases/configure-ota/channex-lock.js';
 import { AdvisoryLock } from './advisory-lock.js';
 
 /** El nombre del temporizador en el `SchedulerRegistry`. */
 export const CHANNEX_SYNC_INTERVAL = 'channex-sync';
 
-/** El bloqueo asesor de la tarea (plan de `generate-ota-reservation`, punto 7). */
-export const CHANNEX_SYNC_LOCK = 'channex-sync';
+/**
+ * El bloqueo asesor de la tarea (plan de `generate-ota-reservation`, punto 7): el de las tareas de Channex,
+ * que comparte con el aviso E2 de `configure-ota`.
+ */
+export const CHANNEX_SYNC_LOCK = CHANNEX_LOCK;
 
 /**
  * La tarea de Channex (plan de `generate-ota-reservation`, puntos 7, 8 y 9, y B3 de `configure-ota`): cada
