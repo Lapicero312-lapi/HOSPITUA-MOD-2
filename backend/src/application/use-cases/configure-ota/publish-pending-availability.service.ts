@@ -2,11 +2,6 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { NightAvailability } from '../../../domain/ota/channex-grouping.js';
 import { toChannexRanges } from '../../../domain/ota/channex-grouping.js';
 import type { OtaRoomTypeMapping } from '../../../domain/ota/ota-room-type-mapping.js';
-import { BusinessError } from '../../../domain/shared/business-error.js';
-import {
-  INVENTORY_UNAVAILABLE,
-  MAINTENANCE_CHECK_UNAVAILABLE,
-} from '../../../domain/shared/error-codes.js';
 import {
   ARI_PENDING_CHANGE_REPOSITORY,
   type AriPendingChange,
@@ -27,17 +22,11 @@ import {
   type OtaRoomTypeMappingRepository,
 } from '../../ports/out/ota-room-type-mapping.repository.js';
 import { MAINTENANCE_CONCURRENCY } from '../../shared/maintenance-concurrency.js';
-import { mapWithLimit } from '../../shared/map-with-limit.js';
 import {
   RESERVATION_LOOKUP,
   type ReservationLookup,
 } from '../check-view-reservation/ports/in/reservation-lookup.port.js';
 
-/** Los códigos con los que el Módulo 1 "no responde" (B3, paso 4; regla 3): las marcas se conservan. */
-const MODULE1_UNAVAILABLE: readonly string[] = [
-  INVENTORY_UNAVAILABLE.code,
-  MAINTENANCE_CHECK_UNAVAILABLE.code,
-];
 import {
   CONSULT_MAINTENANCE_CALENDAR,
   type ConsultMaintenanceCalendar,
@@ -54,6 +43,11 @@ import {
   OTA_CONNECTION_TRACKER,
   type OtaConnectionTracker,
 } from '../register-ota-information-commission/ports/in/ota-connection-tracker.port.js';
+import {
+  categoryAvailability,
+  isModule1Unavailable,
+  nextDay,
+} from './category-availability.js';
 import { BOOKING_OTA_NAME } from './ports/in/ensure-channex-setup.port.js';
 import type {
   PendingAvailabilityResult,
@@ -188,10 +182,7 @@ export class PublishPendingAvailabilityService implements PublishPendingAvailabi
         mapping.countOfRooms,
       );
     } catch (error) {
-      if (
-        error instanceof BusinessError &&
-        MODULE1_UNAVAILABLE.includes(error.errorCode)
-      ) {
+      if (isModule1Unavailable(error)) {
         this.logger.warn(
           `No se envía la disponibilidad de ${categoryRoom}: el Módulo 1 no respondió (${error.errorCode}). Sus marcas quedan para el siguiente ciclo.`,
         );
@@ -208,54 +199,23 @@ export class PublishPendingAvailabilityService implements PublishPendingAvailabi
     };
   }
 
-  /**
-   * Paso 4 (regla 2): por cada noche marcada, las vendibles menos las distintas que están ocupadas o en
-   * mantenimiento, con el `countOfRooms` del tipo como tope (regla 8). Las ocupadas y los mantenimientos se
-   * consultan una vez, de la primera a la última noche marcada; solo cuentan las habitaciones vendibles.
-   */
-  private async availabilityOf(
+  /** Paso 4 (regla 2): el cálculo compartido con B4, de la primera a la última noche marcada. */
+  private availabilityOf(
     categoryRoom: string,
     nights: string[],
     countOfRooms: number,
   ): Promise<NightAvailability[]> {
-    const rooms = await this.inventory.byCategory(categoryRoom);
-    const sellable = new Set(rooms.map(({ id }) => id));
-    const first = nights[0];
-    const afterLast = nextDay(nights[nights.length - 1]);
-
-    const busy = new Map<string, Set<string>>();
-    const mark = (date: string, roomId: string) => {
-      if (sellable.has(roomId)) {
-        busy.set(date, (busy.get(date) ?? new Set()).add(roomId));
-      }
-    };
-    for (const { date, roomIds } of await this.lookup.blockingRoomsByCategory(
+    return categoryAvailability(
+      {
+        inventory: this.inventory,
+        lookup: this.lookup,
+        maintenance: this.maintenance,
+        concurrency: this.concurrency,
+      },
       categoryRoom,
-      first,
-      afterLast,
-    )) {
-      roomIds.forEach((roomId) => mark(date, roomId));
-    }
-    const checks = await mapWithLimit(rooms, this.concurrency, (room) =>
-      this.maintenance.check(room.id, first, afterLast),
+      nights,
+      countOfRooms,
     );
-    for (const { roomId, conflicts } of checks) {
-      for (const { overlapStart, overlapEnd } of conflicts) {
-        for (let day = overlapStart; day <= overlapEnd; day = nextDay(day)) {
-          mark(day, roomId);
-        }
-      }
-    }
-
-    // Solo cuentan las ocupadas vendibles, así que nunca hay más ocupadas que vendibles: el resultado no
-    // baja de 0 (regla 2). El tope es el `countOfRooms` del tipo (regla 8).
-    return nights.map((date) => ({
-      date,
-      availability: Math.min(
-        rooms.length - (busy.get(date)?.size ?? 0),
-        countOfRooms,
-      ),
-    }));
   }
 
   /**
@@ -331,11 +291,4 @@ function marksByCategory(
     byCategory.set(categoryRoom, entry);
   }
   return byCategory;
-}
-
-/** El día siguiente a una `AAAA-MM-DD`. */
-function nextDay(date: string): string {
-  const day = new Date(`${date}T00:00:00Z`);
-  day.setUTCDate(day.getUTCDate() + 1);
-  return day.toISOString().slice(0, 10);
 }

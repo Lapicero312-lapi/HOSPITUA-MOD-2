@@ -11,9 +11,11 @@ import { ARI_CHANGE_RECORDER } from './ports/in/ari-change-recorder.port.js';
 import { ENSURE_CHANNEX_SETUP } from './ports/in/ensure-channex-setup.port.js';
 import { HANDLE_INVENTORY_NOTICE } from './ports/in/handle-inventory-notice.port.js';
 import { HANDLE_MAINTENANCE_NOTICE } from './ports/in/handle-maintenance-notice.port.js';
+import { PUBLISH_DAILY_AVAILABILITY } from './ports/in/publish-daily-availability.port.js';
 import { PUBLISH_PENDING_AVAILABILITY } from './ports/in/publish-pending-availability.port.js';
 import { SYNC_ROOM_TYPES } from './ports/in/sync-room-types.port.js';
 import { VERIFY_CHANNEX_PROPERTY } from './ports/in/verify-channex-property.port.js';
+import { PublishDailyAvailabilityService } from './publish-daily-availability.service.js';
 import { PublishPendingAvailabilityService } from './publish-pending-availability.service.js';
 import { SyncRoomTypesService } from './sync-room-types.service.js';
 import { VerifyChannexPropertyService } from './verify-channex-property.service.js';
@@ -57,6 +59,10 @@ import { VerifyChannexPropertyService } from './verify-channex-property.service.
       provide: PUBLISH_PENDING_AVAILABILITY,
       useClass: PublishPendingAvailabilityService,
     },
+    {
+      provide: PUBLISH_DAILY_AVAILABILITY,
+      useClass: PublishDailyAvailabilityService,
+    },
   ],
   exports: [
     VERIFY_CHANNEX_PROPERTY,
@@ -66,6 +72,7 @@ import { VerifyChannexPropertyService } from './verify-channex-property.service.
     HANDLE_INVENTORY_NOTICE,
     SYNC_ROOM_TYPES,
     PUBLISH_PENDING_AVAILABILITY,
+    PUBLISH_DAILY_AVAILABILITY,
   ],
 })
 export class ConfigureOtaModule {}

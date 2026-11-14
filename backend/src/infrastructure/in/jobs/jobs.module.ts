@@ -6,6 +6,7 @@ import { BookingFeedModule } from '../../../application/use-cases/generate-ota-r
 import { GenerateOtaReservationModule } from '../../../application/use-cases/generate-ota-reservation/generate-ota-reservation.module.js';
 import { UpdateReservationModule } from '../../../application/use-cases/update-reservation/update-reservation.module.js';
 import { AdvisoryLock } from './advisory-lock.js';
+import { AriDailyJob } from './ari-daily.job.js';
 import { ChannexSetupJob } from './channex-setup.job.js';
 import { ChannexSyncJob } from './channex-sync.job.js';
 import { CloseDayJob } from './close-day.job.js';
@@ -33,6 +34,7 @@ import { PublishPendingJob } from './publish-pending.job.js';
     DailyListJob,
     PublishPendingJob,
     CloseDayJob,
+    AriDailyJob,
   ],
   exports: [AdvisoryLock],
 })
