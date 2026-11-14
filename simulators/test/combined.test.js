@@ -25,7 +25,7 @@ describe('Los dos simuladores en un solo puerto (Render)', () => {
     );
 
     assert.equal(rooms.status, 200);
-    assert.equal(rooms.body.length, 4);
+    assert.equal(rooms.body.length, 20);
     assert.equal(maintenances.body.available, false);
   });
 

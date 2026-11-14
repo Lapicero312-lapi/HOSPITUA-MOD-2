@@ -589,8 +589,10 @@ planes:
   puertos son los de los valores por defecto de desarrollo (`localhost:4001` y `localhost:4003`). Cuando
   los módulos reales estén listos, solo cambian esas dos variables.
 - **Datos:** las habitaciones de los ejemplos de los planes (201 y 202 `DOBLE`, 101 `SUITE_JUNIOR`, 1001
-  `DOBLE`). Los mantenimientos usan fechas relativas a hoy, para que siempre caigan en los próximos 30
-  días. Las cotizaciones dan una tarifa fija por categoría y por noche, con un `quoteId` nuevo en cada
+  `DOBLE`, con sus mismos `id`) y, para que la demo se parezca a un hotel real, más habitaciones vendibles:
+  20 en total, en cinco categorías (`INDIVIDUAL`, `DOBLE`, `TRIPLE`, `SUITE_JUNIOR` y `SUITE`), con
+  capacidades de 1 a 5. Los mantenimientos usan fechas relativas a hoy, para que siempre caigan en los
+  próximos 30 días: uno en curso, varios futuros y dos habitaciones de la misma categoría a la vez. Las cotizaciones dan una tarifa fija por categoría y por noche, con un `quoteId` nuevo en cada
   respuesta. Respetan los errores de los contratos: 404 si la habitación no existe y 400 si el `roomId` o
   las fechas son inválidos.
 - **El Módulo 1 por RabbitMQ (demo):** si recibe `RABBITMQ_URL`, el simulador del Módulo 1 también publica
@@ -599,6 +601,16 @@ planes:
   `POST /simulate/check-out`, con `reservationRef`, `roomId` y los huéspedes. Además consume
   `m1.reservas.diarias.queue` y deja en su log la lista del día y sus actualizaciones. Para eso usa
   `amqplib`, su única dependencia.
+- **Reservas de demo:** `pnpm --filter simulators seed` llena el Módulo 2 **por sus rutas REST**, nunca
+  escribiendo en su base, así que pasa por todas sus reglas. Con `BACKEND_URL` (por defecto
+  `http://localhost:3000`):
+  - crea reservas directas de hoy y de los próximos 60 días en todas las categorías
+    (`POST /api/reservations/direct`), con titulares colombianos y extranjeros;
+  - modifica algunas (`PATCH /api/reservations/{reservationRef}`) y cancela otras (`POST …/cancellation`);
+  - hace el Check-In de parte de las llegadas de hoy por `POST /simulate/check-in`.
+
+  Se corre sobre una base sin reservas: si ya hay alguna, avisa y no hace nada. Las reservas de Booking no
+  se crean así: llegan de Channex.
 - **Channex no se simula:** la demo usa Channex staging, con la clave de `backend/.env`.
 - **Es solo para la demo y el desarrollo:** no forma parte del Módulo 2 ni se usa en sus pruebas, que
   siguen con `msw`. Está escrito en Node 22, con `amqplib` como única dependencia.

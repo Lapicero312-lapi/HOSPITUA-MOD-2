@@ -76,7 +76,7 @@ describe('Simulador del Módulo 3 (calculate-dynamic-rate, A1)', () => {
 
   it('una categoría sin tarifa base da 404 BASE_RATE_NOT_FOUND', async () => {
     const { status, body } = await quote({
-      roomType: 'TRIPLE',
+      roomType: 'PENTHOUSE',
       checkInDate: '2026-10-10',
       checkOutDate: '2026-10-11',
     });
