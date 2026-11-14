@@ -30,6 +30,8 @@ import {
   CLOSE_DAY,
   CLOSE_DAY_BATCH_SIZE,
 } from '../../../../../src/application/use-cases/update-reservation/ports/in/close-day.port.js';
+import { ApplyOtaChangeService } from '../../../../../src/application/use-cases/update-reservation/apply-ota-change.service.js';
+import { APPLY_OTA_CHANGE } from '../../../../../src/application/use-cases/update-reservation/ports/in/apply-ota-change.port.js';
 import { ConfirmModificationService } from '../../../../../src/application/use-cases/update-reservation/confirm-modification.service.js';
 import { CONFIRM_MODIFICATION } from '../../../../../src/application/use-cases/update-reservation/ports/in/confirm-modification.port.js';
 import { PREVIEW_MODIFICATION } from '../../../../../src/application/use-cases/update-reservation/ports/in/preview-modification.port.js';
@@ -112,6 +114,11 @@ describe('UpdateReservationModule (plan base, regla 4)', () => {
       token: PREVIEW_MODIFICATION,
       service: PreviewModificationService,
       who: 'ReservationsController (T009)',
+    },
+    {
+      token: APPLY_OTA_CHANGE,
+      service: ApplyOtaChangeService,
+      who: 'generate-ota-reservation (T026)',
     },
     {
       token: CONFIRM_MODIFICATION,
