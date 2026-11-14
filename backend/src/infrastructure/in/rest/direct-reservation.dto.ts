@@ -1,5 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { NO_AVAILABILITY } from '../../../application/use-cases/generate-direct-reservation/error-codes.js';
+import {
+  AVAILABILITY_TAKEN,
+  NO_AVAILABILITY,
+} from '../../../application/use-cases/generate-direct-reservation/error-codes.js';
 import type { DirectReservationPreview } from '../../../application/use-cases/generate-direct-reservation/ports/in/preview-direct-reservation.port.js';
 import { CURRENCY_MISMATCH } from '../../../domain/reservation/reservation-total.js';
 import { DOCUMENT_TYPES } from '../../../domain/shared/enums.js';
@@ -428,7 +431,7 @@ function requestErrors(path: string, withRates: boolean) {
 }
 
 /** Los errores de la disponibilidad, la asignación y la capacidad (pasos 2 a 4 del punto 11), comunes a A y B. */
-function availabilityErrors(path: string) {
+function availabilityErrors(path: string, withTaken: boolean) {
   return {
     [INVENTORY_UNAVAILABLE.code]: errorExample(
       path,
@@ -460,6 +463,17 @@ function availabilityErrors(path: string) {
       GUEST_COUNT_EXCEEDS_CAPACITY.code,
       GUEST_COUNT_EXCEEDS_CAPACITY.message,
     ),
+    // Solo B guarda la reserva: la restricción anti-solape la rechaza y no queda otra habitación (T009, D3).
+    ...(withTaken
+      ? {
+          [AVAILABILITY_TAKEN.code]: errorExample(
+            path,
+            'Otra solicitud ocupó la habitación al guardar y no quedó otra habitación candidata',
+            AVAILABILITY_TAKEN.code,
+            AVAILABILITY_TAKEN.message,
+          ),
+        }
+      : {}),
     [PRICING_UNAVAILABLE.code]: errorExample(
       path,
       'El Módulo 3 no responde al cotizar',
@@ -472,7 +486,7 @@ function availabilityErrors(path: string) {
 /** Un ejemplo por cada error de A, en el orden en que se revisan (punto 13). */
 export const PREVIEW_ERROR_EXAMPLES = {
   ...requestErrors(PREVIEW_PATH, false),
-  ...availabilityErrors(PREVIEW_PATH),
+  ...availabilityErrors(PREVIEW_PATH, false),
   [CURRENCY_MISMATCH.code]: errorExample(
     PREVIEW_PATH,
     'El Módulo 3 cotiza las habitaciones en monedas distintas: no se puede sumar el total',
@@ -520,10 +534,10 @@ export const CREATION_ERROR_EXAMPLES = {
     INVALID_EMAIL.code,
     INVALID_EMAIL.message,
   ),
-  ...availabilityErrors(CREATION_PATH),
+  ...availabilityErrors(CREATION_PATH, true),
   [REQUEST_NOT_PROCESSED]: errorExample(
     CREATION_PATH,
-    'Una excepción inesperada (también, hasta T009, otra solicitud que ocupó la habitación al guardar)',
+    'Una excepción inesperada',
     REQUEST_NOT_PROCESSED,
     REQUEST_NOT_PROCESSED_MESSAGE,
   ),
