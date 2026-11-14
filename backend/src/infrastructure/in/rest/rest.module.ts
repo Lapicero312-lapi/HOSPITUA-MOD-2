@@ -8,11 +8,13 @@ import { GenerateDirectReservationModule } from '../../../application/use-cases/
 import { ProcessGuestDataModule } from '../../../application/use-cases/process-guest-data/process-guest-data.module.js';
 import { RegisterOtaInformationCommissionModule } from '../../../application/use-cases/register-ota-information-commission/register-ota-information-commission.module.js';
 import { UpdateReservationModule } from '../../../application/use-cases/update-reservation/update-reservation.module.js';
+import { ReconciliationConfigModule } from '../../config/reconciliation.config.js';
 import { DirectReservationsController } from './direct-reservations.controller.js';
 import { GuestStaysController } from './guest-stays.controller.js';
 import { GuestsController } from './guests.controller.js';
 import { OtasController } from './otas.controller.js';
 import { RatesController } from './rates.controller.js';
+import { ReconciliationsController } from './reconciliations.controller.js';
 import { ReservationsController } from './reservations.controller.js';
 import { RoomsController } from './rooms.controller.js';
 import { SireController } from './sire.controller.js';
@@ -30,6 +32,7 @@ import { sireRequestLimitsProvider } from './sire-rate-limiter.js';
     ExportSireFileModule,
     RegisterOtaInformationCommissionModule,
     UpdateReservationModule,
+    ReconciliationConfigModule,
   ],
   controllers: [
     RoomsController,
@@ -40,6 +43,7 @@ import { sireRequestLimitsProvider } from './sire-rate-limiter.js';
     ReservationsController,
     SireController,
     OtasController,
+    ReconciliationsController,
   ],
   // Los límites de `POST /api/sire/exports`: una sola cuenta para todas las solicitudes (T005).
   providers: [sireRequestLimitsProvider],

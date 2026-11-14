@@ -1,4 +1,5 @@
 import { Guest } from '../guest/guest.js';
+import { canChangeCommissionStatus } from '../ota/commission.js';
 import { isPercentage } from '../ota/ota.js';
 import { BusinessError } from '../shared/business-error.js';
 import type {
@@ -420,6 +421,31 @@ export class Reservation {
       rooms,
       status: target,
       statusReason: reason,
+    });
+  }
+
+  /**
+   * La reserva de Booking con otro `commissionStatus` (plan de `register-ota-information-commission`, C.2,
+   * paso 9; T012): lo único que cambia es ese estado, no los importes ni el porcentaje. Quien llama
+   * (`ReconcileCommissions`) ya comprobó el canal, el `status` y la transición, así que cualquier otro caso es
+   * un error del programa.
+   * @throws Error si la reserva es directa o si la transición no está permitida.
+   */
+  withCommissionStatus(target: CommissionStatus): Reservation {
+    const { ota } = this.props;
+    if (this.props.source !== 'OTA' || ota === null) {
+      throw new Error(
+        `La reserva ${this.props.reservationRef} es directa: no tiene comisión que conciliar.`,
+      );
+    }
+    if (!canChangeCommissionStatus(ota.commissionStatus, target)) {
+      throw new Error(
+        `La reserva ${this.props.reservationRef} no puede pasar su comisión de ${ota.commissionStatus} a ${target}.`,
+      );
+    }
+    return Reservation.restore({
+      ...this.props,
+      ota: { ...ota, commissionStatus: target },
     });
   }
 
