@@ -92,8 +92,10 @@ export type ModificationApp = {
   dataSource: DataSource;
   reservations: ReservationRepository;
   modules: SimulatedModules;
-  /** Cambia el día operativo (el `Clock`). */
+  /** Cambia el día operativo (el `Clock`); la hora vuelve a las 15:00 de ese día. */
   setToday: (day: string) => void;
+  /** Adelanta la hora del `Clock` dentro del mismo día operativo (las esperas entre reintentos). */
+  advanceClock: (ms: number) => void;
   /** Vuelve a dejar los módulos simulados como al arrancar. */
   resetModules: () => void;
   close: () => Promise<void>;
@@ -126,21 +128,27 @@ export function plusDays(date: string, days: number): string {
  * guardaron otras pruebas.
  *
  * Sin `logs`, la aplicación no escribe nada. Con `logs`, escribe como en producción (pino), pero en el nivel
- * más bajo y en ese destino, para revisar lo que se escribe.
+ * más bajo y en ese destino, para revisar lo que se escribe. Con `rabbitmqUrl`, se conecta a RabbitMQ por
+ * esa dirección (por ejemplo, un proxy que la prueba corta) en vez de la del contenedor.
  */
 export async function startModificationApp(
   today: string,
-  options: { logs?: Writable } = {},
+  options: { logs?: Writable; rabbitmqUrl?: string } = {},
 ): Promise<ModificationApp> {
   // AppConfigModule lee el entorno al importarse: AppModule se importa después de asignarlo.
   Object.assign(process.env, { NODE_ENV: 'test', ...integrationEnv() });
+  if (options.rabbitmqUrl !== undefined) {
+    process.env.RABBITMQ_URL = options.rabbitmqUrl;
+  }
   const { AppModule } = await import('../../../src/app.module.js');
   const { configureApp } = await import('../../../src/configure-app.js');
 
   let current = today;
+  let offsetMs = 0;
   const clock: Clock = {
     today: () => current,
-    now: () => new Date(`${current}T15:00:00.000Z`),
+    now: () =>
+      new Date(new Date(`${current}T15:00:00.000Z`).getTime() + offsetMs),
   };
   const fresh = (): SimulatedModules => ({
     roomCalls: 0,
@@ -240,6 +248,10 @@ export async function startModificationApp(
     modules,
     setToday: (day) => {
       current = day;
+      offsetMs = 0;
+    },
+    advanceClock: (ms) => {
+      offsetMs += ms;
     },
     resetModules: () => Object.assign(modules, fresh()),
     close: async () => {
