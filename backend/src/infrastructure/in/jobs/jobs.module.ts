@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 import { CheckViewReservationModule } from '../../../application/use-cases/check-view-reservation/check-view-reservation.module.js';
 import { ConfigureOtaModule } from '../../../application/use-cases/configure-ota/configure-ota.module.js';
+import { BookingFeedModule } from '../../../application/use-cases/generate-ota-reservation/booking-feed.module.js';
 import { GenerateOtaReservationModule } from '../../../application/use-cases/generate-ota-reservation/generate-ota-reservation.module.js';
 import { UpdateReservationModule } from '../../../application/use-cases/update-reservation/update-reservation.module.js';
 import { AdvisoryLock } from './advisory-lock.js';
@@ -21,6 +22,7 @@ import { DailyListJob } from './daily-list.job.js';
     CheckViewReservationModule,
     ConfigureOtaModule,
     GenerateOtaReservationModule,
+    BookingFeedModule,
     UpdateReservationModule,
   ],
   providers: [

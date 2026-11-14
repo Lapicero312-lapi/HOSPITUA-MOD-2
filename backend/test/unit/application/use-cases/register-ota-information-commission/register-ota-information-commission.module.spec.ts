@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import { describe, expect, it } from 'vitest';
 import { COMMISSION_AUDIT_REPOSITORY } from '../../../../../src/application/ports/out/commission-audit.repository.js';
 import { OTA_REPOSITORY } from '../../../../../src/application/ports/out/ota.repository.js';
+import { RESERVATION_QUERY_PORT } from '../../../../../src/application/ports/out/reservation-query.port.js';
 import { RESERVATION_REPOSITORY } from '../../../../../src/application/ports/out/reservation.repository.js';
 import { TRANSACTION_RUNNER } from '../../../../../src/application/ports/out/transaction.js';
 import { RECONCILE_COMMISSIONS } from '../../../../../src/application/use-cases/register-ota-information-commission/ports/in/reconcile-commissions.port.js';
@@ -12,6 +13,7 @@ import { RegisterOtaInformationCommissionModule } from '../../../../../src/appli
 const GLOBAL_TOKENS = [
   OTA_REPOSITORY,
   RESERVATION_REPOSITORY,
+  RESERVATION_QUERY_PORT,
   COMMISSION_AUDIT_REPOSITORY,
   TRANSACTION_RUNNER,
 ];
