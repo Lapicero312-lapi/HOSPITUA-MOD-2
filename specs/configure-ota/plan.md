@@ -344,6 +344,8 @@ type DailyAvailabilityResult =
 
 interface PublishDailyAvailability {
   publish(): Promise<DailyAvailabilityResult>;
+  /** Anota las noches de todas las categorías relacionadas como marcas (B2), sin calcular ni enviar. */
+  markAllPending(): Promise<void>;
 }
 ```
 
@@ -374,9 +376,10 @@ Channex (`channex-sync`, regla 7). Corre, en orden, el feed (`ProcessBookingFeed
 `PublishDailyAvailability`, y no hace nada mientras la configuración de Channex no esté lista.
 - **El feed no se leyó o falló** por un error inesperado: los tipos se sincronizan igual, pero la
   disponibilidad completa **no se envía** (FR-007, como en B3); se anotan las noches de todas las
-  categorías relacionadas, para que las envíe `ChannexSyncJob` después de su propio feed.
+  categorías relacionadas (`markAllPending`), para que las envíe `ChannexSyncJob` después de su propio feed.
 - **El bloqueo está ocupado** (lo tiene un ciclo de 30 s): se reintenta cada 5 s, hasta 10 minutos. Si no
-  lo consigue, se registra el error y se anotan las noches de todas las categorías relacionadas.
+  lo consigue, se registra el error y se anotan las noches de todas las categorías relacionadas
+  (`markAllPending`).
 - **La aplicación estaba apagada a las 03:00:** no se recupera al arrancar; lo corrige el envío del día
   siguiente, y lo que cambie mientras tanto lo envía el ciclo de 30 s.
 - Fuera de lo anterior, un error inesperado de un paso queda en el log y no impide los siguientes.
