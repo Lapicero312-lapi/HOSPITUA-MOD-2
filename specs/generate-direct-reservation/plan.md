@@ -745,9 +745,22 @@ y por caída del Módulo 3.
 
       Si existe pero venció, se trata como una clave nueva.
     - **En la transacción del paso 5:** `IdempotencyKeyRepository.save(tx, { key, requestHash,
-      reservationId })`, después de insertar la reserva; una fila vencida con la misma clave se reemplaza.
-      Si otra solicitud con la misma clave confirmó primero (la clave primaria la rechaza), se revierte y se
-      responde como en "Antes del paso 1".
+      reservationId, createdAt }, expiredBefore)`, después de insertar la reserva y en cada intento del
+      reintento del punto 14.
+      - `createdAt` es `Clock.now()` y se guarda en `created_at`, también al reemplazar una fila vencida.
+        No se usa `now()` de la base: el vencimiento se decide con `Clock.now()`, y las dos horas deben
+        salir del mismo reloj; con otro reloj (las pruebas lo fijan), una clave recién guardada parecería
+        vencida.
+      - `expiredBefore` es `Clock.now()` menos 24 horas: una fila con la misma clave creada en ese instante
+        o antes ya venció y se reemplaza. Si la que existe sigue vigente, `save` lanza
+        `DuplicateIdempotencyKeyError`.
+    - **La carrera:** si la creación falla por cualquier motivo, se vuelve a buscar la clave antes de
+      responder el error. Esto incluye el solape, el `AVAILABILITY_TAKEN` del punto 14 y
+      `DuplicateIdempotencyKeyError`. Dos envíos simultáneos con la misma clave pasan los dos "Antes del
+      paso 1" sin encontrarla, asignan la misma habitación y el segundo falla antes de guardar la suya.
+      - Con una clave vigente del mismo `requestHash`, se responde la reserva ganadora.
+      - Con otro `requestHash`, `IDEMPOTENCY_KEY_REUSED`.
+      - Sin clave, el error sale tal cual.
     - **La limpieza:** `IdempotencyKeyRepository.deleteExpired(before)` borra las filas con `created_at`
       anterior a `before`. `CloseDay` la llama al terminar, con `Clock.now()` menos 24 horas (punto 13 de
       `update-reservation`: "el borrado de las `idempotency_key` vencidas, que se agrega con su

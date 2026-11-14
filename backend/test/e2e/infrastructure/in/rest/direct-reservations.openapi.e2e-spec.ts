@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import type { OpenAPIObject } from '@nestjs/swagger';
 import { Test } from '@nestjs/testing';
@@ -186,7 +187,11 @@ describe('OpenAPI de la reserva directa (T017 de generate-direct-reservation)', 
   };
 
   const post = (path: string, body: object) =>
-    request(app.getHttpServer()).post(path).send(body);
+    request(app.getHttpServer())
+      .post(path)
+      // Una clave nueva por solicitud: la creación la exige (punto 15, T019); la vista previa no la lee.
+      .set('Idempotency-Key', randomUUID())
+      .send(body);
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
@@ -449,6 +454,8 @@ describe('OpenAPI de la reserva directa (T017 de generate-direct-reservation)', 
 
     it('los errores 400 son los que B puede responder, en el orden en que se revisan (punto 13)', () => {
       expect(errorCodes(CREATION)).toEqual([
+        'IDEMPOTENCY_KEY_REQUIRED',
+        'IDEMPOTENCY_KEY_REUSED',
         'INVALID_CATEGORY',
         'INVALID_ROOM_ID',
         'RATE_CHANGED',
@@ -474,10 +481,17 @@ describe('OpenAPI de la reserva directa (T017 de generate-direct-reservation)', 
       ]);
     });
 
-    it('lo que todavía no existe no se documenta: la Idempotency-Key (T019)', () => {
-      expect(operation(CREATION).parameters ?? []).toEqual([]);
-      expect(errorCodes(CREATION)).not.toContain('IDEMPOTENCY_KEY_REQUIRED');
-      expect(errorCodes(CREATION)).not.toContain('IDEMPOTENCY_KEY_REUSED');
+    it('la cabecera Idempotency-Key va documentada, obligatoria y UUID (punto 15, T019)', () => {
+      expect(operation(CREATION).parameters).toEqual([
+        expect.objectContaining({
+          name: 'Idempotency-Key',
+          in: 'header',
+          required: true,
+          schema: { type: 'string', format: 'uuid' },
+        }),
+      ]);
+      // La vista previa no la lee.
+      expect(operation(PREVIEW).parameters ?? []).toEqual([]);
     });
 
     it('la respuesta real trae los campos documentados y la cabecera Location', async () => {
@@ -501,6 +515,42 @@ describe('OpenAPI de la reserva directa (T017 de generate-direct-reservation)', 
   });
 
   describe('cada error documentado es el que la ruta responde', () => {
+    it('B: IDEMPOTENCY_KEY_REQUIRED, sin la cabecera', async () => {
+      const res = await request(app.getHttpServer())
+        .post(CREATION)
+        .send(creationBody())
+        .expect(400);
+
+      expect(comparable(res.body as Record<string, unknown>)).toEqual(
+        comparable(errorExample(CREATION, 'IDEMPOTENCY_KEY_REQUIRED')),
+      );
+    });
+
+    it('B: IDEMPOTENCY_KEY_REUSED, la misma clave con otro cuerpo', async () => {
+      const key = randomUUID();
+      const send = (body: object) =>
+        request(app.getHttpServer())
+          .post(CREATION)
+          .set('Idempotency-Key', key)
+          .send(body);
+      // Una estadía propia, para no ocupar las habitaciones de las demás pruebas.
+      await send(
+        creationBody({ startDate: '2034-04-10', endDate: '2034-04-12' }),
+      ).expect(201);
+
+      const res = await send(
+        creationBody({
+          startDate: '2034-04-10',
+          endDate: '2034-04-12',
+          notes: 'Otra nota',
+        }),
+      ).expect(400);
+
+      expect(comparable(res.body as Record<string, unknown>)).toEqual(
+        comparable(errorExample(CREATION, 'IDEMPOTENCY_KEY_REUSED')),
+      );
+    });
+
     /** Lo que se compara: el código, el mensaje y la ruta, sin la hora. */
     const comparable = (body: Record<string, unknown>) => ({
       errorCode: body.errorCode,
