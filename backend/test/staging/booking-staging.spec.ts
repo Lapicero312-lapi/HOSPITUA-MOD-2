@@ -298,7 +298,7 @@ describe.skipIf(!configured)(
       const { total: pending } = await staging.fetchBookingFeed(1);
       if (pending > 0) {
         throw new Error(
-          `El feed de Channex staging tiene ${pending} revisiones pendientes: son de la demo, y la prueba no las procesa ni las confirma. Deja que la demo las procese, páusala y vuelve a correr la prueba con el feed vacío.`,
+          `El feed de Channex staging tiene ${pending === 1 ? 'una revisión pendiente' : `${pending} revisiones pendientes`} de la demo. La prueba se detuvo sin procesar ni confirmar nada: deja que la demo termine, páusala y vuelve a correr la prueba con el feed vacío.`,
         );
       }
       say(
