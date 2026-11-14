@@ -1335,8 +1335,9 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
        repetido: `ROOM_ALREADY_IN_RESERVATION`.
     2. **La reserva:** `ReservationLookup.findByRef`. Si no existe, `RESERVATION_NOT_FOUND`; si no es de
        Booking o no está en conflicto, `RESERVATION_NOT_IN_CONFLICT`; si no está en `ACTIVE` ni en `PENDING`,
-       `STATUS_NOT_EDITABLE` (como en `ApplyOtaChange.prepare`: una reserva cancelada o que no se presentó
-       sigue con la marca de conflicto, pero ya no se le asigna habitación).
+       `STATUS_NOT_EDITABLE` (una reserva cancelada o que no se presentó sigue con la marca de conflicto,
+       pero ya no se le asigna habitación; es el mismo criterio de B2 de `generate-ota-reservation`, que no
+       cambia una reserva de Booking fuera de `ACTIVE` y `PENDING`).
     3. **`updatedAt`:** `isSameInstant`; si no, `CONCURRENT_UPDATE`.
     4. **Cada asignación, en su orden:** el `reservationRoomId` es de la reserva y está sin asignar; si no,
        `ROOM_ALREADY_ASSIGNED`.
