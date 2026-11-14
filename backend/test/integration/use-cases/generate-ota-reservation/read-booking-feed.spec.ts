@@ -137,7 +137,11 @@ describe('ReadBookingFeed y ChannexSyncJob contra PostgreSQL real', () => {
           await feed.read();
         },
       },
-      // Sin no-shows pendientes: la prueba es de la lectura del feed.
+      // Sin disponibilidad ni no-shows pendientes: la prueba es de la lectura del feed.
+      {
+        publish: () => Promise.resolve({ status: 'NOTHING_PENDING' as const }),
+      },
+      // (los no-shows): la prueba es de la lectura del feed.
       {
         publish: () =>
           Promise.resolve({ reported: 0, rejected: 0, pending: 0 }),

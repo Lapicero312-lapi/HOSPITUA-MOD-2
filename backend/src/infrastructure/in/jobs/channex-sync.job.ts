@@ -15,6 +15,10 @@ import {
   type PublishPendingNoShows,
 } from '../../../application/use-cases/generate-ota-reservation/ports/in/publish-pending-no-shows.port.js';
 import {
+  PUBLISH_PENDING_AVAILABILITY,
+  type PublishPendingAvailability,
+} from '../../../application/use-cases/configure-ota/ports/in/publish-pending-availability.port.js';
+import {
   PROCESS_BOOKING_FEED,
   type ProcessBookingFeed,
 } from '../../../application/use-cases/generate-ota-reservation/ports/in/process-booking-feed.port.js';
@@ -27,11 +31,11 @@ export const CHANNEX_SYNC_INTERVAL = 'channex-sync';
 export const CHANNEX_SYNC_LOCK = 'channex-sync';
 
 /**
- * La tarea de Channex (plan de `generate-ota-reservation`, puntos 7, 8 y 9): cada
- * `CHANNEX_SYNC_INTERVAL_SECONDS` corre el ciclo del feed (`ProcessBookingFeed`: repite los `ack` pendientes,
- * lee, procesa las revisiones y las confirma) y después envía los no-shows pendientes (A3), aunque la
- * lectura no haya podido leerlo: el reporte no depende del feed. Enviar la disponibilidad (`configure-ota`,
- * que va antes de los no-shows) se agrega en su tarea. No hace nada
+ * La tarea de Channex (plan de `generate-ota-reservation`, puntos 7, 8 y 9, y B3 de `configure-ota`): cada
+ * `CHANNEX_SYNC_INTERVAL_SECONDS` corre, en orden, el ciclo del feed (`ProcessBookingFeed`: repite los `ack`
+ * pendientes, lee, procesa las revisiones y las confirma), el envío de la disponibilidad pendiente
+ * (`PublishPendingAvailability`, T010) y el de los no-shows pendientes (A3). Cada paso corre aunque el
+ * anterior haya fallado: un error inesperado de uno queda en el log y no impide los demás. No hace nada
  * mientras la configuración de Channex no esté lista, y corre con un bloqueo asesor para que dos
  * ejecuciones no se crucen.
  */
@@ -44,6 +48,8 @@ export class ChannexSyncJob
   constructor(
     @Inject(PROCESS_BOOKING_FEED)
     private readonly feed: ProcessBookingFeed,
+    @Inject(PUBLISH_PENDING_AVAILABILITY)
+    private readonly availability: PublishPendingAvailability,
     @Inject(PUBLISH_PENDING_NO_SHOWS)
     private readonly noShows: PublishPendingNoShows,
     @Inject(CHANNEX_SETUP_STATE)
@@ -81,8 +87,12 @@ export class ChannexSyncJob
     try {
       return await this.lock.runExclusive(CHANNEX_SYNC_LOCK, async () => {
         // T007: repite los ack pendientes, lee el feed, procesa las revisiones y confirma.
-        await this.feed.run();
-        await this.noShows.publish();
+        await this.step('el feed', () => this.feed.run());
+        // T010 de configure-ota: la disponibilidad pendiente, después del feed (regla 4).
+        await this.step('la disponibilidad pendiente', () =>
+          this.availability.publish(),
+        );
+        await this.step('los no-shows', () => this.noShows.publish());
       });
     } catch (error) {
       this.logger.error(
@@ -90,6 +100,21 @@ export class ChannexSyncJob
         error instanceof Error ? error.stack : String(error),
       );
       return false;
+    }
+  }
+
+  /** Un paso del ciclo: un error inesperado queda en el log, con su pila, y no detiene los siguientes. */
+  private async step(
+    name: string,
+    work: () => Promise<unknown>,
+  ): Promise<void> {
+    try {
+      await work();
+    } catch (error) {
+      this.logger.error(
+        `El paso de Channex "${name}" falló por un error inesperado: se intenta en el siguiente ciclo`,
+        error instanceof Error ? error.stack : String(error),
+      );
     }
   }
 }

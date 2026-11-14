@@ -1,4 +1,5 @@
 import { Global, Module } from '@nestjs/common';
+import { OTA_ROOM_TYPE_MAPPING_REPOSITORY } from '../../../../../src/application/ports/out/ota-room-type-mapping.repository.js';
 import { Test } from '@nestjs/testing';
 import { describe, expect, it } from 'vitest';
 import { MAINTENANCE_CONCURRENCY } from '../../../../../src/application/shared/maintenance-concurrency.js';
@@ -43,6 +44,7 @@ import { CLOSE_DAY_BATCH_SIZE } from '../../../../../src/application/use-cases/u
  * la modificación (T009) suma los de los Módulos 1 y 3 y la tarifa de referencia de `CalculateDynamicRateModule`.
  */
 const GLOBAL_TOKENS = [
+  OTA_ROOM_TYPE_MAPPING_REPOSITORY,
   RESERVATION_REPOSITORY,
   RESERVATION_QUERY_PORT,
   DAILY_SEQUENCE_REPOSITORY,
