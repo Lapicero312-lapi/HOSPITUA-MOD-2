@@ -102,7 +102,20 @@ import {
   toReservationDetailBody,
 } from './reservation-detail.dto.js';
 import {
+  MODIFICATION_CONFIRMATION_ERROR_EXAMPLES,
+  MODIFICATION_CONFIRMATION_EXAMPLE,
+  MODIFICATION_CONFIRMATION_RESPONSE_EXAMPLE,
+  MODIFICATION_PREVIEW_ERROR_EXAMPLES,
+  MODIFICATION_PREVIEW_EXAMPLE,
+  MODIFICATION_REQUEST_EXAMPLE,
+  ModificationConfirmationRequestDto,
   type ModificationPreviewBody,
+  ModificationPreviewDto,
+  ModificationRequestDto,
+  ROOM_ASSIGNMENT_ERROR_EXAMPLES,
+  ROOM_ASSIGNMENT_REQUEST_EXAMPLE,
+  ROOM_ASSIGNMENT_RESPONSE_EXAMPLE,
+  RoomAssignmentRequestDto,
   toModificationPreviewBody,
 } from './reservation-modification.dto.js';
 import { readReservationListQuery } from './reservation-list-query.dto.js';
@@ -130,6 +143,15 @@ const clientHeader = (clients: Client[]) => ({
   description:
     'Quién llama (plan base, regla transversal 10). Sin ella, o con un llamador que la ruta no admite, `400` `INVALID_CLIENT`.',
 });
+
+/** La referencia de la reserva en la ruta, para las rutas de `update-reservation`. */
+const RESERVATION_REF_PARAM = {
+  name: 'reservationRef',
+  description:
+    'La referencia de la reserva: `RSV-` y 8 hexadecimales en mayúscula.',
+  schema: { type: 'string', pattern: RESERVATION_REF_PATTERN },
+  example: 'RSV-3F9A1C7B',
+};
 
 /** Un parámetro opcional de `GET /api/reservations`, con el llamador que lo usa en la descripción. */
 const listQuery = (
@@ -471,6 +493,32 @@ export class ReservationsController {
    */
   @Post(':reservationRef/modification-preview')
   @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'La vista previa de la modificación de una reserva directa en `ACTIVE` o `PENDING`: valida todo, verifica la disponibilidad, recotiza con el Módulo 3 lo que corresponda y devuelve el resumen. **No guarda nada.** Devuelve el mismo error `400` que la confirmación si algo no es válido o no hay disponibilidad. Una reserva de Booking no se modifica aquí: solo se le asigna habitación.',
+  })
+  @ApiParam(RESERVATION_REF_PARAM)
+  @ApiBody({
+    type: ModificationRequestDto,
+    examples: {
+      PLAN: {
+        summary: 'El ejemplo del contrato B del plan',
+        value: MODIFICATION_REQUEST_EXAMPLE,
+      },
+    },
+  })
+  @ApiOkResponse({
+    type: ModificationPreviewDto,
+    description:
+      'Qué cambia, la disponibilidad verificada, las habitaciones recotizadas con el total, y cómo queda la reserva. `quotes` es `null` si el cambio no recotiza.',
+    example: MODIFICATION_PREVIEW_EXAMPLE,
+  })
+  @ApiBadRequestResponse({
+    type: ApiErrorBody,
+    description:
+      'Algún dato del cambio no es válido, la reserva no existe, es de Booking o su estado no admite cambios, otro cambio ganó, no hay disponibilidad, el Módulo 1 o el Módulo 3 no responden, o una excepción inesperada. Un ejemplo por código, en el orden en que se revisan.',
+    examples: MODIFICATION_PREVIEW_ERROR_EXAMPLES,
+  })
   async modificationPreview(
     @Param('reservationRef') reservationRef: string,
     @Body() body: unknown,
@@ -488,6 +536,33 @@ export class ReservationsController {
    * B salen por el filtro global como `400`.
    */
   @Patch(':reservationRef')
+  @ApiOperation({
+    summary:
+      'Confirma y guarda la modificación de una reserva directa en `ACTIVE` o `PENDING`. Repite las validaciones de la vista previa, vuelve a cotizar y compara con `expectedRates` (si difieren, `RATE_CHANGED`: nunca se guarda un monto enviado por el cliente), y guarda con el aviso a la lista del día y a Channex. Devuelve el detalle de la reserva con su `updatedAt` nuevo. Una reserva de Booking no se modifica aquí: solo se le asigna habitación.',
+  })
+  @ApiParam(RESERVATION_REF_PARAM)
+  @ApiBody({
+    type: ModificationConfirmationRequestDto,
+    examples: {
+      PLAN: {
+        summary:
+          'El ejemplo de B2 del plan: el cambio más la tarifa que vio el solicitante',
+        value: MODIFICATION_CONFIRMATION_EXAMPLE,
+      },
+    },
+  })
+  @ApiOkResponse({
+    type: ReservationDetailDto,
+    description:
+      'El detalle de la reserva actualizada, con la forma de C3 de `check-view-reservation`. El `updatedAt` nuevo viene ahí.',
+    example: MODIFICATION_CONFIRMATION_RESPONSE_EXAMPLE,
+  })
+  @ApiBadRequestResponse({
+    type: ApiErrorBody,
+    description:
+      'Los mismos de la vista previa y `RATE_CHANGED` si la tarifa cambió. Nada queda a medias. Un ejemplo por código, en el orden en que se revisan.',
+    examples: MODIFICATION_CONFIRMATION_ERROR_EXAMPLES,
+  })
   async confirmModificationOf(
     @Param('reservationRef') reservationRef: string,
     @Body() body: unknown,
@@ -504,6 +579,38 @@ export class ReservationsController {
    * los errores salen por el filtro global como `400`.
    */
   @Patch(':reservationRef/room-assignment')
+  @ApiOperation({
+    summary:
+      'La Recepcionista asigna habitación a las habitaciones sin asignar de una reserva de Booking en conflicto, en `ACTIVE` o `PENDING` (FR-025). La habitación elegida debe ser de la misma categoría, tener capacidad para las personas y estar libre en esas fechas. Si ya no queda ninguna sin asignar ni capacidad superada, se quita la marca de conflicto. No cambia ningún otro dato de la reserva. Devuelve el detalle de la reserva.',
+  })
+  @ApiParam(RESERVATION_REF_PARAM)
+  @ApiHeader({
+    name: 'X-User',
+    required: true,
+    description:
+      'La Recepcionista que asigna (máximo 100 caracteres). Es obligatoria, pero esta ruta no la guarda: la reserva no tiene dónde.',
+  })
+  @ApiBody({
+    type: RoomAssignmentRequestDto,
+    examples: {
+      PLAN: {
+        summary: 'El ejemplo de B3 del plan',
+        value: ROOM_ASSIGNMENT_REQUEST_EXAMPLE,
+      },
+    },
+  })
+  @ApiOkResponse({
+    type: ReservationDetailDto,
+    description:
+      'El detalle de la reserva (C3 de `check-view-reservation`), con las habitaciones asignadas y, si ya no quedan pendientes, sin `conflict`.',
+    example: ROOM_ASSIGNMENT_RESPONSE_EXAMPLE,
+  })
+  @ApiBadRequestResponse({
+    type: ApiErrorBody,
+    description:
+      'Falta `X-User` o no es válido, el cuerpo no es válido, la reserva no existe, no es de Booking, no está en conflicto o su estado no admite cambios, otro cambio ganó, la habitación ya está asignada, es de otra categoría, no tiene capacidad o no está libre, el Módulo 1 no responde, o una excepción inesperada. Nada queda a medias. Un ejemplo por código, en el orden en que se revisan.',
+    examples: ROOM_ASSIGNMENT_ERROR_EXAMPLES,
+  })
   async assignRoomOf(
     @Param('reservationRef') reservationRef: string,
     @UserHeader() _user: string,
