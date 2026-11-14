@@ -1,3 +1,5 @@
+import { AriChangeRecorderService } from '../../../../src/application/use-cases/configure-ota/ari-change-recorder.service.js';
+import { TypeOrmAriPendingChangeRepository } from '../../../../src/infrastructure/out/persistence/repositories/ari-pending-change.repository.js';
 import { randomUUID } from 'node:crypto';
 import { Logger } from '@nestjs/common';
 import type { DataSource } from 'typeorm';
@@ -170,6 +172,9 @@ describe('CloseDay contra PostgreSQL real (T021 y T023)', () => {
       new TypeOrmTransactionRunner(dataSource),
       // Lotes pequeños, para que se recorran varios con la base real.
       2,
+      new AriChangeRecorderService(
+        new TypeOrmAriPendingChangeRepository(dataSource),
+      ),
       new TypeOrmIdempotencyKeyRepository(dataSource),
       CLOCK,
     );

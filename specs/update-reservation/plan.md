@@ -633,7 +633,7 @@ de negocio".
    que ahora ocupa otra reserva, y se toma la primera en el orden de la solicitud. Si la consulta no
    encuentra ninguna (la otra ya se canceló), se nombra la primera habitación verificada.
 
-   **Lo que no hace esta regla:** el aviso a Channex (`AriChangeRecorder`) lo agrega T028 (C5).
+   **El aviso a Channex** (`AriChangeRecorder`) lo agrega T028 (punto 17).
 
    `ReservationsController` responde `200` en `PATCH /api/reservations/{reservationRef}` con
    `toReservationDetailBody`. Como en B1, no lee `X-Client` ni `X-User`.
@@ -1313,6 +1313,19 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
     5. `DailyListChangeRecorder.record(tx, bloqueada, guardada)`.
     6. `AriChangeRecorder.record` con cada categoría de antes en las fechas de antes (lo que se libera) y
        cada categoría de después en las fechas nuevas (lo que se ocupa), sin repetir.
+17. **Los avisos a Channex (T028, C5).** `AriChangeRecorder.record` va en la transacción de cada cambio que
+    ocupa o libera inventario, con la **categoría de cada habitación afectada en las fechas de la reserva**
+    (`dateFrom` = `startDate`, `dateTo` = `endDate`, sin repetir), como la cancelación. La marca solo pide
+    recalcular esas fechas: `PublishPendingAvailability` calcula lo libre con los datos reales, así que una
+    marca más amplia no envía nada equivocado.
+
+    | Cambio | Dónde | Qué categorías |
+    |---|---|---|
+    | No-Show | `CloseDay`, junto al aviso a la lista | Todas las de la reserva |
+    | Habitaciones `NOT_ARRIVED` de una reserva en curso | `CloseDay` | Las que pasaron a `NOT_ARRIVED` |
+    | Check-Out | `ProcessCheckOut`, después de pasar la habitación a `CHECKED_OUT` | La de esa habitación |
+    | Modificación (B2) | `ConfirmModification` (regla 9), en su transacción | Las de antes en las fechas de antes y las de después en las fechas nuevas, como `ApplyOtaChange` (punto 15) |
+    | Asignación (B3) | `AssignRoom` (punto 16) | Las de las habitaciones asignadas |
 
 ## Puntos abiertos
 
