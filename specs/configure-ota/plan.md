@@ -191,8 +191,9 @@ type OtaRoomTypeMapping = {      // domain/ota/
 interface OtaRoomTypeMappingRepository {
   findByChannexRoomType(channexRoomTypeId: string): Promise<OtaRoomTypeMapping | null>;  // generate-ota-reservation
   findAll(): Promise<OtaRoomTypeMapping[]>;  // por categoría
-  // C1: guarda la relación; si el tipo ya tenía una, cambia solo su cantidad y su capacidad
-  // (la categoría no cambia: renombrarla crea un tipo nuevo, punto 4).
+  // C1: guarda la relación de la categoría; si la categoría ya tenía una, la reemplaza: el tipo, su
+  // cantidad y su capacidad (un tipo borrado a mano en Channex se vuelve a crear, C1). Renombrar una
+  // categoría crea otra relación (punto 4).
   upsert(mapping: OtaRoomTypeMapping): Promise<void>;
 }
 
@@ -277,6 +278,8 @@ de habitación, No-Show, Check-Out y habitaciones `NOT_ARRIVED`) y `cancel-reser
      capacidad del Módulo 1 (A3) y guarda la relación con ese tipo y lo enviado.
    - Con relación y con cantidad o capacidad distintas a las guardadas: actualiza el tipo (A3) y la
      relación.
+   - Con relación, pero su tipo ya no está en A1 (lo borraron a mano en Channex): se trata como sin
+     relación (lo adopta o lo crea) y la relación pasa al tipo nuevo.
 4. Una categoría con relación que ya no tiene habitaciones vendibles **no se borra ni se actualiza** (Channex
    no acepta `count_of_rooms` en `0`): conserva la última cantidad, queda con disponibilidad `0` y se
    registra en el log para revisión.
@@ -303,6 +306,10 @@ interface SyncRoomTypes {
   sincronización no viera diferencia y que el tope de la regla 8 usara un número que Channex no tiene. La
   relación se guarda después del `200`; si Channex rechaza el envío, no se guarda y se intenta de nuevo en
   la siguiente sincronización.
+- **Un tipo borrado a mano en Channex** se detecta antes de enviar: el id de la relación no está en A1. Así
+  no se manda A3 a un id inexistente (Channex respondería `404` todos los días) y la categoría vuelve a
+  venderse: se adopta un tipo con su nombre o se crea uno, y `upsert` reemplaza la relación de la categoría.
+  Un administrador tiene que volver a mapear el tipo nuevo a Booking en Channex.
 - **Dos tipos con el mismo nombre** (creados a mano): se adopta el primero que devuelve A1 y se registra en
   el log.
 - **El tope de 20** cuenta los tipos de la propiedad que devuelve A1, más los que crea esta misma
@@ -314,13 +321,17 @@ interface SyncRoomTypes {
   - `429`, `5xx`, tiempo agotado o error de red: se registra y **se detiene**; las categorías que faltan
     se sincronizan la próxima vez. La pausa ante un `429` la lleva el adaptador;
   - `422` u otro `4xx` (por ejemplo, bajar la capacidad de un tipo mapeado a Booking, A3): se registra el
-    detalle, esa categoría no se guarda y **se sigue con las demás**.
+    detalle, esa categoría no se guarda y **se sigue con las demás**. Como no se guarda, la siguiente
+    sincronización lo vuelve a enviar, como dice A3, hasta que un administrador corrija la causa en
+    Channex. La sincronización corre pocas veces al día (al iniciar, a las 03:00 y con E2), así que el error
+    se repite poco; el punto 3 de "Puntos que este plan propone" es para la disponibilidad (A4).
 
   Lo que ya se confirmó antes de detenerse queda guardado; el resultado es `NOT_SYNCED` con el motivo.
 - **El Módulo 1 caído** (`INVENTORY_UNAVAILABLE`): no se llama a Channex y el resultado es `NOT_SYNCED`.
 - **Los logs** usan el `Logger` de Nest, con la categoría y el id del tipo, nunca la clave de Channex.
-- **Quién la llama:** `EnsureChannexSetup` en su paso 3, después de registrar la agencia. Un `NOT_SYNCED` no
-  cambia el resultado de `ensure()` (`READY`): la configuración quedó lista y los tipos se vuelven a
+- **Quién la llama:** `EnsureChannexSetup` en su paso 3, después de registrar la agencia. Un `NOT_SYNCED`, o
+  un error inesperado de la sincronización (por ejemplo, la base al guardar la relación, que se registra en
+  el log), no cambia el resultado de `ensure()` (`READY`): la configuración quedó lista y los tipos se vuelven a
   sincronizar a las 03:00 (T011) o con un aviso E2. La disponibilidad completa de los tipos que se
   crearon la envía `PublishDailyAvailability` cuando exista (T011); hasta entonces quedan con
   disponibilidad `0`, como nacen en Channex (A2).
@@ -607,7 +618,9 @@ reserva.
 1. **Un tipo ya creado a mano en Channex con el nombre de una categoría se reutiliza** en lugar de crear
    otro.
 2. **`occ_children` y `occ_infants` en `0`**: la capacidad del Módulo 1 no distingue adultos de niños.
-3. **Un `422` de Channex se descarta** después de registrarlo, para no repetir un error permanente.
+3. **Un `422` de Channex en la disponibilidad (A4) se descarta** después de registrarlo, para no repetir un
+   error permanente. En los tipos de habitación (A2, A3) no se guarda nada y se reintenta en la siguiente
+   sincronización (C1, "Cómo se arma (T007)").
 4. **Renombrar una categoría en el Módulo 1 crea un tipo nuevo** en Channex (la relación es por nombre); el
    anterior queda con disponibilidad `0` y ocupa uno de los 20 cupos.
 5. **Un tipo adoptado recibe la cantidad y la capacidad del Módulo 1** (A3) en la misma sincronización:
