@@ -55,6 +55,7 @@ import {
   CATEGORY_MISMATCH,
   RESERVATION_NOT_IN_CONFLICT,
   ROOM_ALREADY_ASSIGNED,
+  STATUS_NOT_EDITABLE,
 } from './error-codes.js';
 import type { AssignRoom } from './ports/in/assign-room.port.js';
 
@@ -106,13 +107,16 @@ export class AssignRoomService implements AssignRoom {
     // Paso 1: la forma.
     const { expectedUpdatedAt, assignments } = readAssignments(body);
 
-    // Paso 2: una reserva de Booking en conflicto.
+    // Paso 2: una reserva de Booking en conflicto, que todavía admite cambios (ni cancelada ni No-Show).
     const reservation = await this.lookup.findByRef(reservationRef);
     if (reservation === null) {
       throw errorOf(RESERVATION_NOT_FOUND);
     }
     if (reservation.source !== 'OTA' || reservation.conflict === null) {
       throw errorOf(RESERVATION_NOT_IN_CONFLICT);
+    }
+    if (reservation.status !== 'ACTIVE' && reservation.status !== 'PENDING') {
+      throw errorOf(STATUS_NOT_EDITABLE);
     }
 
     // Paso 3: nadie la cambió desde que la pantalla la leyó.

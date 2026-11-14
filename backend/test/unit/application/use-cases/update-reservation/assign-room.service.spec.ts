@@ -224,6 +224,19 @@ describe('AssignRoomService (plan de update-reservation, B3 y punto 16; FR-025; 
         aReservation({ conflict: null, rooms: [assigned201] }),
         'RESERVATION_NOT_IN_CONFLICT',
       ],
+      [
+        'una de Booking en conflicto que se canceló',
+        aReservation({
+          status: 'CANCELLED',
+          statusReason: 'CANCELLED_BY_OTA',
+        }),
+        'STATUS_NOT_EDITABLE',
+      ],
+      [
+        'una de Booking en conflicto que no se presentó',
+        aReservation({ status: 'NO_SHOW', statusReason: 'DAY_CLOSE_NO_SHOW' }),
+        'STATUS_NOT_EDITABLE',
+      ],
     ])('%s: %s', async (_case, reservation, code) => {
       const { service, byRoomId } = anAssign(reservation);
 
@@ -296,6 +309,14 @@ describe('AssignRoomService (plan de update-reservation, B3 y punto 16; FR-025; 
         ),
       ).toBe('GUEST_COUNT_EXCEEDS_CAPACITY');
       expect(check).not.toHaveBeenCalled();
+    });
+
+    it('una de Booking en conflicto que sigue PENDING sí se asigna', async () => {
+      const { service, update } = anAssign(aReservation({ status: 'PENDING' }));
+
+      await service.execute('RSV-8D02E5A4', body(assign(unassigned, r201)));
+
+      expect(update).toHaveBeenCalledTimes(1);
     });
 
     it('con la capacidad justa (2 personas en la 201, de capacidad 2) sí se asigna', async () => {
