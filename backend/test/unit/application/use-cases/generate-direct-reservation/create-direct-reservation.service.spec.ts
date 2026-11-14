@@ -692,12 +692,24 @@ describe('CreateDirectReservation (plan de generate-direct-reservation, B, D2 y 
     });
 
     it('sin clave ganadora, el error del guardado sale tal cual', async () => {
+      const { real, findKey } = aService({
+        insert: () => Promise.reject(new Error('se cayó la conexión')),
+      });
+
+      await expect(real.execute(REQUEST, KEY)).rejects.toThrow(
+        'se cayó la conexión',
+      );
+      // Se buscó la clave dos veces: antes de crear y, por el error, otra vez.
+      expect(findKey).toHaveBeenCalledTimes(2);
+    });
+
+    it('sin clave ganadora, un solape que agota los reintentos sale como AVAILABILITY_TAKEN (T009)', async () => {
       const { real } = aService({
         insert: () => Promise.reject(new RoomOverlapError()),
       });
 
-      await expect(real.execute(REQUEST, KEY)).rejects.toBeInstanceOf(
-        RoomOverlapError,
+      expect(await errorOf(real.execute(REQUEST, KEY))).toBe(
+        'AVAILABILITY_TAKEN',
       );
     });
 
