@@ -4,6 +4,10 @@ import { toChannexRanges } from '../../../domain/ota/channex-grouping.js';
 import type { OtaRoomTypeMapping } from '../../../domain/ota/ota-room-type-mapping.js';
 import { BusinessError } from '../../../domain/shared/business-error.js';
 import {
+  INVENTORY_UNAVAILABLE,
+  MAINTENANCE_CHECK_UNAVAILABLE,
+} from '../../../domain/shared/error-codes.js';
+import {
   ARI_PENDING_CHANGE_REPOSITORY,
   type AriPendingChange,
   type AriPendingChangeRepository,
@@ -28,6 +32,12 @@ import {
   RESERVATION_LOOKUP,
   type ReservationLookup,
 } from '../check-view-reservation/ports/in/reservation-lookup.port.js';
+
+/** Los códigos con los que el Módulo 1 "no responde" (B3, paso 4; regla 3): las marcas se conservan. */
+const MODULE1_UNAVAILABLE: readonly string[] = [
+  INVENTORY_UNAVAILABLE.code,
+  MAINTENANCE_CHECK_UNAVAILABLE.code,
+];
 import {
   CONSULT_MAINTENANCE_CALENDAR,
   type ConsultMaintenanceCalendar,
@@ -153,7 +163,8 @@ export class PublishPendingAvailabilityService implements PublishPendingAvailabi
 
   /**
    * Pasos 2 a 4 para una categoría. Sin noches por enviar o sin tipo en Channex, sus marcas se borran; si el
-   * Módulo 1 no responde, se conservan para el siguiente ciclo.
+   * Módulo 1 no responde (`INVENTORY_UNAVAILABLE` o `MAINTENANCE_CHECK_UNAVAILABLE`), se conservan para el
+   * siguiente ciclo. Cualquier otro error sale tal cual y lo registra la tarea.
    */
   private async categoryOutcome(
     categoryRoom: string,
@@ -177,7 +188,10 @@ export class PublishPendingAvailabilityService implements PublishPendingAvailabi
         mapping.countOfRooms,
       );
     } catch (error) {
-      if (error instanceof BusinessError) {
+      if (
+        error instanceof BusinessError &&
+        MODULE1_UNAVAILABLE.includes(error.errorCode)
+      ) {
         this.logger.warn(
           `No se envía la disponibilidad de ${categoryRoom}: el Módulo 1 no respondió (${error.errorCode}). Sus marcas quedan para el siguiente ciclo.`,
         );

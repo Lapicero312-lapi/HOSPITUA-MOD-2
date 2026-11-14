@@ -413,6 +413,36 @@ describe('PublishPendingAvailability (plan de configure-ota, B3; T010)', () => {
       expect(deps.deleteByIds).not.toHaveBeenCalled();
     });
 
+    it.each([
+      [
+        'el inventario (INVALID_CATEGORY)',
+        { rooms: { DOBLE: new BusinessError('INVALID_CATEGORY', 'x') } },
+        'INVALID_CATEGORY',
+      ],
+      [
+        'un calendario de mantenimientos (INVALID_ROOM_ID)',
+        {
+          rooms: { DOBLE: [R201] },
+          maintenance: { [R201.id]: new BusinessError('INVALID_ROOM_ID', 'x') },
+        },
+        'INVALID_ROOM_ID',
+      ],
+    ])(
+      'otro error de negocio de %s no es "el Módulo 1 no respondió": se propaga, sin llamar a Channex ni borrar nada',
+      async (_from, options, code) => {
+        const deps = aService({
+          marks: [mark('m1', '2026-11-12', '2026-11-13')],
+          ...options,
+        });
+
+        await expect(deps.service.publish()).rejects.toMatchObject({
+          errorCode: code,
+        });
+        expect(deps.pushAvailability).not.toHaveBeenCalled();
+        expect(deps.deleteByIds).not.toHaveBeenCalled();
+      },
+    );
+
     it('un error inesperado al calcular se propaga', async () => {
       const deps = aService({
         marks: [mark('m1', '2026-11-12', '2026-11-13')],

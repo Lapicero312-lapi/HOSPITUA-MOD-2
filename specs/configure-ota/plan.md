@@ -298,7 +298,9 @@ Pasos, en este orden (reglas 2, 3, 4 y 8; D2):
 
    Solo se envían las noches marcadas, no todo el tramo entre la primera y la última. Si el Módulo 1 no
    responde para una categoría (`INVENTORY_UNAVAILABLE` o `MAINTENANCE_CHECK_UNAVAILABLE`), esa categoría
-   no se envía y **sus marcas se conservan**; las demás siguen (regla 3).
+   no se envía y **sus marcas se conservan**; las demás siguen (regla 3). Cualquier otro error (por ejemplo,
+   `INVALID_CATEGORY` o `INVALID_ROOM_ID`) sale tal cual: no se envía nada, las marcas quedan y la tarea lo
+   registra en el log.
 5. **Un solo envío A4** con los rangos de todas las categorías (`toChannexRanges`, del `roomTypeId` de cada
    una). Las marcas que se borran son **solo las leídas en el paso 1** de las categorías enviadas: las que
    llegaron mientras tanto quedan para el siguiente ciclo.
