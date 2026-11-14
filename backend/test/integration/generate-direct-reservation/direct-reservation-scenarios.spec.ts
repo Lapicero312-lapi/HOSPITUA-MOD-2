@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
@@ -97,8 +98,12 @@ describe('Generar reserva directa: escenarios 1 a 7 y 9 de la historia 1 (T011)'
   let quoteCalls = 0;
   let module3Slow = false;
 
+  // Una clave nueva por solicitud: la creación la exige (punto 15, T019).
   const create = (body: object) =>
-    request(app.getHttpServer()).post('/api/reservations/direct').send(body);
+    request(app.getHttpServer())
+      .post('/api/reservations/direct')
+      .set('Idempotency-Key', randomUUID())
+      .send(body);
 
   const reservationsSaved = async (): Promise<number> => {
     const [{ count }]: { count: number }[] = await dataSource.query(
