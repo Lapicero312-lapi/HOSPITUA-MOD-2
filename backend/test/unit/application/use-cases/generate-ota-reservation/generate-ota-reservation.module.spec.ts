@@ -9,6 +9,7 @@ import { OTA_NO_SHOW_REPORT_REPOSITORY } from '../../../../../src/application/po
 import { OTA_REPOSITORY } from '../../../../../src/application/ports/out/ota.repository.js';
 import { RESERVATION_QUERY_PORT } from '../../../../../src/application/ports/out/reservation-query.port.js';
 import { RESERVATION_REPOSITORY } from '../../../../../src/application/ports/out/reservation.repository.js';
+import { TRANSACTION_RUNNER } from '../../../../../src/application/ports/out/transaction.js';
 import { GenerateOtaReservationModule } from '../../../../../src/application/use-cases/generate-ota-reservation/generate-ota-reservation.module.js';
 import { OtaNoShowReporterService } from '../../../../../src/application/use-cases/generate-ota-reservation/ota-no-show-reporter.service.js';
 import { OTA_NO_SHOW_REPORTER } from '../../../../../src/application/use-cases/generate-ota-reservation/ports/in/ota-no-show-reporter.port.js';
@@ -30,6 +31,7 @@ const GLOBALS = [
   OTA_BOOKING_REVISION_REPOSITORY,
   OTA_NO_SHOW_REPORT_REPOSITORY,
   RESERVATION_QUERY_PORT,
+  TRANSACTION_RUNNER,
 ];
 
 @Global()

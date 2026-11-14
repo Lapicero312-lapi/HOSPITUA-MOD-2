@@ -14,6 +14,7 @@ import { GuestsController } from './guests.controller.js';
 import { OtaCommissionsController } from './ota-commissions.controller.js';
 import { OtasController } from './otas.controller.js';
 import { RatesController } from './rates.controller.js';
+import { ReconciliationsController } from './reconciliations.controller.js';
 import { ReservationsController } from './reservations.controller.js';
 import { RoomsController } from './rooms.controller.js';
 import { SireController } from './sire.controller.js';
@@ -42,6 +43,7 @@ import { sireRequestLimitsProvider } from './sire-rate-limiter.js';
     SireController,
     OtasController,
     OtaCommissionsController,
+    ReconciliationsController,
   ],
   // Los límites de `POST /api/sire/exports`: una sola cuenta para todas las solicitudes (T005).
   providers: [sireRequestLimitsProvider],

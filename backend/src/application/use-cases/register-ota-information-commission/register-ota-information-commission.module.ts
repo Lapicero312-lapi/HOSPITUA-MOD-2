@@ -9,14 +9,15 @@ import { LIST_OTA_COMMISSIONS } from './ports/in/list-ota-commissions.port.js';
 import { LIST_OTAS } from './ports/in/list-otas.port.js';
 import { MANAGE_OTA } from './ports/in/manage-ota.port.js';
 import { OTA_CONNECTION_TRACKER } from './ports/in/ota-connection-tracker.port.js';
+import { RECONCILE_COMMISSIONS } from './ports/in/reconcile-commissions.port.js';
 import { REGISTER_OTA_CONFIRMATION_AND_COMMISSION } from './ports/in/register-ota-confirmation-and-commission.port.js';
+import { ReconcileCommissionsService } from './reconcile-commissions.service.js';
 import { RegisterOtaConfirmationAndCommissionService } from './register-ota-confirmation-and-commission.service.js';
 
 /**
  * Los servicios de `register-ota-information-commission` (plan base, regla 4 de la arquitectura). Usa
- * `OTA_REPOSITORY`, `RESERVATION_REPOSITORY`, `RESERVATION_QUERY_PORT` y `COMMISSION_AUDIT_REPOSITORY` de
- * `PersistenceModule`, que
- * es global.
+ * `OTA_REPOSITORY`, `RESERVATION_REPOSITORY`, `RESERVATION_QUERY_PORT`, `COMMISSION_AUDIT_REPOSITORY` y
+ * `TRANSACTION_RUNNER` de `PersistenceModule`, que es global.
  */
 @Module({
   providers: [
@@ -26,6 +27,10 @@ import { RegisterOtaConfirmationAndCommissionService } from './register-ota-conf
       provide: REGISTER_OTA_CONFIRMATION_AND_COMMISSION,
       useClass: RegisterOtaConfirmationAndCommissionService,
     },
+    {
+      provide: RECONCILE_COMMISSIONS,
+      useClass: ReconcileCommissionsService,
+    },
     { provide: LIST_OTAS, useClass: ListOtasService },
     { provide: GET_OTA, useClass: GetOtaService },
     { provide: LIST_OTA_COMMISSIONS, useClass: ListOtaCommissionsService },
@@ -34,6 +39,7 @@ import { RegisterOtaConfirmationAndCommissionService } from './register-ota-conf
     MANAGE_OTA,
     OTA_CONNECTION_TRACKER,
     REGISTER_OTA_CONFIRMATION_AND_COMMISSION,
+    RECONCILE_COMMISSIONS,
     LIST_OTAS,
     GET_OTA,
     LIST_OTA_COMMISSIONS,

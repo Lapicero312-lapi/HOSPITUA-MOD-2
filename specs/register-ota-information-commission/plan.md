@@ -365,8 +365,10 @@ interface OtaConnectionTracker {
    }
    ```
 
-   - **Cuerpo** (`readReconciliationRequest`, en el controlador). El primero que falla responde y no se
-     procesa ningún ítem:
+   - **Cuerpo** (`readReconciliationRequest`, en
+     `application/use-cases/register-ota-information-commission/reconciliation-request.validator.ts`, como
+     los demás validadores de la aplicación; lo llama `ReconciliationsController` antes de llamar al caso de
+     uso). El primero que falla responde y no se procesa ningún ítem:
      1. no es un objeto, o `items` no es una lista, está vacía o tiene más de `RECONCILIATION_MAX_ITEMS`:
         `INVALID_RECONCILIATION_REQUEST`. El máximo llega por `@Inject`, como `CLOSE_DAY_BATCH_SIZE`;
      2. `action`: `INVALID_RECONCILIATION_ACTION`;
@@ -618,14 +620,16 @@ backend/src/
 │   ├── ports/in/
 │   ├── register-ota-confirmation-and-commission.service.ts
 │   ├── reconcile-commissions.service.ts
+│   ├── reconciliation-request.validator.ts
 │   ├── list-ota-commissions.service.ts
 │   ├── list-otas.service.ts
 │   ├── get-ota.service.ts
 │   ├── manage-ota.service.ts
 │   └── ota-connection-tracker.service.ts
 ├── infrastructure/in/rest/
-│   ├── ota-commissions.controller.ts
-│   └── otas.controller.ts
+│   ├── ota-commissions.controller.ts         # A1
+│   ├── reconciliations.controller.ts         # A2
+│   └── otas.controller.ts                    # A3
 └── infrastructure/out/persistence/
     ├── ota.repository.ts
     └── commission-audit.repository.ts
