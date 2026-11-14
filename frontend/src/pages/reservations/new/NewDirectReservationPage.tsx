@@ -7,6 +7,7 @@ import {
 import { useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { ErrorMessage } from '../../../components/ErrorMessage.tsx';
+import { ApiError } from '../../../services/api-client.ts';
 import {
   createDirectReservation,
   DOCUMENT_TYPES,
@@ -42,6 +43,16 @@ const EMPTY_GUEST: GuestForm = {
   contactPhone: '',
   contactEmail: '',
 };
+
+/**
+ * Los errores de B que obligan a volver a cotizar (tabla C): la vista previa que se vio ya no vale. Los demás
+ * se reintentan con lo mismo.
+ */
+const REQUOTE_ERRORS = new Set([
+  'RATE_CHANGED',
+  'NO_AVAILABILITY',
+  'AVAILABILITY_TAKEN',
+]);
 
 /**
  * Pantalla "Nueva reserva directa" (plan de `generate-direct-reservation`, T014; wireframe `scr-nueva-directa`):
@@ -136,6 +147,13 @@ export function NewDirectReservationPage() {
       await queryClient.invalidateQueries({ queryKey: ['reservations'] });
       await navigate(`/reservas/${created.reservationRef}`);
     },
+    onError: (error) => {
+      // Se vuelve a pedir A: con la tarifa o la disponibilidad nuevas a la vista, la siguiente solicitud
+      // lleva las tarifas nuevas (y por eso otra `Idempotency-Key`).
+      if (error instanceof ApiError && REQUOTE_ERRORS.has(error.errorCode)) {
+        void preview.refetch();
+      }
+    },
   });
 
   const submit = (event: FormEvent) => {
@@ -143,6 +161,7 @@ export function NewDirectReservationPage() {
     if (
       preview.isSuccess &&
       !preview.isPlaceholderData &&
+      !preview.isFetching &&
       !creation.isPending
     ) {
       creation.mutate(creationBody(preview.data));
@@ -271,6 +290,7 @@ export function NewDirectReservationPage() {
                 !ready ||
                 !preview.isSuccess ||
                 preview.isPlaceholderData ||
+                preview.isFetching ||
                 creation.isPending
               }
             >

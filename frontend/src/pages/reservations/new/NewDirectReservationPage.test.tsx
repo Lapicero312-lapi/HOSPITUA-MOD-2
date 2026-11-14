@@ -96,7 +96,7 @@ const errorResponse = (errorCode: string, message: string, path: string) =>
   );
 
 /** Lo que responde cada ruta en la prueba. */
-let previewAnswer: () => Response;
+let previewAnswer: () => Response | Promise<Response>;
 let createAnswer: () => Response;
 let lookupAnswer: () => Response;
 
@@ -400,8 +400,8 @@ describe('Pantalla "Nueva reserva directa" (T014 de generate-direct-reservation)
   it('si la creación falla, muestra el mensaje del backend; reintentar lo mismo usa la misma Idempotency-Key', async () => {
     createAnswer = () =>
       errorResponse(
-        'RATE_CHANGED',
-        'La tarifa cambió, vuelva a cotizar.',
+        'REQUEST_NOT_PROCESSED',
+        'No fue posible procesar la solicitud.',
         '/api/reservations/direct',
       );
     const user = userEvent.setup();
@@ -410,10 +410,13 @@ describe('Pantalla "Nueva reserva directa" (T014 de generate-direct-reservation)
     await fillStay(user);
     await fillHolder(user);
     await screen.findByText('3 habitaciones DOBLE disponibles.');
+    const previews = callsTo('/api/reservations/direct/preview').length;
     await user.click(screen.getByRole('button', { name: 'Crear reserva' }));
     expect(
-      await screen.findByText('La tarifa cambió, vuelva a cotizar.'),
+      await screen.findByText('No fue posible procesar la solicitud.'),
     ).toBeInTheDocument();
+    // No obliga a volver a cotizar: se reintenta lo mismo.
+    expect(callsTo('/api/reservations/direct/preview')).toHaveLength(previews);
     await user.click(screen.getByRole('button', { name: 'Crear reserva' }));
 
     await waitFor(() =>
@@ -434,8 +437,8 @@ describe('Pantalla "Nueva reserva directa" (T014 de generate-direct-reservation)
   it('si cambia algo de la solicitud, la Idempotency-Key es otra', async () => {
     createAnswer = () =>
       errorResponse(
-        'RATE_CHANGED',
-        'La tarifa cambió, vuelva a cotizar.',
+        'REQUEST_NOT_PROCESSED',
+        'No fue posible procesar la solicitud.',
         '/api/reservations/direct',
       );
     const user = userEvent.setup();
@@ -445,7 +448,7 @@ describe('Pantalla "Nueva reserva directa" (T014 de generate-direct-reservation)
     await fillHolder(user);
     await screen.findByText('3 habitaciones DOBLE disponibles.');
     await user.click(screen.getByRole('button', { name: 'Crear reserva' }));
-    await screen.findByText('La tarifa cambió, vuelva a cotizar.');
+    await screen.findByText('No fue posible procesar la solicitud.');
     await user.type(screen.getByLabelText('Apellidos'), ' Gómez');
     await user.click(screen.getByRole('button', { name: 'Crear reserva' }));
 
@@ -463,4 +466,77 @@ describe('Pantalla "Nueva reserva directa" (T014 de generate-direct-reservation)
       headersOf(first)['Idempotency-Key'],
     );
   });
+
+  it.each([
+    ['RATE_CHANGED', 'La tarifa cambió, vuelva a cotizar.'],
+    [
+      'NO_AVAILABILITY',
+      'Error 400: La habitación no está disponible para el rango de fechas solicitado',
+    ],
+    [
+      'AVAILABILITY_TAKEN',
+      'Ya no hay disponibilidad para las fechas solicitadas.',
+    ],
+  ])(
+    'si la creación responde %s, vuelve a pedir la vista previa y la siguiente creación lleva la tarifa nueva con otra Idempotency-Key',
+    async (errorCode, message) => {
+      let creations = 0;
+      createAnswer = () =>
+        ++creations === 1
+          ? errorResponse(errorCode, message, '/api/reservations/direct')
+          : jsonResponse({ reservationRef: 'RSV-3F9A1C7B' }, 201);
+      const user = userEvent.setup();
+      const router = renderNew();
+
+      await fillStay(user);
+      await fillHolder(user);
+      await screen.findByText('3 habitaciones DOBLE disponibles.');
+      const previews = callsTo('/api/reservations/direct/preview').length;
+      // La tarifa que cotizará A desde ahora.
+      // Queda en pausa hasta que la prueba la suelte.
+      let release = () => {};
+      const quoted = new Promise<void>((resolve) => (release = resolve));
+      previewAnswer = () =>
+        quoted.then(() =>
+          jsonResponse(
+            JSON.parse(
+              JSON.stringify(PREVIEW).replaceAll('750000.00', '810000.00'),
+            ),
+          ),
+        );
+      await user.click(screen.getByRole('button', { name: 'Crear reserva' }));
+
+      expect(await screen.findByText(message)).toBeInTheDocument();
+      // Mientras se vuelve a cotizar, no se puede enviar la tarifa vieja.
+      expect(
+        screen.getByRole('button', { name: 'Crear reserva' }),
+      ).toBeDisabled();
+      release();
+      // A se pidió otra vez y muestra la tarifa nueva en las dos habitaciones.
+      expect(await screen.findAllByText('810.000,00 COP')).toHaveLength(2);
+      expect(callsTo('/api/reservations/direct/preview')).toHaveLength(
+        previews + 1,
+      );
+      await waitFor(() =>
+        expect(
+          screen.getByRole('button', { name: 'Crear reserva' }),
+        ).toBeEnabled(),
+      );
+      await user.click(screen.getByRole('button', { name: 'Crear reserva' }));
+
+      await waitFor(() =>
+        expect(router.state.location.pathname).toBe('/reservas/RSV-3F9A1C7B'),
+      );
+      const [first, second] = callsTo('/api/reservations/direct').filter(
+        ([input]) => String(input) === '/api/reservations/direct',
+      );
+      expect(bodyOf(second).expectedRates).toEqual([
+        { position: 1, lodgingAmount: '810000.00', currency: 'COP' },
+        { position: 2, lodgingAmount: '810000.00', currency: 'COP' },
+      ]);
+      expect(headersOf(second)['Idempotency-Key']).not.toBe(
+        headersOf(first)['Idempotency-Key'],
+      );
+    },
+  );
 });
