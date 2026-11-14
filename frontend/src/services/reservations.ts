@@ -56,6 +56,8 @@ export type ReservationListFilters = {
   /** Las dos o ninguna, en `AAAA-MM-DD`. */
   dateFrom?: string;
   dateTo?: string;
+  /** Solo las que llegan ese día (`startDate`), en `AAAA-MM-DD` (FR-003b). */
+  arrivalDate?: string;
   order?: 'asc' | 'desc';
   page?: number;
 };
@@ -90,6 +92,7 @@ export function listReservations(
   add('inConflict', filters.inConflict === true ? 'true' : undefined);
   add('dateFrom', filters.dateFrom);
   add('dateTo', filters.dateTo);
+  add('arrivalDate', filters.arrivalDate);
   add('order', filters.order);
   add('page', filters.page === undefined ? undefined : String(filters.page));
   const text = query.toString();
