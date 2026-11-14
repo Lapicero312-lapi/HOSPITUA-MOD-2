@@ -6,9 +6,11 @@ import { parseEnv } from 'node:util';
 import { HttpService } from '@nestjs/axios';
 import type { INestApplication } from '@nestjs/common';
 import type { ConfigService } from '@nestjs/config';
+import { Test } from '@nestjs/testing';
 import axios from 'axios';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
+import { Logger, PARAMS_PROVIDER_TOKEN } from 'nestjs-pino';
 import type { DataSource } from 'typeorm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import type { BookingRevision } from '../../src/application/integration/booking-revision.js';
@@ -21,9 +23,12 @@ import {
   PROCESS_BOOKING_FEED,
   type ProcessBookingFeed,
 } from '../../src/application/use-cases/generate-ota-reservation/ports/in/process-booking-feed.port.js';
+import { configureApp } from '../../src/configure-app.js';
+import { AriDailyJob } from '../../src/infrastructure/in/jobs/ari-daily.job.js';
+import { ChannexSetupJob } from '../../src/infrastructure/in/jobs/channex-setup.job.js';
+import { ChannexSyncJob } from '../../src/infrastructure/in/jobs/channex-sync.job.js';
 import { ChannexHttpAdapter } from '../../src/infrastructure/out/channex/channex-http.adapter.js';
-import { HotelClock } from '../../src/infrastructure/out/clock/hotel-clock.js';
-import { startBookingFeedApp } from '../integration/support/booking-feed-app.js';
+import { pinoHttpOptions } from '../../src/infrastructure/shared/logging.options.js';
 import {
   integrationEnv,
   openTestDataSource,
@@ -99,6 +104,40 @@ const say = (text: string) => {
   process.stdout.write(`\n[staging] ${text}\n\n`);
 };
 
+/**
+ * La aplicación completa, con su log en `LOG_FILE` y sin las tareas programadas que envían a Channex:
+ * `ChannexSyncJob` (disponibilidad y no-shows) y `AriDailyJob` (el envío de las 03:00). Así, aunque la corrida
+ * dure más de una hora o pase por las 03:00, no envía nada a staging: la prueba solo dispara el ciclo del
+ * feed. Como `startBookingFeedApp` de la integración, espera a que la configuración de Channex (A0) quede
+ * lista.
+ */
+async function startStagingApp(): Promise<INestApplication> {
+  const attempt = vi.spyOn(ChannexSetupJob.prototype, 'attempt');
+  const { AppModule } = await import('../../src/app.module.js');
+  const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+    .overrideProvider(ChannexSyncJob)
+    .useValue({})
+    .overrideProvider(AriDailyJob)
+    .useValue({})
+    .overrideProvider(PARAMS_PROVIDER_TOKEN)
+    .useValue({
+      pinoHttp: [pinoHttpOptions('trace'), createWriteStream(LOG_FILE)],
+    })
+    .compile();
+  const app = moduleRef.createNestApplication({ bufferLogs: true });
+  app.useLogger(app.get(Logger));
+  configureApp(app);
+  await app.init();
+  const setup = await (attempt.mock.results[0]?.value as Promise<string>);
+  attempt.mockRestore();
+  if (setup !== 'READY') {
+    throw new Error(
+      `La configuración de Channex staging no quedó lista (${setup}). El motivo está en ${LOG_FILE}.`,
+    );
+  }
+  return app;
+}
+
 const module1Rooms: Room[] = [];
 const server = setupServer(
   // Como el Módulo 1, filtra por `categoryRoom` si viene en la consulta.
@@ -130,10 +169,15 @@ const server = setupServer(
  * `STAGING_STEP_MINUTES` (15 por defecto) a que llegue la revisión. Sin la clave o la propiedad de Channex,
  * se salta. Solo corre contra `staging.channex.io`.
  *
+ * Antes de correrla, la demo (la única copia del Módulo 2 conectada a Channex) tiene que estar pausada y el
+ * feed vacío: si la demo lee el feed durante la corrida, confirma las revisiones y la prueba ya no las ve. Si
+ * al empezar el feed tiene revisiones pendientes, son de la demo: la prueba se detiene sin procesarlas ni
+ * confirmarlas.
+ *
  * Para no cambiar la propiedad de staging, el Módulo 1 simulado informa 3 habitaciones por cada tipo de
  * habitación que ya existe en Channex, y la relación de cada tipo se guarda antes de arrancar con esa misma
  * cantidad y capacidad: `SyncRoomTypes` no tiene nada que actualizar. La prueba solo dispara el ciclo del
- * feed (`ProcessBookingFeed`); no envía disponibilidad.
+ * feed (`ProcessBookingFeed`); las tareas programadas que envían a Channex no corren (`startStagingApp`).
  */
 describe.skipIf(!configured)(
   'generate-ota-reservation contra Channex staging: una reserva de prueba de Booking creada, cambiada y cancelada (T012)',
@@ -144,8 +188,6 @@ describe.skipIf(!configured)(
     let readFeed: ChannexPort['fetchBookingFeed'];
     /** Las revisiones que leyó el feed, por id. */
     const seen = new Map<string, BookingRevision>();
-    /** Las que ya estaban en el feed antes de empezar: no son de esta prueba. */
-    const before = new Set<string>();
     /** La revisión `new` de la reserva de esta prueba, y la fila de su último paso. */
     let created: BookingRevision | undefined;
     let last: ReservationRow | undefined;
@@ -219,9 +261,7 @@ describe.skipIf(!configured)(
 
     const ofThisBooking =
       (status: BookingRevision['status']) => (revision: BookingRevision) =>
-        revision.status === status &&
-        revision.bookingId === created?.bookingId &&
-        !before.has(revision.id);
+        revision.status === status && revision.bookingId === created?.bookingId;
 
     beforeAll(async () => {
       if (new URL(STAGING.CHANNEX_BASE_URL).hostname !== STAGING_HOST) {
@@ -229,8 +269,8 @@ describe.skipIf(!configured)(
           `La prueba solo corre contra ${STAGING_HOST}: CHANNEX_BASE_URL apunta a otro Channex.`,
         );
       }
-      // Antes de importar AppModule: AppConfigModule lee el entorno al importarse. El intervalo largo evita
-      // que las tareas de Channex corran solas: el ciclo del feed lo dispara la prueba.
+      // Antes de importar AppModule: AppConfigModule lee el entorno al importarse. Las tareas que envían a
+      // Channex no corren (`startStagingApp`); el intervalo largo queda de respaldo.
       Object.assign(process.env, {
         NODE_ENV: 'test',
         ...integrationEnv(),
@@ -248,13 +288,25 @@ describe.skipIf(!configured)(
         },
       });
 
-      // Los tipos de habitación que ya tiene la propiedad (A1 de `configure-ota`), con su relación guardada.
-      const listed = await new ChannexHttpAdapter(
+      const staging = new ChannexHttpAdapter(
         new HttpService(axios.create({ timeout: 15_000 })),
         {
           get: (name: string) => process.env[name],
         } as unknown as ConfigService,
-      ).listRoomTypes();
+      );
+      // Lo pendiente en el feed es de la demo: se detiene sin leerlo con la aplicación ni confirmarlo.
+      const { total: pending } = await staging.fetchBookingFeed(1);
+      if (pending > 0) {
+        throw new Error(
+          `El feed de Channex staging tiene ${pending} revisiones pendientes: son de la demo, y la prueba no las procesa ni las confirma. Deja que la demo las procese, páusala y vuelve a correr la prueba con el feed vacío.`,
+        );
+      }
+      say(
+        'El feed de Channex staging está vacío. Mientras dure la prueba, la demo tiene que seguir pausada: si lee el feed, confirma las revisiones y la prueba ya no las ve.',
+      );
+
+      // Los tipos de habitación que ya tiene la propiedad (A1 de `configure-ota`), con su relación guardada.
+      const listed = await staging.listRoomTypes();
       // Un tipo por nombre, como lo adopta SyncRoomTypes: con dos del mismo nombre, el segundo no se usa.
       const types = listed.filter(
         (type, index) =>
@@ -285,9 +337,7 @@ describe.skipIf(!configured)(
         );
       }
 
-      app = await startBookingFeedApp(new HotelClock(), {
-        logs: createWriteStream(LOG_FILE),
-      });
+      app = await startStagingApp();
       feed = app.get<ProcessBookingFeed>(PROCESS_BOOKING_FEED);
       const channex = app.get<ChannexPort>(CHANNEX_PORT);
       readFeed = channex.fetchBookingFeed.bind(channex);
@@ -296,10 +346,6 @@ describe.skipIf(!configured)(
         read.revisions.forEach((revision) => seen.set(revision.id, revision));
         return read;
       });
-
-      // Lo que ya estaba pendiente en el feed se procesa primero, como en cualquier ciclo, y no cuenta.
-      await feed.run();
-      seen.forEach((_, id) => before.add(id));
     });
 
     afterAll(async () => {
@@ -317,8 +363,7 @@ describe.skipIf(!configured)(
         );
         const revision = await processed(
           'la reserva nueva',
-          (candidate) =>
-            candidate.status === 'new' && !before.has(candidate.id),
+          (candidate) => candidate.status === 'new',
         );
         created = revision;
         const code = revision.otaReservationCode ?? '';
