@@ -9,6 +9,10 @@ import {
   type EnsureChannexSetup,
 } from './ports/in/ensure-channex-setup.port.js';
 import {
+  SYNC_ROOM_TYPES,
+  type SyncRoomTypes,
+} from './ports/in/sync-room-types.port.js';
+import {
   VERIFY_CHANNEX_PROPERTY,
   type ChannexVerification,
   type VerifyChannexProperty,
@@ -16,7 +20,8 @@ import {
 
 /**
  * B1 de `configure-ota`: verifica la propiedad y, si está lista, registra la agencia Booking.com en
- * `CONNECTED` y sin porcentaje (lo calcula `register-ota-information-commission` con su primera reserva).
+ * `CONNECTED` y sin porcentaje (lo calcula `register-ota-information-commission` con su primera reserva) y
+ * sincroniza los tipos de habitación (C1, T007).
  */
 @Injectable()
 export class EnsureChannexSetupService implements EnsureChannexSetup {
@@ -27,6 +32,8 @@ export class EnsureChannexSetupService implements EnsureChannexSetup {
     private readonly otas: ManageOta,
     @Inject(CLOCK)
     private readonly clock: Clock,
+    @Inject(SYNC_ROOM_TYPES)
+    private readonly roomTypes: SyncRoomTypes,
   ) {}
 
   async ensure(): Promise<ChannexVerification> {
@@ -34,6 +41,10 @@ export class EnsureChannexSetupService implements EnsureChannexSetup {
     if (result === 'READY') {
       // Idempotente: si la agencia ya existe, no la cambia.
       await this.otas.register({ name: BOOKING_OTA_NAME }, this.clock.now());
+      // Paso 3: un `NOT_SYNCED` ya quedó en el log y no cambia el resultado: la configuración está lista y
+      // los tipos se vuelven a sincronizar a las 03:00 (T011). La disponibilidad de los tipos nuevos la envía
+      // `PublishDailyAvailability` cuando exista (T011); hasta entonces quedan en 0, como nacen en Channex.
+      await this.roomTypes.sync();
     }
     return result;
   }
