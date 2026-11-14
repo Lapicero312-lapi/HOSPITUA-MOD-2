@@ -49,11 +49,31 @@ describe('Simulador del Módulo 1', () => {
   });
 
   describe('inventario (consult-room-inventory, A)', () => {
-    it('A3: las cuatro habitaciones del plan, con los cuatro campos del contrato', async () => {
-      assert.deepEqual(await simulator.call('/api/rooms'), {
-        status: 200,
-        body: [ROOM_201, ROOM_202, ROOM_1001, ROOM_101],
-      });
+    it('A3: las 20 habitaciones de la demo, primero las cuatro del plan, con los cuatro campos del contrato', async () => {
+      const { status, body } = await simulator.call('/api/rooms');
+
+      assert.equal(status, 200);
+      assert.equal(body.length, 20);
+      assert.deepEqual(body.slice(0, 4), [
+        ROOM_201,
+        ROOM_202,
+        ROOM_1001,
+        ROOM_101,
+      ]);
+      assert.deepEqual(
+        [...new Set(body.map((room) => room.categoryRoom))].sort(),
+        ['DOBLE', 'INDIVIDUAL', 'SUITE', 'SUITE_JUNIOR', 'TRIPLE'],
+      );
+      assert.equal(new Set(body.map((room) => room.id)).size, 20);
+      assert.equal(new Set(body.map((room) => room.roomNumber)).size, 20);
+      for (const room of body) {
+        assert.deepEqual(Object.keys(room).sort(), [
+          'categoryRoom',
+          'id',
+          'maxCapacity',
+          'roomNumber',
+        ]);
+      }
     });
 
     it('A2: las habitaciones de una categoría', async () => {
@@ -62,14 +82,21 @@ describe('Simulador del Módulo 1', () => {
       );
 
       assert.equal(status, 200);
-      assert.deepEqual(body, [ROOM_201, ROOM_202, ROOM_1001]);
+      assert.deepEqual(body.slice(0, 3), [ROOM_201, ROOM_202, ROOM_1001]);
+      assert.deepEqual(
+        body.map((room) => room.roomNumber),
+        ['201', '202', '1001', '203', '204', '205'],
+      );
     });
 
     it('A2: una categoría sin habitaciones da una lista vacía', async () => {
-      assert.deepEqual(await simulator.call('/api/rooms?categoryRoom=TRIPLE'), {
-        status: 200,
-        body: [],
-      });
+      assert.deepEqual(
+        await simulator.call('/api/rooms?categoryRoom=PENTHOUSE'),
+        {
+          status: 200,
+          body: [],
+        },
+      );
     });
 
     it('A2: una categoría con otra forma da 400', async () => {
