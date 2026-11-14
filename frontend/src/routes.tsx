@@ -1,6 +1,7 @@
 import type { RouteObject } from 'react-router';
 import { Layout } from './components/Layout.tsx';
 import { RequireUser } from './components/RequireUser.tsx';
+import { GuestStaysPage } from './pages/guest-stays/GuestStaysPage.tsx';
 import { HomePage } from './pages/HomePage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
 import { NotFoundPage } from './pages/NotFoundPage.tsx';
@@ -34,6 +35,7 @@ export const routes: RouteObject[] = [
       { path: 'reservas', element: <ReservationsPage /> },
       // Una ruta fija: va antes que `reservas/:reservationRef`, aunque react-router ya la prefiere.
       { path: 'reservas/nueva', element: <NewDirectReservationPage /> },
+      { path: 'huespedes', element: <GuestStaysPage /> },
       { path: 'sire', element: <SirePage /> },
       { path: 'habitaciones', element: <RoomsPage /> },
       { path: 'tarifas', element: <RatesPage /> },

@@ -14,6 +14,11 @@ export function HomePage() {
           </Link>
         </li>
         <li>
+          <Link className="home-link" to="/huespedes">
+            Huéspedes alojados
+          </Link>
+        </li>
+        <li>
           <Link className="home-link" to="/sire">
             Exportar SIRE
           </Link>
