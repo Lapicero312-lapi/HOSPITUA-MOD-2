@@ -12,7 +12,6 @@ import type {
 } from '../../integration/room-quote.js';
 import { CLOCK, type Clock } from '../../ports/out/clock.js';
 import {
-  DuplicateIdempotencyKeyError,
   IDEMPOTENCY_KEY_REPOSITORY,
   type IdempotencyKeyRepository,
   type StoredIdempotencyKey,
@@ -107,10 +106,10 @@ export class CreateDirectReservationService implements CreateDirectReservation {
     try {
       return await this.create(body, key, requestHash);
     } catch (error) {
-      if (!(error instanceof DuplicateIdempotencyKeyError)) {
-        throw error;
-      }
-      // Otra solicitud con la misma clave confirmó primero: se responde como si hubiera llegado antes.
+      // Otra solicitud con la misma clave pudo confirmar primero: su reserva ocupa las mismas habitaciones,
+      // así que esta falla por el solape (o por la clave, `DuplicateIdempotencyKeyError`) antes de guardar
+      // la suya. Se responde como si hubiera llegado después: la reserva ganadora, o
+      // `IDEMPOTENCY_KEY_REUSED` si la ganadora traía otro cuerpo. Sin clave ganadora, el error sale tal cual.
       const winner = await this.replayOf(
         await this.idempotency.find(key),
         requestHash,

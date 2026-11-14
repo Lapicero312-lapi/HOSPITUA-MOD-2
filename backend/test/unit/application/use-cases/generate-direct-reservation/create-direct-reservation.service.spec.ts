@@ -10,6 +10,7 @@ import type { Clock } from '../../../../../src/application/ports/out/clock.js';
 import {
   DuplicateReservationRefError,
   type ReservationRepository,
+  RoomOverlapError,
 } from '../../../../../src/application/ports/out/reservation.repository.js';
 import type {
   Transaction,
@@ -647,6 +648,63 @@ describe('CreateDirectReservation (plan de generate-direct-reservation, B, D2 y 
 
       expect(detail).toEqual({ reservationRef: 'RSV-0THE2000' });
       expect(detailOf).toHaveBeenLastCalledWith('RSV-0THE2000');
+    });
+
+    it('el doble envío simultáneo: si la otra confirmó primero y esta choca con su habitación, responde la reserva ganadora', async () => {
+      const storedKeys = new Map<string, StoredIdempotencyKey>();
+      let inserts = 0;
+      const { real, detailOf } = aService({
+        storedKeys,
+        insert: (reservation) => {
+          inserts += 1;
+          if (inserts === 1) {
+            // Un envío anterior, con otra clave: deja el hash de este mismo cuerpo.
+            return Promise.resolve(reservation);
+          }
+          // La otra solicitud, con la misma clave y el mismo cuerpo, ya confirmó: ocupa la habitación.
+          storedKeys.set(KEY, {
+            requestHash: [...storedKeys.values()][0].requestHash,
+            reservationRef: 'RSV-0THE2000',
+            createdAt: NOW,
+          });
+          return Promise.reject(new RoomOverlapError());
+        },
+      });
+      await real.execute(REQUEST, randomUUID());
+
+      const detail = await real.execute(REQUEST, KEY);
+
+      expect(detail).toEqual({ reservationRef: 'RSV-0THE2000' });
+      expect(detailOf).toHaveBeenLastCalledWith('RSV-0THE2000');
+    });
+
+    it('sin clave ganadora, el error del guardado sale tal cual', async () => {
+      const { real } = aService({
+        insert: () => Promise.reject(new RoomOverlapError()),
+      });
+
+      await expect(real.execute(REQUEST, KEY)).rejects.toBeInstanceOf(
+        RoomOverlapError,
+      );
+    });
+
+    it('si la ganadora usó la misma clave con otro cuerpo: IDEMPOTENCY_KEY_REUSED', async () => {
+      const storedKeys = new Map<string, StoredIdempotencyKey>();
+      const { real } = aService({
+        storedKeys,
+        insert: () => {
+          storedKeys.set(KEY, {
+            requestHash: 'otro',
+            reservationRef: 'RSV-0THE2000',
+            createdAt: NOW,
+          });
+          return Promise.reject(new RoomOverlapError());
+        },
+      });
+
+      expect(await errorOf(real.execute(REQUEST, KEY))).toBe(
+        'IDEMPOTENCY_KEY_REUSED',
+      );
     });
   });
 });
