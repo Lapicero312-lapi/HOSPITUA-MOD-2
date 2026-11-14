@@ -20,16 +20,17 @@
 }
 
 /* Estados con tinta semántica */
+/* Confirmada: dorado; En curso (en casa): petróleo (tokens de hospitua) */
 .detail-status--active {
-  --tone-bg: var(--positive-bg);
-  --tone-border: var(--positive-border);
-  --tone-fg: var(--positive-fg);
-}
-
-.detail-status--in_progress {
   --tone-bg: var(--info-bg);
   --tone-border: var(--info-border);
   --tone-fg: var(--info-fg);
+}
+
+.detail-status--in_progress {
+  --tone-bg: var(--positive-bg);
+  --tone-border: var(--positive-border);
+  --tone-fg: var(--positive-fg);
 }
 
 .detail-status--pending {

@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { currentUser, signOut } from '../services/session.ts';
 import { useTheme } from '../services/theme.ts';
 import { CommandPalette } from './CommandPalette.tsx';
+import { BrandMark } from './brand.tsx';
 import {
-  BrandGlyph,
   CloseIcon,
   LogOutIcon,
   MenuIcon,
   MoonIcon,
+  PlusIcon,
   SearchIcon,
+  ShiftBadgeIcon,
   SidebarIcon,
   SunIcon,
 } from './icons.tsx';
@@ -91,9 +93,13 @@ export function Layout() {
         <div className="rail-top">
           <span className="rail-brand">
             <span className="brand-mark" aria-hidden="true">
-              <BrandGlyph />
+              <BrandMark size={28} />
             </span>
-            <span className="rail-brand-name">HOSPITUA · Recepción</span>
+            <span className="rail-brand-text" aria-hidden="true">
+              <span className="rail-brand-wordmark">hospitua</span>
+              <span className="rail-brand-sub">Recepción</span>
+            </span>
+            <span className="visually-hidden">HOSPITUA · Recepción</span>
           </span>
           <button
             type="button"
@@ -144,8 +150,14 @@ export function Layout() {
           <div className="rail-user">
             <span className="rail-avatar" aria-hidden="true">
               {initials(user)}
+              <span className="rail-avatar-dot" />
             </span>
-            <span className="rail-user-text">Recepcionista: {user}</span>
+            <span className="rail-user-info">
+              <span className="rail-user-shift" aria-hidden="true">
+                <ShiftBadgeIcon size={11} /> Turno activo
+              </span>
+              <span className="rail-user-text">Recepcionista: {user}</span>
+            </span>
             <button
               type="button"
               className="icon-button rail-signout"
@@ -212,6 +224,16 @@ export function Layout() {
           </button>
           <div className="topbar-right">
             <LiveClock />
+            {/* En "Reservas" y en "Nueva reserva directa" la pantalla ya tiene esta acción. */}
+            {!location.pathname.startsWith('/reservas') && (
+              <Link
+                className="ui-link-button ui-button--primary topbar-new"
+                to="/reservas/nueva"
+              >
+                <PlusIcon size={15} />
+                <span className="topbar-new-text">Nueva reserva</span>
+              </Link>
+            )}
           </div>
         </header>
         <main className="canvas-main">
