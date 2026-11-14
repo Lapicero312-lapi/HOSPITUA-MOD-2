@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto';
+import type { Writable } from 'node:stream';
 import type { INestApplication } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
+import { Logger, PARAMS_PROVIDER_TOKEN } from 'nestjs-pino';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { DataSource } from 'typeorm';
@@ -15,6 +17,7 @@ import {
 } from '../../../src/application/ports/out/reservation.repository.js';
 import type { EnvironmentVariables } from '../../../src/infrastructure/config/env.validation.js';
 import { CloseDayJob } from '../../../src/infrastructure/in/jobs/close-day.job.js';
+import { pinoHttpOptions } from '../../../src/infrastructure/shared/logging.options.js';
 import { ROOM_201, ROOM_202 } from '../../support/rooms.js';
 import { integrationEnv } from './database.js';
 
@@ -119,9 +122,13 @@ export function plusDays(date: string, days: number): string {
  * prueba. Los Módulos 1 y 3 se simulan en HTTP (msw), así que sus clientes, sus topes de concurrencia y la
  * configuración son los reales. El cierre del día no corre al arrancar: con el reloj fijo cerraría lo que
  * guardaron otras pruebas.
+ *
+ * Sin `logs`, la aplicación no escribe nada. Con `logs`, escribe como en producción (pino), pero en el nivel
+ * más bajo y en ese destino, para revisar lo que se escribe.
  */
 export async function startModificationApp(
   today: string,
+  options: { logs?: Writable } = {},
 ): Promise<ModificationApp> {
   // AppConfigModule lee el entorno al importarse: AppModule se importa después de asignarlo.
   Object.assign(process.env, { NODE_ENV: 'test', ...integrationEnv() });
@@ -146,15 +153,24 @@ export async function startModificationApp(
   // La aplicación completa también llama a Channex al arrancar, y esta prueba no lo simula.
   const server = setupServer();
   server.listen({ onUnhandledRequest: 'bypass' });
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+  const { logs } = options;
+  const builder = Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(CLOCK)
     .useValue(clock)
     .overrideProvider(CloseDayJob)
-    .useValue({})
-    .compile();
-  const app = moduleRef.createNestApplication<INestApplication<App>>({
-    logger: false,
-  });
+    .useValue({});
+  if (logs !== undefined) {
+    builder
+      .overrideProvider(PARAMS_PROVIDER_TOKEN)
+      .useValue({ pinoHttp: [pinoHttpOptions('trace'), logs] });
+  }
+  const moduleRef = await builder.compile();
+  const app = moduleRef.createNestApplication<INestApplication<App>>(
+    logs === undefined ? { logger: false } : { bufferLogs: true },
+  );
+  if (logs !== undefined) {
+    app.useLogger(app.get(Logger));
+  }
   configureApp(app);
   await app.init();
 
