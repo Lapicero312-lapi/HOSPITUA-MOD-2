@@ -1,4 +1,5 @@
 import { Guest } from '../guest/guest.js';
+import { canChangeCommissionStatus } from '../ota/commission.js';
 import { isPercentage } from '../ota/ota.js';
 import { BusinessError } from '../shared/business-error.js';
 import type {
@@ -316,6 +317,66 @@ export class Reservation {
   }
 
   /**
+   * La reserva de Booking con habitación en las que estaban sin asignar (plan de `update-reservation`, B3 y
+   * punto 16; FR-025; T027): cada `reservationRoomId` toma su habitación y su número, y vuelve a ocupar
+   * inventario. El conflicto queda con el motivo que diga quien llama: sin motivo se quita; con el mismo,
+   * conserva su `detectedAt`; con otro, lo detecta `changedAt`. Nada más cambia.
+   * @throws Error si la reserva no es de Booking o una habitación no es suya o ya tiene número: lo revisa
+   * antes quien llama.
+   */
+  withAssignedRooms(change: {
+    rooms: { reservationRoomId: string; roomId: string; roomNumber: string }[];
+    conflictReason: ConflictReason | null;
+    changedAt: Date;
+  }): Reservation {
+    if (this.props.source !== 'OTA') {
+      throw new Error(
+        `La reserva ${this.props.reservationRef} es directa: no se le asigna habitación con withAssignedRooms.`,
+      );
+    }
+    const assigned = new Map(
+      change.rooms.map((room) => [room.reservationRoomId, room]),
+    );
+    const rooms = this.props.rooms.map((current) => {
+      const chosen = assigned.get(current.id);
+      if (chosen === undefined) {
+        return current;
+      }
+      if (current.roomId !== null) {
+        throw new Error(
+          `La habitación ${current.id} de la reserva ${this.props.reservationRef} ya está asignada.`,
+        );
+      }
+      assigned.delete(current.id);
+      return ReservationRoom.restore({
+        ...current.snapshot(),
+        roomId: chosen.roomId,
+        roomNumber: chosen.roomNumber,
+      });
+    });
+    if (assigned.size > 0) {
+      throw new Error(
+        `Las habitaciones ${[...assigned.keys()].join(', ')} no pertenecen a la reserva ${this.props.reservationRef}.`,
+      );
+    }
+    const { conflict } = this.props;
+    return Reservation.restore({
+      ...this.props,
+      rooms,
+      conflict:
+        change.conflictReason === null
+          ? null
+          : {
+              reason: change.conflictReason,
+              detectedAt:
+                conflict !== null && conflict.reason === change.conflictReason
+                  ? conflict.detectedAt
+                  : change.changedAt,
+            },
+    });
+  }
+
+  /**
    * La reserva de Booking con el cambio que envió la agencia (plan de `update-reservation`, punto 15; T026):
    * - las fechas y las habitaciones del plan: una conservada guarda su fila, su habitación y su
    *   `stayStatus`, con sus personas nuevas; una nueva es otra fila, en `EXPECTED`, con habitación o sin
@@ -420,6 +481,31 @@ export class Reservation {
       rooms,
       status: target,
       statusReason: reason,
+    });
+  }
+
+  /**
+   * La reserva de Booking con otro `commissionStatus` (plan de `register-ota-information-commission`, C.2,
+   * paso 9; T012): lo único que cambia es ese estado, no los importes ni el porcentaje. Quien llama
+   * (`ReconcileCommissions`) ya comprobó el canal, el `status` y la transición, así que cualquier otro caso es
+   * un error del programa.
+   * @throws Error si la reserva es directa o si la transición no está permitida.
+   */
+  withCommissionStatus(target: CommissionStatus): Reservation {
+    const { ota } = this.props;
+    if (this.props.source !== 'OTA' || ota === null) {
+      throw new Error(
+        `La reserva ${this.props.reservationRef} es directa: no tiene comisión que conciliar.`,
+      );
+    }
+    if (!canChangeCommissionStatus(ota.commissionStatus, target)) {
+      throw new Error(
+        `La reserva ${this.props.reservationRef} no puede pasar su comisión de ${ota.commissionStatus} a ${target}.`,
+      );
+    }
+    return Reservation.restore({
+      ...this.props,
+      ota: { ...ota, commissionStatus: target },
     });
   }
 
