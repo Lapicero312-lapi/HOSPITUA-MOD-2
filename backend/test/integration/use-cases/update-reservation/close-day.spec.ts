@@ -41,6 +41,7 @@ import {
   openTestDataSource,
   truncateAllTables,
 } from '../../support/database.js';
+import { NO_PUBLICATION } from '../../../support/publication.js';
 
 /**
  * El día que se cierra. El cierre corre a las 00:00:30 del día siguiente (FR-018): el reloj ya está en ese
@@ -163,6 +164,8 @@ describe('CloseDay contra PostgreSQL real (T021 y T023)', () => {
         new TypeOrmDailyMessageRepository(dataSource),
         new TypeOrmOtaRepository(dataSource),
         CLOCK,
+        new TypeOrmTransactionRunner(dataSource),
+        NO_PUBLICATION,
       ),
       new OtaNoShowReporterService(
         new TypeOrmOtaBookingRevisionRepository(dataSource),

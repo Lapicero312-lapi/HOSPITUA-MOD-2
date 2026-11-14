@@ -18,6 +18,7 @@ import {
   truncateAllTables,
 } from '../../support/database.js';
 import { FakeDailyListPublisherModule } from '../../support/fake-daily-list-publisher.js';
+import { NO_PUBLICATION } from '../../../support/publication.js';
 
 /** El día operativo y la hora del ejemplo de UPDATED del plan: 2026-10-09 a las 09:15 de Colombia. */
 const TODAY = '2026-10-09';
@@ -92,6 +93,8 @@ describe('DailyListChangeRecorder contra PostgreSQL real', () => {
       new TypeOrmDailyMessageRepository(dataSource),
       new TypeOrmOtaRepository(dataSource),
       CLOCK,
+      transactions,
+      NO_PUBLICATION,
     );
   });
 

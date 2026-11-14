@@ -288,6 +288,9 @@ describe('Consultar reservas: los logs no escriben datos personales del titular 
   });
 
   describe('la publicación de la lista del día (T026)', () => {
+    // Generar la lista dispara su publicación inmediata (T029): las pruebas esperan a que el mensaje llegue
+    // al estado que revisan, y la falla de RabbitMQ se prepara antes de generarla.
+
     /** Genera la lista de hoy, con la reserva del titular. */
     async function generateList(): Promise<void> {
       await app.get<GenerateDailyList>(GENERATE_DAILY_LIST).execute(TODAY);
@@ -303,6 +306,18 @@ describe('Consultar reservas: los logs no escriben datos personales del titular 
         );
       return row;
     };
+
+    /** Espera a que el mensaje de la lista quede como `expected`. */
+    const listMessageBecomes = (expected: {
+      publish_status: string;
+      attempts?: number;
+    }) =>
+      vi.waitFor(
+        async () => {
+          expect(await listMessage()).toMatchObject(expected);
+        },
+        { timeout: 10_000, interval: 50 },
+      );
 
     const publish = () =>
       app
@@ -322,18 +337,16 @@ describe('Consultar reservas: los logs no escriben datos personales del titular 
     it('la publicación que sale: el log no trae al titular', async () => {
       await generateList();
 
-      await publish();
-
-      expect((await listMessage()).publish_status).toBe('PUBLISHED');
+      await listMessageBecomes({ publish_status: 'PUBLISHED' });
       expectNoPersonalData();
     });
 
     it('una publicación que falla: el aviso del reintento queda en el log, sin el payload', async () => {
-      await generateList();
       rabbitRejecting();
 
-      await publish();
+      await generateList();
 
+      await listMessageBecomes({ publish_status: 'PENDING', attempts: 1 });
       expect(await listMessage()).toEqual({
         publish_status: 'PENDING',
         attempts: 1,
@@ -344,16 +357,20 @@ describe('Consultar reservas: los logs no escriben datos personales del titular 
     });
 
     it('el décimo intento: la alerta de FAILED queda en el log, sin el payload', async () => {
+      rabbitRejecting();
       await generateList();
+      // El primer intento es el de la publicación inmediata; luego se lleva al noveno y se deja salir ya.
+      await listMessageBecomes({ publish_status: 'PENDING', attempts: 1 });
       await app.get(DataSource).query(
-        `UPDATE daily_list_message SET attempts = 9
+        `UPDATE daily_list_message SET attempts = 9, next_attempt_at = NULL
            WHERE operational_date = $1 AND message_kind = 'LIST'`,
         [TODAY],
       );
-      rabbitRejecting();
 
+      // Si la tarea de 10 s tiene el bloqueo, esta devuelve 0 y la tarea vuelve a leer al soltarlo.
       await publish();
 
+      await listMessageBecomes({ publish_status: 'FAILED' });
       expect(await listMessage()).toEqual({
         publish_status: 'FAILED',
         attempts: 10,
