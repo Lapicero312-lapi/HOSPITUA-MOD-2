@@ -438,6 +438,10 @@ function whereOf(filters: ReservationListFilters): {
     add((p) => `r.start_date <= ${p}::date`, filters.stayRange.dateTo);
     add((p) => `r.end_date > ${p}::date`, filters.stayRange.dateFrom);
   }
+  if (filters.arrivalDate !== null) {
+    // FR-003b: las que llegan ese día, en cualquier estado.
+    add((p) => `r.start_date = ${p}::date`, filters.arrivalDate);
+  }
   return {
     where: conditions.length === 0 ? '' : `WHERE ${conditions.join(' AND ')}`,
     params,

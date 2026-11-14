@@ -45,6 +45,7 @@ describe('readReservationListQuery (C1, "Orden de validación")', () => {
         otaId: null,
         inConflict: false,
         stayRange: null,
+        arrivalDate: null,
         order: 'desc',
         page: 1,
       });
@@ -60,6 +61,7 @@ describe('readReservationListQuery (C1, "Orden de validación")', () => {
           inConflict: 'true',
           dateFrom: '2026-10-02',
           dateTo: '2026-10-06',
+          arrivalDate: '2026-10-09',
           order: 'asc',
           page: '3',
         }),
@@ -70,9 +72,24 @@ describe('readReservationListQuery (C1, "Orden de validación")', () => {
         otaId: OTA_ID,
         inConflict: true,
         stayRange: { dateFrom: '2026-10-02', dateTo: '2026-10-06' },
+        arrivalDate: '2026-10-09',
         order: 'asc',
         page: 3,
       });
+    });
+
+    it('arrivalDate sola, sin rango de estadía (FR-003b)', () => {
+      expect(readReservationListQuery({ arrivalDate: '2026-10-09' })).toEqual(
+        expect.objectContaining({ arrivalDate: '2026-10-09', stayRange: null }),
+      );
+    });
+
+    it.each([
+      ['mal formada', '09/10/2026'],
+      ['inexistente', '2026-02-30'],
+      ['repetida', ['2026-10-09', '2026-10-10']],
+    ])('arrivalDate %s: INVALID_DATE', (_, arrivalDate) => {
+      expect(errorOf({ arrivalDate })).toEqual(expected('INVALID_DATE'));
     });
 
     it('ignora los parámetros que no son de C1', () => {
@@ -309,6 +326,7 @@ describe('readReservationListQuery (C1, "Orden de validación")', () => {
       inConflict: 'X',
       dateFrom: 'X',
       dateTo: 'X',
+      arrivalDate: 'X',
       order: 'X',
       page: 'X',
     };
@@ -321,7 +339,8 @@ describe('readReservationListQuery (C1, "Orden de validación")', () => {
       [{ source: 'OTA' }, 'INVALID_CONFLICT_FILTER'],
       [{ inConflict: 'true' }, 'INVALID_DATE'],
       [{ dateFrom: '2026-10-06', dateTo: '2026-10-02' }, 'INVALID_DATE_RANGE'],
-      [{ dateFrom: '2026-10-02', dateTo: '2026-10-06' }, 'INVALID_SORT_ORDER'],
+      [{ dateFrom: '2026-10-02', dateTo: '2026-10-06' }, 'INVALID_DATE'],
+      [{ arrivalDate: '2026-10-09' }, 'INVALID_SORT_ORDER'],
       [{ order: 'asc' }, 'INVALID_PAGE'],
     ];
 

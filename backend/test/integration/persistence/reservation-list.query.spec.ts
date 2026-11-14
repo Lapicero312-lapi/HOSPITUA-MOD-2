@@ -29,6 +29,7 @@ const NO_FILTERS: ReservationListFilters = {
   otaId: null,
   inConflict: false,
   stayRange: null,
+  arrivalDate: null,
   order: 'desc',
   search: null,
 };
@@ -308,6 +309,49 @@ describe('TypeOrmReservationQuery.listReservations contra PostgreSQL real (check
       expect(refsOf(page)).toEqual([match.reservationRef]);
     });
 
+    it('escenario 1a: por día de llegada (FR-003b), las que llegan ese día en cualquier estado, y no la que ya estaba ni la de mañana', async () => {
+      const active = await direct({
+        status: 'ACTIVE',
+        startDate: '2026-10-09',
+        endDate: '2026-10-11',
+      });
+      const cancelled = await direct({
+        status: 'CANCELLED',
+        startDate: '2026-10-09',
+        endDate: '2026-10-10',
+      });
+      await direct({
+        status: 'IN_PROGRESS',
+        startDate: '2026-10-08',
+        endDate: '2026-10-12',
+      });
+      await direct({ startDate: '2026-10-10', endDate: '2026-10-12' });
+
+      const page = await list({ arrivalDate: '2026-10-09' });
+
+      expect(page.totalItems).toBe(2);
+      expect(refsOf(page).sort()).toEqual(
+        [active.reservationRef, cancelled.reservationRef].sort(),
+      );
+    });
+
+    it('el día de llegada se combina con los demás filtros (FR-003b)', async () => {
+      const active = await direct({
+        status: 'ACTIVE',
+        startDate: '2026-10-09',
+        endDate: '2026-10-11',
+      });
+      await direct({
+        status: 'CANCELLED',
+        startDate: '2026-10-09',
+        endDate: '2026-10-10',
+      });
+
+      const page = await list({ arrivalDate: '2026-10-09', status: 'ACTIVE' });
+
+      expect(refsOf(page)).toEqual([active.reservationRef]);
+    });
+
     it('en conflicto (FR-002a): solo las de Booking con conflicto', async () => {
       const ota = await otas.insert(anOta());
       await direct();
@@ -431,7 +475,7 @@ describe('TypeOrmReservationQuery.listReservations contra PostgreSQL real (check
       expect(refsOf(page)).toEqual([byCode.reservationRef]);
     });
 
-    it('CODE ignora los demás filtros: estado, canal, agencia, conflicto y estadía', async () => {
+    it('CODE ignora los demás filtros: estado, canal, agencia, conflicto, estadía y día de llegada', async () => {
       const wanted = await direct({ reservationRef: 'RSV-3F9A1C7B' });
 
       const page = await list({
@@ -440,6 +484,7 @@ describe('TypeOrmReservationQuery.listReservations contra PostgreSQL real (check
         otaId: randomUUID(),
         inConflict: true,
         stayRange: { dateFrom: '2001-01-01', dateTo: '2001-01-02' },
+        arrivalDate: '2001-01-01',
         search: { kind: 'CODE', code: 'RSV-3F9A1C7B' },
       });
 

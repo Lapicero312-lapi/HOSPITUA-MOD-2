@@ -108,6 +108,10 @@ export class ReservationListQueryDto {
   dateTo?: unknown;
 
   @IsOptional()
+  @IsRealDate()
+  arrivalDate?: unknown;
+
+  @IsOptional()
   @IsIn(['asc', 'desc'])
   order?: unknown;
 
@@ -127,6 +131,7 @@ const FIELD_ERRORS: Readonly<Record<QueryField, ErrorCode>> = {
   inConflict: INVALID_CONFLICT_FILTER,
   dateFrom: INVALID_DATE,
   dateTo: INVALID_DATE,
+  arrivalDate: INVALID_DATE,
   order: INVALID_SORT_ORDER,
   page: INVALID_PAGE,
 };
@@ -140,6 +145,8 @@ export type ReservationListQuery = {
   otaId: string | null;
   inConflict: boolean;
   stayRange: { dateFrom: string; dateTo: string } | null;
+  /** Solo las que llegan ese día (`startDate = arrivalDate`, FR-003b); `null` si no viene. */
+  arrivalDate: string | null;
   order: 'asc' | 'desc';
   page: number;
 };
@@ -147,7 +154,7 @@ export type ReservationListQuery = {
 /**
  * Revisa los parámetros de C1 antes de consultar, en el orden del plan ("Orden de validación"): formato
  * de `search` → `status` → `source` → `otaId` (formato y canal) → `inConflict` → fechas (formato,
- * completitud, orden y 366 días) → `order` → `page`. El primero que falla responde. La longitud del
+ * completitud, orden y 366 días) → `arrivalDate` → `order` → `page`. El primero que falla responde. La longitud del
  * nombre, la última del orden, depende de cómo se clasifique la búsqueda: es de T006 y T021.
  * @throws BusinessError con el código y el mensaje de la tabla de errores de C1.
  */
@@ -178,6 +185,7 @@ export function readReservationListQuery(
   check('dateFrom');
   check('dateTo');
   const stayRange = readStayRange(dto.dateFrom, dto.dateTo);
+  check('arrivalDate');
   check('order');
   check('page');
 
@@ -189,6 +197,7 @@ export function readReservationListQuery(
     otaId: (dto.otaId as string | undefined) ?? null,
     inConflict: dto.inConflict === 'true',
     stayRange,
+    arrivalDate: (dto.arrivalDate as string | undefined) ?? null,
     order: (dto.order as 'asc' | 'desc' | undefined) ?? 'desc',
     page: dto.page === undefined ? 1 : Number(dto.page),
   };

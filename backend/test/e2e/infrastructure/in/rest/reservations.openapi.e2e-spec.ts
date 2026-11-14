@@ -222,6 +222,7 @@ describe('OpenAPI de las rutas de check-view-reservation (T037)', () => {
         'inConflict',
         'dateFrom',
         'dateTo',
+        'arrivalDate',
         'order',
         'page',
         'roomId',
@@ -231,6 +232,9 @@ describe('OpenAPI de las rutas de check-view-reservation (T037)', () => {
       }
       expect(parameter(LIST, 'roomId').description).toMatch(/^Módulo 1\./);
       expect(parameter(LIST, 'page').description).toMatch(/^Recepcionista\./);
+      expect(parameter(LIST, 'arrivalDate').description).toMatch(
+        /^Recepcionista\./,
+      );
       expect(parameter(LIST, 'dateFrom').description).toContain(
         'con el Módulo 1, obligatoria',
       );

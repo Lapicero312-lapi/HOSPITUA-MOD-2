@@ -235,7 +235,7 @@ export const LIST_ERROR_EXAMPLES = {
     INVALID_CONFLICT_FILTER,
   ),
   [INVALID_DATE.code]: listError(
-    'Los dos: `dateFrom` o `dateTo` mal formada o inexistente',
+    'Los dos: `dateFrom`, `dateTo` o (Recepcionista) `arrivalDate` mal formada o inexistente',
     INVALID_DATE,
   ),
   [INCOMPLETE_DATE_RANGE.code]: listError(

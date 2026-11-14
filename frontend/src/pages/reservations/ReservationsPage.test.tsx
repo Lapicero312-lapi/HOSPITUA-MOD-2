@@ -3,6 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createMemoryRouter, RouterProvider } from 'react-router';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { todayInColombia } from '../../services/operational-date.ts';
 import { routes } from '../../routes.tsx';
 import { createQueryClient } from '../../services/query-client.ts';
 import type {
@@ -177,7 +178,7 @@ describe('Pantalla "Consultar reservas"', () => {
 
   describe('el listado (FR-005)', () => {
     it('muestra la fila del ejemplo de C1 con sus ocho columnas', async () => {
-      renderAt('/reservas');
+      renderAt('/reservas?view=all');
 
       expect(await screen.findByRole('table')).toBeInTheDocument();
       expect(
@@ -210,7 +211,7 @@ describe('Pantalla "Consultar reservas"', () => {
     });
 
     it('sin filtros pide la primera página en orden descendente y nada más', async () => {
-      renderAt('/reservas');
+      renderAt('/reservas?view=all');
 
       await screen.findByRole('table');
       expect(listQueries()).toEqual([{ order: 'desc', page: '1' }]);
@@ -218,7 +219,7 @@ describe('Pantalla "Consultar reservas"', () => {
 
     it('una reserva de Booking muestra su código, su agencia, todas sus habitaciones en una sola fila y "Sin asignar"', async () => {
       listAnswer = () => jsonResponse(listOf([BOOKING_IN_CONFLICT]));
-      renderAt('/reservas');
+      renderAt('/reservas?view=all');
 
       await screen.findByRole('table');
       const [row] = tableRows();
@@ -232,7 +233,7 @@ describe('Pantalla "Consultar reservas"', () => {
 
     it('una reserva en conflicto lleva la marca "En conflicto" y la acción "Asignar habitación"', async () => {
       listAnswer = () => jsonResponse(listOf([BOOKING_IN_CONFLICT]));
-      renderAt('/reservas');
+      renderAt('/reservas?view=all');
 
       await screen.findByRole('table');
       expect(screen.getByText('En conflicto')).toBeInTheDocument();
@@ -244,7 +245,7 @@ describe('Pantalla "Consultar reservas"', () => {
     });
 
     it('sin conflicto no hay marca ni "Asignar habitación"', async () => {
-      renderAt('/reservas');
+      renderAt('/reservas?view=all');
 
       await screen.findByRole('table');
       expect(screen.queryByText('En conflicto')).not.toBeInTheDocument();
@@ -262,7 +263,7 @@ describe('Pantalla "Consultar reservas"', () => {
       ['NO_SHOW', 'No se presentó'],
     ] as const)('el estado %s se muestra "%s"', async (status, text) => {
       listAnswer = () => jsonResponse(listOf([{ ...DIRECT, status }]));
-      renderAt('/reservas');
+      renderAt('/reservas?view=all');
 
       await screen.findByRole('table');
       expect(tableRows()[0][5]).toBe(text);
@@ -278,7 +279,7 @@ describe('Pantalla "Consultar reservas"', () => {
       async (migrationStatus, text) => {
         listAnswer = () =>
           jsonResponse(listOf([{ ...DIRECT, migrationStatus }]));
-        renderAt('/reservas');
+        renderAt('/reservas?view=all');
 
         await screen.findByRole('table');
         expect(tableRows()[0][6]).toBe(text);
@@ -288,7 +289,7 @@ describe('Pantalla "Consultar reservas"', () => {
 
   describe('las acciones de cada fila (FR-005)', () => {
     it('una reserva que se puede modificar y cancelar tiene los tres enlaces', async () => {
-      renderAt('/reservas');
+      renderAt('/reservas?view=all');
 
       await screen.findByRole('table');
       expect(
@@ -317,7 +318,7 @@ describe('Pantalla "Consultar reservas"', () => {
             },
           ]),
         );
-      renderAt('/reservas');
+      renderAt('/reservas?view=all');
 
       await screen.findByRole('table');
       for (const name of ['Modificar RSV-3F9A1C7B', 'Cancelar RSV-3F9A1C7B']) {
@@ -333,7 +334,7 @@ describe('Pantalla "Consultar reservas"', () => {
 
   describe('el resumen del día (FR-005a)', () => {
     it('muestra las llegadas y las salidas esperadas hoy y el día operativo', async () => {
-      renderAt('/reservas');
+      renderAt('/reservas?view=all');
 
       const summary = await screen.findByLabelText(
         'Resumen del día 09/10/2026',
@@ -349,7 +350,7 @@ describe('Pantalla "Consultar reservas"', () => {
           'REQUEST_NOT_PROCESSED',
           'No fue posible procesar la solicitud.',
         );
-      renderAt('/reservas');
+      renderAt('/reservas?view=all');
 
       expect(await screen.findByRole('alert')).toHaveTextContent(
         'No fue posible procesar la solicitud.',
@@ -361,7 +362,7 @@ describe('Pantalla "Consultar reservas"', () => {
   describe('los filtros', () => {
     it('el estado se aplica al elegirlo y vuelve a la página 1', async () => {
       const user = userEvent.setup();
-      const router = renderAt('/reservas?page=3');
+      const router = renderAt('/reservas?view=all&page=3');
       await screen.findByRole('table');
 
       await user.selectOptions(screen.getByLabelText('Estado'), 'Pendiente');
@@ -373,11 +374,11 @@ describe('Pantalla "Consultar reservas"', () => {
           page: '1',
         }),
       );
-      expect(router.state.location.search).toBe('?status=PENDING');
+      expect(router.state.location.search).toBe('?view=all&status=PENDING');
     });
 
     it('las opciones del estado son "Todos" y los seis estados', async () => {
-      renderAt('/reservas');
+      renderAt('/reservas?view=all');
       await screen.findByRole('table');
 
       expect(
@@ -397,7 +398,7 @@ describe('Pantalla "Consultar reservas"', () => {
 
     it('la agencia solo se habilita con el canal OTA, y entonces trae las agencias', async () => {
       const user = userEvent.setup();
-      renderAt('/reservas');
+      renderAt('/reservas?view=all');
       await screen.findByRole('table');
       expect(screen.getByLabelText('Agencia')).toBeDisabled();
 
@@ -418,7 +419,7 @@ describe('Pantalla "Consultar reservas"', () => {
 
     it('con el canal OTA y una agencia envía los dos; al volver a "Todos" quita la agencia', async () => {
       const user = userEvent.setup();
-      renderAt('/reservas?source=OTA');
+      renderAt('/reservas?view=all&source=OTA');
       await screen.findByRole('option', { name: 'Booking.com' });
 
       await user.selectOptions(screen.getByLabelText('Agencia'), 'Booking.com');
@@ -438,7 +439,7 @@ describe('Pantalla "Consultar reservas"', () => {
     });
 
     it('una agencia en la dirección sin el canal OTA no se envía: el backend la rechazaría (AGENCY_REQUIRES_OTA_CHANNEL)', async () => {
-      renderAt(`/reservas?otaId=${BOOKING_OTA_ID}`);
+      renderAt(`/reservas?view=all&otaId=${BOOKING_OTA_ID}`);
 
       await screen.findByRole('table');
       expect(listQueries()).toEqual([{ order: 'desc', page: '1' }]);
@@ -446,7 +447,7 @@ describe('Pantalla "Consultar reservas"', () => {
 
     it('"Solo en conflicto" envía inConflict=true (FR-002a)', async () => {
       const user = userEvent.setup();
-      renderAt('/reservas');
+      renderAt('/reservas?view=all');
       await screen.findByRole('table');
 
       await user.click(screen.getByLabelText('Solo en conflicto'));
@@ -462,7 +463,7 @@ describe('Pantalla "Consultar reservas"', () => {
 
     it('el rango de estadía se envía cuando están las dos fechas; con una sola espera la otra', async () => {
       const user = userEvent.setup();
-      renderAt('/reservas');
+      renderAt('/reservas?view=all');
       await screen.findByRole('table');
 
       await user.type(screen.getByLabelText('Desde'), '2026-10-02');
@@ -491,7 +492,7 @@ describe('Pantalla "Consultar reservas"', () => {
 
     it('el orden ascendente conserva los filtros (FR-003a)', async () => {
       const user = userEvent.setup();
-      renderAt('/reservas?status=ACTIVE&source=DIRECT');
+      renderAt('/reservas?view=all&status=ACTIVE&source=DIRECT');
       await screen.findByRole('table');
 
       await user.selectOptions(
@@ -511,7 +512,7 @@ describe('Pantalla "Consultar reservas"', () => {
 
     it('la búsqueda se envía al pulsar "Buscar", sin los espacios de los extremos, y no con cada tecla', async () => {
       const user = userEvent.setup();
-      renderAt('/reservas');
+      renderAt('/reservas?view=all');
       await screen.findByRole('table');
       const before = listQueries().length;
 
@@ -540,14 +541,15 @@ describe('Pantalla "Consultar reservas"', () => {
       await waitFor(() =>
         expect(lastListQuery()).toEqual({ order: 'desc', page: '1' }),
       );
-      expect(router.state.location.search).toBe('');
+      // "Limpiar filtros" también pasa a "Todas" (FR-003b).
+      expect(router.state.location.search).toBe('?view=all');
       expect(screen.getByLabelText('Buscar')).toHaveValue('');
       expect(screen.getByLabelText('Estado')).toHaveValue('');
     });
 
     it('los filtros de la dirección se aplican al abrir la pantalla', async () => {
       renderAt(
-        '/reservas?status=ACTIVE&source=DIRECT&dateFrom=2026-10-01&dateTo=2026-10-01&order=asc&page=2',
+        '/reservas?view=all&status=ACTIVE&source=DIRECT&dateFrom=2026-10-01&dateTo=2026-10-01&order=asc&page=2',
       );
 
       await screen.findByRole('table');
@@ -566,6 +568,76 @@ describe('Pantalla "Consultar reservas"', () => {
     });
   });
 
+  describe('"Hoy / Todas" (FR-003b)', () => {
+    it('escenario 1a: al abrir la pantalla, "Hoy" pide las llegadas del día operativo', async () => {
+      renderAt('/reservas');
+
+      await screen.findByRole('table');
+      expect(listQueries()).toEqual([
+        { arrivalDate: todayInColombia(), order: 'desc', page: '1' },
+      ]);
+      expect(screen.getByRole('button', { name: 'Hoy' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+    });
+
+    it('"Hoy" se combina con los demás filtros', async () => {
+      renderAt('/reservas?status=ACTIVE');
+
+      await screen.findByRole('table');
+      expect(lastListQuery()).toEqual({
+        status: 'ACTIVE',
+        arrivalDate: todayInColombia(),
+        order: 'desc',
+        page: '1',
+      });
+    });
+
+    it('"Todas" quita el día de llegada y lo guarda en la dirección; "Hoy" lo vuelve a poner', async () => {
+      const user = userEvent.setup();
+      const router = renderAt('/reservas');
+      await screen.findByRole('table');
+
+      await user.click(screen.getByRole('button', { name: 'Todas' }));
+      await waitFor(() =>
+        expect(lastListQuery()).toEqual({ order: 'desc', page: '1' }),
+      );
+      expect(router.state.location.search).toBe('?view=all');
+      expect(screen.getByRole('button', { name: 'Todas' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+
+      await user.click(screen.getByRole('button', { name: 'Hoy' }));
+      await waitFor(() =>
+        expect(lastListQuery()).toEqual({
+          arrivalDate: todayInColombia(),
+          order: 'desc',
+          page: '1',
+        }),
+      );
+      expect(router.state.location.search).toBe('');
+    });
+
+    it('escenario 1b: con una búsqueda, "Hoy" no limita a las llegadas del día', async () => {
+      const user = userEvent.setup();
+      renderAt('/reservas');
+      await screen.findByRole('table');
+
+      await user.type(screen.getByLabelText('Buscar'), 'BK-99812');
+      await user.click(screen.getByRole('button', { name: 'Buscar' }));
+
+      await waitFor(() =>
+        expect(lastListQuery()).toEqual({
+          search: 'BK-99812',
+          order: 'desc',
+          page: '1',
+        }),
+      );
+    });
+  });
+
   describe('la paginación (FR-001 y FR-003a)', () => {
     const page = (number: number) =>
       jsonResponse(
@@ -575,7 +647,7 @@ describe('Pantalla "Consultar reservas"', () => {
     it('informa el total y la página, y "Siguiente" pide la página siguiente con los mismos filtros y el mismo orden', async () => {
       const user = userEvent.setup();
       listAnswer = (query) => page(Number(query.get('page')));
-      renderAt('/reservas?status=ACTIVE&order=asc');
+      renderAt('/reservas?view=all&status=ACTIVE&order=asc');
       await screen.findByRole('table');
 
       const pagination = screen.getByRole('navigation', { name: 'Paginación' });
@@ -604,7 +676,7 @@ describe('Pantalla "Consultar reservas"', () => {
     it('en la última página "Siguiente" queda deshabilitado y "Anterior" vuelve', async () => {
       const user = userEvent.setup();
       listAnswer = (query) => page(Number(query.get('page')));
-      renderAt('/reservas?page=3');
+      renderAt('/reservas?view=all&page=3');
       await screen.findByRole('table');
 
       const pagination = screen.getByRole('navigation', { name: 'Paginación' });
@@ -623,7 +695,7 @@ describe('Pantalla "Consultar reservas"', () => {
 
     it('si se pide una página que no existe, muestra la que devolvió el backend: la última válida', async () => {
       listAnswer = () => page(3);
-      renderAt('/reservas?page=9');
+      renderAt('/reservas?view=all&page=9');
 
       await screen.findByRole('table');
       expect(
@@ -632,7 +704,7 @@ describe('Pantalla "Consultar reservas"', () => {
     });
 
     it('con una sola reserva dice "1 reserva"', async () => {
-      renderAt('/reservas');
+      renderAt('/reservas?view=all');
 
       await screen.findByRole('table');
       expect(
@@ -644,7 +716,7 @@ describe('Pantalla "Consultar reservas"', () => {
   describe('los demás estados de la pantalla', () => {
     it('sin resultados muestra el mensaje del backend y ninguna tabla (FR-010)', async () => {
       listAnswer = () => jsonResponse(listOf([]));
-      renderAt('/reservas?status=NO_SHOW');
+      renderAt('/reservas?view=all&status=NO_SHOW');
 
       expect(await screen.findByText(NO_RESULTS_MESSAGE)).toBeInTheDocument();
       expect(screen.queryByRole('table')).not.toBeInTheDocument();
@@ -655,7 +727,7 @@ describe('Pantalla "Consultar reservas"', () => {
 
     it('mientras responde muestra "Cargando reservas…" y ninguna tabla', async () => {
       listAnswer = () => new Promise<Response>(() => undefined) as never;
-      renderAt('/reservas');
+      renderAt('/reservas?view=all');
 
       expect(await screen.findByText('Cargando reservas…')).toBeInTheDocument();
       expect(screen.queryByRole('table')).not.toBeInTheDocument();
@@ -667,7 +739,7 @@ describe('Pantalla "Consultar reservas"', () => {
           'INVALID_RESERVATION_CODE',
           'Debe proveer un código de reserva válido para la consulta.',
         );
-      renderAt('/reservas?search=ana.perez');
+      renderAt('/reservas?view=all&search=ana.perez');
 
       expect(await screen.findByRole('alert')).toHaveTextContent(
         'Debe proveer un código de reserva válido para la consulta.',
@@ -706,7 +778,7 @@ describe('Pantalla "Consultar reservas"', () => {
     });
 
     it('toda consulta lleva X-Client: RECEPTIONIST', async () => {
-      renderAt('/reservas');
+      renderAt('/reservas?view=all');
 
       await screen.findByRole('table');
       for (const [, init] of fetchMock.mock.calls) {

@@ -9,6 +9,7 @@ import {
   DoorCheckOutIcon,
   SearchIcon,
 } from '../../components/icons.tsx';
+import { todayInColombia } from '../../services/operational-date.ts';
 import { listOtas } from '../../services/otas.ts';
 import {
   getDaySummary,
@@ -48,6 +49,8 @@ const SOURCES: ReservationSource[] = ['DIRECT', 'OTA'];
  * de página o de orden (FR-003a), al volver del detalle y al recargar.
  */
 type ScreenFilters = {
+  /** "Hoy" (las que llegan hoy, FR-003b) o "Todas". Al abrir la pantalla, "Hoy". */
+  view: 'today' | 'all';
   search: string;
   status: ReservationStatus | '';
   source: ReservationSource | '';
@@ -64,6 +67,7 @@ function readFilters(params: URLSearchParams): ScreenFilters {
   const source = params.get('source') ?? '';
   const page = Number(params.get('page') ?? '1');
   return {
+    view: params.get('view') === 'all' ? 'all' : 'today',
     search: params.get('search') ?? '',
     status: STATUSES.includes(status as ReservationStatus)
       ? (status as ReservationStatus)
@@ -83,6 +87,7 @@ function readFilters(params: URLSearchParams): ScreenFilters {
 /** Los filtros como parámetros de la dirección, sin los que tienen su valor por defecto. */
 function toParams(filters: ScreenFilters): URLSearchParams {
   const params = new URLSearchParams();
+  if (filters.view === 'all') params.set('view', 'all');
   if (filters.search !== '') params.set('search', filters.search);
   if (filters.status !== '') params.set('status', filters.status);
   if (filters.source !== '') params.set('source', filters.source);
@@ -97,9 +102,13 @@ function toParams(filters: ScreenFilters): URLSearchParams {
 
 /**
  * Lo que se le pide al backend (C1). El rango de estadía solo se envía completo: con una sola fecha la
- * pantalla espera la otra. La agencia solo se envía con el canal `OTA`.
+ * pantalla espera la otra. La agencia solo se envía con el canal `OTA`. En "Hoy" se envía `arrivalDate`
+ * con el día operativo, salvo que haya una búsqueda: esa se hace sobre todas las reservas (FR-003b).
  */
-function toRequest(filters: ScreenFilters): ReservationListFilters {
+function toRequest(
+  filters: ScreenFilters,
+  today: string,
+): ReservationListFilters {
   const withRange = filters.dateFrom !== '' && filters.dateTo !== '';
   return {
     search: filters.search === '' ? undefined : filters.search,
@@ -112,6 +121,8 @@ function toRequest(filters: ScreenFilters): ReservationListFilters {
     inConflict: filters.inConflict ? true : undefined,
     dateFrom: withRange ? filters.dateFrom : undefined,
     dateTo: withRange ? filters.dateTo : undefined,
+    arrivalDate:
+      filters.view === 'today' && filters.search === '' ? today : undefined,
     order: filters.order,
     page: filters.page,
   };
@@ -149,6 +160,29 @@ export function ReservationsPage() {
       <DaySummaryPanel />
       <Filters key={filters.search} filters={filters} onChange={change} />
       <div className="reservations-panel ui-panel">
+        <div className="reservations-view-bar">
+          <div className="reservations-view" role="group" aria-label="Mostrar">
+            <button
+              type="button"
+              aria-pressed={filters.view === 'today'}
+              onClick={() => change({ view: 'today' })}
+            >
+              Hoy
+            </button>
+            <button
+              type="button"
+              aria-pressed={filters.view === 'all'}
+              onClick={() => change({ view: 'all' })}
+            >
+              Todas
+            </button>
+          </div>
+          {filters.view === 'today' && filters.search === '' && (
+            <span className="reservations-view-hint">
+              Llegadas del {formatDate(todayInColombia())}
+            </span>
+          )}
+        </div>
         <Results filters={filters} onPage={(page) => change({ page })} />
       </div>
     </section>
@@ -229,6 +263,7 @@ function Filters({
   const clear = () => {
     setSearch('');
     onChange({
+      view: 'all',
       search: '',
       status: '',
       source: '',
@@ -377,7 +412,7 @@ function Results({
   filters: ScreenFilters;
   onPage: (page: number) => void;
 }) {
-  const request = toRequest(filters);
+  const request = toRequest(filters, todayInColombia());
   const reservations = useQuery({
     queryKey: ['reservations', 'list', request],
     queryFn: ({ signal }) => listReservations(request, signal),

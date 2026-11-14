@@ -222,3 +222,50 @@
   flex-shrink: 0;
   color: var(--text-3);
 }
+
+/* "Hoy / Todas" (FR-003b): control segmentado sobre la tabla */
+.reservations-view-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.reservations-view {
+  display: inline-flex;
+  padding: 2px;
+  background-color: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.reservations-view button {
+  min-height: 30px;
+  padding: 0 0.875rem;
+  background-color: transparent;
+  border-color: transparent;
+  border-radius: 6px;
+  box-shadow: none;
+  color: var(--text-2);
+}
+
+.reservations-view button:hover:not(:disabled) {
+  background-color: var(--surface);
+  border-color: transparent;
+  color: var(--text-1);
+}
+
+.reservations-view button[aria-pressed='true'] {
+  background-color: var(--surface);
+  border-color: var(--border);
+  box-shadow: var(--shadow-control);
+  color: var(--text-1);
+  font-weight: 600;
+}
+
+.reservations-view-hint {
+  color: var(--text-3);
+  font-size: 0.75rem;
+}

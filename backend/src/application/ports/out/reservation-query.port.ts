@@ -69,6 +69,8 @@ export type ReservationListFilters = {
   inConflict: boolean;
   /** Cruce con la estadía: `start_date <= dateTo` y `end_date > dateFrom`, en `AAAA-MM-DD`. */
   stayRange: { dateFrom: string; dateTo: string } | null;
+  /** Solo las que llegan ese día: `start_date = arrivalDate`, en `AAAA-MM-DD` (FR-003b). */
+  arrivalDate: string | null;
   /** Por `start_date` y, si empatan, por `reservation_ref`, en el mismo sentido. */
   order: 'asc' | 'desc';
   /**

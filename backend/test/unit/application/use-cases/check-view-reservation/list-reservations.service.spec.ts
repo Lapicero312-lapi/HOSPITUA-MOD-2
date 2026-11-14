@@ -16,6 +16,7 @@ const NO_FILTERS: ListReservationFilters = {
   otaId: null,
   inConflict: false,
   stayRange: null,
+  arrivalDate: null,
   order: 'desc',
 };
 const MESSAGE = 'No se encontraron reservas con los filtros aplicados.';
