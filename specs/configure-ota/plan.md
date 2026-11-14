@@ -317,7 +317,10 @@ Pasos, en este orden (reglas 2, 3, 4 y 8; D2):
 
 **Quién lo llama:** `ChannexSyncJob`, cada `CHANNEX_SYNC_INTERVAL_SECONDS`, con su bloqueo asesor: primero el
 feed (`ProcessBookingFeed`), después `PublishPendingAvailability` y al final los no-shows
-(`PublishPendingNoShows`). Un error inesperado de un paso queda en el log y no impide los siguientes.
+(`PublishPendingNoShows`). Si el feed falla por un error inesperado, **no se envía la disponibilidad** en ese
+ciclo: FR-007 pide procesar antes las reservas pendientes de Channex, para no devolverle a Booking un cupo que
+ya descontó por una reserva nueva; las marcas se conservan para el siguiente. Los no-shows no dependen del
+feed: se envían igual. Un error inesperado de cualquier paso queda en el log.
 
 ### C. Sincronización de tipos de habitación
 

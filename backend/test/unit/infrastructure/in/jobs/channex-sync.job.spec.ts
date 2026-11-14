@@ -193,7 +193,7 @@ describe('ChannexSyncJob (plan de generate-ota-reservation, punto 7)', () => {
     expect(publish).toHaveBeenCalledTimes(2);
   });
 
-  it('un error inesperado del feed se registra y no impide la disponibilidad ni los no-shows; la siguiente ejecución lee de nuevo', async () => {
+  it('un error inesperado del feed se registra, no se envía la disponibilidad (FR-007) y los no-shows sí; la siguiente ejecución lee de nuevo', async () => {
     const { job, read, calls } = aJob();
     read.mockRejectedValueOnce(new Error('la base de datos no responde'));
 
@@ -201,8 +201,9 @@ describe('ChannexSyncJob (plan de generate-ota-reservation, punto 7)', () => {
     expect(errors).toEqual([
       'El paso de Channex "el feed" falló por un error inesperado: se intenta en el siguiente ciclo',
     ]);
-    // La lectura falló (su simulación no anota nada): los otros dos pasos corrieron igual.
-    expect(calls).toEqual(['availability', 'publish']);
+    // La lectura falló (su simulación no anota nada): sin el feed procesado no se envía la disponibilidad,
+    // y los no-shows, que no dependen del feed, sí.
+    expect(calls).toEqual(['publish']);
 
     await expect(job.run()).resolves.toBe(true);
     expect(read).toHaveBeenCalledTimes(2);
