@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { AnimatedLogo, type DoorState } from '../components/brand.tsx';
+import { Concierge, type ConciergeMood } from '../components/Concierge.tsx';
 import {
   CalendarIcon,
   DoorCheckInIcon,
@@ -39,11 +40,17 @@ function dayPercent(now: Date): number {
 
 /**
  * El panel derecho del login (The Threshold Experience del paquete visual): Dark Petroleum con la
- * retícula arquitectónica, un foco que sigue al cursor, la tarjeta llave digital con inclinación 3D y
- * brillo dorado, y tres píldoras que flotan. Es decorativo (`aria-hidden`) y solo muestra datos reales:
+ * retícula arquitectónica, un foco que sigue al cursor, Túa (el conserje que saluda), la tarjeta llave
+ * digital con inclinación 3D y brillo dorado, y dos píldoras que flotan. Es decorativo (`aria-hidden`) y solo muestra datos reales:
  * la hora y el día de Colombia y el avance de la jornada.
  */
-export function LoginVisual({ door }: { door: DoorState }) {
+export function LoginVisual({
+  door,
+  mood,
+}: {
+  door: DoorState;
+  mood: ConciergeMood;
+}) {
   const panelRef = useRef<HTMLDivElement>(null);
   const frame = useRef(0);
   const [now, setNow] = useState(() => new Date());
@@ -111,6 +118,8 @@ export function LoginVisual({ door }: { door: DoorState }) {
             <span className="pill-value pill-value--date">{date}</span>
           </span>
         </div>
+
+        <Concierge mood={mood} size={200} />
 
         <div className="keycard">
           <span className="keycard-shimmer" />

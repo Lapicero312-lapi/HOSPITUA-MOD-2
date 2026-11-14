@@ -1,6 +1,7 @@
 import { useState, type CSSProperties, type FormEvent } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router';
 import { AnimatedLogo, type DoorState } from '../components/brand.tsx';
+import { Concierge, type ConciergeMood } from '../components/Concierge.tsx';
 import {
   ArrowRightIcon,
   MoonIcon,
@@ -32,6 +33,12 @@ export function LoginPage() {
   const [aiming, setAiming] = useState(false);
   const from = (location.state as LoginState)?.from ?? '/';
   const door: DoorState = typing || aiming ? 'open' : 'peek';
+  // Túa mira el formulario mientras se escribe y se sacude si el nombre no sirve.
+  const mood: ConciergeMood = typing
+    ? 'attentive'
+    : error !== null
+      ? 'error'
+      : 'greeting';
 
   if (currentUser()) {
     return <Navigate to={from} replace />;
@@ -69,6 +76,11 @@ export function LoginPage() {
 
         <main className="login-main">
           <div className="login-card">
+            <Concierge
+              mood={mood}
+              size={132}
+              className="login-concierge-mobile login-step"
+            />
             <span className="login-eyebrow login-step" style={step(1)}>
               Recepción · Módulo 2
             </span>
@@ -128,7 +140,7 @@ export function LoginPage() {
         </footer>
       </div>
 
-      <LoginVisual door={door} />
+      <LoginVisual door={door} mood={mood} />
     </div>
   );
 }

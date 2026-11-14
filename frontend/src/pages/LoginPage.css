@@ -228,8 +228,20 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1.75rem;
+  gap: 1rem;
   padding: 3rem;
+}
+
+/* Túa también saluda en móvil y tablet, encima del formulario */
+.login-concierge-mobile {
+  align-self: center;
+  margin-bottom: 1.25rem;
+}
+
+@media (min-width: 1024px) {
+  .login-concierge-mobile {
+    display: none;
+  }
 }
 
 /* Tarjeta llave digital */
@@ -238,9 +250,9 @@
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  width: 410px;
-  height: 250px;
-  padding: 1.625rem 1.75rem;
+  width: 380px;
+  height: 214px;
+  padding: 1.375rem 1.5rem;
   overflow: hidden;
   background: linear-gradient(135deg, #20272a 0%, #17363f 60%, #123b46 100%);
   border: 1px solid rgba(184, 155, 94, 0.45);
@@ -430,14 +442,16 @@
 }
 
 .pill--top {
-  align-self: flex-start;
-  margin-left: max(0px, calc(50% - 250px));
+  position: absolute;
+  top: 12%;
+  left: 8%;
   animation: float-slow 6.5s ease-in-out infinite;
 }
 
 .pill--bottom {
-  align-self: flex-end;
-  margin-right: max(0px, calc(50% - 250px));
+  position: absolute;
+  right: 8%;
+  bottom: 10%;
   animation: float-slow 7.8s ease-in-out 1.4s infinite;
 }
 
@@ -480,4 +494,11 @@
 
 .pill-value--date::first-letter {
   text-transform: uppercase;
+}
+
+/* Sin altura suficiente, las píldoras se apartan para no tapar a Túa ni la tarjeta */
+@media (max-height: 820px) {
+  .pill {
+    display: none;
+  }
 }
