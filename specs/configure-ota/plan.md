@@ -264,6 +264,59 @@ afectado (`dateFrom` incluido, `dateTo` excluido: el día de salida no se ocupa)
 `generate-direct-reservation`, `generate-ota-reservation`, `update-reservation` (modificación, asignación
 de habitación, No-Show, Check-Out y habitaciones `NOT_ARRIVED`) y `cancel-reservation`.
 
+**B3. Enviar lo pendiente (`PublishPendingAvailability`, T010).** Puerto de entrada en
+`ports/in/publish-pending-availability.port.ts`, con su símbolo `PUBLISH_PENDING_AVAILABILITY`;
+`ConfigureOtaModule` lo registra y lo exporta.
+
+```typescript
+type PendingAvailabilityResult =
+  | { status: 'SENT'; categories: string[]; marks: number }   // lo enviado y las marcas borradas
+  | { status: 'NOTHING_PENDING' }
+  | { status: 'NOT_SENT'; reason: string };                    // todo lo pendiente se conserva
+
+interface PublishPendingAvailability {
+  publish(): Promise<PendingAvailabilityResult>;
+}
+```
+
+Pasos, en este orden (reglas 2, 3, 4 y 8; D2):
+
+1. **Las marcas.** `AriPendingChangeRepository.findAll()`. Sin marcas: `NOTHING_PENDING`, sin llamar a nadie.
+2. **Por categoría**, en orden alfabético, las noches marcadas: la unión de los rangos `[dateFrom, dateTo)` de
+   sus marcas, **sin las noches anteriores al día operativo** (`Clock.today()`; FR-008: no se envían fechas
+   pasadas). Una marca con todas sus noches en el pasado se borra sin enviar nada.
+3. **El tipo de Channex** de cada categoría, con `OtaRoomTypeMappingRepository.findAll()`. Una categoría sin
+   relación todavía no tiene tipo en Channex: sus marcas se **borran** y se registra en el log. Su
+   disponibilidad completa la envía `PublishDailyAvailability` (T011) cuando `SyncRoomTypes` cree el tipo.
+4. **La disponibilidad de cada noche** (regla 2), entre la primera y la última noche marcada de la categoría:
+   - las vendibles: `ConsultRoomInventory.byCategory`;
+   - las ocupadas: `ReservationLookup.blockingRoomsByCategory`;
+   - las de mantenimiento: `ConsultMaintenanceCalendar.check` por cada habitación vendible, con el tope
+     `MAINTENANCE_CONCURRENCY`; las noches de `overlapStart` a `overlapEnd` de cada cruce;
+   - libres = vendibles − (ocupadas ∪ en mantenimiento), contando cada habitación una sola vez; nunca menos
+     de `0` ni más del `countOfRooms` de la relación (regla 8).
+
+   Solo se envían las noches marcadas, no todo el tramo entre la primera y la última. Si el Módulo 1 no
+   responde para una categoría (`INVENTORY_UNAVAILABLE` o `MAINTENANCE_CHECK_UNAVAILABLE`), esa categoría
+   no se envía y **sus marcas se conservan**; las demás siguen (regla 3).
+5. **Un solo envío A4** con los rangos de todas las categorías (`toChannexRanges`, del `roomTypeId` de cada
+   una). Las marcas que se borran son **solo las leídas en el paso 1** de las categorías enviadas: las que
+   llegaron mientras tanto quedan para el siguiente ciclo.
+6. **La respuesta de Channex** (tabla de A):
+   - `200`: borra esas marcas (`deleteByIds`); si trae `warnings`, se registran;
+   - `401` o `403`: la `Ota` Booking.com pasa a `DISCONNECTED` (`OtaConnectionTracker.markDisconnected`) y
+     se conserva todo;
+   - `429`, `5xx`, tiempo agotado o error de red: se conserva todo; la pausa ante un `429` la lleva el
+     adaptador;
+   - `422` u otro `4xx`: se registra el detalle y se **borran** esas marcas, para no repetir un error
+     permanente (punto 3 de "Puntos que este plan propone"); el envío diario corrige lo que haya quedado.
+
+   En los casos que conservan, el resultado es `NOT_SENT` con el motivo.
+
+**Quién lo llama:** `ChannexSyncJob`, cada `CHANNEX_SYNC_INTERVAL_SECONDS`, con su bloqueo asesor: primero el
+feed (`ProcessBookingFeed`), después `PublishPendingAvailability` y al final los no-shows
+(`PublishPendingNoShows`). Un error inesperado de un paso queda en el log y no impide los siguientes.
+
 ### C. Sincronización de tipos de habitación
 
 **C1. `SyncRoomTypes`** (al iniciar y a las 03:00):
