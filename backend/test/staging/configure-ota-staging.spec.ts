@@ -45,6 +45,8 @@ import {
 
 /** El único Channex contra el que corre: una propiedad de producción no se toca. */
 const STAGING_HOST = 'staging.channex.io';
+/** Donde la prueba llama a la aplicación (supertest): esta misma máquina. */
+const LOCAL_HOSTS = ['127.0.0.1', 'localhost', '[::1]'];
 /** El hotel de prueba de Booking conectado a la propiedad de staging (A0). */
 const BOOKING_TEST_HOTEL = '10485037';
 /** El Módulo 1 y el Módulo 3 están simulados: solo Channex es el real. */
@@ -346,11 +348,16 @@ describe.skipIf(!configured)(
         MODULE1_BASE_URL,
         MODULE3_BASE_URL,
       });
-      // Solo sale a la red lo que va a Channex staging; cualquier otra llamada sin simular falla.
+      // Solo sale a la red lo que va a Channex staging, además de las llamadas de la prueba a la aplicación
+      // (en esta máquina). Cualquier otra sin simular se corta: el error hace que msw la responda con un 500
+      // sin enviarla (avisar con `print.error()` no la corta).
       server.listen({
-        onUnhandledRequest: (asked, print) => {
-          if (new URL(asked.url).hostname !== STAGING_HOST) {
-            print.error();
+        onUnhandledRequest: (asked) => {
+          const { hostname } = new URL(asked.url);
+          if (hostname !== STAGING_HOST && !LOCAL_HOSTS.includes(hostname)) {
+            throw new Error(
+              `Llamada sin simular cortada: ${asked.method} ${hostname}`,
+            );
           }
         },
       });
