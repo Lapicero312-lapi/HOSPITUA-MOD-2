@@ -1,5 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { Reservation } from '../../../domain/reservation/reservation.js';
+import type { AriChange } from '../../ports/out/ari-pending-change.repository.js';
 import { BusinessError } from '../../../domain/shared/business-error.js';
 import {
   RESERVATION_QUERY_PORT,
@@ -18,6 +19,10 @@ import {
   DAILY_LIST_CHANGE_RECORDER,
   type DailyListChangeRecorder,
 } from '../check-view-reservation/ports/in/daily-list-change-recorder.port.js';
+import {
+  ARI_CHANGE_RECORDER,
+  type AriChangeRecorder,
+} from '../configure-ota/ports/in/ari-change-recorder.port.js';
 import {
   OTA_NO_SHOW_REPORTER,
   type OtaNoShowReporter,
@@ -58,6 +63,8 @@ export class CloseDayService implements CloseDay {
     private readonly transactions: TransactionRunner,
     @Inject(CLOSE_DAY_BATCH_SIZE)
     private readonly batchSize: number,
+    @Inject(ARI_CHANGE_RECORDER)
+    private readonly ariChanges: AriChangeRecorder,
   ) {}
 
   async closePendingDays(today: string): Promise<CloseDaySummary[]> {
@@ -149,6 +156,8 @@ export class CloseDayService implements CloseDay {
       'DAY_CLOSE_NO_SHOW',
     );
     await this.dailyList.record(tx, reservation, after, operationalDate);
+    // Punto 17: el inventario que libera, para Channex.
+    await this.ariChanges.record(tx, occupancyOf(after, after.rooms));
     if (after.source === 'OTA') {
       await this.noShows.record(tx, after);
     }
@@ -170,12 +179,41 @@ export class CloseDayService implements CloseDay {
       return 'ignored';
     }
     const after = await this.status.markNotArrived(tx, reservation);
+    // Punto 17: las que pasaron a NOT_ARRIVED liberan su inventario, para Channex.
+    const expectedIds = new Set(
+      reservation.rooms
+        .filter(({ stayStatus }) => stayStatus === 'EXPECTED')
+        .map(({ id }) => id),
+    );
+    await this.ariChanges.record(
+      tx,
+      occupancyOf(
+        after,
+        after.rooms.filter(({ id }) => expectedIds.has(id)),
+      ),
+    );
     if (after.rooms.some(({ stayStatus }) => stayStatus === 'CHECKED_IN')) {
       return 'notArrived';
     }
     await this.status.transition(tx, after, 'COMPLETED', 'DAY_CLOSE_PARTIAL');
     return 'completed';
   }
+}
+
+/**
+ * Punto 17: la categoría de cada habitación, en las fechas de la reserva, sin repetir.
+ */
+function occupancyOf(
+  reservation: Reservation,
+  rooms: readonly { categoryRoom: string }[],
+): AriChange[] {
+  return [...new Set(rooms.map(({ categoryRoom }) => categoryRoom))].map(
+    (categoryRoom) => ({
+      categoryRoom,
+      dateFrom: reservation.startDate,
+      dateTo: reservation.endDate,
+    }),
+  );
 }
 
 /** El motivo de un fallo para el log: el código de negocio o el tipo y el mensaje del error. */

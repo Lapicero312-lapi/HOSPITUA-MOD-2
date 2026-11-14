@@ -31,6 +31,7 @@ import {
   openTestDataSource,
   truncateAllTables,
 } from '../../support/database.js';
+import { NO_PUBLICATION } from '../../../support/publication.js';
 
 /** El día operativo y la hora del ejemplo de A: 2026-10-09 a las 10:15:20 de Colombia. */
 const TODAY = '2026-10-09';
@@ -188,6 +189,8 @@ describe('CancelReservation contra PostgreSQL real (T005 a T007)', () => {
       new TypeOrmDailyMessageRepository(dataSource),
       new TypeOrmOtaRepository(dataSource),
       CLOCK,
+      transactions,
+      NO_PUBLICATION,
     );
     availability = new AriChangeRecorderService(
       new TypeOrmAriPendingChangeRepository(dataSource),

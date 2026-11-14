@@ -4,8 +4,9 @@ import { module3Handler } from './module3.js';
 /**
  * Los dos simuladores en un solo puerto, para Render, que da un único `PORT` por servicio (plan base,
  * "Despliegue de la demo (Render)"). Sus rutas no se cruzan: `/pricing/…` es del Módulo 3 y todo lo demás
- * (`/api/rooms…`) del Módulo 1.
- * @param {{ today?: () => string }} [options] `today` permite fijar el día en las pruebas
+ * (`/api/rooms…` y `/simulate/…`) del Módulo 1.
+ * @param {Parameters<typeof module1Handler>[0]} [options] los del Módulo 1: el día y, con RabbitMQ, su
+ * publicador
  * @returns {import('./http.js').Handler}
  */
 export function combinedHandler(options) {

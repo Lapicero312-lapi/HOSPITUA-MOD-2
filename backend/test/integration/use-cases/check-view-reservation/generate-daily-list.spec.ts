@@ -27,6 +27,7 @@ import {
   truncateAllTables,
 } from '../../support/database.js';
 import { FakeDailyListPublisherModule } from '../../support/fake-daily-list-publisher.js';
+import { NO_PUBLICATION } from '../../../support/publication.js';
 
 /** El día operativo del ejemplo de "Lista del día" del plan, a las 00:00:02 de Colombia. */
 const TODAY = '2026-10-09';
@@ -122,12 +123,15 @@ describe('GenerateDailyList contra PostgreSQL real (T023)', () => {
       query,
       messageRepository,
       CLOCK,
+      NO_PUBLICATION,
     );
     recorder = new DailyListChangeRecorderService(
       sequences,
       messageRepository,
       new TypeOrmOtaRepository(dataSource),
       CLOCK,
+      transactions,
+      NO_PUBLICATION,
     );
   });
 
@@ -397,6 +401,7 @@ describe('GenerateDailyList contra PostgreSQL real (T023)', () => {
           insert: () => Promise.reject(new Error('se cayó la conexión')),
         } as unknown as DailyMessageRepository,
         CLOCK,
+        NO_PUBLICATION,
       );
 
       await expect(failing.execute()).rejects.toThrow('se cayó la conexión');

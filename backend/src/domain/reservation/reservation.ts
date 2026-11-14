@@ -317,6 +317,66 @@ export class Reservation {
   }
 
   /**
+   * La reserva de Booking con habitación en las que estaban sin asignar (plan de `update-reservation`, B3 y
+   * punto 16; FR-025; T027): cada `reservationRoomId` toma su habitación y su número, y vuelve a ocupar
+   * inventario. El conflicto queda con el motivo que diga quien llama: sin motivo se quita; con el mismo,
+   * conserva su `detectedAt`; con otro, lo detecta `changedAt`. Nada más cambia.
+   * @throws Error si la reserva no es de Booking o una habitación no es suya o ya tiene número: lo revisa
+   * antes quien llama.
+   */
+  withAssignedRooms(change: {
+    rooms: { reservationRoomId: string; roomId: string; roomNumber: string }[];
+    conflictReason: ConflictReason | null;
+    changedAt: Date;
+  }): Reservation {
+    if (this.props.source !== 'OTA') {
+      throw new Error(
+        `La reserva ${this.props.reservationRef} es directa: no se le asigna habitación con withAssignedRooms.`,
+      );
+    }
+    const assigned = new Map(
+      change.rooms.map((room) => [room.reservationRoomId, room]),
+    );
+    const rooms = this.props.rooms.map((current) => {
+      const chosen = assigned.get(current.id);
+      if (chosen === undefined) {
+        return current;
+      }
+      if (current.roomId !== null) {
+        throw new Error(
+          `La habitación ${current.id} de la reserva ${this.props.reservationRef} ya está asignada.`,
+        );
+      }
+      assigned.delete(current.id);
+      return ReservationRoom.restore({
+        ...current.snapshot(),
+        roomId: chosen.roomId,
+        roomNumber: chosen.roomNumber,
+      });
+    });
+    if (assigned.size > 0) {
+      throw new Error(
+        `Las habitaciones ${[...assigned.keys()].join(', ')} no pertenecen a la reserva ${this.props.reservationRef}.`,
+      );
+    }
+    const { conflict } = this.props;
+    return Reservation.restore({
+      ...this.props,
+      rooms,
+      conflict:
+        change.conflictReason === null
+          ? null
+          : {
+              reason: change.conflictReason,
+              detectedAt:
+                conflict !== null && conflict.reason === change.conflictReason
+                  ? conflict.detectedAt
+                  : change.changedAt,
+            },
+    });
+  }
+
+  /**
    * La reserva de Booking con el cambio que envió la agencia (plan de `update-reservation`, punto 15; T026):
    * - las fechas y las habitaciones del plan: una conservada guarda su fila, su habitación y su
    *   `stayStatus`, con sus personas nuevas; una nueva es otra fila, en `EXPECTED`, con habitación o sin

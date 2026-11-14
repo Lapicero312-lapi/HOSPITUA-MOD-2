@@ -199,6 +199,7 @@ Un único cuadro de búsqueda (`search`) cubre código de reserva, código de la
   "conflict": null,
   "rooms": [
     {
+      "reservationRoomId": "7c1e…",
       "roomId": "a4c2…",
       "roomNumber": "204",
       "categoryRoom": "DOBLE",
@@ -219,6 +220,9 @@ Un único cuadro de búsqueda (`search`) cubre código de reserva, código de la
   nunca como número.
 - `conflict` tiene la misma forma que en C1; una habitación sin asignar trae `roomId` y `roomNumber` en
   `null`. Cada habitación trae su `roomId` (historia 2, escenario 1).
+- `reservationRoomId` es el `id` de la `ReservationRoom`: con él, la Recepcionista elige a cuál habitación sin
+  asignar le asigna una (B3 de `update-reservation`, que lo pide en `assignments`). Lo agrega la T027 de
+  `update-reservation`.
 - En reservas de Booking el titular puede venir sin `documentType` ni `documentNumber` (`null`).
 - `updatedAt` va en hora de Colombia y con microsegundos. Es el control de concurrencia que la pantalla
   envía al cancelar (`cancel-reservation`, A) y al modificar (`update-reservation`, B1 y B2): "el que la

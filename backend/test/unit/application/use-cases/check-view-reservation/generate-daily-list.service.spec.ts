@@ -64,6 +64,8 @@ function serviceWith(
 ) {
   const calls: string[] = [];
   const run = vi.fn((work: (tx: Transaction) => Promise<unknown>) => work(TX));
+  const afterCommit = vi.fn<TransactionRunner['afterCommit']>();
+  const publication = { execute: vi.fn(() => Promise.resolve(0)) };
   const lockOrCreateDay = vi.fn((_date: string, _tx: Transaction) => {
     calls.push('lockOrCreateDay');
     return Promise.resolve(day);
@@ -81,7 +83,7 @@ function serviceWith(
     return insert(message, tx);
   });
   const service = new GenerateDailyListService(
-    { run } as unknown as TransactionRunner,
+    { run, afterCommit } as unknown as TransactionRunner,
     {
       lockOrCreateDay,
       markListGenerated,
@@ -89,6 +91,7 @@ function serviceWith(
     { findArrivals } as unknown as ReservationQueryPort,
     { insert: insertMessage } as unknown as DailyMessageRepository,
     CLOCK,
+    publication,
   );
   /** El mensaje que se guardó. */
   const saved = () => insertMessage.mock.calls[0][0];
@@ -101,6 +104,8 @@ function serviceWith(
     findArrivals,
     insertMessage,
     saved,
+    afterCommit,
+    publication,
   };
 }
 
@@ -389,5 +394,30 @@ describe('GenerateDailyList (T023)', () => {
     await second.service.execute();
 
     expect(first.saved().messageId).not.toBe(second.saved().messageId);
+  });
+
+  describe('la publicación inmediata (T029)', () => {
+    it('al generar la lista, la deja para cuando se confirme la transacción', async () => {
+      const { service, afterCommit, publication } = serviceWith([]);
+
+      expect(await service.execute()).toBe(true);
+
+      expect(afterCommit).toHaveBeenCalledTimes(1);
+      const [tx, work] = afterCommit.mock.calls[0];
+      expect(tx).toBe(TX);
+      expect(publication.execute).not.toHaveBeenCalled();
+      await work();
+      expect(publication.execute).toHaveBeenCalledTimes(1);
+    });
+
+    it('si la lista ya estaba generada, no deja ninguna publicación', async () => {
+      const { service, afterCommit } = serviceWith([], {
+        lastSequence: 1,
+        listGenerated: true,
+      });
+
+      expect(await service.execute()).toBe(false);
+      expect(afterCommit).not.toHaveBeenCalled();
+    });
   });
 });

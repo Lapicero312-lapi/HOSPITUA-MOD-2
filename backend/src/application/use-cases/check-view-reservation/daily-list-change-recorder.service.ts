@@ -19,10 +19,18 @@ import {
   OTA_REPOSITORY,
   type OtaRepository,
 } from '../../ports/out/ota.repository.js';
-import type { Transaction } from '../../ports/out/transaction.js';
+import {
+  TRANSACTION_RUNNER,
+  type Transaction,
+  type TransactionRunner,
+} from '../../ports/out/transaction.js';
 import { messageProjection } from './message-projection.js';
 import { colombiaTime } from './message-time.js';
 import type { DailyListChangeRecorder } from './ports/in/daily-list-change-recorder.port.js';
+import {
+  PUBLISH_PENDING_DAILY_MESSAGES,
+  type PublishPendingDailyMessages,
+} from './ports/in/publish-pending-daily-messages.port.js';
 
 /**
  * Deja en `daily_list_message` la actualización `ADDED`, `UPDATED` o `REMOVED` que genera el cambio de una
@@ -40,6 +48,10 @@ export class DailyListChangeRecorderService implements DailyListChangeRecorder {
     private readonly otas: OtaRepository,
     @Inject(CLOCK)
     private readonly clock: Clock,
+    @Inject(TRANSACTION_RUNNER)
+    private readonly transactions: TransactionRunner,
+    @Inject(PUBLISH_PENDING_DAILY_MESSAGES)
+    private readonly publication: PublishPendingDailyMessages,
   ) {}
 
   async record(
@@ -89,6 +101,8 @@ export class DailyListChangeRecorderService implements DailyListChangeRecorder {
       },
       tx,
     );
+    // La publicación inmediata, apenas se confirme el cambio que lo originó (T029, NFR-005).
+    this.transactions.afterCommit(tx, () => this.publication.execute());
   }
 
   /** El detalle de FR-014 tal como viaja: con el nombre de la agencia y `updatedAt` en hora de Colombia. */
