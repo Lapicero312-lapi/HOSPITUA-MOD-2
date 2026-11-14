@@ -1,3 +1,5 @@
+import { AriChangeRecorderService } from '../../../../src/application/use-cases/configure-ota/ari-change-recorder.service.js';
+import { TypeOrmAriPendingChangeRepository } from '../../../../src/infrastructure/out/persistence/repositories/ari-pending-change.repository.js';
 import { randomUUID } from 'node:crypto';
 import { Logger } from '@nestjs/common';
 import type { DataSource } from 'typeorm';
@@ -27,6 +29,7 @@ import { TypeOrmOtaNoShowReportRepository } from '../../../../src/infrastructure
 import { TypeOrmOtaRepository } from '../../../../src/infrastructure/out/persistence/repositories/ota.repository.js';
 import { TypeOrmReservationQuery } from '../../../../src/infrastructure/out/persistence/repositories/reservation-query.repository.js';
 import { TypeOrmReservationRepository } from '../../../../src/infrastructure/out/persistence/repositories/reservation.repository.js';
+import { TypeOrmIdempotencyKeyRepository } from '../../../../src/infrastructure/out/persistence/repositories/idempotency-key.repository.js';
 import { TypeOrmTransactionRunner } from '../../../../src/infrastructure/out/persistence/typeorm-transaction.js';
 import {
   aDirectReservation,
@@ -39,6 +42,7 @@ import {
   openTestDataSource,
   truncateAllTables,
 } from '../../support/database.js';
+import { NO_PUBLICATION } from '../../../support/publication.js';
 
 /**
  * El día que se cierra. El cierre corre a las 00:00:30 del día siguiente (FR-018): el reloj ya está en ese
@@ -161,6 +165,8 @@ describe('CloseDay contra PostgreSQL real (T021 y T023)', () => {
         new TypeOrmDailyMessageRepository(dataSource),
         new TypeOrmOtaRepository(dataSource),
         CLOCK,
+        new TypeOrmTransactionRunner(dataSource),
+        NO_PUBLICATION,
       ),
       new OtaNoShowReporterService(
         new TypeOrmOtaBookingRevisionRepository(dataSource),
@@ -169,6 +175,11 @@ describe('CloseDay contra PostgreSQL real (T021 y T023)', () => {
       new TypeOrmTransactionRunner(dataSource),
       // Lotes pequeños, para que se recorran varios con la base real.
       2,
+      new AriChangeRecorderService(
+        new TypeOrmAriPendingChangeRepository(dataSource),
+      ),
+      new TypeOrmIdempotencyKeyRepository(dataSource),
+      CLOCK,
     );
   });
 

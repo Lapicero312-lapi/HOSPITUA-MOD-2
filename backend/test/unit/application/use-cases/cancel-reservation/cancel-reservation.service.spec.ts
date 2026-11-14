@@ -115,7 +115,7 @@ function serviceWith(
     { record } as DailyListChangeRecorder,
     CLOCK,
     // `execute` abre su transacción; `cancel` recibe la de quien llama.
-    { run: (work) => work(TX) },
+    { run: (work) => work(TX), afterCommit: () => {} },
     { record: recordAvailability },
   );
   /** La reserva que devolvió `transition`: la ya guardada. */

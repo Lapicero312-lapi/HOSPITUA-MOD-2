@@ -1,6 +1,10 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { CLOCK, type Clock } from '../../ports/out/clock.js';
 import {
+  EXCLUSIVE_RUNNER,
+  type ExclusiveRunner,
+} from '../../ports/out/exclusive-runner.js';
+import {
   DAILY_LIST_PUBLISHER,
   type DailyListPublisher,
 } from '../../ports/out/daily-list-publisher.js';
@@ -19,6 +23,9 @@ export const MAX_ATTEMPTS = 10;
 
 /** La espera después de cada intento fallido: 5 s, 15 s, 45 s, 2 min y, del quinto en adelante, 5 min. */
 const RETRY_DELAYS_MS = [5_000, 15_000, 45_000, 120_000, 300_000];
+
+/** El bloqueo asesor de la publicación: el mismo para la tarea de 10 s y la inmediata (T029). */
+export const PUBLISH_LOCK = 'daily-list-publish';
 
 /** Lo que pasó con un mensaje. */
 type Outcome = 'PUBLISHED' | 'STOPPED';
@@ -39,9 +46,38 @@ export class PublishPendingDailyMessagesService implements PublishPendingDailyMe
     private readonly publisher: DailyListPublisher,
     @Inject(CLOCK)
     private readonly clock: Clock,
+    @Inject(EXCLUSIVE_RUNNER)
+    private readonly lock: ExclusiveRunner,
   ) {}
 
+  /** Una ejecución pidió publicar mientras otra tenía el bloqueo: la que lo tiene vuelve a leer. */
+  private missed = false;
+
+  /**
+   * Con el bloqueo `daily-list-publish` (T029). Si otra ejecución lo tiene, no publica y lo anota; la que
+   * lo tiene, al soltarlo, vuelve a leer una vez, para que ningún mensaje confirmado mientras tanto espere a
+   * la tarea de 10 s (NFR-005).
+   */
   async execute(): Promise<number> {
+    let published = 0;
+    const ran = await this.lock.runExclusive(PUBLISH_LOCK, async () => {
+      published = await this.publishInOrder();
+    });
+    if (!ran) {
+      this.missed = true;
+      return 0;
+    }
+    if (this.missed) {
+      this.missed = false;
+      await this.lock.runExclusive(PUBLISH_LOCK, async () => {
+        published += await this.publishInOrder();
+      });
+    }
+    return published;
+  }
+
+  /** Los pasos 1 a 4 de `execute` en el plan. */
+  private async publishInOrder(): Promise<number> {
     let published = 0;
     for (;;) {
       // Paso 1.

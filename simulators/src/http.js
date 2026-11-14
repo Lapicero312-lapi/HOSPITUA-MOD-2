@@ -5,7 +5,7 @@ const MAX_BODY_BYTES = 10_000;
 
 /**
  * @typedef {{ status: number; body: unknown }} Reply
- * @typedef {(request: { method: string; url: URL; body: string }) => Reply} Handler
+ * @typedef {(request: { method: string; url: URL; body: string }) => Reply | Promise<Reply>} Handler
  */
 
 /**

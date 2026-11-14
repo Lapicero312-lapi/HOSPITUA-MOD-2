@@ -12,7 +12,9 @@ import { CHANNEX_SETUP_STATE } from '../../../../../src/application/ports/out/ch
 import { CHANNEX_PORT } from '../../../../../src/application/ports/out/channex.port.js';
 import { CLOCK } from '../../../../../src/application/ports/out/clock.js';
 import { COMMISSION_AUDIT_REPOSITORY } from '../../../../../src/application/ports/out/commission-audit.repository.js';
+import { EXCLUSIVE_RUNNER } from '../../../../../src/application/ports/out/exclusive-runner.js';
 import { DAILY_LIST_PUBLISHER } from '../../../../../src/application/ports/out/daily-list-publisher.js';
+import { IDEMPOTENCY_KEY_REPOSITORY } from '../../../../../src/application/ports/out/idempotency-key.repository.js';
 import { DAILY_MESSAGE_REPOSITORY } from '../../../../../src/application/ports/out/daily-message.repository.js';
 import { DAILY_SEQUENCE_REPOSITORY } from '../../../../../src/application/ports/out/daily-sequence.repository.js';
 import { GUEST_DATA_REPOSITORY } from '../../../../../src/application/ports/out/guest-data.repository.js';
@@ -45,7 +47,9 @@ const GLOBAL_TOKENS = [
   RESERVATION_QUERY_PORT,
   DAILY_SEQUENCE_REPOSITORY,
   DAILY_MESSAGE_REPOSITORY,
+  IDEMPOTENCY_KEY_REPOSITORY,
   DAILY_LIST_PUBLISHER,
+  EXCLUSIVE_RUNNER,
   OTA_REPOSITORY,
   CANCELLATION_REPOSITORY,
   CLOCK,

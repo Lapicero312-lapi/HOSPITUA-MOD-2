@@ -10,5 +10,8 @@
   "scripts": {
     "start": "node src/main.js",
     "test": "node --test \"test/**/*.test.js\""
+  },
+  "dependencies": {
+    "amqplib": "0.10.9"
   }
 }
