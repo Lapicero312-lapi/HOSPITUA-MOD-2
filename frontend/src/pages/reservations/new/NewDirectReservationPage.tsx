@@ -174,13 +174,13 @@ export function NewDirectReservationPage() {
     );
 
   return (
-    <section className="new-direct">
-      <Link className="new-direct-back" to="/reservas">
+    <section className="new-direct ui-page">
+      <Link className="new-direct-back ui-back" to="/reservas">
         ← Volver a reservas
       </Link>
-      <h1 className="new-direct-title">Nueva reserva directa</h1>
+      <h1 className="new-direct-title ui-page-title">Nueva reserva directa</h1>
       <form className="new-direct-grid" onSubmit={submit} noValidate>
-        <div className="new-direct-panel">
+        <div className="new-direct-panel ui-panel">
           <h2>Estadía</h2>
           <div className="new-direct-row">
             <Field id="nd-start" label="Fecha de entrada">
@@ -270,7 +270,7 @@ export function NewDirectReservationPage() {
           </Field>
         </div>
 
-        <div className="new-direct-panel">
+        <div className="new-direct-panel new-direct-aside ui-panel">
           <h2>Disponibilidad y tarifa</h2>
           {!ready && (
             <p className="new-direct-hint">
@@ -286,6 +286,7 @@ export function NewDirectReservationPage() {
           <div className="new-direct-buttons">
             <button
               type="submit"
+              className="ui-button--primary"
               disabled={
                 !ready ||
                 !preview.isSuccess ||
@@ -296,7 +297,9 @@ export function NewDirectReservationPage() {
             >
               {creation.isPending ? 'Creando…' : 'Crear reserva'}
             </button>
-            <Link to="/reservas">Volver</Link>
+            <Link className="ui-link-button" to="/reservas">
+              Volver
+            </Link>
           </div>
         </div>
       </form>
@@ -430,7 +433,7 @@ function Quote({ preview }: { preview: DirectPreview }) {
         {preview.availability.availableCount} habitaciones{' '}
         {preview.availability.categoryRoom} disponibles.
       </p>
-      <table className="new-direct-table">
+      <table className="new-direct-table ui-table">
         <thead>
           <tr>
             <th scope="col">Habitación</th>

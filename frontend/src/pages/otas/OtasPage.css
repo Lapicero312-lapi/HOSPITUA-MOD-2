@@ -1,166 +1,52 @@
-/*
- * Pantalla "Agencias OTA". Todo cuelga de `.otas`, así no cambia ninguna otra pantalla. Usa los colores
- * base de `index.css`: un panel con la tabla y una etiqueta de color para la conexión con Channex.
- */
-
-.otas {
-  --otas-radius: 12px;
-  --otas-radius-pill: 999px;
-  --otas-shadow:
-    0 1px 2px rgba(31, 41, 51, 0.04), 0 8px 24px rgba(31, 41, 51, 0.06);
-  --otas-row-hover: #f0f6fb;
-  --otas-connected: #1d6b3f;
-  --otas-connected-background: #e5f4ea;
-  --otas-disconnected-background: #fef3f2;
-  --otas-error-background: #fef3f2;
-  max-width: 72rem;
-}
-
-.otas-title {
-  margin: 0 0 1rem;
-  font-size: 1.5rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
+/* Pantalla "Agencias OTA": tabla de solo lectura con la conexión como estado. */
 
 .otas-panel {
   overflow: hidden;
-  background-color: var(--color-background);
-  border: 1px solid var(--color-border);
-  border-radius: var(--otas-radius);
-  box-shadow: var(--otas-shadow);
-}
-
-.otas-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.875rem;
-}
-
-.otas-table th {
-  padding: 0.75rem 1.25rem;
-  background-color: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
-  color: var(--color-muted);
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-align: left;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.otas-table td {
-  padding: 0.875rem 1.25rem;
-  border-bottom: 1px solid var(--color-border);
-  vertical-align: middle;
-  white-space: nowrap;
-}
-
-.otas-table tbody tr {
-  transition: background-color 120ms ease;
-}
-
-.otas-table tbody tr:hover {
-  background-color: var(--otas-row-hover);
-}
-
-.otas-table tbody tr:last-child td {
-  border-bottom: none;
 }
 
 .otas-name {
-  font-weight: 600;
+  color: var(--text-1);
+  font-weight: 500;
+  white-space: nowrap;
 }
 
-.otas-commission {
-  font-variant-numeric: tabular-nums;
+.otas-commission,
+.otas-count {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.otas-table th:nth-child(2),
+.otas-table th:last-child {
+  text-align: right;
 }
 
 .otas-commission--none {
-  color: var(--color-muted);
-}
-
-/* La conexión: una etiqueta con un punto de color, verde si está conectada y roja si no. */
-.otas-connection {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.25rem 0.75rem;
-  border-radius: var(--otas-radius-pill);
-  font-size: 0.8125rem;
-  font-weight: 600;
-}
-
-.otas-connection::before {
-  content: '';
-  width: 0.5rem;
-  height: 0.5rem;
-  background-color: currentColor;
-  border-radius: 50%;
-}
-
-.otas-connection--connected {
-  background-color: var(--otas-connected-background);
-  color: var(--otas-connected);
-}
-
-.otas-connection--disconnected {
-  background-color: var(--otas-disconnected-background);
-  color: var(--color-error);
+  color: var(--text-3);
 }
 
 .otas-date {
-  color: var(--color-muted);
-  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
+  white-space: nowrap;
 }
 
 .otas-count {
+  color: var(--text-1);
   font-weight: 600;
-  font-variant-numeric: tabular-nums;
 }
 
-/* Mientras carga y sin agencias: un mensaje centrado dentro del panel. */
-.otas-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  margin: 0;
-  padding: 2.5rem 1.25rem;
-  color: var(--color-muted);
+.otas-connection--connected {
+  --tone-bg: var(--positive-bg);
+  --tone-border: var(--positive-border);
+  --tone-fg: var(--positive-fg);
 }
 
-.otas-state--loading::before {
-  content: '';
-  width: 1rem;
-  height: 1rem;
-  border: 2px solid var(--color-border);
-  border-top-color: var(--color-accent);
-  border-radius: 50%;
-  animation: otas-spin 0.8s linear infinite;
+.otas-connection--disconnected {
+  --tone-bg: var(--neutral-bg);
+  --tone-border: var(--neutral-border);
+  --tone-fg: var(--neutral-fg);
 }
 
-@keyframes otas-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .otas-state--loading::before {
-    animation: none;
-  }
-
-  .otas-table tbody tr {
-    transition: none;
-  }
-}
-
-/* El mensaje de error (`ErrorMessage`) dentro del panel, en lugar de la tabla. */
 .otas-panel .error-message {
-  margin: 0;
-  padding: 1rem 1.25rem;
-  background-color: var(--otas-error-background);
-  border-left: 4px solid var(--color-error);
+  margin: 1rem;
 }

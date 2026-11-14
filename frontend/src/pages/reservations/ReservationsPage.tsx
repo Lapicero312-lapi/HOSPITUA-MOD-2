@@ -2,6 +2,13 @@ import { useQuery } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { ErrorMessage } from '../../components/ErrorMessage.tsx';
+import {
+  ChannelBookingIcon,
+  ChannelDirectIcon,
+  DoorCheckInIcon,
+  DoorCheckOutIcon,
+  SearchIcon,
+} from '../../components/icons.tsx';
 import { listOtas } from '../../services/otas.ts';
 import {
   getDaySummary,
@@ -125,16 +132,23 @@ export function ReservationsPage() {
   };
 
   return (
-    <section className="reservations">
-      <header className="reservations-header">
-        <h1 className="reservations-title">Consultar reservas</h1>
-        <Link className="reservations-new" to="/reservas/nueva">
+    <section className="reservations ui-page">
+      <header className="reservations-header ui-page-header">
+        <div>
+          <h1 className="reservations-title ui-page-title">
+            Consultar reservas
+          </h1>
+        </div>
+        <Link
+          className="reservations-new ui-link-button ui-button--primary"
+          to="/reservas/nueva"
+        >
           + Nueva reserva directa
         </Link>
       </header>
       <DaySummaryPanel />
       <Filters key={filters.search} filters={filters} onChange={change} />
-      <div className="reservations-panel">
+      <div className="reservations-panel ui-panel">
         <Results filters={filters} onPage={(page) => change({ page })} />
       </div>
     </section>
@@ -150,29 +164,35 @@ function DaySummaryPanel() {
 
   if (summary.isPending) {
     return (
-      <p className="reservations-summary reservations-summary--loading">
+      <p className="reservations-summary reservations-summary--loading ui-ribbon">
         Cargando el resumen del día…
       </p>
     );
   }
   if (summary.isError) {
     return (
-      <div className="reservations-summary">
+      <div className="reservations-summary reservations-summary--error">
         <ErrorMessage error={summary.error} />
       </div>
     );
   }
   return (
     <dl
-      className="reservations-summary"
+      className="reservations-summary ui-ribbon"
       aria-label={`Resumen del día ${formatDate(summary.data.operationalDate)}`}
     >
       <div className="reservations-summary-item">
-        <dt>Llegadas esperadas hoy</dt>
+        <dt>
+          <DoorCheckInIcon size={14} className="reservations-kpi-icon" />
+          Llegadas esperadas hoy
+        </dt>
         <dd>{summary.data.expectedArrivals}</dd>
       </div>
       <div className="reservations-summary-item">
-        <dt>Salidas esperadas hoy</dt>
+        <dt>
+          <DoorCheckOutIcon size={14} className="reservations-kpi-icon" />
+          Salidas esperadas hoy
+        </dt>
         <dd>{summary.data.expectedDepartures}</dd>
       </div>
       <div className="reservations-summary-item reservations-summary-item--date">
@@ -224,14 +244,15 @@ function Filters({
 
   return (
     <form
-      className="reservations-filters"
+      className="reservations-filters ui-panel ui-toolbar"
       aria-label="Filtros"
       onSubmit={submit}
       noValidate
     >
-      <div className="reservations-field reservations-field--search">
+      <div className="reservations-field reservations-field--search ui-field">
         <label htmlFor="reservations-search">Buscar</label>
         <div className="reservations-search">
+          <SearchIcon size={15} className="reservations-search-icon" />
           <input
             id="reservations-search"
             type="search"
@@ -243,7 +264,7 @@ function Filters({
           <button type="submit">Buscar</button>
         </div>
       </div>
-      <div className="reservations-field">
+      <div className="reservations-field ui-field">
         <label htmlFor="reservations-status">Estado</label>
         <select
           id="reservations-status"
@@ -260,7 +281,7 @@ function Filters({
           ))}
         </select>
       </div>
-      <div className="reservations-field">
+      <div className="reservations-field ui-field">
         <label htmlFor="reservations-source">Canal</label>
         <select
           id="reservations-source"
@@ -278,7 +299,7 @@ function Filters({
           <option value="OTA">OTA</option>
         </select>
       </div>
-      <div className="reservations-field">
+      <div className="reservations-field ui-field">
         <label htmlFor="reservations-ota">Agencia</label>
         <select
           id="reservations-ota"
@@ -294,7 +315,7 @@ function Filters({
           ))}
         </select>
       </div>
-      <div className="reservations-field">
+      <div className="reservations-field ui-field">
         <label htmlFor="reservations-from">Desde</label>
         <input
           id="reservations-from"
@@ -303,7 +324,7 @@ function Filters({
           onChange={(event) => onChange({ dateFrom: event.target.value })}
         />
       </div>
-      <div className="reservations-field">
+      <div className="reservations-field ui-field">
         <label htmlFor="reservations-to">Hasta</label>
         <input
           id="reservations-to"
@@ -312,7 +333,7 @@ function Filters({
           onChange={(event) => onChange({ dateTo: event.target.value })}
         />
       </div>
-      <div className="reservations-field">
+      <div className="reservations-field ui-field">
         <label htmlFor="reservations-order">Orden</label>
         <select
           id="reservations-order"
@@ -325,7 +346,7 @@ function Filters({
           <option value="asc">Llegada: más antigua primero</option>
         </select>
       </div>
-      <label className="reservations-check">
+      <label className="reservations-check ui-check">
         <input
           type="checkbox"
           checked={filters.inConflict}
@@ -333,7 +354,11 @@ function Filters({
         />
         Solo en conflicto
       </label>
-      <button type="button" className="reservations-clear" onClick={clear}>
+      <button
+        type="button"
+        className="reservations-clear ui-button--ghost"
+        onClick={clear}
+      >
         Limpiar filtros
       </button>
       {incompleteRange && (
@@ -360,7 +385,7 @@ function Results({
 
   if (reservations.isPending) {
     return (
-      <p className="reservations-state reservations-state--loading">
+      <p className="reservations-state reservations-state--loading ui-state ui-state--loading">
         Cargando reservas…
       </p>
     );
@@ -370,7 +395,7 @@ function Results({
   }
   if (reservations.data.items.length === 0) {
     return (
-      <p className="reservations-state">
+      <p className="reservations-state ui-state">
         {reservations.data.message ??
           'No se encontraron reservas con los filtros aplicados.'}
       </p>
@@ -390,28 +415,30 @@ function ReservationsTable({
   reservations: ReservationListItem[];
 }) {
   return (
-    <table className="reservations-table">
-      <thead>
-        <tr>
-          <th scope="col">Ref. reserva</th>
-          <th scope="col">Huésped</th>
-          <th scope="col">Habitaciones</th>
-          <th scope="col">Canal</th>
-          <th scope="col">Fechas (in → out)</th>
-          <th scope="col">Estado</th>
-          <th scope="col">Migración</th>
-          <th scope="col">Acciones</th>
-        </tr>
-      </thead>
-      <tbody>
-        {reservations.map((reservation) => (
-          <ReservationRow
-            key={reservation.reservationRef}
-            reservation={reservation}
-          />
-        ))}
-      </tbody>
-    </table>
+    <div className="ui-scroll-x">
+      <table className="reservations-table ui-table ui-table--sticky">
+        <thead>
+          <tr>
+            <th scope="col">Ref. reserva</th>
+            <th scope="col">Huésped</th>
+            <th scope="col">Habitaciones</th>
+            <th scope="col">Canal</th>
+            <th scope="col">Fechas (in → out)</th>
+            <th scope="col">Estado</th>
+            <th scope="col">Migración</th>
+            <th scope="col">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {reservations.map((reservation) => (
+            <ReservationRow
+              key={reservation.reservationRef}
+              reservation={reservation}
+            />
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -422,7 +449,7 @@ function ReservationRow({ reservation }: { reservation: ReservationListItem }) {
       <td>
         <span className="reservations-ref">{reservationRef}</span>
         {reservation.externalConfirmationCode !== null && (
-          <span className="reservations-secondary">
+          <span className="reservations-secondary ui-secondary">
             {reservation.externalConfirmationCode}
           </span>
         )}
@@ -430,7 +457,7 @@ function ReservationRow({ reservation }: { reservation: ReservationListItem }) {
       <td>
         <span className="reservations-guest">{reservation.guest.fullName}</span>
         {reservation.guest.documentNumber !== null && (
-          <span className="reservations-secondary">
+          <span className="reservations-secondary ui-secondary">
             {reservation.guest.documentNumber}
           </span>
         )}
@@ -447,12 +474,24 @@ function ReservationRow({ reservation }: { reservation: ReservationListItem }) {
       </td>
       <td>
         {reservation.source === 'DIRECT' ? (
-          'Directo'
+          <span className="reservations-channel">
+            <ChannelDirectIcon
+              size={14}
+              className="reservations-channel-icon"
+            />
+            Directo
+          </span>
         ) : (
           <>
-            OTA
+            <span className="reservations-channel">
+              <ChannelBookingIcon
+                size={14}
+                className="reservations-channel-icon"
+              />
+              OTA
+            </span>
             {reservation.otaName !== null && (
-              <span className="reservations-secondary">
+              <span className="reservations-secondary ui-secondary">
                 {reservation.otaName}
               </span>
             )}
@@ -464,12 +503,14 @@ function ReservationRow({ reservation }: { reservation: ReservationListItem }) {
       </td>
       <td>
         <span
-          className={`reservations-status reservations-status--${reservation.status.toLowerCase()}`}
+          className={`reservations-status ui-badge reservations-status--${reservation.status.toLowerCase()}`}
         >
           {STATUS_LABELS[reservation.status]}
         </span>
         {reservation.conflict !== null && (
-          <span className="reservations-conflict">En conflicto</span>
+          <span className="reservations-conflict ui-badge tone-critical">
+            En conflicto
+          </span>
         )}
       </td>
       <td>{MIGRATION_LABELS[reservation.migrationStatus]}</td>
@@ -548,7 +589,10 @@ function Pagination({
   onPage: (page: number) => void;
 }) {
   return (
-    <nav className="reservations-pagination" aria-label="Paginación">
+    <nav
+      className="reservations-pagination ui-pagination"
+      aria-label="Paginación"
+    >
       <span>
         {list.totalItems === 1 ? '1 reserva' : `${list.totalItems} reservas`}
       </span>

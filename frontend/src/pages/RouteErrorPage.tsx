@@ -5,10 +5,14 @@ import { ErrorMessage } from '../components/ErrorMessage.tsx';
 export function RouteErrorPage() {
   const error = useRouteError();
   return (
-    <section className="layout-main">
-      <h1>No se pudo mostrar la pantalla.</h1>
-      <ErrorMessage error={error} />
-      <Link to="/">Volver al inicio</Link>
+    <section className="route-error">
+      <div className="ui-panel ui-empty">
+        <h1 className="ui-page-title">No se pudo mostrar la pantalla.</h1>
+        <ErrorMessage error={error} />
+        <Link className="ui-link-button" to="/">
+          Volver al inicio
+        </Link>
+      </div>
     </section>
   );
 }

@@ -1,69 +1,120 @@
-/*
- * Pantalla de inicio: los accesos a las pantallas, como tarjetas. Todo cuelga de `.home-links`, así no
- * cambia ninguna otra pantalla.
- */
+/* Pantalla de inicio: el saludo del turno y los accesos a las pantallas, como tarjetas. */
+
+.home {
+  gap: 1.75rem;
+}
+
+.home-hero {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding-top: 0.5rem;
+}
+
+.home-date {
+  color: var(--accent);
+}
+
+.home-title {
+  font-size: 1.75rem;
+  letter-spacing: -0.03em;
+}
 
 .home-links {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
-  gap: 1rem;
-  max-width: 60rem;
-  margin: 1.5rem 0 0;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+  gap: 0.75rem;
+  margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.home-links li {
+  min-width: 0;
+  animation: ui-rise 450ms var(--ease) backwards;
+}
+
+.home-links li:nth-child(2) {
+  animation-delay: 50ms;
+}
+
+.home-links li:nth-child(3) {
+  animation-delay: 100ms;
+}
+
+.home-links li:nth-child(4) {
+  animation-delay: 150ms;
+}
+
+.home-links li:nth-child(n + 5) {
+  animation-delay: 200ms;
 }
 
 .home-link {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  padding: 1.25rem 1.5rem;
-  background-color: var(--color-background);
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  box-shadow:
-    0 1px 2px rgba(31, 41, 51, 0.04),
-    0 8px 24px rgba(31, 41, 51, 0.06);
-  color: var(--color-text);
-  font-weight: 600;
-  text-decoration: none;
+  gap: 0.875rem;
+  height: 100%;
+  min-height: 76px;
+  padding: 1rem 1.125rem;
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--highlight);
+  color: var(--text-1);
   transition:
-    border-color 120ms ease,
-    box-shadow 120ms ease,
-    transform 120ms ease;
-}
-
-/* Una flecha dibujada con bordes: no es texto, así que no cambia el nombre del enlace. */
-.home-link::after {
-  content: '';
-  flex-shrink: 0;
-  width: 0.5rem;
-  height: 0.5rem;
-  border-top: 2px solid var(--color-accent);
-  border-right: 2px solid var(--color-accent);
-  transform: rotate(45deg);
+    border-color var(--fast) var(--ease),
+    background-color var(--fast) var(--ease),
+    transform var(--base) var(--ease);
 }
 
 .home-link:hover {
-  border-color: var(--color-accent);
-  box-shadow:
-    0 1px 2px rgba(31, 41, 51, 0.06),
-    0 12px 28px rgba(31, 95, 139, 0.14);
-  transform: translateY(-1px);
+  background-color: var(--surface-2);
+  border-color: var(--border-strong);
+  color: var(--text-1);
 }
 
-.home-link:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
+.home-link:active {
+  transform: scale(0.99);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .home-link {
-    transition: none;
-  }
+.home-link-icon {
+  display: inline-grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background-color: var(--surface-2);
+  color: var(--text-2);
+  transition:
+    color var(--fast) var(--ease),
+    background-color var(--fast) var(--ease);
+}
 
-  .home-link:hover {
-    transform: none;
-  }
+.home-link:hover .home-link-icon {
+  background-color: var(--accent-soft);
+  color: var(--accent);
+}
+
+.home-link-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.home-link-arrow {
+  flex-shrink: 0;
+  color: var(--text-3);
+  transition:
+    transform var(--base) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.home-link:hover .home-link-arrow {
+  color: var(--text-1);
+  transform: translateX(3px);
 }

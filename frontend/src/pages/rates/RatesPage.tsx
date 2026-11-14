@@ -15,9 +15,13 @@ import './RatesPage.css';
  */
 export function RatesPage() {
   return (
-    <section className="rates">
-      <h1 className="rates-title">Tarifas</h1>
-      <div className="rates-panel">
+    <section className="rates ui-page">
+      <header className="ui-page-header">
+        <div>
+          <h1 className="rates-title ui-page-title">Tarifas</h1>
+        </div>
+      </header>
+      <div className="rates-panel ui-panel">
         <RatesContent />
       </div>
     </section>
@@ -32,7 +36,9 @@ function RatesContent() {
 
   if (rates.isPending) {
     return (
-      <p className="rates-state rates-state--loading">Cargando tarifas…</p>
+      <p className="rates-state rates-state--loading ui-state ui-state--loading">
+        Cargando tarifas…
+      </p>
     );
   }
   if (rates.isError) {
@@ -41,7 +47,7 @@ function RatesContent() {
   return (
     <>
       {rates.data.items.length === 0 ? (
-        <p className="rates-state">
+        <p className="rates-state ui-state">
           No hay tarifas de referencia configuradas.
         </p>
       ) : (
@@ -54,30 +60,32 @@ function RatesContent() {
 
 function RatesTable({ rates }: { rates: ReferenceRate[] }) {
   return (
-    <table className="rates-table">
-      <thead>
-        <tr>
-          <th scope="col">Categoría</th>
-          <th scope="col">Tarifa base</th>
-          <th scope="col">Ajuste de temporada</th>
-          <th scope="col">Tarifa efectiva / noche</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rates.map((rate) => (
-          <tr key={rate.categoryRoom}>
-            <td className="rates-category">{rate.categoryRoom}</td>
-            <td className="rates-money">{formatMoney(rate.baseRate)}</td>
-            <td className="rates-adjustment">
-              {formatPercentage(rate.seasonAdjustmentPercentage)}
-            </td>
-            <td className="rates-money rates-effective">
-              {formatMoney(rate.effectiveRate)}
-            </td>
+    <div className="ui-scroll-x">
+      <table className="rates-table ui-table ui-table--sticky">
+        <thead>
+          <tr>
+            <th scope="col">Categoría</th>
+            <th scope="col">Tarifa base</th>
+            <th scope="col">Ajuste de temporada</th>
+            <th scope="col">Tarifa efectiva / noche</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {rates.map((rate) => (
+            <tr key={rate.categoryRoom}>
+              <td className="rates-category">{rate.categoryRoom}</td>
+              <td className="rates-money">{formatMoney(rate.baseRate)}</td>
+              <td className="rates-adjustment">
+                {formatPercentage(rate.seasonAdjustmentPercentage)}
+              </td>
+              <td className="rates-money rates-effective">
+                {formatMoney(rate.effectiveRate)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

@@ -96,11 +96,15 @@ export function SirePage() {
     movements.isSuccess && movements.data.totalItems > 0 && complete;
 
   return (
-    <section className="sire">
-      <h1 className="sire-title">Exportar archivo SIRE</h1>
-      <div className="sire-panel sire-period">
-        <div className="sire-fields">
-          <div className="sire-field">
+    <section className="sire ui-page">
+      <header className="ui-page-header">
+        <div>
+          <h1 className="sire-title ui-page-title">Exportar archivo SIRE</h1>
+        </div>
+      </header>
+      <div className="sire-panel sire-period ui-panel">
+        <div className="sire-fields ui-toolbar">
+          <div className="sire-field ui-field">
             <label htmlFor="sire-start">Fecha inicial</label>
             <input
               id="sire-start"
@@ -109,7 +113,7 @@ export function SirePage() {
               onChange={(event) => change({ startDate: event.target.value })}
             />
           </div>
-          <div className="sire-field">
+          <div className="sire-field ui-field">
             <label htmlFor="sire-end">Fecha final</label>
             <input
               id="sire-end"
@@ -118,15 +122,17 @@ export function SirePage() {
               onChange={(event) => change({ endDate: event.target.value })}
             />
           </div>
-          <button type="button" onClick={() => change(lastDays(7))}>
-            Últimos 7 días
-          </button>
-          <button type="button" onClick={() => change(lastDays(30))}>
-            Últimos 30 días
-          </button>
+          <div className="sire-shortcuts" role="group" aria-label="Atajos">
+            <button type="button" onClick={() => change(lastDays(7))}>
+              Últimos 7 días
+            </button>
+            <button type="button" onClick={() => change(lastDays(30))}>
+              Últimos 30 días
+            </button>
+          </div>
           <button
             type="button"
-            className="sire-primary sire-download-all"
+            className="sire-primary sire-download-all ui-button--primary"
             disabled={!hasMovements || download.isPending}
             onClick={() =>
               download.mutate({
@@ -146,14 +152,16 @@ export function SirePage() {
           <ErrorMessage error={download.error} />
         )}
         {notice !== null && (
-          <p role="status" className="sire-notice">
+          <p role="status" className="sire-notice ui-notice tone-positive">
             {notice}
           </p>
         )}
       </div>
       <PeriodStats complete={complete} query={movements} />
-      <div className="sire-panel">
-        <h2 className="sire-subtitle">Movimientos del periodo</h2>
+      <div className="sire-panel ui-panel">
+        <h2 className="sire-subtitle ui-panel-title">
+          Movimientos del periodo
+        </h2>
         <Movements
           complete={complete}
           query={movements}
@@ -195,7 +203,7 @@ function PeriodStats({
     return null;
   }
   return (
-    <dl className="sire-stats">
+    <dl className="sire-stats ui-ribbon">
       <div className="sire-stat">
         <dt>Movimientos en el periodo</dt>
         <dd>{query.data.totalItems}</dd>
@@ -221,14 +229,16 @@ function Movements({
 }) {
   if (!complete) {
     return (
-      <p className="sire-state">
+      <p className="sire-state ui-state">
         Elija la fecha inicial y la final para ver los movimientos del periodo.
       </p>
     );
   }
   if (query.isPending) {
     return (
-      <p className="sire-state sire-state--loading">Cargando movimientos…</p>
+      <p className="sire-state sire-state--loading ui-state ui-state--loading">
+        Cargando movimientos…
+      </p>
     );
   }
   if (query.isError) {
@@ -237,7 +247,7 @@ function Movements({
   const list = query.data;
   if (list.items.length === 0) {
     return (
-      <p className="sire-state">
+      <p className="sire-state ui-state">
         {list.message ??
           'No hay movimientos migratorios que reportar en ese periodo.'}
       </p>
@@ -245,60 +255,63 @@ function Movements({
   }
   return (
     <>
-      <table className="sire-table">
-        <thead>
-          <tr>
-            <th scope="col">Reserva</th>
-            <th scope="col">Huésped</th>
-            <th scope="col">Nacionalidad</th>
-            <th scope="col">Movimiento</th>
-            <th scope="col">Acciones</th>
-          </tr>
-        </thead>
-        <tbody>
-          {list.items.map((movement) => (
-            <tr key={movement.movementId}>
-              <td className="sire-ref">{movement.reservationRef}</td>
-              <td>
-                <span className="sire-guest">{movement.guest.fullName}</span>
-                <span className="sire-secondary">
-                  {movement.guest.documentType} {movement.guest.documentNumber}
-                </span>
-              </td>
-              <td>{movement.guest.nationality}</td>
-              <td>
-                <span className="sire-movement">
-                  {MOVEMENT_LABELS[movement.movementType]}
-                </span>
-                <span className="sire-secondary">
-                  {formatDate(movement.movementDate)}
-                </span>
-              </td>
-              <td>
-                <span className="sire-actions">
-                  <button
-                    type="button"
-                    aria-label={`Previsualizar ${movementName(movement)}`}
-                    onClick={() => onPreview(movement)}
-                  >
-                    Previsualizar
-                  </button>
-                  <button
-                    type="button"
-                    className="sire-primary"
-                    aria-label={`Descargar ${movementName(movement)}`}
-                    disabled={downloading}
-                    onClick={() => onDownload(movement)}
-                  >
-                    Descargar
-                  </button>
-                </span>
-              </td>
+      <div className="ui-scroll-x">
+        <table className="sire-table ui-table ui-table--sticky">
+          <thead>
+            <tr>
+              <th scope="col">Reserva</th>
+              <th scope="col">Huésped</th>
+              <th scope="col">Nacionalidad</th>
+              <th scope="col">Movimiento</th>
+              <th scope="col">Acciones</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-      <nav className="sire-pagination" aria-label="Paginación">
+          </thead>
+          <tbody>
+            {list.items.map((movement) => (
+              <tr key={movement.movementId}>
+                <td className="sire-ref">{movement.reservationRef}</td>
+                <td>
+                  <span className="sire-guest">{movement.guest.fullName}</span>
+                  <span className="sire-secondary">
+                    {movement.guest.documentType}{' '}
+                    {movement.guest.documentNumber}
+                  </span>
+                </td>
+                <td>{movement.guest.nationality}</td>
+                <td>
+                  <span className="sire-movement">
+                    {MOVEMENT_LABELS[movement.movementType]}
+                  </span>
+                  <span className="sire-secondary">
+                    {formatDate(movement.movementDate)}
+                  </span>
+                </td>
+                <td>
+                  <span className="sire-actions">
+                    <button
+                      type="button"
+                      aria-label={`Previsualizar ${movementName(movement)}`}
+                      onClick={() => onPreview(movement)}
+                    >
+                      Previsualizar
+                    </button>
+                    <button
+                      type="button"
+                      className="sire-primary ui-button--primary"
+                      aria-label={`Descargar ${movementName(movement)}`}
+                      disabled={downloading}
+                      onClick={() => onDownload(movement)}
+                    >
+                      Descargar
+                    </button>
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <nav className="sire-pagination ui-pagination" aria-label="Paginación">
         <button
           type="button"
           disabled={list.page <= 1}
@@ -353,74 +366,88 @@ function PreviewDialog({
   }, [onClose]);
 
   return (
-    <div className="sire-backdrop">
+    <div className="sire-backdrop" onMouseDown={onClose}>
       <div
         className="sire-dialog"
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        onMouseDown={(event) => event.stopPropagation()}
       >
-        <h2 id={titleId} className="sire-subtitle">
-          Previsualizar movimiento
-        </h2>
-        <p className="sire-secondary">
-          Así saldría la línea en el archivo .TXT.
-        </p>
-        <dl className="sire-meta">
+        <header className="sire-dialog-header">
           <div>
-            <dt>Reserva</dt>
-            <dd>{movement.reservationRef}</dd>
-          </div>
-          <div>
-            <dt>Huésped</dt>
-            <dd>{movement.guest.fullName}</dd>
-          </div>
-          <div>
-            <dt>Movimiento</dt>
-            <dd>
-              {MOVEMENT_LABELS[movement.movementType]} ·{' '}
-              {formatDate(movement.movementDate)}
-            </dd>
-          </div>
-        </dl>
-        {preview.isPending && (
-          <p className="sire-state sire-state--loading">Cargando la línea…</p>
-        )}
-        {preview.isError && <ErrorMessage error={preview.error} />}
-        {preview.isSuccess && (
-          <>
-            <table className="sire-table" aria-label="Campos SIRE">
-              <thead>
-                <tr>
-                  <th scope="col">#</th>
-                  <th scope="col">Campo SIRE</th>
-                  <th scope="col">Valor</th>
-                </tr>
-              </thead>
-              <tbody>
-                {preview.data.fields.map((field) => (
-                  <tr key={field.position}>
-                    <td className="sire-secondary">{field.position}</td>
-                    <td>{field.name}</td>
-                    <td className="sire-value">{field.value}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <h2 id={titleId} className="sire-subtitle">
+              Previsualizar movimiento
+            </h2>
             <p className="sire-secondary">
-              Línea del archivo (el separador se muestra como →):
+              Así saldría la línea en el archivo .TXT.
             </p>
-            <pre className="sire-line">{showSeparator(preview.data.line)}</pre>
-          </>
-        )}
-        {error !== null && <ErrorMessage error={error} />}
+          </div>
+          <kbd>ESC</kbd>
+        </header>
+        <div className="sire-dialog-body">
+          <dl className="sire-meta">
+            <div>
+              <dt>Reserva</dt>
+              <dd>{movement.reservationRef}</dd>
+            </div>
+            <div>
+              <dt>Huésped</dt>
+              <dd>{movement.guest.fullName}</dd>
+            </div>
+            <div>
+              <dt>Movimiento</dt>
+              <dd>
+                {MOVEMENT_LABELS[movement.movementType]} ·{' '}
+                {formatDate(movement.movementDate)}
+              </dd>
+            </div>
+          </dl>
+          {preview.isPending && (
+            <p className="sire-state sire-state--loading ui-state ui-state--loading">
+              Cargando la línea…
+            </p>
+          )}
+          {preview.isError && <ErrorMessage error={preview.error} />}
+          {preview.isSuccess && (
+            <>
+              <div className="sire-fields-table">
+                <table className="sire-table ui-table" aria-label="Campos SIRE">
+                  <thead>
+                    <tr>
+                      <th scope="col">#</th>
+                      <th scope="col">Campo SIRE</th>
+                      <th scope="col">Valor</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {preview.data.fields.map((field) => (
+                      <tr key={field.position}>
+                        <td className="sire-secondary">{field.position}</td>
+                        <td>{field.name}</td>
+                        <td className="sire-value">{field.value}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <p className="sire-secondary">
+                Línea del archivo (el separador se muestra como →):
+              </p>
+              <pre className="sire-line">
+                {showSeparator(preview.data.line)}
+              </pre>
+            </>
+          )}
+          {error !== null && <ErrorMessage error={error} />}
+        </div>
         <div className="sire-dialog-actions">
           <button type="button" onClick={onClose}>
             Cerrar
           </button>
           <button
             type="button"
-            className="sire-primary"
+            className="sire-primary ui-button--primary"
             disabled={!preview.isSuccess || downloading}
             onClick={onDownload}
           >

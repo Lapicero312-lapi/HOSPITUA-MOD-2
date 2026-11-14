@@ -74,16 +74,20 @@ export function ModifyReservationPage() {
   });
 
   return (
-    <section className="modify">
-      <Link className="modify-back" to={`/reservas/${reservationRef}`}>
+    <section className="modify ui-page">
+      <Link className="modify-back ui-back" to={`/reservas/${reservationRef}`}>
         ← Volver al detalle
       </Link>
-      <h1 className="modify-title">Modificar reserva {reservationRef}</h1>
+      <h1 className="modify-title ui-page-title">
+        Modificar reserva {reservationRef}
+      </h1>
       {reservation.isPending && (
-        <p className="modify-hint">Cargando reserva…</p>
+        <p className="modify-hint modify-loading ui-panel ui-state ui-state--loading">
+          Cargando reserva…
+        </p>
       )}
       {reservation.isError && (
-        <div className="modify-panel">
+        <div className="modify-panel ui-panel">
           <ErrorMessage error={reservation.error} />
         </div>
       )}
@@ -114,7 +118,7 @@ function Modification({
         : STATUS_MESSAGE;
   if (blocked !== null) {
     return (
-      <div className="modify-panel">
+      <div className="modify-panel ui-panel">
         <p role="alert" className="error-message">
           {blocked}
         </p>
@@ -249,7 +253,7 @@ function ModificationForm({
 
   return (
     <form className="modify-grid" onSubmit={submit} noValidate>
-      <div className="modify-panel">
+      <div className="modify-panel ui-panel">
         <h2>Estadía</h2>
         <div className="modify-row">
           <Field id="md-start" label="Fecha de entrada">
@@ -276,7 +280,7 @@ function ModificationForm({
           categoría, agregar o quitar.
         </p>
         {inventory.isError && <ErrorMessage error={inventory.error} />}
-        <table className="modify-table">
+        <table className="modify-table ui-table">
           <thead>
             <tr>
               <th scope="col">Habitación</th>
@@ -390,7 +394,7 @@ function ModificationForm({
         </Field>
       </div>
 
-      <div className="modify-panel">
+      <div className="modify-panel modify-aside ui-panel">
         <h2>Tarifa</h2>
         {!changed && <p className="modify-hint">No hay cambios.</p>}
         {changed && !complete && (
@@ -414,6 +418,7 @@ function ModificationForm({
         <div className="modify-buttons">
           <button
             type="submit"
+            className="ui-button--primary"
             disabled={
               !ready ||
               !preview.isSuccess ||
@@ -424,7 +429,9 @@ function ModificationForm({
           >
             {confirmation.isPending ? 'Guardando…' : 'Guardar cambios'}
           </button>
-          <Link to={`/reservas/${reservationRef}`}>Volver sin guardar</Link>
+          <Link className="ui-link-button" to={`/reservas/${reservationRef}`}>
+            Volver sin guardar
+          </Link>
         </div>
       </div>
     </form>
@@ -519,7 +526,7 @@ function Quote({
       {quotes === null ? (
         <p className="modify-hint">La tarifa no cambia.</p>
       ) : (
-        <table className="modify-table">
+        <table className="modify-table ui-table">
           <thead>
             <tr>
               <th scope="col">Habitación</th>

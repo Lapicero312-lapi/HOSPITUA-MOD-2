@@ -107,10 +107,16 @@ export function GuestStaysPage() {
   };
 
   return (
-    <section className="guest-stays">
-      <h1 className="guest-stays-title">Huéspedes alojados</h1>
+    <section className="guest-stays ui-page">
+      <header className="ui-page-header">
+        <div>
+          <h1 className="guest-stays-title ui-page-title">
+            Huéspedes alojados
+          </h1>
+        </div>
+      </header>
       <Filters key={filters.search} filters={filters} onChange={change} />
-      <div className="guest-stays-panel">
+      <div className="guest-stays-panel ui-panel">
         <Results
           filters={filters}
           onPage={(page) => change({ page })}
@@ -153,12 +159,12 @@ function Filters({
 
   return (
     <form
-      className="guest-stays-filters"
+      className="guest-stays-filters ui-panel ui-toolbar"
       aria-label="Filtros"
       onSubmit={submit}
       noValidate
     >
-      <div className="guest-stays-field guest-stays-field--search">
+      <div className="guest-stays-field guest-stays-field--search ui-field">
         <label htmlFor="guest-stays-search">Buscar</label>
         <div className="guest-stays-search">
           <input
@@ -172,7 +178,7 @@ function Filters({
           <button type="submit">Buscar</button>
         </div>
       </div>
-      <div className="guest-stays-field">
+      <div className="guest-stays-field ui-field">
         <label htmlFor="guest-stays-nationality">Nacionalidad</label>
         <select
           id="guest-stays-nationality"
@@ -188,7 +194,7 @@ function Filters({
           <option value="COLOMBIAN">Colombianos</option>
         </select>
       </div>
-      <div className="guest-stays-field">
+      <div className="guest-stays-field ui-field">
         <label htmlFor="guest-stays-presence">Situación</label>
         <select
           id="guest-stays-presence"
@@ -202,7 +208,7 @@ function Filters({
           <option value="CHECKED_OUT">Ya salió</option>
         </select>
       </div>
-      <div className="guest-stays-field">
+      <div className="guest-stays-field ui-field">
         <label htmlFor="guest-stays-from">Desde</label>
         <input
           id="guest-stays-from"
@@ -211,7 +217,7 @@ function Filters({
           onChange={(event) => onChange({ dateFrom: event.target.value })}
         />
       </div>
-      <div className="guest-stays-field">
+      <div className="guest-stays-field ui-field">
         <label htmlFor="guest-stays-to">Hasta</label>
         <input
           id="guest-stays-to"
@@ -220,7 +226,11 @@ function Filters({
           onChange={(event) => onChange({ dateTo: event.target.value })}
         />
       </div>
-      <button type="button" className="guest-stays-clear" onClick={clear}>
+      <button
+        type="button"
+        className="guest-stays-clear ui-button--ghost"
+        onClick={clear}
+      >
         Limpiar filtros
       </button>
     </form>
@@ -244,7 +254,7 @@ function Results({
 
   if (stays.isPending) {
     return (
-      <p className="guest-stays-state guest-stays-state--loading">
+      <p className="guest-stays-state guest-stays-state--loading ui-state ui-state--loading">
         Cargando huéspedes…
       </p>
     );
@@ -254,7 +264,7 @@ function Results({
   }
   if (stays.data.items.length === 0) {
     return (
-      <p className="guest-stays-state">
+      <p className="guest-stays-state ui-state">
         {stays.data.message ?? NO_GUEST_STAYS}
       </p>
     );
@@ -275,27 +285,32 @@ function GuestStaysTable({
   onOpen: (guest: GuestKey) => void;
 }) {
   return (
-    <table className="guest-stays-table" aria-label="Huéspedes alojados">
-      <thead>
-        <tr>
-          <th scope="col">Huésped</th>
-          <th scope="col">Nacionalidad</th>
-          <th scope="col">Reserva</th>
-          <th scope="col">Entrada</th>
-          <th scope="col">Salida</th>
-          <th scope="col">Acciones</th>
-        </tr>
-      </thead>
-      <tbody>
-        {stays.map((stay) => (
-          <GuestStayRow
-            key={`${stay.reservationRef}/${stay.guest.documentNumber}`}
-            stay={stay}
-            onOpen={onOpen}
-          />
-        ))}
-      </tbody>
-    </table>
+    <div className="ui-scroll-x">
+      <table
+        className="guest-stays-table ui-table ui-table--sticky"
+        aria-label="Huéspedes alojados"
+      >
+        <thead>
+          <tr>
+            <th scope="col">Huésped</th>
+            <th scope="col">Nacionalidad</th>
+            <th scope="col">Reserva</th>
+            <th scope="col">Entrada</th>
+            <th scope="col">Salida</th>
+            <th scope="col">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {stays.map((stay) => (
+            <GuestStayRow
+              key={`${stay.reservationRef}/${stay.guest.documentNumber}`}
+              stay={stay}
+              onOpen={onOpen}
+            />
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -312,14 +327,14 @@ function GuestStayRow({
     <tr>
       <td>
         <span className="guest-stays-name">{name}</span>
-        <span className="guest-stays-secondary">
+        <span className="guest-stays-secondary ui-secondary">
           {guest.documentType} {guest.documentNumber}
         </span>
       </td>
       <td>
         {orEmpty(guest.nationality)}
         {guest.isForeign && (
-          <span className="guest-stays-badge guest-stays-badge--foreign">
+          <span className="guest-stays-badge guest-stays-badge--foreign ui-badge ui-badge--plain tone-info">
             Extranjero
           </span>
         )}
@@ -338,7 +353,7 @@ function GuestStayRow({
       </td>
       <td className="guest-stays-date">
         {stay.inHotel ? (
-          <span className="guest-stays-badge guest-stays-badge--in-hotel">
+          <span className="guest-stays-badge guest-stays-badge--in-hotel ui-badge tone-positive">
             En el hotel
           </span>
         ) : stay.exitDate === null ? (
@@ -375,7 +390,10 @@ function Pagination({
   const to = from + list.items.length - 1;
   const pages = pageWindow(list.page, list.totalPages);
   return (
-    <nav className="guest-stays-pagination" aria-label="Paginación">
+    <nav
+      className="guest-stays-pagination ui-pagination"
+      aria-label="Paginación"
+    >
       <span>
         Mostrando {from}–{to} de {list.totalItems}{' '}
         {list.totalItems === 1 ? 'huésped' : 'huéspedes'} · página {list.page}{' '}
@@ -481,82 +499,93 @@ function GuestDialog({
       : `${orEmpty(data.guest.firstName)} ${orEmpty(data.guest.lastName)}`;
 
   return (
-    <div className="guest-stays-backdrop">
+    <div className="guest-stays-backdrop" onMouseDown={onClose}>
       <div
         className="guest-stays-dialog"
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
+        onMouseDown={(event) => event.stopPropagation()}
       >
-        <h2 id={titleId} className="guest-stays-subtitle">
-          {title}
-        </h2>
-        {detail.isPending && (
-          <p className="guest-stays-state guest-stays-state--loading">
-            Cargando el huésped…
-          </p>
-        )}
-        {detail.isError && <ErrorMessage error={detail.error} />}
-        {data !== undefined && (
-          <>
-            <dl className="guest-stays-data">
-              <Datum
-                label="Documento"
-                value={`${data.guest.documentType} ${data.guest.documentNumber}`}
-              />
-              <Datum
-                label="Fecha de nacimiento"
-                value={formatDate(data.guest.birthDate)}
-              />
-              <Datum
-                label="Nacionalidad"
-                value={
-                  data.guest.nationality === null
-                    ? null
-                    : `${data.guest.nationality}${data.guest.isForeign ? ' · extranjero' : ''}`
-                }
-              />
-              <Datum label="Reserva" value={data.reservationRef} />
-              <Datum
-                label="Lugar de procedencia"
-                value={data.guest.originPlace}
-              />
-              <Datum
-                label="Lugar de destino"
-                value={data.guest.destinationPlace}
-              />
-            </dl>
-            <table className="guest-stays-table" aria-label="Movimientos">
-              <thead>
-                <tr>
-                  <th scope="col">Movimiento</th>
-                  <th scope="col">Fecha</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.movements.map((movement) => (
-                  <tr key={movement.movementType}>
-                    <td>
-                      <span className="guest-stays-badge">
-                        {MOVEMENT_LABELS[movement.movementType]}
-                      </span>
-                    </td>
-                    <td className="guest-stays-date">
-                      {formatDate(movement.movementDate)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </>
-        )}
+        <header className="guest-stays-dialog-header">
+          <h2 id={titleId} className="guest-stays-subtitle">
+            {title}
+          </h2>
+          <kbd>ESC</kbd>
+        </header>
+        <div className="guest-stays-dialog-body">
+          {detail.isPending && (
+            <p className="guest-stays-state guest-stays-state--loading ui-state ui-state--loading">
+              Cargando el huésped…
+            </p>
+          )}
+          {detail.isError && <ErrorMessage error={detail.error} />}
+          {data !== undefined && (
+            <>
+              <dl className="guest-stays-data">
+                <Datum
+                  label="Documento"
+                  value={`${data.guest.documentType} ${data.guest.documentNumber}`}
+                />
+                <Datum
+                  label="Fecha de nacimiento"
+                  value={formatDate(data.guest.birthDate)}
+                />
+                <Datum
+                  label="Nacionalidad"
+                  value={
+                    data.guest.nationality === null
+                      ? null
+                      : `${data.guest.nationality}${data.guest.isForeign ? ' · extranjero' : ''}`
+                  }
+                />
+                <Datum label="Reserva" value={data.reservationRef} />
+                <Datum
+                  label="Lugar de procedencia"
+                  value={data.guest.originPlace}
+                />
+                <Datum
+                  label="Lugar de destino"
+                  value={data.guest.destinationPlace}
+                />
+              </dl>
+              <div className="guest-stays-movements">
+                <table
+                  className="guest-stays-table ui-table"
+                  aria-label="Movimientos"
+                >
+                  <thead>
+                    <tr>
+                      <th scope="col">Movimiento</th>
+                      <th scope="col">Fecha</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {data.movements.map((movement) => (
+                      <tr key={movement.movementType}>
+                        <td>
+                          <span className="guest-stays-badge ui-badge">
+                            {MOVEMENT_LABELS[movement.movementType]}
+                          </span>
+                        </td>
+                        <td className="guest-stays-date">
+                          {formatDate(movement.movementDate)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
         <div className="guest-stays-dialog-actions">
           <button type="button" onClick={onClose}>
             Cerrar
           </button>
           {data !== undefined && (
             <Link
-              className="guest-stays-primary"
+              className="guest-stays-primary ui-link-button ui-button--primary"
               to={`/reservas/${data.reservationRef}`}
             >
               Ver reserva

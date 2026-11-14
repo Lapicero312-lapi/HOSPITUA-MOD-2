@@ -1,338 +1,224 @@
 /*
- * Pantalla "Consultar reservas". Todo cuelga de `.reservations`, así no cambia ninguna otra pantalla. Usa
- * los colores base de `index.css`: el resumen del día, los filtros y un panel con la tabla.
+ * Pantalla "Consultar reservas". Usa las piezas `ui-*` de `index.css`: la cinta de métricas del día, la
+ * barra de filtros y el panel con la tabla. Aquí solo lo propio de la pantalla.
  */
 
-.reservations {
-  --reservations-radius: 12px;
-  --reservations-radius-pill: 999px;
-  --reservations-shadow:
-    0 1px 2px rgba(31, 41, 51, 0.04), 0 8px 24px rgba(31, 41, 51, 0.06);
-  --reservations-row-hover: #f0f6fb;
-  --reservations-error-background: #fef3f2;
-  max-width: 90rem;
-}
-
-.reservations-header {
+/* Cinta del día: mientras carga, un esqueleto de la misma altura */
+.reservations-summary--loading {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1rem;
-}
-
-.reservations-title {
-  margin: 0;
-  font-size: 1.5rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-
-/* El resumen del día operativo: una tarjeta por cifra. */
-.reservations-summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-  margin: 0 0 1rem;
-}
-
-.reservations-summary--loading {
-  color: var(--color-muted);
-}
-
-.reservations-summary-item {
-  min-width: 12rem;
-  padding: 0.875rem 1.25rem;
-  background-color: var(--color-background);
-  border: 1px solid var(--color-border);
-  border-radius: var(--reservations-radius);
-  box-shadow: var(--reservations-shadow);
-}
-
-.reservations-summary-item dt {
-  color: var(--color-muted);
+  min-height: 74px;
+  padding: 0 1.125rem;
+  color: var(--text-3);
   font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-.reservations-summary-item dd {
-  margin: 0.25rem 0 0;
-  font-size: 1.75rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
 }
 
 .reservations-summary-item--date dd {
-  font-size: 1.125rem;
-  line-height: 2.625rem;
+  font-size: 0.9375rem;
+  line-height: 1.85rem;
 }
 
-/* Los filtros: una fila que se parte en varias si no cabe. */
-.reservations-filters {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 0.75rem 1rem;
-  margin-bottom: 1rem;
-  padding: 1rem 1.25rem;
-  background-color: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--reservations-radius);
-}
-
-.reservations-field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
+/* Filtros */
 .reservations-field--search {
-  flex: 1 1 18rem;
+  flex: 1 1 20rem;
 }
 
-.reservations-field label {
-  color: var(--color-muted);
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-.reservations-filters input,
-.reservations-filters select,
-.reservations-filters button {
-  padding: 0.4375rem 0.625rem;
-  background-color: var(--color-background);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  color: var(--color-text);
-  font: inherit;
-}
-
-.reservations-filters select:disabled {
-  background-color: var(--color-surface);
-  color: var(--color-muted);
+.reservations-field:not(.reservations-field--search) {
+  flex: 0 1 11rem;
 }
 
 .reservations-search {
+  position: relative;
   display: flex;
   gap: 0.5rem;
 }
 
-.reservations-search input {
+.reservations-search-icon {
+  position: absolute;
+  top: 50%;
+  left: 0.75rem;
+  color: var(--text-3);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.reservations-search input:not([type='checkbox']) {
   flex: 1;
   min-width: 0;
+  padding-left: 2.125rem;
 }
 
-.reservations-check {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding-bottom: 0.4375rem;
-}
-
-.reservations-filters button {
-  cursor: pointer;
+.reservations-clear {
+  margin-left: auto;
 }
 
 .reservations-hint {
   flex-basis: 100%;
   margin: 0;
-  color: var(--color-muted);
-  font-size: 0.875rem;
-}
-
-.reservations-panel {
-  overflow-x: auto;
-  background-color: var(--color-background);
-  border: 1px solid var(--color-border);
-  border-radius: var(--reservations-radius);
-  box-shadow: var(--reservations-shadow);
-}
-
-.reservations-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.875rem;
-}
-
-.reservations-table th {
-  padding: 0.75rem 1rem;
-  background-color: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
-  color: var(--color-muted);
+  color: var(--warning-fg);
   font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-align: left;
-  text-transform: uppercase;
-  white-space: nowrap;
+}
+
+/* Tabla: filas de una línea; si no cabe, se desplaza en horizontal */
+.reservations-panel {
+  overflow: hidden;
 }
 
 .reservations-table td {
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid var(--color-border);
-  vertical-align: top;
-}
-
-.reservations-table tbody tr:hover {
-  background-color: var(--reservations-row-hover);
-}
-
-.reservations-ref,
-.reservations-guest {
-  display: block;
-  font-weight: 600;
   white-space: nowrap;
 }
 
 .reservations-ref {
-  font-variant-numeric: tabular-nums;
+  display: block;
+  color: var(--text-1);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
-/* El segundo dato de una celda: el código de la OTA, el documento o la agencia. */
-.reservations-secondary {
+.reservations-guest {
   display: block;
-  color: var(--color-muted);
-  font-size: 0.8125rem;
+  max-width: 16rem;
+  overflow: hidden;
+  color: var(--text-1);
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reservations-secondary {
+  white-space: nowrap;
 }
 
 .reservations-rooms {
   margin: 0;
   padding: 0;
+  color: var(--text-2);
   list-style: none;
   white-space: nowrap;
 }
 
 .reservations-dates {
-  font-variant-numeric: tabular-nums;
+  color: var(--text-2);
   white-space: nowrap;
 }
 
-.reservations-status,
-.reservations-conflict {
-  display: inline-block;
-  padding: 0.125rem 0.625rem;
-  border-radius: var(--reservations-radius-pill);
-  font-size: 0.8125rem;
-  font-weight: 600;
-  white-space: nowrap;
+/* Estados con tinta semántica */
+/* Confirmada: dorado; En curso (en casa): petróleo (tokens de hospitua) */
+.reservations-status--active {
+  --tone-bg: var(--info-bg);
+  --tone-border: var(--info-border);
+  --tone-fg: var(--info-fg);
 }
 
-.reservations-status--active,
 .reservations-status--in_progress {
-  background-color: #e5f4ea;
-  color: #1d6b3f;
+  --tone-bg: var(--positive-bg);
+  --tone-border: var(--positive-border);
+  --tone-fg: var(--positive-fg);
 }
 
 .reservations-status--pending {
-  background-color: #fff4e0;
-  color: #8a5a00;
-}
-
-.reservations-status--completed {
-  background-color: var(--color-surface);
-  color: var(--color-muted);
+  --tone-bg: var(--warning-bg);
+  --tone-border: var(--warning-border);
+  --tone-fg: var(--warning-fg);
 }
 
 .reservations-status--cancelled,
 .reservations-status--no_show {
-  background-color: #fef3f2;
-  color: var(--color-error);
+  --tone-bg: var(--critical-bg);
+  --tone-border: var(--critical-border);
+  --tone-fg: var(--critical-fg);
 }
 
 .reservations-conflict {
-  margin-top: 0.25rem;
-  display: block;
+  display: flex;
   width: fit-content;
-  background-color: #fef3f2;
-  border: 1px solid var(--color-error);
-  color: var(--color-error);
+  margin-top: 0.375rem;
 }
 
+/* Acciones de la fila: enlaces compactos */
 .reservations-actions {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem 0.75rem;
+  flex-wrap: nowrap;
+  gap: 0.25rem;
   white-space: nowrap;
 }
 
+.reservations-actions a,
 .reservations-action--disabled {
-  color: var(--color-muted);
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 0.5rem;
+  border-radius: var(--radius-md);
+  color: var(--text-2);
+  font-size: 0.75rem;
+  font-weight: 500;
+  transition:
+    background-color var(--fast) var(--ease),
+    color var(--fast) var(--ease);
+}
+
+.reservations-actions a:hover {
+  background-color: var(--surface);
+  color: var(--text-1);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.reservations-actions a:first-child {
+  color: var(--accent);
+}
+
+.reservations-action--disabled {
+  color: var(--text-3);
   cursor: not-allowed;
   opacity: 0.6;
 }
 
-.reservations-pagination {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.75rem;
-  padding: 0.75rem 1rem;
-  color: var(--color-muted);
-  font-size: 0.875rem;
-}
-
-.reservations-pagination span:first-child {
+.reservations-pagination > span:first-child {
   margin-right: auto;
+  color: var(--text-3);
 }
 
-.reservations-pagination button {
-  padding: 0.375rem 0.75rem;
-  background-color: var(--color-background);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  color: var(--color-text);
-  font: inherit;
-  cursor: pointer;
+/* El mensaje de error dentro del panel o de la cinta */
+.reservations-panel .error-message {
+  margin: 1rem;
 }
 
-.reservations-pagination button:disabled {
-  color: var(--color-muted);
-  cursor: not-allowed;
-  opacity: 0.6;
+.reservations-summary--error {
+  margin: 0;
 }
 
-/* Mientras carga y sin resultados: un mensaje centrado dentro del panel. */
-.reservations-state {
+@media (max-width: 767px) {
+  .reservations-field:not(.reservations-field--search) {
+    flex: 1 1 calc(50% - 0.375rem);
+  }
+
+  .reservations-clear {
+    margin-left: 0;
+  }
+}
+
+/* Iconos del paquete hospitua: puerta de llegada/salida y canal */
+.reservations-summary dt {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  margin: 0;
-  padding: 2.5rem 1.25rem;
-  color: var(--color-muted);
+  gap: 0.375rem;
 }
 
-.reservations-state--loading::before {
-  content: '';
-  width: 1rem;
-  height: 1rem;
-  border: 2px solid var(--color-border);
-  border-top-color: var(--color-accent);
-  border-radius: 50%;
-  animation: reservations-spin 0.8s linear infinite;
+.reservations-kpi-icon {
+  flex-shrink: 0;
+  color: var(--accent);
 }
 
-@keyframes reservations-spin {
-  to {
-    transform: rotate(360deg);
-  }
+.reservations-channel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .reservations-state--loading::before {
-    animation: none;
-  }
-}
-
-/* El mensaje de error (`ErrorMessage`) dentro del panel o del resumen. */
-.reservations-panel .error-message,
-.reservations-summary .error-message {
-  margin: 0;
-  padding: 1rem 1.25rem;
-  background-color: var(--reservations-error-background);
-  border-left: 4px solid var(--color-error);
+.reservations-channel-icon {
+  flex-shrink: 0;
+  color: var(--text-3);
 }
