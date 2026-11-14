@@ -314,6 +314,7 @@ habitaciones sin asignar de una reserva de Booking en conflicto. Cabecera `X-Use
 | `errorCode` | Cuándo | `message` |
 |---|---|---|
 | `RESERVATION_NOT_IN_CONFLICT` | La reserva no es de Booking o no está en conflicto | "Solo se puede asignar habitación a una reserva de Booking en conflicto." |
+| `STATUS_NOT_EDITABLE` | La reserva de Booking en conflicto no está en `ACTIVE` ni en `PENDING` (se canceló o no se presentó) | "El estado actual de la reserva no admite modificaciones." (el mismo de B1 y B2) |
 | `ROOM_ALREADY_ASSIGNED` | La habitación de la reserva ya tiene número | "Esa habitación de la reserva ya está asignada." |
 | `CATEGORY_MISMATCH` | La habitación elegida es de otra categoría | "La habitación debe ser de la misma categoría." |
 | `GUEST_COUNT_EXCEEDS_CAPACITY` | La habitación elegida tiene menos capacidad que las personas | "La cantidad de personas supera la capacidad de la habitación." |
@@ -1333,7 +1334,9 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
        `roomId` que son UUID (en minúsculas). Si no: `INVALID_ROOM_ID`. Un `roomId` o un `reservationRoomId`
        repetido: `ROOM_ALREADY_IN_RESERVATION`.
     2. **La reserva:** `ReservationLookup.findByRef`. Si no existe, `RESERVATION_NOT_FOUND`; si no es de
-       Booking o no está en conflicto, `RESERVATION_NOT_IN_CONFLICT`.
+       Booking o no está en conflicto, `RESERVATION_NOT_IN_CONFLICT`; si no está en `ACTIVE` ni en `PENDING`,
+       `STATUS_NOT_EDITABLE` (como en `ApplyOtaChange.prepare`: una reserva cancelada o que no se presentó
+       sigue con la marca de conflicto, pero ya no se le asigna habitación).
     3. **`updatedAt`:** `isSameInstant`; si no, `CONCURRENT_UPDATE`.
     4. **Cada asignación, en su orden:** el `reservationRoomId` es de la reserva y está sin asignar; si no,
        `ROOM_ALREADY_ASSIGNED`.
