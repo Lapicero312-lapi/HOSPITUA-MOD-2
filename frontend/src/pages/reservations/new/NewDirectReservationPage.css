@@ -16,7 +16,7 @@
 
 @media (min-width: 1100px) {
   .new-direct-grid {
-    grid-template-columns: minmax(0, 1fr) 380px;
+    grid-template-columns: minmax(0, 1fr) 420px;
   }
 
   .new-direct-aside {
@@ -89,6 +89,12 @@
   color: var(--text-1);
   font-weight: 600;
   text-align: left;
+}
+
+.new-direct-aside .new-direct-table th,
+.new-direct-aside .new-direct-table td {
+  padding-right: 0.625rem;
+  padding-left: 0.625rem;
 }
 
 .new-direct-money {

@@ -516,15 +516,17 @@ kbd {
 
 /* Isotipo */
 .brand-mark {
-  display: inline-grid;
+  display: inline-flex;
   flex-shrink: 0;
-  place-items: center;
   width: 26px;
   height: 26px;
   border-radius: 7px;
-  background-color: var(--accent);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
-  color: var(--accent-contrast);
+  box-shadow: 0 0 0 1px var(--border);
+}
+
+.brand-mark svg {
+  display: block;
+  border-radius: 7px;
 }
 
 /* Encabezado de pantalla */

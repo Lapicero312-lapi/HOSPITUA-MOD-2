@@ -142,20 +142,23 @@ export const CornerDownLeftIcon = (p: IconProps) => (
   </Icon>
 );
 
-/** El isotipo: una H de trazo fino. */
-export function BrandGlyph() {
+/** El logo de HOSPITUA: la H con la puerta entreabierta. */
+export function BrandGlyph({ size = 26 }: { size?: number }) {
   return (
     <svg
       aria-hidden="true"
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2.5}
-      strokeLinecap="round"
+      width={size}
+      height={size}
+      viewBox="0 0 64 64"
+      focusable="false"
     >
-      <path d="M7 4v16M17 4v16M7 12h10" />
+      <rect width="64" height="64" rx="14" fill="#F4F3EF" />
+      <path
+        fill="#1F4B50"
+        d="M13 9h11.5v18.5h15V9H51v46H39.5V36.5h-15V55H13z"
+      />
+      <path fill="#2C6B6C" d="M26.4 37.9 37.4 35.4V55l-11-2.3z" />
+      <circle cx="29.6" cy="45.6" r="1.15" fill="#F4F3EF" />
     </svg>
   );
 }
