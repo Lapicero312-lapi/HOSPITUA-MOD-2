@@ -24,6 +24,7 @@ export function Layout() {
           <NavLink to="/reservas" end>
             Reservas
           </NavLink>
+          <NavLink to="/huespedes">Huéspedes alojados</NavLink>
           <NavLink to="/sire">Exportar SIRE</NavLink>
           <NavLink to="/habitaciones">Habitaciones</NavLink>
           <NavLink to="/tarifas">Tarifas</NavLink>

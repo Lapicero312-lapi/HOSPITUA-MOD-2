@@ -1,6 +1,7 @@
 import type { RouteObject } from 'react-router';
 import { Layout } from './components/Layout.tsx';
 import { RequireUser } from './components/RequireUser.tsx';
+import { GuestStaysPage } from './pages/guest-stays/GuestStaysPage.tsx';
 import { HomePage } from './pages/HomePage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
 import { NotFoundPage } from './pages/NotFoundPage.tsx';
@@ -30,6 +31,7 @@ export const routes: RouteObject[] = [
     children: [
       { index: true, element: <HomePage /> },
       { path: 'reservas', element: <ReservationsPage /> },
+      { path: 'huespedes', element: <GuestStaysPage /> },
       { path: 'sire', element: <SirePage /> },
       { path: 'habitaciones', element: <RoomsPage /> },
       { path: 'tarifas', element: <RatesPage /> },
