@@ -1,0 +1,122 @@
+/*
+ * Pantalla "Modificar". Todo cuelga de `.modify`, así no cambia ninguna otra pantalla. Usa los colores base
+ * de `index.css`: a la izquierda el formulario y a la derecha la tarifa, como el wireframe.
+ */
+
+.modify {
+  --modify-radius: 12px;
+  --modify-shadow:
+    0 1px 2px rgba(31, 41, 51, 0.04), 0 8px 24px rgba(31, 41, 51, 0.06);
+  max-width: 72rem;
+}
+
+.modify-back {
+  display: inline-block;
+  margin-bottom: 1rem;
+  text-decoration: none;
+}
+
+.modify-title {
+  margin: 0 0 1rem;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.modify-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (max-width: 56rem) {
+  .modify-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.modify-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  padding: 1.25rem;
+  background-color: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--modify-radius);
+  box-shadow: var(--modify-shadow);
+}
+
+.modify-panel h2 {
+  margin: 0.5rem 0 0;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.modify-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+
+.modify-field {
+  display: flex;
+  flex: 1 1 10rem;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.modify-field label {
+  color: var(--color-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.modify-hint {
+  margin: 0;
+  color: var(--color-muted);
+}
+
+.modify-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.modify-table th,
+.modify-table td {
+  padding: 0.5rem;
+  border-bottom: 1px solid var(--color-border);
+  text-align: left;
+}
+
+.modify-table input {
+  width: 4.5rem;
+}
+
+.modify-add {
+  align-self: flex-start;
+}
+
+.modify-money {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.modify-buttons {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+/* Solo para lectores de pantalla: el encabezado de la columna de "Quitar". */
+.modify-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
