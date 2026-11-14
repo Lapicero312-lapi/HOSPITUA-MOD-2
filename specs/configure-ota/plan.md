@@ -317,10 +317,18 @@ Pasos, en este orden (reglas 2, 3, 4 y 8; D2):
 
 **Quién lo llama:** `ChannexSyncJob`, cada `CHANNEX_SYNC_INTERVAL_SECONDS`, con su bloqueo asesor: primero el
 feed (`ProcessBookingFeed`), después `PublishPendingAvailability` y al final los no-shows
-(`PublishPendingNoShows`). Si el feed falla por un error inesperado, **no se envía la disponibilidad** en ese
-ciclo: FR-007 pide procesar antes las reservas pendientes de Channex, para no devolverle a Booking un cupo que
-ya descontó por una reserva nueva; las marcas se conservan para el siguiente. Los no-shows no dependen del
+(`PublishPendingNoShows`). Si el feed **no se leyó** (`ProcessBookingFeed.run()` da `false`: Channex respondió
+`5xx`, `429` o no respondió) o falló por un error inesperado, **no se envía la disponibilidad** en ese ciclo:
+FR-007 pide procesar antes las reservas pendientes de Channex, para no devolverle a Booking un cupo que ya
+descontó por una reserva nueva; las marcas se conservan para el siguiente. Los no-shows no dependen del
 feed: se envían igual. Un error inesperado de cualquier paso queda en el log.
+
+**Caso conocido:** si el feed se leyó pero **una revisión no se guardó** (da `RETRY` o falla; por ejemplo, el
+Módulo 1 no respondió o su tipo no tiene relación), la disponibilidad **sí se envía**, calculada sin esa
+reserva. Saltar el envío por una revisión que no se guarda congelaría la disponibilidad de todas las
+categorías mientras siga sin guardarse, y una revisión de un tipo sin relación se reintenta en cada ciclo
+hasta que alguien la arregle. Si en ese lapso Booking vende de más, la reserva llega como conflicto
+(`NO_ROOM_AVAILABLE`), como cualquier venta en el instante entre la lectura y el envío.
 
 ### C. Sincronización de tipos de habitación
 

@@ -37,7 +37,7 @@ export class ProcessBookingFeedService implements ProcessBookingFeed {
     private readonly revision: ProcessBookingRevision,
   ) {}
 
-  async run(): Promise<void> {
+  async run(): Promise<boolean> {
     // Primero, los `ack` que quedaron pendientes en un ciclo anterior.
     for (const pending of await this.revisions.findPendingAck()) {
       await this.acknowledge(pending.revisionId);
@@ -45,7 +45,7 @@ export class ProcessBookingFeedService implements ProcessBookingFeed {
 
     const read = await this.feed.read();
     if (read.status !== 'READ') {
-      return;
+      return false;
     }
     // Las reservas con una revisión que no se guardó en esta lectura: sus siguientes esperan.
     const waiting = new Set<string>();
@@ -73,6 +73,7 @@ export class ProcessBookingFeedService implements ProcessBookingFeed {
       }
       await this.acknowledge(revision.id);
     }
+    return true;
   }
 
   /** A2: el `ack` a Channex y, si responde, `acked_at`. Si falla, se repite en el ciclo siguiente. */

@@ -156,4 +156,29 @@ describe('configure-ota: la disponibilidad pendiente llega a Channex (T010)', ()
     expect(availabilityCalls[1]).toEqual(availabilityCalls[0]);
     expect(await pendingMarks()).toBe(0);
   });
+
+  it('si el feed no se puede leer (503), no se envía la disponibilidad y la marca se conserva; el ciclo que lo lee, la envía (FR-007)', async () => {
+    // Una marca pendiente: la reserva entra, pero el A4 de ese ciclo no lo acepta Channex.
+    channex.feed = [aRevision(NEW_REVISION)];
+    availabilityStatus = 503;
+    await cycle();
+    expect(availabilityCalls).toHaveLength(1);
+    availabilityStatus = 200;
+
+    // El feed responde 503: sin leerlo, no se envía la disponibilidad.
+    channex.feed = [];
+    channex.feedStatus = 503;
+    await cycle();
+
+    expect(availabilityCalls).toHaveLength(1);
+    expect(await pendingMarks()).toBe(1);
+
+    // El feed vuelve: se lee y después se envía la disponibilidad.
+    channex.feedStatus = 200;
+    await cycle();
+
+    expect(availabilityCalls).toHaveLength(2);
+    expect(availabilityCalls[1]).toEqual(availabilityCalls[0]);
+    expect(await pendingMarks()).toBe(0);
+  });
 });
