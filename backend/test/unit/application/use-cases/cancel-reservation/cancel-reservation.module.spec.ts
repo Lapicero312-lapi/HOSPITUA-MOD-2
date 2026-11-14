@@ -1,5 +1,4 @@
 import { Global, Module } from '@nestjs/common';
-import { OTA_ROOM_TYPE_MAPPING_REPOSITORY } from '../../../../../src/application/ports/out/ota-room-type-mapping.repository.js';
 import { Test } from '@nestjs/testing';
 import { describe, expect, it } from 'vitest';
 import { MAINTENANCE_CONCURRENCY } from '../../../../../src/application/shared/maintenance-concurrency.js';
@@ -24,6 +23,7 @@ import { MIGRATORY_MOVEMENT_REPOSITORY } from '../../../../../src/application/po
 import { OTA_BOOKING_REVISION_REPOSITORY } from '../../../../../src/application/ports/out/ota-booking-revision.repository.js';
 import { OTA_NO_SHOW_REPORT_REPOSITORY } from '../../../../../src/application/ports/out/ota-no-show-report.repository.js';
 import { OTA_REPOSITORY } from '../../../../../src/application/ports/out/ota.repository.js';
+import { OTA_ROOM_TYPE_MAPPING_REPOSITORY } from '../../../../../src/application/ports/out/ota-room-type-mapping.repository.js';
 import { PROCESSED_MESSAGE_REPOSITORY } from '../../../../../src/application/ports/out/processed-message.repository.js';
 import { RESERVATION_QUERY_PORT } from '../../../../../src/application/ports/out/reservation-query.port.js';
 import { RESERVATION_REPOSITORY } from '../../../../../src/application/ports/out/reservation.repository.js';
@@ -44,7 +44,6 @@ import { CLOSE_DAY_BATCH_SIZE } from '../../../../../src/application/use-cases/u
  * la modificación (T009) suma los de los Módulos 1 y 3 y la tarifa de referencia de `CalculateDynamicRateModule`.
  */
 const GLOBAL_TOKENS = [
-  OTA_ROOM_TYPE_MAPPING_REPOSITORY,
   RESERVATION_REPOSITORY,
   RESERVATION_QUERY_PORT,
   DAILY_SEQUENCE_REPOSITORY,
@@ -53,6 +52,7 @@ const GLOBAL_TOKENS = [
   DAILY_LIST_PUBLISHER,
   EXCLUSIVE_RUNNER,
   OTA_REPOSITORY,
+  OTA_ROOM_TYPE_MAPPING_REPOSITORY,
   CANCELLATION_REPOSITORY,
   CLOCK,
   TRANSACTION_RUNNER,

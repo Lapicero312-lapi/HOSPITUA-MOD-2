@@ -12,8 +12,9 @@ export const BOOKING_OTA_NAME = 'Booking.com';
  */
 export interface EnsureChannexSetup {
   /**
-   * Paso 1: verifica la propiedad. Paso 2, solo si da `READY`: registra la agencia Booking.com sin
-   * duplicarla. El paso 3 (los tipos de habitación) lo conecta T007.
+   * Paso 1: verifica la propiedad. Pasos 2 y 3, solo si da `READY`: registra la agencia Booking.com sin
+   * duplicarla y sincroniza los tipos de habitación (`SyncRoomTypes`, T007). Una sincronización que no se
+   * completa no cambia el resultado.
    */
   ensure(): Promise<ChannexVerification>;
 }
