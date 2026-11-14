@@ -8,6 +8,7 @@ import {
 } from '../../../domain/reservation/reservation.js';
 import { newReservationRef } from '../../../domain/reservation/reservation-ref.js';
 import { BusinessError } from '../../../domain/shared/business-error.js';
+import { CONCURRENT_UPDATE } from '../../../domain/shared/error-codes.js';
 import type { BookingRevision } from '../../integration/booking-revision.js';
 import { CLOCK, type Clock } from '../../ports/out/clock.js';
 import {
@@ -59,6 +60,11 @@ import {
   type RegisterOtaConfirmationAndCommission,
 } from '../register-ota-information-commission/ports/in/register-ota-confirmation-and-commission.port.js';
 import {
+  APPLY_OTA_CHANGE,
+  type ApplyOtaChange,
+  type OtaChangePlan,
+} from '../update-reservation/ports/in/apply-ota-change.port.js';
+import {
   mapBookingRevision,
   type OtaReservationData,
 } from './booking-revision.mapper.js';
@@ -76,6 +82,9 @@ const BOOKING_PROCESSED_BY = 'Booking.com';
 /** Los estados en los que Booking ya no puede cancelar: se marca el conflicto (B3). */
 const NOT_CANCELLABLE_BY_BOOKING = ['IN_PROGRESS', 'COMPLETED', 'NO_SHOW'];
 
+/** Los estados en los que se aplica un cambio de Booking; en los demás se marca el conflicto (B2). */
+const CHANGEABLE_BY_BOOKING = ['ACTIVE', 'PENDING'];
+
 const ACKNOWLEDGE: RevisionOutcome = { kind: 'ACKNOWLEDGE' };
 const retry = (reason: string): RevisionOutcome => ({ kind: 'RETRY', reason });
 
@@ -83,7 +92,7 @@ const retry = (reason: string): RevisionOutcome => ({ kind: 'RETRY', reason });
 type MappedRoom = { categoryRoom: string; guestCount: number };
 
 /**
- * `ProcessBookingRevision` (plan de `generate-ota-reservation`, B1, B3 y punto 9). Las lecturas y las
+ * `ProcessBookingRevision` (plan de `generate-ota-reservation`, B1, B2, B3 y punto 9). Las lecturas y las
  * llamadas a los otros módulos van antes de abrir la transacción; dentro solo se escribe (regla 6 del plan
  * base).
  */
@@ -114,6 +123,8 @@ export class ProcessBookingRevisionService implements ProcessBookingRevision {
     private readonly availabilityChanges: AriChangeRecorder,
     @Inject(CANCEL_RESERVATION)
     private readonly cancellation: CancelReservation,
+    @Inject(APPLY_OTA_CHANGE)
+    private readonly otaChanges: ApplyOtaChange,
   ) {}
 
   async process(revision: BookingRevision): Promise<RevisionOutcome> {
@@ -142,10 +153,8 @@ export class ProcessBookingRevisionService implements ProcessBookingRevision {
       return this.cancel(revision, otaId, existing, now);
     }
     if (existing !== null) {
-      // Una `new` de una reserva que ya existe se trata como `modified`; las dos esperan a T009.
-      return retry(
-        `revisión ${revision.id}: pendiente de ApplyOtaChange (T009)`,
-      );
+      // Una `new` de una reserva que ya existe se trata como `modified` (paso 2 de B1).
+      return this.modify(revision, data, otaId, existing, now);
     }
     // Una `modified` de una reserva desconocida se procesa como `new` (punto 1).
     return this.create(revision, data, otaId, now);
@@ -165,11 +174,7 @@ export class ProcessBookingRevisionService implements ProcessBookingRevision {
       );
     }
     // Paso 4: fechas distintas por habitación (FR-012, T011c).
-    const datesDifferPerRoom = data.rooms.some(
-      (room) =>
-        room.checkinDate !== data.startDate ||
-        room.checkoutDate !== data.endDate,
-    );
+    const datesDifferPerRoom = differPerRoom(data);
     // Paso 5: una verificación por categoría y la de menor `roomNumber`, sin repetir.
     const roomInputs = await this.assign(rooms, data);
 
@@ -286,11 +291,7 @@ export class ProcessBookingRevisionService implements ProcessBookingRevision {
           return;
         }
         if (NOT_CANCELLABLE_BY_BOOKING.includes(existing.status)) {
-          await this.reservations.update(
-            existing.withConflict('CHANGE_NOT_APPLICABLE', now),
-            tx,
-          );
-          await this.record(tx, revision, otaId, existing.id, 'CONFLICT');
+          await this.markNotApplicable(tx, revision, otaId, existing, now);
           return;
         }
         await this.cancellation.cancel(tx, {
@@ -308,6 +309,108 @@ export class ProcessBookingRevisionService implements ProcessBookingRevision {
       throw error;
     }
     return ACKNOWLEDGE;
+  }
+
+  /**
+   * B2 (T009): el cambio de Booking, con `ApplyOtaChange` de `update-reservation`. `prepare` consulta el
+   * Módulo 1 antes de la transacción; dentro, `apply` solo escribe. Si la reserva cambió entre medio, o la
+   * restricción anti-solape rechaza una habitación, la revisión queda en el feed y se vuelve a preparar en la
+   * siguiente lectura.
+   */
+  private async modify(
+    revision: BookingRevision,
+    data: OtaReservationData,
+    otaId: string,
+    existing: Reservation,
+    now: Date,
+  ): Promise<RevisionOutcome> {
+    try {
+      if (!CHANGEABLE_BY_BOOKING.includes(existing.status)) {
+        await this.transactions.run((tx) =>
+          this.markNotApplicable(tx, revision, otaId, existing, now),
+        );
+        return ACKNOWLEDGE;
+      }
+      const rooms = await this.mapRooms(data);
+      if (rooms === null) {
+        return retry(
+          `revisión ${revision.id}: una habitación sin relación con una categoría (configure-ota)`,
+        );
+      }
+      let plan: OtaChangePlan;
+      try {
+        plan = await this.otaChanges.prepare(existing, {
+          startDate: data.startDate,
+          endDate: data.endDate,
+          rooms,
+          grossAmount: data.grossAmount,
+          notes: data.notes,
+          guest: {
+            firstName: data.guest.firstName,
+            lastName: data.guest.lastName,
+            contactEmail: data.guest.contactEmail,
+            contactPhone: data.guest.contactPhone,
+            nationality: data.guest.nationality,
+          },
+          datesDifferPerRoom: differPerRoom(data),
+        });
+      } catch (error) {
+        if (error instanceof BusinessError) {
+          this.logger.warn(
+            `La revisión ${revision.id} no se aplicó: ${error.errorCode}. Queda en el feed.`,
+          );
+          return retry(`revisión ${revision.id}: ${error.errorCode}`);
+        }
+        throw error;
+      }
+      await this.transactions.run(async (tx) => {
+        const saved = await this.otaChanges.apply(tx, plan);
+        await this.record(
+          tx,
+          revision,
+          otaId,
+          saved.id,
+          saved.conflict === null ? 'APPLIED' : 'CONFLICT',
+        );
+      });
+    } catch (error) {
+      if (error instanceof RoomOverlapError) {
+        return retry(
+          `revisión ${revision.id}: otra reserva tomó una habitación al guardar`,
+        );
+      }
+      if (
+        error instanceof BusinessError &&
+        error.errorCode === CONCURRENT_UPDATE.code
+      ) {
+        return retry(
+          `revisión ${revision.id}: la reserva cambió mientras se preparaba el cambio`,
+        );
+      }
+      if (error instanceof DuplicateOtaBookingRevisionError) {
+        return ACKNOWLEDGE;
+      }
+      throw error;
+    }
+    return ACKNOWLEDGE;
+  }
+
+  /**
+   * Un cambio o una cancelación que no se puede aplicar por el estado de la reserva: se marca
+   * `CHANGE_NOT_APPLICABLE` y la revisión queda `CONFLICT` (B2 y B3).
+   */
+  private async markNotApplicable(
+    tx: Transaction,
+    revision: BookingRevision,
+    otaId: string,
+    existing: Reservation,
+    now: Date,
+  ): Promise<void> {
+    await this.reservations.update(
+      existing.withConflict('CHANGE_NOT_APPLICABLE', now),
+      tx,
+    );
+    await this.record(tx, revision, otaId, existing.id, 'CONFLICT');
   }
 
   /**
@@ -413,4 +516,12 @@ export class ProcessBookingRevisionService implements ProcessBookingRevision {
       }
     }
   }
+}
+
+/** Alguna habitación trae `checkinDate` o `checkoutDate` distintos de las fechas de la reserva (FR-012). */
+function differPerRoom(data: OtaReservationData): boolean {
+  return data.rooms.some(
+    (room) =>
+      room.checkinDate !== data.startDate || room.checkoutDate !== data.endDate,
+  );
 }
