@@ -6,6 +6,7 @@ import {
 import { useEffect, useId, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { ErrorMessage } from '../../components/ErrorMessage.tsx';
+import { todayInColombia } from '../../services/operational-date.ts';
 import { saveFile } from '../../services/save-file.ts';
 import {
   exportSireFile,
@@ -32,11 +33,18 @@ type DownloadRequest = {
 /** El periodo y la página viven en la dirección (`?startDate=…&endDate=…&page=2`): se conservan al recargar. */
 type ScreenPeriod = { startDate: string; endDate: string; page: number };
 
-function readPeriod(params: URLSearchParams): ScreenPeriod {
+/**
+ * El periodo de la dirección. Sin ninguna de las dos fechas, el de hoy: así, al abrir la pantalla ya se ven
+ * los movimientos del día operativo (FR-002a).
+ */
+function readPeriod(params: URLSearchParams, today: string): ScreenPeriod {
   const page = Number(params.get('page') ?? '1');
+  const startDate = params.get('startDate');
+  const endDate = params.get('endDate');
+  const none = startDate === null && endDate === null;
   return {
-    startDate: params.get('startDate') ?? '',
-    endDate: params.get('endDate') ?? '',
+    startDate: none ? today : (startDate ?? ''),
+    endDate: none ? today : (endDate ?? ''),
     page: Number.isInteger(page) && page >= 1 ? page : 1,
   };
 }
@@ -56,7 +64,7 @@ function toParams(period: ScreenPeriod): URLSearchParams {
  */
 export function SirePage() {
   const [params, setParams] = useSearchParams();
-  const period = readPeriod(params);
+  const period = readPeriod(params, todayInColombia());
   const complete = period.startDate !== '' && period.endDate !== '';
   const [notice, setNotice] = useState<string | null>(null);
   const [previewing, setPreviewing] = useState<SireMovementItem | null>(null);
@@ -123,6 +131,9 @@ export function SirePage() {
             />
           </div>
           <div className="sire-shortcuts" role="group" aria-label="Atajos">
+            <button type="button" onClick={() => change(lastDays(0))}>
+              Hoy
+            </button>
             <button type="button" onClick={() => change(lastDays(7))}>
               Últimos 7 días
             </button>
@@ -481,22 +492,12 @@ function movementName(movement: SireMovementItem): string {
   return `${MOVEMENT_LABELS[movement.movementType].toLowerCase()} de ${movement.guest.fullName}`;
 }
 
-/** Los atajos del wireframe: de hoy menos `days` días a hoy, en hora de Colombia. */
+/** Los atajos del wireframe: de hoy menos `days` días a hoy, en hora de Colombia ("Hoy" es `0`). */
 function lastDays(days: number): Pick<ScreenPeriod, 'startDate' | 'endDate'> {
   const today = todayInColombia();
   const start = new Date(`${today}T00:00:00Z`);
   start.setUTCDate(start.getUTCDate() - days);
   return { startDate: start.toISOString().slice(0, 10), endDate: today };
-}
-
-/** El día de hoy en Colombia (`AAAA-MM-DD`), sin depender de la zona horaria del computador. */
-function todayInColombia(): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Bogota',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date());
 }
 
 /** `2026-10-09` como `09/10/2026` (plan base, "Fechas"). */

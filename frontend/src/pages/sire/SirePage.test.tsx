@@ -230,12 +230,8 @@ describe('Pantalla "Exportar SIRE"', () => {
 
     it('con las dos fechas consulta el periodo desde la página 1 y lo guarda en la dirección', async () => {
       backend({});
-      const router = renderAt('/sire');
+      const router = renderAt('/sire?startDate=2026-10-01');
 
-      await userEvent.type(
-        screen.getByLabelText('Fecha inicial'),
-        '2026-10-01',
-      );
       await userEvent.type(screen.getByLabelText('Fecha final'), '2026-10-31');
 
       expect(await screen.findByRole('table')).toBeInTheDocument();
@@ -248,6 +244,38 @@ describe('Pantalla "Exportar SIRE"', () => {
       expect(router.state.location.search).toBe(
         '?startDate=2026-10-01&endDate=2026-10-31',
       );
+    });
+
+    it('escenario 8: al abrir la pantalla, el periodo es hoy y ya lista sus movimientos (FR-002a)', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      // Las 10:00 del 15 de octubre en Colombia.
+      vi.setSystemTime(new Date('2026-10-15T15:00:00.000Z'));
+      backend({});
+      const router = renderAt('/sire');
+
+      expect(await screen.findByRole('table')).toBeInTheDocument();
+      expect(screen.getByLabelText('Fecha inicial')).toHaveValue('2026-10-15');
+      expect(screen.getByLabelText('Fecha final')).toHaveValue('2026-10-15');
+      expect(callsTo('/api/sire/movements')).toEqual([
+        expect.objectContaining({
+          url: '/api/sire/movements?startDate=2026-10-15&endDate=2026-10-15&page=1',
+        }),
+      ]);
+      // El periodo de hoy no se escribe en la dirección: es el de abrir la pantalla.
+      expect(router.state.location.search).toBe('');
+    });
+
+    it('"Hoy" vuelve al periodo de hoy después de cambiarlo', async () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date('2026-10-15T15:00:00.000Z'));
+      backend({});
+      renderAt('/sire?startDate=2026-10-01&endDate=2026-10-31');
+      await screen.findByRole('table');
+
+      await userEvent.click(screen.getByRole('button', { name: 'Hoy' }));
+
+      expect(screen.getByLabelText('Fecha inicial')).toHaveValue('2026-10-15');
+      expect(screen.getByLabelText('Fecha final')).toHaveValue('2026-10-15');
     });
 
     it.each([

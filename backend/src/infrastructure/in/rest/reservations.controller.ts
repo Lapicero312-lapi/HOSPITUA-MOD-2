@@ -186,6 +186,11 @@ const LIST_QUERY_PARAMETERS = [
     'Los dos. Con la Recepcionista, las dos fechas o ninguna; con el Módulo 1, obligatoria.',
     { type: 'string', format: 'date' },
   ),
+  listQuery(
+    'arrivalDate',
+    'Recepcionista. Solo las reservas que llegan ese día (`startDate = arrivalDate`), en cualquier estado; se combina con los demás filtros.',
+    { type: 'string', format: 'date' },
+  ),
   listQuery('order', 'Recepcionista. Por `startDate`; por defecto `desc`.', {
     type: 'string',
     enum: ['asc', 'desc'],
