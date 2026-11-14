@@ -143,6 +143,8 @@ describe('update-reservation: reservas de Booking (T029, escenarios 13 y 14)', (
       startDate: start,
       endDate: plusDays(end, 1),
       rooms: [{ categoryRoom: 'SUITE', guestCount: 2 }],
+      // Una sola habitación: no hay fechas distintas entre habitaciones.
+      datesDifferPerRoom: false,
       grossAmount: reservation.ota?.grossAmount ?? Money.of('0', 'USD'),
       notes: reservation.notes,
       guest: {
