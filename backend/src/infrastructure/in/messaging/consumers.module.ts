@@ -3,6 +3,7 @@ import { ConfigureOtaModule } from '../../../application/use-cases/configure-ota
 import { UpdateReservationModule } from '../../../application/use-cases/update-reservation/update-reservation.module.js';
 import { CheckInConsumer } from './check-in.consumer.js';
 import { CheckOutConsumer } from './check-out.consumer.js';
+import { InventoryConsumer } from './inventory.consumer.js';
 import { MaintenanceConsumer } from './maintenance.consumer.js';
 
 /**
@@ -11,6 +12,11 @@ import { MaintenanceConsumer } from './maintenance.consumer.js';
  */
 @Module({
   imports: [UpdateReservationModule, ConfigureOtaModule],
-  providers: [CheckInConsumer, CheckOutConsumer, MaintenanceConsumer],
+  providers: [
+    CheckInConsumer,
+    CheckOutConsumer,
+    MaintenanceConsumer,
+    InventoryConsumer,
+  ],
 })
 export class ConsumersModule {}
