@@ -332,9 +332,18 @@ export const CREATION_EXAMPLE: ReservationDetailBody = {
   updatedAt: '2026-10-09T09:14:00.123456-05:00',
   conflict: null,
   rooms: [
-    { roomId: ROOM_201, roomNumber: '201' },
-    { roomId: ROOM_202, roomNumber: '202' },
-  ].map(({ roomId, roomNumber }) => ({
+    {
+      reservationRoomId: '1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e',
+      roomId: ROOM_201,
+      roomNumber: '201',
+    },
+    {
+      reservationRoomId: '2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f',
+      roomId: ROOM_202,
+      roomNumber: '202',
+    },
+  ].map(({ reservationRoomId, roomId, roomNumber }) => ({
+    reservationRoomId,
     roomId,
     roomNumber,
     categoryRoom: 'DOBLE',

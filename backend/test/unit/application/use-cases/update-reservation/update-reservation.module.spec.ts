@@ -33,6 +33,8 @@ import {
 } from '../../../../../src/application/use-cases/update-reservation/ports/in/close-day.port.js';
 import { ApplyOtaChangeService } from '../../../../../src/application/use-cases/update-reservation/apply-ota-change.service.js';
 import { APPLY_OTA_CHANGE } from '../../../../../src/application/use-cases/update-reservation/ports/in/apply-ota-change.port.js';
+import { AssignRoomService } from '../../../../../src/application/use-cases/update-reservation/assign-room.service.js';
+import { ASSIGN_ROOM } from '../../../../../src/application/use-cases/update-reservation/ports/in/assign-room.port.js';
 import { ConfirmModificationService } from '../../../../../src/application/use-cases/update-reservation/confirm-modification.service.js';
 import { CONFIRM_MODIFICATION } from '../../../../../src/application/use-cases/update-reservation/ports/in/confirm-modification.port.js';
 import { PREVIEW_MODIFICATION } from '../../../../../src/application/use-cases/update-reservation/ports/in/preview-modification.port.js';
@@ -126,6 +128,11 @@ describe('UpdateReservationModule (plan base, regla 4)', () => {
       token: CONFIRM_MODIFICATION,
       service: ConfirmModificationService,
       who: 'ReservationsController (T010)',
+    },
+    {
+      token: ASSIGN_ROOM,
+      service: AssignRoomService,
+      who: 'ReservationsController (T027)',
     },
   ])(
     'exporta $token.description: $who lo puede inyectar',

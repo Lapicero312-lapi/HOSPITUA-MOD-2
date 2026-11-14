@@ -18,6 +18,8 @@ import { ReservationStatusService } from './reservation-status.service.js';
 import { ApplyOtaChangeService } from './apply-ota-change.service.js';
 import { APPLY_OTA_CHANGE } from './ports/in/apply-ota-change.port.js';
 import { RegisterOtaInformationCommissionModule } from '../register-ota-information-commission/register-ota-information-commission.module.js';
+import { AssignRoomService } from './assign-room.service.js';
+import { ASSIGN_ROOM } from './ports/in/assign-room.port.js';
 import { ConfigureOtaModule } from '../configure-ota/configure-ota.module.js';
 import { ConfirmModificationService } from './confirm-modification.service.js';
 import { CONFIRM_MODIFICATION } from './ports/in/confirm-modification.port.js';
@@ -26,8 +28,9 @@ import { CONFIRM_MODIFICATION } from './ports/in/confirm-modification.port.js';
  * Los servicios de `update-reservation` (plan base, regla 4 de la arquitectura). Exporta
  * `RESERVATION_STATUS` para `cancel-reservation` (T025), `PROCESS_CHECK_IN` y `PROCESS_CHECK_OUT` para
  * `CheckInConsumer` y `CheckOutConsumer` (T015 y T016), `CLOSE_DAY` para `CloseDayJob` (T022) y
- * `PREVIEW_MODIFICATION` y `CONFIRM_MODIFICATION` para `ReservationsController` (T009 y T010) y `APPLY_OTA_CHANGE` para
- * `generate-ota-reservation` (T026, con `RegisterOtaInformationCommissionModule` y `ConfigureOtaModule`). Importa `ProcessGuestDataModule` por
+ * `PREVIEW_MODIFICATION`, `CONFIRM_MODIFICATION` y `ASSIGN_ROOM` para `ReservationsController` (T009, T010 y T027) y
+ * `APPLY_OTA_CHANGE` para `generate-ota-reservation` (T026, con `RegisterOtaInformationCommissionModule` y
+ * `ConfigureOtaModule`, que da también `AriChangeRecorder` a T027). Importa `ProcessGuestDataModule` por
  * `REGISTER_GUEST_MOVEMENTS`, `CheckViewReservationModule` por `DAILY_LIST_CHANGE_RECORDER` y
  * `RESERVATION_LOOKUP`, `GenerateOtaReservationModule` por `OTA_NO_SHOW_REPORTER`, y
  * `ConsultRoomInventoryModule`, `CheckRoomAvailabilityModule` y `CalculateDynamicRateModule` por los puertos
@@ -54,6 +57,7 @@ import { CONFIRM_MODIFICATION } from './ports/in/confirm-modification.port.js';
     { provide: CLOSE_DAY, useClass: CloseDayService },
     { provide: PREVIEW_MODIFICATION, useClass: PreviewModificationService },
     { provide: APPLY_OTA_CHANGE, useClass: ApplyOtaChangeService },
+    { provide: ASSIGN_ROOM, useClass: AssignRoomService },
     { provide: CONFIRM_MODIFICATION, useClass: ConfirmModificationService },
   ],
   exports: [
@@ -63,6 +67,7 @@ import { CONFIRM_MODIFICATION } from './ports/in/confirm-modification.port.js';
     CLOSE_DAY,
     PREVIEW_MODIFICATION,
     APPLY_OTA_CHANGE,
+    ASSIGN_ROOM,
     CONFIRM_MODIFICATION,
   ],
 })
