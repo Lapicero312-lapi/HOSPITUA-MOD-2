@@ -8,6 +8,8 @@ import { NotFoundPage } from './pages/NotFoundPage.tsx';
 import { OtasPage } from './pages/otas/OtasPage.tsx';
 import { RatesPage } from './pages/rates/RatesPage.tsx';
 import { CancelReservationPage } from './pages/reservations/cancel/CancelReservationPage.tsx';
+import { ModifyReservationPage } from './pages/reservations/modify/ModifyReservationPage.tsx';
+import { NewDirectReservationPage } from './pages/reservations/new/NewDirectReservationPage.tsx';
 import { ReservationDetailPage } from './pages/reservations/ReservationDetailPage.tsx';
 import { ReservationsPage } from './pages/reservations/ReservationsPage.tsx';
 import { RoomsPage } from './pages/rooms/RoomsPage.tsx';
@@ -31,6 +33,8 @@ export const routes: RouteObject[] = [
     children: [
       { index: true, element: <HomePage /> },
       { path: 'reservas', element: <ReservationsPage /> },
+      // Una ruta fija: va antes que `reservas/:reservationRef`, aunque react-router ya la prefiere.
+      { path: 'reservas/nueva', element: <NewDirectReservationPage /> },
       { path: 'huespedes', element: <GuestStaysPage /> },
       { path: 'sire', element: <SirePage /> },
       { path: 'habitaciones', element: <RoomsPage /> },
@@ -43,6 +47,10 @@ export const routes: RouteObject[] = [
       {
         path: 'reservas/:reservationRef/cancelar',
         element: <CancelReservationPage />,
+      },
+      {
+        path: 'reservas/:reservationRef/modificar',
+        element: <ModifyReservationPage />,
       },
       { path: '*', element: <NotFoundPage /> },
     ],

@@ -1,3 +1,4 @@
+import type { AriChangeRecorder } from '../../../../../src/application/use-cases/configure-ota/ports/in/ari-change-recorder.port.js';
 import { describe, expect, it, vi } from 'vitest';
 import type { Room } from '../../../../../src/application/integration/room.js';
 import type {
@@ -199,6 +200,10 @@ function aConfirmation(
     calls.push('record');
     return Promise.resolve();
   });
+  const ari = vi.fn<AriChangeRecorder['record']>(() => {
+    calls.push('ari');
+    return Promise.resolve();
+  });
   const execute = vi.fn((ref: string) => {
     calls.push(`detail ${ref}`);
     return Promise.resolve(DETAIL);
@@ -222,6 +227,7 @@ function aConfirmation(
     { update } as unknown as ReservationRepository,
     { record } as DailyListChangeRecorder,
     { execute } as GetReservationDetail,
+    { record: ari } as AriChangeRecorder,
   );
   return {
     service,
@@ -232,6 +238,7 @@ function aConfirmation(
     run,
     update,
     record,
+    ari,
     execute,
   };
 }
@@ -665,6 +672,7 @@ describe('ConfirmModificationService (plan de update-reservation, B2, D2 y regla
         'findForUpdate RSV-3F9A1C7B',
         'update',
         'record',
+        'ari',
         'COMMIT',
         'detail RSV-3F9A1C7B',
       ]);
@@ -685,6 +693,26 @@ describe('ConfirmModificationService (plan de update-reservation, B2, D2 y regla
       const saved = savedOf(update);
       expect(record).toHaveBeenCalledWith(TX, reservation, saved);
       expect(detail).toBe(DETAIL);
+    });
+
+    it('punto 17 (T028): avisa a Channex lo que se libera (las fechas de antes) y lo que se ocupa (las nuevas), sin repetir', async () => {
+      const { service, ari } = aConfirmation();
+
+      await service.execute(
+        'RSV-3F9A1C7B',
+        change({
+          startDate: '2031-03-21',
+          endDate: '2031-03-24',
+          rooms: rooms([r201, 2], [r305, 1]),
+          expectedRates: [seen(r201), seen(r305)],
+        }),
+      );
+
+      expect(ari).toHaveBeenCalledWith(TX, [
+        { categoryRoom: 'DOBLE', dateFrom: START, dateTo: END },
+        { categoryRoom: 'DOBLE', dateFrom: '2031-03-21', dateTo: '2031-03-24' },
+        { categoryRoom: 'SUITE', dateFrom: '2031-03-21', dateTo: '2031-03-24' },
+      ]);
     });
 
     it('se arma sobre la reserva bloqueada, no sobre la que se leyó antes', async () => {

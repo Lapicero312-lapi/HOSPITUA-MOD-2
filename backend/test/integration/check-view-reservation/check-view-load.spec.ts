@@ -4,16 +4,12 @@ import { setupServer } from 'msw/node';
 import request from 'supertest';
 import type { App } from 'supertest/types.js';
 import { DataSource } from 'typeorm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { CLOCK, type Clock } from '../../../src/application/ports/out/clock.js';
 import {
   GENERATE_DAILY_LIST,
   type GenerateDailyList,
 } from '../../../src/application/use-cases/check-view-reservation/ports/in/generate-daily-list.port.js';
-import {
-  PUBLISH_PENDING_DAILY_MESSAGES,
-  type PublishPendingDailyMessages,
-} from '../../../src/application/use-cases/check-view-reservation/ports/in/publish-pending-daily-messages.port.js';
 import { configureApp } from '../../../src/configure-app.js';
 import { integrationEnv, truncateAllTables } from '../support/database.js';
 
@@ -126,6 +122,12 @@ describe('Consultar reservas: prueba de carga (T036, NFR-002 y NFR-004)', () => 
   }, 300_000);
 
   afterAll(async () => {
+    // Las 50 000 reservas no se dejan en la base: la siguiente prueba que arranca la aplicación completa
+    // con un día posterior tendría que cerrarlas todas en la recuperación del cierre del día (T022) antes de
+    // terminar de arrancar.
+    if (dataSource !== undefined) {
+      await truncateAllTables(dataSource);
+    }
     server.close();
     await app?.close();
   });
@@ -225,24 +227,32 @@ describe('Consultar reservas: prueba de carga (T036, NFR-002 y NFR-004)', () => 
   it(`NFR-004: con ${ARRIVALS} llegadas, la lista del día queda generada y publicada en RabbitMQ en menos de ${LIST_LIMIT_MS / 1000} s`, async () => {
     await load(ARRIVALS, ARRIVALS_DAY, ARRIVALS, 'B');
     const generator = app.get<GenerateDailyList>(GENERATE_DAILY_LIST);
-    const publisher = app.get<PublishPendingDailyMessages>(
-      PUBLISH_PENDING_DAILY_MESSAGES,
-    );
+    const listMessage = async () => {
+      const [message]: {
+        publish_status: string;
+        total: number;
+      }[] = await dataSource.query(
+        `SELECT publish_status, (payload->>'totalReservations')::int AS total
+         FROM daily_list_message WHERE operational_date = $1 AND message_kind = 'LIST'`,
+        [ARRIVALS_DAY],
+      );
+      return message;
+    };
 
+    // Generar la lista dispara su publicación (T029): se mide hasta que queda PUBLISHED, no lo que devuelva
+    // una publicación aparte, que puede encontrar el bloqueo tomado o la lista ya publicada.
     const { elapsed } = await timed(async () => {
       await generator.execute(ARRIVALS_DAY);
-      await publisher.execute();
+      await vi.waitFor(
+        async () => {
+          expect((await listMessage())?.publish_status).toBe('PUBLISHED');
+        },
+        { timeout: LIST_LIMIT_MS, interval: 50 },
+      );
     });
 
     expect(elapsed).toBeLessThan(LIST_LIMIT_MS);
-    const [message]: {
-      publish_status: string;
-      total: number;
-    }[] = await dataSource.query(
-      `SELECT publish_status, (payload->>'totalReservations')::int AS total
-       FROM daily_list_message WHERE operational_date = $1 AND message_kind = 'LIST'`,
-      [ARRIVALS_DAY],
-    );
+    const message = await listMessage();
     // Solo van las ACTIVE de ese día (`DailyListMembership.belongs`): 8 de cada 10 de las 500, más las de
     // las 50 000 que también llegan ese día.
     const [{ active }]: { active: number }[] = await dataSource.query(

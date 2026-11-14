@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Writable } from 'node:stream';
 import type { INestApplication } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -155,7 +156,11 @@ describe('Reserva directa: los logs no escriben datos personales del titular (T0
   }
 
   const create = (body: object) =>
-    request(app.getHttpServer()).post(CREATE_ROUTE).send(body);
+    request(app.getHttpServer())
+      .post(CREATE_ROUTE)
+      // Una clave nueva por solicitud: la creación la exige (punto 15, T019).
+      .set('Idempotency-Key', randomUUID())
+      .send(body);
 
   const lookup = (documentType: string, documentNumber: string) =>
     request(app.getHttpServer())

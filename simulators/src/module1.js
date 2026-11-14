@@ -1,6 +1,12 @@
 import { ROOMS, maintenancesFrom } from './data.js';
 import { isRealDate, todayInHotel } from './dates.js';
 import { errorReply, reply } from './http.js';
+import {
+  ROUTING_KEYS,
+  movementMessage,
+  readMovementRequest,
+  sequenceCounter,
+} from './module1-messages.js';
 
 /** UUID en su forma estándar `8-4-4-4-12` (hexadecimal), como lo valida el Módulo 2. */
 const UUID_FORMAT =
@@ -11,15 +17,33 @@ const CATEGORY_ROOM_FORMAT = /^[A-Z0-9_]{1,50}$/;
 
 const ROOM_PATH = /^\/api\/rooms\/([^/]+)$/;
 const MAINTENANCES_PATH = /^\/api\/rooms\/([^/]+)\/maintenances$/;
+const SIMULATE_PATH = /^\/simulate\/(check-in|check-out)$/;
 
 /**
  * El Módulo 1 simulado: el inventario (`consult-room-inventory`, A1, A2 y A3) y los mantenimientos
- * (`consult-maintenance-calendar`, A1).
- * @param {{ today?: () => string }} [options] `today` permite fijar el día en las pruebas
+ * (`consult-maintenance-calendar`, A1). Con `publisher` (cuando hay `RABBITMQ_URL`), también los avisos de
+ * Check-In y Check-Out por RabbitMQ, a pedido: `POST /simulate/check-in` y `POST /simulate/check-out`.
+ * @param {{
+ *   today?: () => string;
+ *   publisher?: import('./module1-messaging.js').Module1Publisher;
+ *   sequences?: ReturnType<typeof sequenceCounter>;
+ * }} [options] `today` permite fijar el día en las pruebas
  * @returns {import('./http.js').Handler}
  */
-export function module1Handler({ today = () => todayInHotel() } = {}) {
-  return ({ method, url }) => {
+export function module1Handler({
+  today = () => todayInHotel(),
+  publisher,
+  sequences = sequenceCounter(),
+} = {}) {
+  return ({ method, url, body }) => {
+    const simulate = SIMULATE_PATH.exec(url.pathname);
+    if (simulate && method === 'POST' && publisher) {
+      return publishMovement(
+        /** @type {'check-in' | 'check-out'} */ (simulate[1]),
+        body,
+        { publisher, sequences, today: today() },
+      );
+    }
     if (method !== 'GET') {
       return errorReply(404, 'NOT_FOUND', 'Ruta no encontrada.');
     }
@@ -41,6 +65,36 @@ export function module1Handler({ today = () => todayInHotel() } = {}) {
     }
     return errorReply(404, 'NOT_FOUND', 'Ruta no encontrada.');
   };
+}
+
+/**
+ * Arma el aviso del contrato A de `update-reservation` y lo publica. Responde `202` con el mensaje que
+ * salió, o `400` si la solicitud no tiene la forma esperada.
+ * @param {'check-in' | 'check-out'} movement
+ * @param {string} body
+ * @param {{
+ *   publisher: import('./module1-messaging.js').Module1Publisher;
+ *   sequences: ReturnType<typeof sequenceCounter>;
+ *   today: string;
+ * }} context
+ */
+async function publishMovement(movement, body, context) {
+  let parsed;
+  try {
+    parsed = JSON.parse(body);
+  } catch {
+    return errorReply(400, 'INVALID_BODY', 'El cuerpo debe ser JSON.');
+  }
+  const read = readMovementRequest(parsed);
+  if (!read.ok) {
+    return errorReply(400, 'INVALID_BODY', read.message);
+  }
+  const message = movementMessage(movement, read.request, {
+    sequenceNumber: context.sequences.next(movement),
+    today: context.today,
+  });
+  await context.publisher.publish(ROUTING_KEYS[movement], message);
+  return reply(202, message);
 }
 
 /**

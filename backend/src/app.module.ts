@@ -17,6 +17,8 @@ import { AppConfigModule } from './infrastructure/config/app-config.module.js';
 import { MessagingModule } from './infrastructure/config/messaging.module.js';
 import { RateReferenceConfigModule } from './infrastructure/config/rate-reference.config.js';
 import { CloseDayConfigModule } from './infrastructure/config/close-day.config.js';
+import { DirectReservationConfigModule } from './infrastructure/config/direct-reservation.config.js';
+import { ReconciliationConfigModule } from './infrastructure/config/reconciliation.config.js';
 import { SireConfigModule } from './infrastructure/config/sire.config.js';
 import { JobsModule } from './infrastructure/in/jobs/jobs.module.js';
 import { ConsumersModule } from './infrastructure/in/messaging/consumers.module.js';
@@ -43,6 +45,8 @@ import { LoggingModule } from './infrastructure/shared/logging.module.js';
     RateReferenceConfigModule,
     SireConfigModule,
     CloseDayConfigModule,
+    DirectReservationConfigModule,
+    ReconciliationConfigModule,
     Module1ClientModule,
     Module3ClientModule,
     ChannexClientModule,

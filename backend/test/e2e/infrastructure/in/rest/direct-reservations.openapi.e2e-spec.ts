@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import type { OpenAPIObject } from '@nestjs/swagger';
 import { Test } from '@nestjs/testing';
@@ -19,10 +20,18 @@ import {
   type Module3Port,
   Module3UnavailableError,
 } from '../../../../../src/application/ports/out/module3.port.js';
+import {
+  RESERVATION_REPOSITORY,
+  type ReservationRepository,
+} from '../../../../../src/application/ports/out/reservation.repository.js';
 import { AppModule } from '../../../../../src/app.module.js';
 import { configureApp } from '../../../../../src/configure-app.js';
 import { CloseDayJob } from '../../../../../src/infrastructure/in/jobs/close-day.job.js';
 import { Money } from '../../../../../src/domain/shared/money.js';
+import {
+  aDirectReservation,
+  aDirectRoom,
+} from '../../../../support/builders.js';
 import { ROOM_201, ROOM_202 } from '../../../../support/rooms.js';
 
 /**
@@ -76,18 +85,25 @@ const module1: Partial<Module1Port> = {
 let pricingDown = false;
 let mixedCurrencies = false;
 let quotes = 0;
-const createQuote: Module3Port['createQuote'] = () => {
+/** Lo que pasa mientras el Módulo 3 cotiza, una sola vez: por ejemplo, otra solicitud que guarda su reserva. */
+let whileQuoting: (() => Promise<void>) | null = null;
+const createQuote: Module3Port['createQuote'] = async () => {
   quotes += 1;
+  // El número de esta cotización, antes de esperar: las de una misma solicitud corren a la vez.
+  const quote = quotes;
   if (pricingDown) {
-    return Promise.reject(new Module3UnavailableError('tiempo agotado'));
+    throw new Module3UnavailableError('tiempo agotado');
   }
-  const currency = mixedCurrencies && quotes % 2 === 0 ? 'USD' : 'COP';
-  return Promise.resolve({
-    quoteId: `q-openapi-${quotes}`,
+  const meanwhile = whileQuoting;
+  whileQuoting = null;
+  await meanwhile?.();
+  const currency = mixedCurrencies && quote % 2 === 0 ? 'USD' : 'COP';
+  return {
+    quoteId: `q-openapi-${quote}`,
     currency,
     nightlyRates: [],
     lodgingAmount: Money.of('750000.00', currency),
-  } satisfies RateQuote);
+  } satisfies RateQuote;
 };
 
 const GUEST = {
@@ -171,7 +187,11 @@ describe('OpenAPI de la reserva directa (T017 de generate-direct-reservation)', 
   };
 
   const post = (path: string, body: object) =>
-    request(app.getHttpServer()).post(path).send(body);
+    request(app.getHttpServer())
+      .post(path)
+      // Una clave nueva por solicitud: la creación la exige (punto 15, T019); la vista previa no la lee.
+      .set('Idempotency-Key', randomUUID())
+      .send(body);
 
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
@@ -199,6 +219,7 @@ describe('OpenAPI de la reserva directa (T017 de generate-direct-reservation)', 
     room202InMaintenance = false;
     pricingDown = false;
     mixedCurrencies = false;
+    whileQuoting = null;
   });
 
   afterAll(async () => {
@@ -433,6 +454,8 @@ describe('OpenAPI de la reserva directa (T017 de generate-direct-reservation)', 
 
     it('los errores 400 son los que B puede responder, en el orden en que se revisan (punto 13)', () => {
       expect(errorCodes(CREATION)).toEqual([
+        'IDEMPOTENCY_KEY_REQUIRED',
+        'IDEMPOTENCY_KEY_REUSED',
         'INVALID_CATEGORY',
         'INVALID_ROOM_ID',
         'RATE_CHANGED',
@@ -452,16 +475,23 @@ describe('OpenAPI de la reserva directa (T017 de generate-direct-reservation)', 
         'ROOM_NOT_AVAILABLE',
         'NO_AVAILABILITY',
         'GUEST_COUNT_EXCEEDS_CAPACITY',
+        'AVAILABILITY_TAKEN',
         'PRICING_UNAVAILABLE',
         'REQUEST_NOT_PROCESSED',
       ]);
     });
 
-    it('lo que todavía no existe no se documenta: ni la Idempotency-Key (T019) ni AVAILABILITY_TAKEN (T009)', () => {
-      expect(operation(CREATION).parameters ?? []).toEqual([]);
-      expect(errorCodes(CREATION)).not.toContain('IDEMPOTENCY_KEY_REQUIRED');
-      expect(errorCodes(CREATION)).not.toContain('IDEMPOTENCY_KEY_REUSED');
-      expect(errorCodes(CREATION)).not.toContain('AVAILABILITY_TAKEN');
+    it('la cabecera Idempotency-Key va documentada, obligatoria y UUID (punto 15, T019)', () => {
+      expect(operation(CREATION).parameters).toEqual([
+        expect.objectContaining({
+          name: 'Idempotency-Key',
+          in: 'header',
+          required: true,
+          schema: { type: 'string', format: 'uuid' },
+        }),
+      ]);
+      // La vista previa no la lee.
+      expect(operation(PREVIEW).parameters ?? []).toEqual([]);
     });
 
     it('la respuesta real trae los campos documentados y la cabecera Location', async () => {
@@ -485,6 +515,42 @@ describe('OpenAPI de la reserva directa (T017 de generate-direct-reservation)', 
   });
 
   describe('cada error documentado es el que la ruta responde', () => {
+    it('B: IDEMPOTENCY_KEY_REQUIRED, sin la cabecera', async () => {
+      const res = await request(app.getHttpServer())
+        .post(CREATION)
+        .send(creationBody())
+        .expect(400);
+
+      expect(comparable(res.body as Record<string, unknown>)).toEqual(
+        comparable(errorExample(CREATION, 'IDEMPOTENCY_KEY_REQUIRED')),
+      );
+    });
+
+    it('B: IDEMPOTENCY_KEY_REUSED, la misma clave con otro cuerpo', async () => {
+      const key = randomUUID();
+      const send = (body: object) =>
+        request(app.getHttpServer())
+          .post(CREATION)
+          .set('Idempotency-Key', key)
+          .send(body);
+      // Una estadía propia, para no ocupar las habitaciones de las demás pruebas.
+      await send(
+        creationBody({ startDate: '2034-04-10', endDate: '2034-04-12' }),
+      ).expect(201);
+
+      const res = await send(
+        creationBody({
+          startDate: '2034-04-10',
+          endDate: '2034-04-12',
+          notes: 'Otra nota',
+        }),
+      ).expect(400);
+
+      expect(comparable(res.body as Record<string, unknown>)).toEqual(
+        comparable(errorExample(CREATION, 'IDEMPOTENCY_KEY_REUSED')),
+      );
+    });
+
     /** Lo que se compara: el código, el mensaje y la ruta, sin la hora. */
     const comparable = (body: Record<string, unknown>) => ({
       errorCode: body.errorCode,
@@ -616,6 +682,23 @@ describe('OpenAPI de la reserva directa (T017 de generate-direct-reservation)', 
         'INVALID_EMAIL',
         { guest: { ...GUEST, contactEmail: 'valentina@correo' } },
         () => undefined,
+      ],
+      // Va al final: deja la 201 ocupada en `STAY`.
+      [
+        'AVAILABILITY_TAKEN',
+        {},
+        () => {
+          whileQuoting = async () => {
+            await app.get<ReservationRepository>(RESERVATION_REPOSITORY).insert(
+              aDirectReservation({
+                ...STAY,
+                rooms: [
+                  aDirectRoom({ roomId: ROOM_201.id, roomNumber: '201' }),
+                ],
+              }),
+            );
+          };
+        },
       ],
     ] as [string, object, () => void][])(
       'B: %s',
