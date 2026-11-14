@@ -91,9 +91,12 @@ const commissionOf = (gross: string, percentage: string): string =>
     Math.round(Math.round(Number(gross) * 100) * Number(percentage)) / 10_000
   ).toFixed(2);
 
-/** Lo que quien corre la prueba tiene que hacer, o lo que pasó. Nunca con datos del titular. */
+/**
+ * Lo que quien corre la prueba tiene que hacer, o lo que pasó. Nunca con datos del titular. Va directo a la
+ * salida, en el momento: Vitest no muestra el `console.log` de una prueba que pasa.
+ */
 const say = (text: string) => {
-  console.log(`\n[staging] ${text}\n`);
+  process.stdout.write(`\n[staging] ${text}\n\n`);
 };
 
 const module1Rooms: Room[] = [];
