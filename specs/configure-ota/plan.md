@@ -314,7 +314,8 @@ interface SyncRoomTypes {
   - `429`, `5xx`, tiempo agotado o error de red: se registra y **se detiene**; las categorías que faltan
     se sincronizan la próxima vez. La pausa ante un `429` la lleva el adaptador;
   - `422` u otro `4xx` (por ejemplo, bajar la capacidad de un tipo mapeado a Booking, A3): se registra el
-    detalle, esa categoría no se guarda y **se sigue con las demás**.
+    detalle, esa categoría no se guarda y **se sigue con las demás**; se reintenta en la siguiente
+    sincronización.
 
   Lo que ya se confirmó antes de detenerse queda guardado; el resultado es `NOT_SYNCED` con el motivo.
 - **El Módulo 1 caído** (`INVENTORY_UNAVAILABLE`): no se llama a Channex y el resultado es `NOT_SYNCED`.
@@ -607,7 +608,10 @@ reserva.
 1. **Un tipo ya creado a mano en Channex con el nombre de una categoría se reutiliza** en lugar de crear
    otro.
 2. **`occ_children` y `occ_infants` en `0`**: la capacidad del Módulo 1 no distingue adultos de niños.
-3. **Un `422` de Channex se descarta** después de registrarlo, para no repetir un error permanente.
+3. **Un `422` de Channex al enviar disponibilidad (A4) se descarta** después de registrarlo, para no repetir
+   un error permanente. El de un tipo de habitación (A2 o A3) no se guarda y se reintenta en la siguiente
+   sincronización: cuesta una llamada por sincronización y le da a un administrador la oportunidad de
+   corregir el mapeo.
 4. **Renombrar una categoría en el Módulo 1 crea un tipo nuevo** en Channex (la relación es por nombre); el
    anterior queda con disponibilidad `0` y ocupa uno de los 20 cupos.
 5. **Un tipo adoptado recibe la cantidad y la capacidad del Módulo 1** (A3) en la misma sincronización:
@@ -621,6 +625,7 @@ reserva.
 | 2 | Restricciones de venta (estancia mínima, cierre de llegadas): hoy no las envía nadie; si el Módulo 3 las necesita, van en sus envíos de precios (`POST /restrictions`) | Módulo 3 |
 | 3 | El Módulo 1 no debe pasar de 20 categorías vendibles ni renombrarlas sin avisar (tope de Channex) | Módulo 1 |
 | 4 | El Módulo 1 debe publicar los avisos E1 (mantenimiento) y E2 (inventario) | Módulo 1 |
+| 5 | Un tipo relacionado que alguien borró a mano en Channex: A3 responde `404`, la categoría no se vende y el log lo repite en cada sincronización. Un administrador borra su fila de `ota_room_type_mapping`; la siguiente sincronización no encuentra relación ni tipo con ese nombre y lo crea de nuevo (C1, paso 3) | Administración |
 
 ## Notes
 
