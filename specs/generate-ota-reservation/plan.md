@@ -63,7 +63,11 @@ propio de este caso de uso:
 Cabecera `user-api-key: {CHANNEX_API_KEY}` en todas las llamadas. La clave nunca se escribe en los logs.
 
 **A1. Feed de revisiones**:
-`GET {CHANNEX_BASE_URL}/api/v1/booking_revisions/feed?filter[property_id]={CHANNEX_PROPERTY_ID}&order[inserted_at]=asc&pagination[page]={n}&pagination[limit]=100`
+`GET {CHANNEX_BASE_URL}/api/v1/booking_revisions?filter[property_id]={CHANNEX_PROPERTY_ID}&filter[acknowledge_status]=pending&order[inserted_at]=asc&pagination[page]={n}&pagination[limit]=100`
+
+Es la lista de revisiones filtrada por las no confirmadas, y no `/booking_revisions/feed`. En staging,
+`/feed` no devuelve las revisiones que llegan por el canal de Booking (`channel_id` con valor), aunque
+estén `pending`. La lista filtrada sí las trae, con la misma forma de revisión. El `ack` (A2) no cambia.
 
 **Paginación**: Channex devuelve 10 por defecto y como máximo 100 por página (`meta.total`, `page`,
 `limit`). En cada lectura el sistema pide **todas las páginas primero** (de la 1 hasta cubrir
@@ -304,7 +308,7 @@ sequenceDiagram
     participant DB as PostgreSQL
 
     J->>P: fetchBookingFeed()
-    P->>CX: GET /booking_revisions/feed, página por página (user-api-key)
+    P->>CX: GET /booking_revisions (pending), página por página (user-api-key)
     CX-->>P: revisiones (más antigua primero)
     J->>J: markSynced (lastSyncAt)
     loop cada revisión

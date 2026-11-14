@@ -136,7 +136,7 @@ export function simulate(server: SetupServer, channex: SimulatedChannex) {
         ],
       }),
     ),
-    http.get(`${CHANNEX_BASE_URL}/api/v1/booking_revisions/feed`, () => {
+    http.get(`${CHANNEX_BASE_URL}/api/v1/booking_revisions`, () => {
       channex.feedReads += 1;
       return channex.feedStatus === 200
         ? HttpResponse.json({

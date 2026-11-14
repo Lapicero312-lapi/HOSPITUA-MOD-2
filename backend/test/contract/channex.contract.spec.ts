@@ -299,10 +299,10 @@ describe('ChannexHttpAdapter contra respuestas simuladas de Channex', () => {
   });
 
   describe('generate-ota-reservation', () => {
-    it('A1: pide la página del feed de la propiedad, de la más antigua, de 100 en 100', async () => {
+    it('A1: pide la página de revisiones pendientes de la propiedad, de la más antigua, de 100 en 100', async () => {
       let params: URLSearchParams | null = null;
       server.use(
-        http.get(`${BASE_URL}/api/v1/booking_revisions/feed`, ({ request }) => {
+        http.get(`${BASE_URL}/api/v1/booking_revisions`, ({ request }) => {
           params = new URL(request.url).searchParams;
           return HttpResponse.json(feed([aRevision()], 101));
         }),
@@ -312,6 +312,7 @@ describe('ChannexHttpAdapter contra respuestas simuladas de Channex', () => {
 
       expect(Object.fromEntries(params ?? [])).toEqual({
         'filter[property_id]': PROPERTY_ID,
+        'filter[acknowledge_status]': 'pending',
         'order[inserted_at]': 'asc',
         'pagination[page]': '2',
         'pagination[limit]': '100',
@@ -357,7 +358,7 @@ describe('ChannexHttpAdapter contra respuestas simuladas de Channex', () => {
       const unmapped = aRevision();
       unmapped.attributes.rooms[0].room_type_id = null as unknown as string;
       server.use(
-        http.get(`${BASE_URL}/api/v1/booking_revisions/feed`, () =>
+        http.get(`${BASE_URL}/api/v1/booking_revisions`, () =>
           HttpResponse.json(feed([unmapped])),
         ),
       );
@@ -369,7 +370,7 @@ describe('ChannexHttpAdapter contra respuestas simuladas de Channex', () => {
 
     it('A1: sin titular ni notas, esos datos quedan vacíos', async () => {
       server.use(
-        http.get(`${BASE_URL}/api/v1/booking_revisions/feed`, () =>
+        http.get(`${BASE_URL}/api/v1/booking_revisions`, () =>
           HttpResponse.json(
             feed([aRevision({ customer: null, notes: '', amount: null })]),
           ),
@@ -393,7 +394,7 @@ describe('ChannexHttpAdapter contra respuestas simuladas de Channex', () => {
       const onlyAdults = aRevision();
       onlyAdults.attributes.rooms[0].occupancy = { adults: 2 } as never;
       server.use(
-        http.get(`${BASE_URL}/api/v1/booking_revisions/feed`, () =>
+        http.get(`${BASE_URL}/api/v1/booking_revisions`, () =>
           HttpResponse.json(feed([onlyAdults])),
         ),
       );
@@ -474,7 +475,7 @@ describe('ChannexHttpAdapter contra respuestas simuladas de Channex', () => {
       'A1: una revisión con %s se lee igual, con ese dato vacío (lo decide el caso de uso)',
       async (_, attributes, check) => {
         server.use(
-          http.get(`${BASE_URL}/api/v1/booking_revisions/feed`, () =>
+          http.get(`${BASE_URL}/api/v1/booking_revisions`, () =>
             HttpResponse.json(feed([aRevision(attributes)])),
           ),
         );
@@ -508,7 +509,7 @@ describe('ChannexHttpAdapter contra respuestas simuladas de Channex', () => {
       'A1: una revisión %s se omite, se registra sin datos personales y las demás se leen',
       async (_, attributes) => {
         server.use(
-          http.get(`${BASE_URL}/api/v1/booking_revisions/feed`, () =>
+          http.get(`${BASE_URL}/api/v1/booking_revisions`, () =>
             HttpResponse.json(
               feed([
                 aRevision(attributes),
@@ -539,7 +540,7 @@ describe('ChannexHttpAdapter contra respuestas simuladas de Channex', () => {
 
     it('A1: un feed sin meta.total es ChannexUnavailableError', async () => {
       server.use(
-        http.get(`${BASE_URL}/api/v1/booking_revisions/feed`, () =>
+        http.get(`${BASE_URL}/api/v1/booking_revisions`, () =>
           HttpResponse.json({ data: [] }),
         ),
       );
@@ -660,7 +661,7 @@ describe('ChannexHttpAdapter contra respuestas simuladas de Channex', () => {
             { status: 429 },
           );
         }),
-        http.get(`${BASE_URL}/api/v1/booking_revisions/feed`, () => {
+        http.get(`${BASE_URL}/api/v1/booking_revisions`, () => {
           calls++;
           return HttpResponse.json(feed([]));
         }),
@@ -679,7 +680,7 @@ describe('ChannexHttpAdapter contra respuestas simuladas de Channex', () => {
 
     describe('la pausa ante 429', () => {
       const MINUTE = 60_000;
-      const feedUrl = `${BASE_URL}/api/v1/booking_revisions/feed`;
+      const feedUrl = `${BASE_URL}/api/v1/booking_revisions`;
       let replies: number[];
 
       // Solo se finge la hora: msw y axios siguen con sus temporizadores reales.
@@ -767,7 +768,7 @@ describe('ChannexHttpAdapter contra respuestas simuladas de Channex', () => {
     it('una respuesta que no es JSON, donde se lee el cuerpo, es ChannexUnavailableError', async () => {
       server.use(
         http.get(
-          `${BASE_URL}/api/v1/booking_revisions/feed`,
+          `${BASE_URL}/api/v1/booking_revisions`,
           () => new HttpResponse('<html>'),
         ),
       );

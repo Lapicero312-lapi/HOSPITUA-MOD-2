@@ -116,13 +116,18 @@ export class ChannexHttpAdapter implements ChannexPort {
     };
   }
 
+  /**
+   * A1: la lista de revisiones filtrada por las no confirmadas, no `/booking_revisions/feed`. En staging,
+   * `/feed` no devuelve las revisiones que llegan por el canal de Booking aunque estén `pending`.
+   */
   async fetchBookingFeed(page: number): Promise<BookingFeedPage> {
     const { propertyId } = this.settings();
     const body = await this.call({
       method: 'GET',
-      url: '/api/v1/booking_revisions/feed',
+      url: '/api/v1/booking_revisions',
       params: {
         'filter[property_id]': propertyId,
+        'filter[acknowledge_status]': 'pending',
         'order[inserted_at]': 'asc',
         'pagination[page]': page,
         'pagination[limit]': BOOKING_FEED_PAGE_SIZE,
