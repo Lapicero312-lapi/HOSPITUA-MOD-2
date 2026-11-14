@@ -20,6 +20,11 @@ export type OtaChange = {
     contactPhone: string | null;
     nationality: string | null;
   };
+  /**
+   * Alguna habitación traía fechas distintas de las de la reserva: se aplican las de la reserva y, si no hay
+   * otro motivo, se marca `CHANGE_NOT_APPLICABLE` (FR-012 de `generate-ota-reservation`).
+   */
+  datesDifferPerRoom: boolean;
 };
 
 /** Una habitación del cambio, ya resuelta (punto 15). */
@@ -39,7 +44,8 @@ export type OtaChangePlan = {
   change: OtaChange;
   /** Una por cada habitación de `change.rooms`, en su orden. */
   rooms: PlannedOtaRoom[];
-  conflictReason: 'NO_ROOM_AVAILABLE' | 'CAPACITY_EXCEEDED' | null;
+  conflictReason:
+    'NO_ROOM_AVAILABLE' | 'CAPACITY_EXCEEDED' | 'CHANGE_NOT_APPLICABLE' | null;
   /** La comisión con el porcentaje congelado; `null` si el valor no cambió. */
   commission: CommissionResult | null;
 };

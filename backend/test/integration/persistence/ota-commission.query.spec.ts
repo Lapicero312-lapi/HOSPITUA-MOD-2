@@ -37,6 +37,12 @@ describe('TypeOrmReservationQuery.listOtaCommissions contra PostgreSQL real (reg
     ...changes,
   });
 
+  /**
+   * El número de la próxima reserva de la prueba, para su código de confirmación: único por agencia sin
+   * depender del azar (con `Math.random()`, dos de las 101 del mismo día podían repetir el código).
+   */
+  let nextCode = 0;
+
   /** Una reserva de la agencia que sale el `endDate` (llega dos días antes). */
   const anOtaLeaving = (
     otaId: string,
@@ -53,7 +59,7 @@ describe('TypeOrmReservationQuery.listOtaCommissions contra PostgreSQL real (reg
         startDate: start,
         endDate,
         ota: otaTerms(otaId, {
-          externalConfirmationCode: `${endDate.replaceAll('-', '')}${Math.floor(Math.random() * 1e6)}`,
+          externalConfirmationCode: `${endDate.replaceAll('-', '')}${String((nextCode += 1)).padStart(6, '0')}`,
           ...terms,
         }),
         ...changes,

@@ -81,6 +81,8 @@ export type SimulatedModules = {
   nightly: string;
   /** El Módulo 3 responde 500. */
   module3Down: boolean;
+  /** Las cotizaciones que responden 500, por su número de llamada (1, 2…): una que falla entre otras. */
+  failingQuoteCalls: number[];
   /** Si la hay, cada cotización espera en ella antes de responder. */
   quoteGate: Gate | null;
 };
@@ -146,6 +148,7 @@ export async function startModificationApp(
     quotedTypes: [],
     nightly: '300000.00',
     module3Down: false,
+    failingQuoteCalls: [],
     quoteGate: null,
   });
   const modules = fresh();
@@ -179,6 +182,16 @@ export async function startModificationApp(
   const module1 = config.get('MODULE1_BASE_URL', { infer: true });
   const module3 = config.get('MODULE3_BASE_URL', { infer: true });
   server.use(
+    // La lista de una categoría (la usa ApplyOtaChange): como el Módulo 1, filtra por `categoryRoom`.
+    http.get(`${module1}/api/rooms`, ({ request: list }) => {
+      modules.roomCalls += 1;
+      const category = new URL(list.url).searchParams.get('categoryRoom');
+      return HttpResponse.json(
+        MODULE1_ROOMS.filter(
+          ({ categoryRoom }) => category === null || categoryRoom === category,
+        ),
+      );
+    }),
     http.get(`${module1}/api/rooms/:roomId`, ({ params }) => {
       modules.roomCalls += 1;
       const room = MODULE1_ROOMS.find(({ id }) => id === params.roomId);
@@ -201,12 +214,13 @@ export async function startModificationApp(
         checkOutDate: string;
       };
       modules.quotedTypes.push(roomType);
+      const call = modules.quotedTypes.length;
       const gate = modules.quoteGate;
       if (gate !== null) {
         gate.arrive();
         await gate.opened;
       }
-      if (modules.module3Down) {
+      if (modules.module3Down || modules.failingQuoteCalls.includes(call)) {
         return new HttpResponse(null, { status: 500 });
       }
       const nights = nightsOf(checkInDate, checkOutDate);

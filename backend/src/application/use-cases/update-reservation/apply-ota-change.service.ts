@@ -162,7 +162,9 @@ export class ApplyOtaChangeService implements ApplyOtaChange {
       ? 'NO_ROOM_AVAILABLE'
       : capacityExceeded
         ? 'CAPACITY_EXCEEDED'
-        : null;
+        : change.datesDifferPerRoom
+          ? 'CHANGE_NOT_APPLICABLE'
+          : null;
 
     // Paso 5: la comisión con el porcentaje congelado, solo si Booking cambió el valor.
     const before = reservation.ota?.grossAmount;
