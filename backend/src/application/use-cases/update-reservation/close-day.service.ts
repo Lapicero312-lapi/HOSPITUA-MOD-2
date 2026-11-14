@@ -2,6 +2,11 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { Reservation } from '../../../domain/reservation/reservation.js';
 import type { AriChange } from '../../ports/out/ari-pending-change.repository.js';
 import { BusinessError } from '../../../domain/shared/business-error.js';
+import { CLOCK, type Clock } from '../../ports/out/clock.js';
+import {
+  IDEMPOTENCY_KEY_REPOSITORY,
+  type IdempotencyKeyRepository,
+} from '../../ports/out/idempotency-key.repository.js';
 import {
   RESERVATION_QUERY_PORT,
   type ReservationQueryPort,
@@ -65,6 +70,10 @@ export class CloseDayService implements CloseDay {
     private readonly batchSize: number,
     @Inject(ARI_CHANGE_RECORDER)
     private readonly ariChanges: AriChangeRecorder,
+    @Inject(IDEMPOTENCY_KEY_REPOSITORY)
+    private readonly idempotencyKeys: IdempotencyKeyRepository,
+    @Inject(CLOCK)
+    private readonly clock: Clock,
   ) {}
 
   async closePendingDays(today: string): Promise<CloseDaySummary[]> {
@@ -112,10 +121,27 @@ export class CloseDayService implements CloseDay {
       }
       afterRef = refs[refs.length - 1];
     }
+    await this.deleteExpiredIdempotencyKeys();
     this.logger.log(
       `Cierre del día ${operationalDate}: ${summary.noShow} No-Show, ${summary.notArrived} con habitaciones sin llegar, ${summary.completed} completadas, ${summary.ignored} ignoradas y ${summary.failed} con error.`,
     );
     return summary;
+  }
+
+  /**
+   * Al terminar, borra las `Idempotency-Key` de más de 24 horas (punto 13; punto 15 de
+   * `generate-direct-reservation`, T019). Si falla, solo queda en el log: el cierre ya terminó.
+   */
+  private async deleteExpiredIdempotencyKeys(): Promise<void> {
+    try {
+      await this.idempotencyKeys.deleteExpired(
+        new Date(this.clock.now().getTime() - IDEMPOTENCY_TTL_MS),
+      );
+    } catch (error) {
+      this.logger.warn(
+        `No se pudieron borrar las Idempotency-Key vencidas: ${reasonOf(error)}`,
+      );
+    }
   }
 
   /** Una reserva, en su transacción: la bloquea, vuelve a revisarla y la cierra según su estado. */
@@ -199,6 +225,9 @@ export class CloseDayService implements CloseDay {
     return 'completed';
   }
 }
+
+/** Cuánto vive una `Idempotency-Key` (D16 del plan base). */
+const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Punto 17: la categoría de cada habitación, en las fechas de la reserva, sin repetir.
