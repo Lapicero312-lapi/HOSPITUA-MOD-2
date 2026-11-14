@@ -19,6 +19,7 @@ import { RESERVATION_REPOSITORY } from '../../../application/ports/out/reservati
 import { SIRE_EXPORT_REPOSITORY } from '../../../application/ports/out/sire-export.repository.js';
 import { CANCELLATION_REPOSITORY } from '../../../application/ports/out/cancellation.repository.js';
 import { EXCLUSIVE_RUNNER } from '../../../application/ports/out/exclusive-runner.js';
+import { IDEMPOTENCY_KEY_REPOSITORY } from '../../../application/ports/out/idempotency-key.repository.js';
 import { TRANSACTION_RUNNER } from '../../../application/ports/out/transaction.js';
 import type { EnvironmentVariables } from '../../config/env.validation.js';
 import { typeOrmOptions } from '../../config/typeorm.options.js';
@@ -40,6 +41,7 @@ import { TypeOrmReservationRepository } from './repositories/reservation.reposit
 import { TypeOrmSireExportRepository } from './repositories/sire-export.repository.js';
 import { TypeOrmCancellationRepository } from './repositories/cancellation.repository.js';
 import { AdvisoryExclusiveRunner } from './advisory-exclusive-runner.js';
+import { TypeOrmIdempotencyKeyRepository } from './repositories/idempotency-key.repository.js';
 import { TypeOrmTransactionRunner } from './typeorm-transaction.js';
 
 /**
@@ -112,6 +114,10 @@ import { TypeOrmTransactionRunner } from './typeorm-transaction.js';
     },
     { provide: TRANSACTION_RUNNER, useClass: TypeOrmTransactionRunner },
     { provide: EXCLUSIVE_RUNNER, useClass: AdvisoryExclusiveRunner },
+    {
+      provide: IDEMPOTENCY_KEY_REPOSITORY,
+      useClass: TypeOrmIdempotencyKeyRepository,
+    },
   ],
   exports: [
     RESERVATION_REPOSITORY,
@@ -133,6 +139,7 @@ import { TypeOrmTransactionRunner } from './typeorm-transaction.js';
     CANCELLATION_REPOSITORY,
     TRANSACTION_RUNNER,
     EXCLUSIVE_RUNNER,
+    IDEMPOTENCY_KEY_REPOSITORY,
   ],
 })
 export class PersistenceModule {}
