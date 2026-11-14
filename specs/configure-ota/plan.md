@@ -272,7 +272,7 @@ de habitación, No-Show, Check-Out y habitaciones `NOT_ARRIVED`) y `cancel-reser
 type PendingAvailabilityResult =
   | { status: 'SENT'; categories: string[]; marks: number }   // lo enviado y las marcas borradas
   | { status: 'NOTHING_PENDING' }
-  | { status: 'NOT_SENT'; reason: string };                    // todo lo pendiente se conserva
+  | { status: 'NOT_SENT'; reason: string };                    // Channex no lo aceptó (o el Módulo 1 no respondió)
 
 interface PublishPendingAvailability {
   publish(): Promise<PendingAvailabilityResult>;
@@ -311,7 +311,9 @@ Pasos, en este orden (reglas 2, 3, 4 y 8; D2):
    - `422` u otro `4xx`: se registra el detalle y se **borran** esas marcas, para no repetir un error
      permanente (punto 3 de "Puntos que este plan propone"); el envío diario corrige lo que haya quedado.
 
-   En los casos que conservan, el resultado es `NOT_SENT` con el motivo.
+   Fuera del `200`, el resultado es `NOT_SENT` con el motivo (`CHANNEX_401`, `CHANNEX_429`,
+   `CHANNEX_UNAVAILABLE`, `CHANNEX_422`…). Si el Módulo 1 no respondió para ninguna categoría y no queda nada
+   que enviar, también es `NOT_SENT`, con su código.
 
 **Quién lo llama:** `ChannexSyncJob`, cada `CHANNEX_SYNC_INTERVAL_SECONDS`, con su bloqueo asesor: primero el
 feed (`ProcessBookingFeed`), después `PublishPendingAvailability` y al final los no-shows
