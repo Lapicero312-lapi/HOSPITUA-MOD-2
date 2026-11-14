@@ -1,7 +1,7 @@
 # Feature Specification: Consultar Reservas
 
 **Created**: 2026-09-19
-**Updated**: 2026-10-18
+**Updated**: 2026-11-14
 
 ## Use Case (Caso de Uso)
 
@@ -46,9 +46,10 @@ funcionalidad solo **informa**: no aparta ni libera habitaciones (el Módulo 1 d
 
 **Listado y filtros**
 
-1. La **Recepcionista** abre la vista de reservas. Sin filtros, el sistema muestra todas las
-   reservas, de a 10 por página y ordenadas por fecha de llegada (`startDate`) de la más reciente a
-   la más antigua.
+1. La **Recepcionista** abre la vista de reservas. Al abrirla, el sistema muestra las reservas que
+   **llegan hoy** (`startDate` igual al día operativo), de a 10 por página. Con el control "Hoy /
+   Todas" (o con "Limpiar filtros") pasa a ver **todas** las reservas, sin filtros, ordenadas por
+   fecha de llegada (`startDate`) de la más reciente a la más antigua.
 2. La Recepcionista aplica, en cualquier combinación, los filtros disponibles:
    - **Búsqueda**: `reservationRef`, `externalConfirmationCode` (código de la OTA), `documentNumber`
      o `fullName` del `Guest` titular.
@@ -152,9 +153,21 @@ cambia el orden y se envían filtros inválidos y se confirma el **HTTP 400**.
 
 1. **Scenario**: Listado de todas las reservas sin filtros (Happy Path)
    - **Given** 45 reservas registradas en distintos estados
-   - **When** la Recepcionista abre la vista de reservas sin filtros
+   - **When** la Recepcionista elige "Todas" en la vista de reservas, sin otros filtros
    - **Then** el sistema muestra la página 1 con 10 reservas ordenadas por `startDate` descendente,
      informa un total de 45 y 5 páginas, y cada fila muestra los datos de FR-005
+
+1a. **Scenario**: Al abrir la vista se ven las llegadas de hoy
+   - **Given** el día operativo 2026-10-09, dos reservas con `startDate` 2026-10-09 (una `ACTIVE` y
+     una `CANCELLED`), una en curso que llegó el 2026-10-08 y otra que llega el 2026-10-10
+   - **When** la Recepcionista abre la vista de reservas
+   - **Then** el control "Hoy / Todas" aparece en "Hoy" y el sistema muestra solo las dos que llegan el
+     2026-10-09, en cualquier estado; los demás filtros se pueden combinar con "Hoy"
+
+1b. **Scenario**: Una búsqueda no se limita a las llegadas de hoy
+   - **Given** la vista en "Hoy"
+   - **When** la Recepcionista busca por código, documento o nombre
+   - **Then** el sistema busca en todas las reservas, como en "Todas"
 
 2. **Scenario**: Filtro por un estado
    - **Given** reservas en `ACTIVE`, `PENDING` y `CANCELLED`
@@ -501,6 +514,11 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
 - **FR-003**: El sistema debe permitir filtrar el listado por un rango inclusivo de fechas
   (`dateFrom` y `dateTo`, formato `AAAA-MM-DD`, hora de Colombia) sobre la estadía: muestra las
   reservas cuya estadía se cruza con el rango (`startDate` ≤ `dateTo` y `endDate` > `dateFrom`).
+- **FR-003b**: El sistema debe permitir filtrar el listado por **día de llegada** (`arrivalDate`,
+  formato `AAAA-MM-DD`): muestra las reservas con `startDate` igual a ese día, en cualquier estado, y se
+  combina con los demás filtros. La pantalla de la Recepcionista lo aplica con el día operativo al
+  abrir la vista (control "Hoy / Todas" en "Hoy"); "Todas" y "Limpiar filtros" lo quitan. Con texto en
+  la búsqueda, la pantalla no lo envía: la búsqueda se hace sobre todas las reservas.
 - **FR-003a**: El sistema debe permitir ordenar el listado por `startDate`, ascendente o descendente.
   Por defecto, descendente (la llegada más reciente primero). El orden y los filtros se conservan al
   cambiar de página.
@@ -563,7 +581,7 @@ habitación a otra y se cancela una cuarta; se verifica que el Módulo 1 recibe,
   | Código con el formato de `reservationRef` interna (empieza con `RSV-`) sin coincidencias | "La reserva no existe." |
   | Estado inexistente | "El estado indicado no es válido." |
   | Canal inexistente | "El canal indicado no es válido." |
-  | Fecha con formato distinto de `AAAA-MM-DD` o inexistente | "La fecha indicada no es válida." |
+  | Fecha con formato distinto de `AAAA-MM-DD` o inexistente (`dateFrom`, `dateTo` o `arrivalDate`) | "La fecha indicada no es válida." |
   | Solo una de las dos fechas del rango (`dateFrom` sin `dateTo`, o `dateTo` sin `dateFrom`) | "Debe completar ambas fechas del rango." |
   | `dateFrom` posterior a `dateTo` | "La fecha inicial no puede ser posterior a la fecha final." |
   | Rango de más de 366 días | "El rango de fechas no puede superar 366 días." |

@@ -98,6 +98,7 @@ Un único cuadro de búsqueda (`search`) cubre código de reserva, código de la
 | `otaId` | id de agencia | No | Solo con `source=OTA` (ver "Puntos que este plan propone") |
 | `inConflict` | `true` | No | Solo las reservas de Booking en conflicto (FR-002a) |
 | `dateFrom`, `dateTo` | `AAAA-MM-DD` | Ambos o ninguno | Rango inclusivo; cruce: `startDate ≤ dateTo` y `endDate > dateFrom`; máximo 366 días |
+| `arrivalDate` | `AAAA-MM-DD` | No | Solo las reservas con `startDate = arrivalDate`, en cualquier estado (FR-003b). Se combina con los demás filtros; la búsqueda por código lo ignora, como a los demás |
 | `order` | `asc` \| `desc` | No | Por `startDate`. Por defecto `desc` |
 | `page` | entero ≥ 1 | No | Por defecto `1`. Tamaño fijo de 10 (no hay `pageSize`) |
 
@@ -152,7 +153,7 @@ Un único cuadro de búsqueda (`search`) cubre código de reserva, código de la
 | `RESERVATION_NOT_FOUND` | `search` empieza con `RSV-` y no hay coincidencia | "La reserva no existe." |
 | `INVALID_STATUS` | `status` fuera del enumerado | "El estado indicado no es válido." |
 | `INVALID_CHANNEL` | `source` fuera del enumerado | "El canal indicado no es válido." |
-| `INVALID_DATE` | `dateFrom` o `dateTo` mal formada o inexistente (por ejemplo `2026-02-30`) | "La fecha indicada no es válida." |
+| `INVALID_DATE` | `dateFrom`, `dateTo` o `arrivalDate` mal formada o inexistente (por ejemplo `2026-02-30`) | "La fecha indicada no es válida." |
 | `INCOMPLETE_DATE_RANGE` | Solo una de las dos fechas | "Debe completar ambas fechas del rango." |
 | `INVALID_DATE_RANGE` | `dateFrom` > `dateTo` | "La fecha inicial no puede ser posterior a la fecha final." |
 | `DATE_RANGE_TOO_LARGE` | Más de 366 días | "El rango de fechas no puede superar 366 días." |
@@ -164,8 +165,13 @@ Un único cuadro de búsqueda (`search`) cubre código de reserva, código de la
 | `INVALID_CONFLICT_FILTER` | `inConflict` con un valor distinto de `true` | "El filtro de conflicto no es válido." |
 
 **Orden de validación** (el primero que falle responde): formato de `search` → `status` → `source` →
-`otaId` (formato y canal) → `inConflict` → fechas (formato, completitud, orden, 366 días) → `order` →
-`page` → longitud del nombre.
+`otaId` (formato y canal) → `inConflict` → fechas (formato, completitud, orden, 366 días) → `arrivalDate`
+→ `order` → `page` → longitud del nombre.
+
+**Pantalla "Consultar reservas" (FR-003b).** Al abrirla, la pantalla envía `arrivalDate` con el día
+operativo (hoy en `America/Bogota`), y muestra el control "Hoy / Todas" en "Hoy". "Todas" y "Limpiar
+filtros" lo quitan; la elección vive en la dirección de la pantalla (`?view=all`) como los demás
+filtros. Con texto en `search`, la pantalla no envía `arrivalDate`.
 
 ### C2. `GET /api/reservations/day-summary` (Recepcionista): resumen del día
 
@@ -1149,6 +1155,7 @@ type ReservationListFilters = {
   otaId: string | null;                 // solo llega con source = OTA (lo valida T007)
   inConflict: boolean;                  // true: solo las que tienen conflict_reason (FR-002a)
   stayRange: { dateFrom: string; dateTo: string } | null;  // cruce: start_date <= dateTo y end_date > dateFrom
+  arrivalDate: string | null;           // start_date = arrivalDate (FR-003b)
   order: 'asc' | 'desc';                // por start_date y, si empatan, por reservation_ref, en el mismo sentido
 };
 
@@ -1455,6 +1462,8 @@ devuelven exactamente lo esperado, con totales y páginas correctos.
 - [ ] T035 Verificar que ningún log escribe datos personales del titular (NFR-003)
 - [ ] T036 Prueba de carga: 50 000 reservas y una página en menos de 1 s; 500 reservas en la lista en menos de 1 min
 - [ ] T037 Documentar las rutas en OpenAPI (`@nestjs/swagger`), incluidos los dos comportamientos de `GET /api/reservations` según `X-Client`
+- [ ] T038 [US1] `arrivalDate` en C1 (FR-003b): validación, filtro `start_date = arrivalDate` en `listReservations`, OpenAPI y pruebas
+- [ ] T039 [US1] Frontend: "Consultar reservas" abre en "Hoy" (`arrivalDate` = día operativo) con el control "Hoy / Todas"; pruebas de los escenarios 1, 1a y 1b
 
 ## Pruebas por escenario
 
