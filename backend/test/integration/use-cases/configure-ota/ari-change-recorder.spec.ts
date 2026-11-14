@@ -48,6 +48,12 @@ describe('AriChangeRecorder con los módulos de Nest y PostgreSQL real (configur
       await import('../../../../src/infrastructure/out/clock/clock.module.js');
     const { ChannexClientModule } =
       await import('../../../../src/infrastructure/out/channex/channex-client.module.js');
+    // ConfigureOtaModule usa, para la disponibilidad (T010), el Módulo 1 (inventario y mantenimientos) y
+    // `ReservationLookup` de check-view-reservation, cuyo módulo publica por RabbitMQ (MessagingModule).
+    const { MessagingModule } =
+      await import('../../../../src/infrastructure/config/messaging.module.js');
+    const { Module1ClientModule } =
+      await import('../../../../src/infrastructure/out/module1/module1-client.module.js');
     const { ConfigureOtaModule } =
       await import('../../../../src/application/use-cases/configure-ota/configure-ota.module.js');
     moduleRef = await Test.createTestingModule({
@@ -56,6 +62,8 @@ describe('AriChangeRecorder con los módulos de Nest y PostgreSQL real (configur
         PersistenceModule,
         ClockModule,
         ChannexClientModule,
+        Module1ClientModule,
+        MessagingModule,
         ConfigureOtaModule,
       ],
       providers: [
