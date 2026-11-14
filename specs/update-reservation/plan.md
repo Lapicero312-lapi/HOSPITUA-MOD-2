@@ -397,6 +397,7 @@ interface OtaChange {
   grossAmount: Money; notes: string | null;
   guest: { firstName: string; lastName: string; contactEmail: string | null;
            contactPhone: string | null; nationality: string | null };
+  datesDifferPerRoom: boolean;  // alguna habitación traía otras fechas (FR-012 de generate-ota-reservation)
 }
 
 interface ApplyOtaChange {
@@ -411,7 +412,8 @@ interface ApplyOtaChange {
 
 - Conserva las habitaciones que siguen libres en las fechas nuevas; para las demás busca otra libre de la
   misma categoría (`assignRooms`) y, si no hay, la deja **sin asignar** (`NO_ROOM_AVAILABLE`). Si alguna
-  supera su `maxCapacity`, marca `CAPACITY_EXCEEDED`.
+  supera su `maxCapacity`, marca `CAPACITY_EXCEEDED`. Si no hay ninguno de los dos y
+  `datesDifferPerRoom` es verdadero, marca `CHANGE_NOT_APPLICABLE` (el mismo orden que `createOta`).
 - **No invoca al Módulo 3**: recalcula la comisión con el porcentaje congelado
   (`RegisterOtaConfirmationAndCommission`).
 - No usa `updatedAt` del cliente: el orden lo da el feed. `apply` compara el `updated_at` que leyó
@@ -1276,7 +1278,7 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
         categoryRoom: string;
         guestCount: number;
       }[];
-      conflictReason: 'NO_ROOM_AVAILABLE' | 'CAPACITY_EXCEEDED' | null;
+      conflictReason: 'NO_ROOM_AVAILABLE' | 'CAPACITY_EXCEEDED' | 'CHANGE_NOT_APPLICABLE' | null;
       commission: CommissionResult | null;  // null si el valor no cambió
     };
     ```
@@ -1292,7 +1294,9 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
        2. si no, **se reasigna** con `assignRooms` (la libre de menor `roomNumber`, sin repetir): fila nueva;
        3. si no, queda **sin asignar**: fila nueva, sin habitación.
     4. El conflicto, en el orden de `createOta`: `NO_ROOM_AVAILABLE` si queda alguna sin asignar; si no,
-       `CAPACITY_EXCEEDED` si alguna asignada tiene menos `maxCapacity` que sus personas; si no, ninguno.
+       `CAPACITY_EXCEEDED` si alguna asignada tiene menos `maxCapacity` que sus personas; si no,
+       `CHANGE_NOT_APPLICABLE` si `change.datesDifferPerRoom` (Booking envió fechas distintas por habitación:
+       se aplican las de la reserva, FR-012 de `generate-ota-reservation`); si no, ninguno.
     5. La comisión: si `grossAmount` cambió (monto o moneda),
        `RegisterOtaConfirmationAndCommission.recalculate(reserva, grossAmount)`, con el porcentaje congelado
        de la reserva. Si no cambió, no se recalcula. **`recalculate` lo agrega esta tarea**: el plan de
