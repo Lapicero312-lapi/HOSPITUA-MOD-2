@@ -393,10 +393,13 @@ function whereOf(filters: ReservationListFilters): {
   };
   const { search } = filters;
   if (search?.kind === 'CODE') {
-    // Paso 3: la referencia y el código de la OTA a la vez, con sus índices; ignora los demás filtros.
+    // Paso 3: la referencia y el código de la OTA a la vez, con sus índices; ignora los demás filtros. La
+    // referencia se guarda en mayúsculas (`char(12)`): se compara con el texto en mayúsculas como `bpchar`, el
+    // tipo de la columna sin largo (`char(12)` recortaría un texto más largo y daría una coincidencia falsa),
+    // así usa el índice único de `reservation_ref` ("Índices y extensiones"); `lower()` lo impediría.
     add(
       (p) =>
-        `(lower(r.reservation_ref) = lower(${p}) OR lower(r.external_confirmation_code) = lower(${p}))`,
+        `(r.reservation_ref = upper(${p})::bpchar OR lower(r.external_confirmation_code) = lower(${p}))`,
       search.code,
     );
     return { where: `WHERE ${conditions[0]}`, params };

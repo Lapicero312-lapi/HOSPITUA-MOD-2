@@ -190,6 +190,53 @@ describe('TypeOrmReservationRepository contra PostgreSQL real', () => {
       expect(await repository.findByRef(other.reservationRef)).toBeNull();
     });
 
+    it('un bloqueo mutuo (40P01) entre dos guardados simultáneos también es RoomOverlapError (D3), y el otro se guarda', async () => {
+      // Dos transacciones toman habitaciones en orden cruzado: la primera la X y la segunda la Y; después la
+      // primera pide la Y y la segunda la X. Cada una espera a la otra y PostgreSQL aborta una (40P01).
+      const roomX = randomUUID();
+      const roomY = randomUUID();
+      const stay = (roomId: string) =>
+        aDirectReservation({
+          startDate: '2026-12-01',
+          endDate: '2026-12-03',
+          rooms: [aDirectRoom({ roomId })],
+        });
+      let firstHasX: () => void = () => {};
+      let secondHasY: () => void = () => {};
+      const xTaken = new Promise<void>((resolve) => (firstHasX = resolve));
+      const yTaken = new Promise<void>((resolve) => (secondHasY = resolve));
+
+      const results = await Promise.allSettled([
+        transactions.run(async (tx) => {
+          await repository.insert(stay(roomX), tx);
+          firstHasX();
+          await yTaken;
+          await repository.insert(stay(roomY), tx);
+        }),
+        transactions.run(async (tx) => {
+          await xTaken;
+          await repository.insert(stay(roomY), tx);
+          secondHasY();
+          // La primera ya espera por la Y: ahora esta pide la X y se cierra el ciclo.
+          await new Promise((resolve) => setTimeout(resolve, 200));
+          await repository.insert(stay(roomX), tx);
+        }),
+      ]);
+
+      const rejected = results.filter(
+        (result): result is PromiseRejectedResult =>
+          result.status === 'rejected',
+      );
+      expect(rejected).toHaveLength(1);
+      expect(rejected[0].reason).toBeInstanceOf(RoomOverlapError);
+      // La que siguió guardó sus dos reservas: la X y la Y quedan ocupadas una vez cada una.
+      const [{ rooms }]: { rooms: number }[] = await dataSource.query(
+        'SELECT count(*)::int AS rooms FROM reservation_room WHERE room_id = ANY($1)',
+        [[roomX, roomY]],
+      );
+      expect(rooms).toBe(2);
+    });
+
     it('una referencia repetida es DuplicateReservationRefError', async () => {
       const first = aDirectReservation();
       await repository.insert(first);

@@ -298,7 +298,9 @@ Pasos, en este orden (reglas 2, 3, 4 y 8; D2):
 
    Solo se envían las noches marcadas, no todo el tramo entre la primera y la última. Si el Módulo 1 no
    responde para una categoría (`INVENTORY_UNAVAILABLE` o `MAINTENANCE_CHECK_UNAVAILABLE`), esa categoría
-   no se envía y **sus marcas se conservan**; las demás siguen (regla 3).
+   no se envía y **sus marcas se conservan**; las demás siguen (regla 3). Cualquier otro error (por ejemplo,
+   `INVALID_CATEGORY` o `INVALID_ROOM_ID`) sale tal cual: no se envía nada, las marcas quedan y la tarea lo
+   registra en el log.
 5. **Un solo envío A4** con los rangos de todas las categorías (`toChannexRanges`, del `roomTypeId` de cada
    una). Las marcas que se borran son **solo las leídas en el paso 1** de las categorías enviadas: las que
    llegaron mientras tanto quedan para el siguiente ciclo.
@@ -317,7 +319,70 @@ Pasos, en este orden (reglas 2, 3, 4 y 8; D2):
 
 **Quién lo llama:** `ChannexSyncJob`, cada `CHANNEX_SYNC_INTERVAL_SECONDS`, con su bloqueo asesor: primero el
 feed (`ProcessBookingFeed`), después `PublishPendingAvailability` y al final los no-shows
-(`PublishPendingNoShows`). Un error inesperado de un paso queda en el log y no impide los siguientes.
+(`PublishPendingNoShows`). Si el feed **no se leyó** (`ProcessBookingFeed.run()` da `false`: Channex respondió
+`5xx`, `429` o no respondió) o falló por un error inesperado, **no se envía la disponibilidad** en ese ciclo:
+FR-007 pide procesar antes las reservas pendientes de Channex, para no devolverle a Booking un cupo que ya
+descontó por una reserva nueva; las marcas se conservan para el siguiente. Los no-shows no dependen del
+feed: se envían igual. Un error inesperado de cualquier paso queda en el log.
+
+**Caso conocido:** si el feed se leyó pero **una revisión no se guardó** (da `RETRY` o falla; por ejemplo, el
+Módulo 1 no respondió o su tipo no tiene relación), la disponibilidad **sí se envía**, calculada sin esa
+reserva. Saltar el envío por una revisión que no se guarda congelaría la disponibilidad de todas las
+categorías mientras siga sin guardarse, y una revisión de un tipo sin relación se reintenta en cada ciclo
+hasta que alguien la arregle. Si en ese lapso Booking vende de más, la reserva llega como conflicto
+(`NO_ROOM_AVAILABLE`), como cualquier venta en el instante entre la lectura y el envío.
+
+**B4. Enviar la disponibilidad completa (`PublishDailyAvailability`, T011).** Puerto de entrada en
+`ports/in/publish-daily-availability.port.ts`, con su símbolo `PUBLISH_DAILY_AVAILABILITY`;
+`ConfigureOtaModule` lo registra y lo exporta.
+
+```typescript
+type DailyAvailabilityResult =
+  | { status: 'SENT'; categories: string[] }     // las categorías enviadas
+  | { status: 'NOTHING_TO_SEND' }                // ninguna categoría tiene tipo en Channex
+  | { status: 'NOT_SENT'; reason: string };      // Channex no lo aceptó (o el Módulo 1 no respondió)
+
+interface PublishDailyAvailability {
+  publish(): Promise<DailyAvailabilityResult>;
+  /** Anota las noches de todas las categorías relacionadas como marcas (B2), sin calcular ni enviar. */
+  markAllPending(): Promise<void>;
+}
+```
+
+Pasos, en este orden (reglas 2, 3, 5 y 8; FR-007 y FR-008):
+
+1. **Las categorías:** todas las que tienen relación en `ota_room_type_mapping`
+   (`OtaRoomTypeMappingRepository.findAll()`). Sin ninguna: `NOTHING_TO_SEND`, sin llamar a nadie. Una
+   categoría relacionada que ya no tiene habitaciones vendibles se envía con `0`.
+2. **Las noches:** de hoy (`Clock.today()`) a `hoy + CHANNEX_ARI_DAYS` (excluido), sin fechas pasadas.
+3. **La disponibilidad de cada noche:** el mismo cálculo de B3 (regla 2, con el tope `countOfRooms` de la
+   regla 8 y los mantenimientos con `MAINTENANCE_CONCURRENCY`), que pasa a una pieza compartida por B3 y B4.
+   Si el Módulo 1 no responde para una categoría (`INVENTORY_UNAVAILABLE` o `MAINTENANCE_CHECK_UNAVAILABLE`),
+   esa categoría no se envía y **se anotan sus noches como marcas** (B2), para que `ChannexSyncJob` la envíe
+   cuando el Módulo 1 vuelva; las demás siguen.
+4. **Un solo envío A4** con los rangos de todas las categorías (`toChannexRanges`). Las marcas pendientes no
+   se tocan: el ciclo de 30 s las envía igual.
+5. **La respuesta de Channex** (tabla de A):
+   - `200`: si trae `warnings`, se registran;
+   - `401` o `403`: la `Ota` Booking.com pasa a `DISCONNECTED` (`OtaConnectionTracker.markDisconnected`);
+   - `429`, `5xx`, tiempo agotado o error de red: **se anotan las noches de las categorías calculadas**
+     como marcas, para que las reintente el ciclo de 30 s;
+   - `422` u otro `4xx`: se registra el detalle y no se reintenta, como en B3.
+
+   Fuera del `200`, el resultado es `NOT_SENT` con el motivo.
+
+**Quién lo llama: `AriDailyJob`**, a las 03:00 (`America/Bogota`), con el bloqueo asesor de las tareas de
+Channex (`channex-sync`, regla 7). Corre, en orden, el feed (`ProcessBookingFeed`), `SyncRoomTypes` (C1) y
+`PublishDailyAvailability`, y no hace nada mientras la configuración de Channex no esté lista.
+- **El feed no se leyó o falló** por un error inesperado: los tipos se sincronizan igual, pero la
+  disponibilidad completa **no se envía** (FR-007, como en B3); se anotan las noches de todas las
+  categorías relacionadas (`markAllPending`), para que las envíe `ChannexSyncJob` después de su propio feed.
+- **El bloqueo está ocupado** (lo tiene un ciclo de 30 s): se reintenta cada 5 s, hasta 10 minutos. Si no
+  lo consigue, se registra el error y se anotan las noches de todas las categorías relacionadas
+  (`markAllPending`).
+- **La aplicación estaba apagada a las 03:00:** no se recupera al arrancar; lo corrige el envío del día
+  siguiente, y lo que cambie mientras tanto lo envía el ciclo de 30 s.
+- Fuera de lo anterior, un error inesperado de un paso queda en el log y no impide los siguientes.
 
 ### C. Sincronización de tipos de habitación
 
@@ -441,6 +506,18 @@ Mensajes planos del exchange `hospitua.events`, con las reglas de mensajería de
 - `previousCategoryRoom` solo si cambió de categoría.
 - El sistema ejecuta la sincronización de tipos (C1), con el mismo bloqueo asesor de las tareas de Channex, y anota los 90 días de `categoryRoom` y, si viene,
   de `previousCategoryRoom`.
+- **Pasos (`HandleInventoryNotice`, T012b):**
+  1. Un `messageId` ya procesado se confirma sin efectos y sin sincronizar.
+  2. Con el bloqueo asesor de las tareas de Channex (`channex-sync`, regla 7), se ejecuta `SyncRoomTypes`
+     (C1).
+  3. En una transacción, se anotan (B2) los 90 días de `categoryRoom` y, si viene, de
+     `previousCategoryRoom`, y se registra el mensaje en `processed_message`.
+- **Bloqueo ocupado** (una tarea de Channex está corriendo): el aviso no se procesa ni se anota; sale como
+  fallo temporal y se reintenta con la espera creciente de la cola (plan base). Agotados los reintentos, va
+  a la dead-letter queue.
+- **`NOT_SYNCED`** (el Módulo 1 o Channex no responden): las marcas se anotan y el aviso se confirma igual;
+  los tipos se corrigen en la sincronización de las 03:00 (T011). Con la configuración de Channex no válida
+  no se sincroniza: solo se anotan las marcas, como en E1.
 
 Un mensaje sin `messageId`, `roomId` o `categoryRoom`, con fechas inválidas o con una `action` desconocida
 va a la dead-letter queue sin procesar. Un `messageId` repetido se confirma sin efectos.

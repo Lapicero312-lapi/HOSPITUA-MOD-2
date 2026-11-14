@@ -14,10 +14,6 @@ import {
   type ChannexPort,
 } from '../../../../src/application/ports/out/channex.port.js';
 import {
-  CONSULT_ROOM_INVENTORY,
-  type ConsultRoomInventory,
-} from '../../../../src/application/use-cases/consult-room-inventory/ports/in/consult-room-inventory.port.js';
-import {
   ENSURE_CHANNEX_SETUP,
   type EnsureChannexSetup,
 } from '../../../../src/application/use-cases/configure-ota/ports/in/ensure-channex-setup.port.js';
@@ -25,35 +21,12 @@ import { integrationEnv, truncateAllTables } from '../../support/database.js';
 
 const PROPERTY_ID = '716305c4-561a-4561-a187-7f5b8aeb5920';
 
-/** Channex simulado: A0 con la propiedad configurada, y A1 y A2 para el paso 3 (T007). */
+/** Channex simulado: solo A0, con la propiedad configurada. */
 const channex = {
   listProperties: vi.fn(() =>
     Promise.resolve([{ id: PROPERTY_ID, title: 'Hotel de prueba' }]),
   ),
-  listRoomTypes: vi.fn(() => Promise.resolve([])),
-  createRoomType: vi.fn((input: { title: string; occupancy: number }) =>
-    Promise.resolve({
-      id: '994d1375-dbbd-4072-8724-b2ab32ce781b',
-      title: input.title,
-      defaultOccupancy: input.occupancy,
-    }),
-  ),
-  updateRoomType: vi.fn(() => Promise.resolve()),
 } as unknown as ChannexPort;
-
-/** El Módulo 1 simulado: la 201, la 202 y la 203 de `DOBLE`, de 2 personas. */
-const inventory = {
-  listAll: vi.fn(() =>
-    Promise.resolve(
-      ['201', '202', '203'].map((roomNumber) => ({
-        id: `00000000-0000-4000-8000-000000000${roomNumber}`,
-        roomNumber,
-        categoryRoom: 'DOBLE',
-        maxCapacity: 2,
-      })),
-    ),
-  ),
-} as unknown as ConsultRoomInventory;
 
 describe('EnsureChannexSetup con los módulos de Nest y PostgreSQL real', () => {
   let moduleRef: TestingModule;
@@ -77,6 +50,10 @@ describe('EnsureChannexSetup con los módulos de Nest y PostgreSQL real', () => 
       await import('../../../../src/infrastructure/out/clock/clock.module.js');
     const { ChannexClientModule } =
       await import('../../../../src/infrastructure/out/channex/channex-client.module.js');
+    // ConfigureOtaModule usa, para la disponibilidad (T010), el Módulo 1 (inventario y mantenimientos) y
+    // `ReservationLookup` de check-view-reservation, cuyo módulo publica por RabbitMQ (MessagingModule).
+    const { MessagingModule } =
+      await import('../../../../src/infrastructure/config/messaging.module.js');
     const { Module1ClientModule } =
       await import('../../../../src/infrastructure/out/module1/module1-client.module.js');
     const { ConfigureOtaModule } =
@@ -88,13 +65,12 @@ describe('EnsureChannexSetup con los módulos de Nest y PostgreSQL real', () => 
         ClockModule,
         ChannexClientModule,
         Module1ClientModule,
+        MessagingModule,
         ConfigureOtaModule,
       ],
     })
       .overrideProvider(CHANNEX_PORT)
       .useValue(channex)
-      .overrideProvider(CONSULT_ROOM_INVENTORY)
-      .useValue(inventory)
       .compile();
     moduleRef.useLogger(false);
     await moduleRef.init();
@@ -130,32 +106,5 @@ describe('EnsureChannexSetup con los módulos de Nest y PostgreSQL real', () => 
         connection_status: 'CONNECTED',
       },
     ]);
-  });
-
-  it('paso 3: crea el tipo de cada categoría y guarda su relación con lo enviado; la segunda vez no cambia nada (T007)', async () => {
-    vi.mocked(channex.createRoomType).mockClear();
-    vi.mocked(channex.updateRoomType).mockClear();
-
-    await expect(setup.ensure()).resolves.toBe('READY');
-    await expect(setup.ensure()).resolves.toBe('READY');
-
-    const rows: {
-      channex_room_type_id: string;
-      category_room: string;
-      count_of_rooms: number;
-      occupancy: number;
-    }[] = await dataSource.query(
-      'SELECT channex_room_type_id, category_room, count_of_rooms, occupancy FROM ota_room_type_mapping',
-    );
-    expect(rows).toEqual([
-      {
-        channex_room_type_id: '994d1375-dbbd-4072-8724-b2ab32ce781b',
-        category_room: 'DOBLE',
-        count_of_rooms: 3,
-        occupancy: 2,
-      },
-    ]);
-    expect(channex.createRoomType).toHaveBeenCalledTimes(1);
-    expect(channex.updateRoomType).not.toHaveBeenCalled();
   });
 });

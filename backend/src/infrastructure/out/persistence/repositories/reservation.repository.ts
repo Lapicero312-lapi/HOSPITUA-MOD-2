@@ -262,7 +262,9 @@ async function translateErrors<T>(
         code?: string;
         constraint?: string;
       };
-      if (code === '23P01') {
+      // `23P01`: la restricción anti-solape rechazó la habitación (D3). `40P01`: dos guardados simultáneos
+      // sobre la misma habitación se bloquearon al revisarla y PostgreSQL abortó uno; es el mismo choque.
+      if (code === '23P01' || code === '40P01') {
         throw new RoomOverlapError();
       }
       if (code === '23505' && constraint === 'uq_reservation_reservation_ref') {

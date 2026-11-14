@@ -105,7 +105,8 @@ describe('ProcessBookingFeed (plan de generate-ota-reservation, punto 9; T007)',
       revisions: [revision('r1', 'b1'), revision('r2', 'b2')],
     };
 
-    await service.run();
+    // Leyó el feed: ChannexSyncJob puede enviar la disponibilidad (B3 de configure-ota, FR-007).
+    await expect(service.run()).resolves.toBe(true);
 
     expect(calls).toEqual([
       'findPendingAck',
@@ -119,10 +120,10 @@ describe('ProcessBookingFeed (plan de generate-ota-reservation, punto 9; T007)',
     ]);
   });
 
-  it('si no se pudo leer el feed, no procesa nada', async () => {
+  it('si no se pudo leer el feed, no procesa nada y devuelve false (sin disponibilidad en ese ciclo, FR-007)', async () => {
     read = { status: 'NOT_READ' };
 
-    await service.run();
+    await expect(service.run()).resolves.toBe(false);
 
     expect(process).not.toHaveBeenCalled();
     expect(ack).not.toHaveBeenCalled();
@@ -143,7 +144,8 @@ describe('ProcessBookingFeed (plan de generate-ota-reservation, punto 9; T007)',
     outcomes.r1 = () =>
       Promise.resolve({ kind: 'RETRY', reason: 'revisión r1: sin relación' });
 
-    await service.run();
+    // Leyó el feed: una revisión que no se guardó no cambia el resultado (caso conocido de B3).
+    await expect(service.run()).resolves.toBe(true);
 
     expect(process.mock.calls.map(([r]) => (r as BookingRevision).id)).toEqual([
       'r1',
@@ -170,7 +172,7 @@ describe('ProcessBookingFeed (plan de generate-ota-reservation, punto 9; T007)',
     outcomes.r1 = () =>
       Promise.reject(new TypeError('Ana Pérez ana@correo.com no cabe'));
 
-    await service.run();
+    await expect(service.run()).resolves.toBe(true);
 
     expect(process.mock.calls.map(([r]) => (r as BookingRevision).id)).toEqual([
       'r1',

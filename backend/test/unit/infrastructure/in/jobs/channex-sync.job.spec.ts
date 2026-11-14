@@ -38,6 +38,10 @@ function aJob({
       calls.push('publish');
       return Promise.resolve({ reported: 0, rejected: 0, pending: 0 });
     });
+  const availability = vi.fn(() => {
+    calls.push('availability');
+    return Promise.resolve({ status: 'NOTHING_PENDING' as const });
+  });
   const state = {
     settings: () => (withSettings ? SETTINGS : null),
     isReady: () => ready,
@@ -54,18 +58,15 @@ function aJob({
   );
   const scheduler = new SchedulerRegistry();
   const job = new ChannexSyncJob(
-    // El ciclo del feed (T007): aquí solo cuenta que se llame, como antes la lectura.
-    {
-      run: async () => {
-        await read();
-      },
-    },
+    // El ciclo del feed (T007): como el real, dice si leyó el feed.
+    { run: async () => (await read()).status === 'READ' },
+    { publish: availability },
     { publish },
     state,
     { runExclusive } as unknown as AdvisoryLock,
     scheduler,
   );
-  return { job, read, publish, calls, runExclusive, scheduler };
+  return { job, read, availability, publish, calls, runExclusive, scheduler };
 }
 
 describe('ChannexSyncJob (plan de generate-ota-reservation, punto 7)', () => {
@@ -135,63 +136,107 @@ describe('ChannexSyncJob (plan de generate-ota-reservation, punto 7)', () => {
   });
 
   it('no hace nada mientras la configuración de Channex no esté lista', async () => {
-    const { job, read, publish, runExclusive } = aJob({ ready: false });
+    const { job, read, availability, publish, runExclusive } = aJob({
+      ready: false,
+    });
 
     await expect(job.run()).resolves.toBe(false);
 
     expect(runExclusive).not.toHaveBeenCalled();
     expect(read).not.toHaveBeenCalled();
+    expect(availability).not.toHaveBeenCalled();
     expect(publish).not.toHaveBeenCalled();
   });
 
   it('si otra ejecución tiene el bloqueo, se salta esta', async () => {
-    const { job, read, publish } = aJob({ locked: true });
+    const { job, read, availability, publish } = aJob({ locked: true });
 
     await expect(job.run()).resolves.toBe(false);
 
     expect(read).not.toHaveBeenCalled();
+    expect(availability).not.toHaveBeenCalled();
     expect(publish).not.toHaveBeenCalled();
   });
 
-  it('después de leer el feed envía los no-shows pendientes, dentro del mismo bloqueo (punto 8)', async () => {
+  it('en el mismo bloqueo: primero el feed, después la disponibilidad pendiente (B3 de configure-ota) y al final los no-shows (punto 8)', async () => {
     const { job, calls, runExclusive } = aJob();
 
     await expect(job.run()).resolves.toBe(true);
 
-    expect(calls).toEqual(['read', 'publish']);
+    expect(calls).toEqual(['read', 'availability', 'publish']);
     expect(runExclusive).toHaveBeenCalledTimes(1);
   });
 
-  it('envía los no-shows aunque la lectura no haya podido leer el feed: el reporte no depende del feed', async () => {
-    const { job, read, publish } = aJob();
-    read.mockResolvedValueOnce({ status: 'NOT_READ' });
+  it('si no se pudo leer el feed, no envía la disponibilidad (FR-007) y los no-shows sí; el ciclo siguiente que lo lee, la envía', async () => {
+    const warnings: string[] = [];
+    vi.spyOn(Logger.prototype, 'warn').mockImplementation(
+      (message: unknown) => {
+        warnings.push(String(message));
+      },
+    );
+    const { job, read, calls } = aJob();
+    read.mockImplementationOnce(() => {
+      calls.push('read');
+      return Promise.resolve({ status: 'NOT_READ' });
+    });
 
     await expect(job.run()).resolves.toBe(true);
+    expect(calls).toEqual(['read', 'publish']);
+    expect(warnings).toEqual([
+      'No se envía la disponibilidad en este ciclo: el feed no se leyó. Las marcas quedan para el siguiente.',
+    ]);
+    expect(errors).toEqual([]);
 
-    expect(publish).toHaveBeenCalledTimes(1);
+    await expect(job.run()).resolves.toBe(true);
+    expect(calls).toEqual([
+      'read',
+      'publish',
+      'read',
+      'availability',
+      'publish',
+    ]);
   });
 
   it('un error inesperado al enviar los no-shows se registra y el ciclo siguiente los envía de nuevo', async () => {
     const { job, publish } = aJob();
     publish.mockRejectedValueOnce(new Error('la base de datos no responde'));
 
-    await expect(job.run()).resolves.toBe(false);
+    await expect(job.run()).resolves.toBe(true);
     expect(errors).toEqual([
-      'El ciclo de Channex falló por un error inesperado: se intenta en el siguiente',
+      'El paso de Channex "los no-shows" falló por un error inesperado: se intenta en el siguiente ciclo',
     ]);
 
     await expect(job.run()).resolves.toBe(true);
     expect(publish).toHaveBeenCalledTimes(2);
   });
 
-  it('un error inesperado se registra y la siguiente ejecución lee de nuevo', async () => {
-    const { job, read } = aJob();
+  it('un error inesperado del feed se registra, no se envía la disponibilidad (FR-007) y los no-shows sí; la siguiente ejecución lee de nuevo', async () => {
+    const { job, read, calls } = aJob();
     read.mockRejectedValueOnce(new Error('la base de datos no responde'));
 
-    await expect(job.run()).resolves.toBe(false);
-    expect(errors).toHaveLength(1);
+    await expect(job.run()).resolves.toBe(true);
+    expect(errors).toEqual([
+      'El paso de Channex "el feed" falló por un error inesperado: se intenta en el siguiente ciclo',
+    ]);
+    // La lectura falló (su simulación no anota nada): sin el feed procesado no se envía la disponibilidad,
+    // y los no-shows, que no dependen del feed, sí.
+    expect(calls).toEqual(['publish']);
 
     await expect(job.run()).resolves.toBe(true);
     expect(read).toHaveBeenCalledTimes(2);
+  });
+
+  it('un error inesperado de la disponibilidad pendiente se registra y los no-shows se envían igual', async () => {
+    const { job, availability, publish } = aJob();
+    availability.mockRejectedValueOnce(
+      new Error('la base de datos no responde'),
+    );
+
+    await expect(job.run()).resolves.toBe(true);
+
+    expect(errors).toEqual([
+      'El paso de Channex "la disponibilidad pendiente" falló por un error inesperado: se intenta en el siguiente ciclo',
+    ]);
+    expect(publish).toHaveBeenCalledTimes(1);
   });
 });
