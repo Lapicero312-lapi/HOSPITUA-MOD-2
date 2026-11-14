@@ -24,7 +24,9 @@ import {
   GET_REFERENCE_RATES,
   type GetReferenceRates,
 } from '../../../src/application/use-cases/calculate-dynamic-rate/ports/in/get-reference-rates.port.js';
+import { PUBLISH_PENDING_DAILY_MESSAGES } from '../../../src/application/use-cases/check-view-reservation/ports/in/publish-pending-daily-messages.port.js';
 import { configureApp } from '../../../src/configure-app.js';
+import { PublishPendingJob } from '../../../src/infrastructure/in/jobs/publish-pending.job.js';
 import type { ReferenceRate } from '../../../src/domain/rate/reference-rate.js';
 import type { RoomRate } from '../../../src/domain/reservation/reservation-room.js';
 import { aDirectReservation } from '../../support/builders.js';
@@ -95,9 +97,17 @@ describe('calculate-dynamic-rate: la referencia de tarifas no llama al Módulo 3
     });
     callsToOtherModules = [];
     const { AppModule } = await import('../../../src/app.module.js');
+    // La publicación de la lista del día consulta la base por su cuenta: la tarea de cada 10 s
+    // (`PublishPendingJob`) y la inmediata, que sale después de generar la lista al arrancar. Apagadas, la
+    // única consulta que podría ver el espía de abajo sería la de la referencia de tarifas.
     const moduleRef = await Test.createTestingModule({
       imports: [AppModule],
-    }).compile();
+    })
+      .overrideProvider(PublishPendingJob)
+      .useValue({})
+      .overrideProvider(PUBLISH_PENDING_DAILY_MESSAGES)
+      .useValue({ execute: () => Promise.resolve(0) })
+      .compile();
     app = moduleRef.createNestApplication<INestApplication<App>>({
       logger: false,
     });
