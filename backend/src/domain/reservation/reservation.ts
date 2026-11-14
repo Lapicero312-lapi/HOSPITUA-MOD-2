@@ -1,4 +1,4 @@
-import type { Guest } from '../guest/guest.js';
+import { Guest } from '../guest/guest.js';
 import { isPercentage } from '../ota/ota.js';
 import { BusinessError } from '../shared/business-error.js';
 import type {
@@ -51,6 +51,40 @@ export type DirectReservationInput = {
   guest: Guest;
   notes: string | null;
   rooms: DirectRoomInput[];
+};
+
+/**
+ * Una habitación de la reserva modificada (plan de `update-reservation`, regla 9): la fila que se conserva o
+ * una nueva, con su habitación del Módulo 1, sus personas y su tarifa.
+ */
+export type ModifiedRoomInput = {
+  /** El `id` de la `ReservationRoom` que se conserva; `null` en una agregada o la nueva de una cambiada. */
+  keptRoomId: string | null;
+  room: { roomId: string; roomNumber: string; categoryRoom: string };
+  guestCount: number;
+  rate: RoomRate;
+};
+
+/** Lo que cambia `Reservation.withModification`. Un campo en `undefined` queda como está. */
+export type ReservationModification = {
+  startDate: string;
+  endDate: string;
+  /** La lista completa de las que quedan, en el orden de la solicitud. */
+  rooms: ModifiedRoomInput[];
+  /** Los seis datos que se corrigen (FR-001); la nacionalidad no cambia. */
+  guest:
+    | Pick<
+        Guest,
+        | 'firstName'
+        | 'lastName'
+        | 'documentType'
+        | 'documentNumber'
+        | 'contactPhone'
+        | 'contactEmail'
+      >
+    | undefined;
+  /** `null` borra las observaciones. */
+  notes: string | null | undefined;
 };
 
 /** Datos de una reserva de canal `OTA`: la agencia, su código y la comisión. */
@@ -282,6 +316,87 @@ export class Reservation {
   }
 
   /**
+   * La reserva de Booking con el cambio que envió la agencia (plan de `update-reservation`, punto 15; T026):
+   * - las fechas y las habitaciones del plan: una conservada guarda su fila, su habitación y su
+   *   `stayStatus`, con sus personas nuevas; una nueva es otra fila, en `EXPECTED`, con habitación o sin
+   *   asignar, y sin tarifa;
+   * - las observaciones y el titular (nombre, apellido, correo, teléfono y nacionalidad; el documento no
+   *   cambia);
+   * - el valor y, si viene, la comisión nueva;
+   * - el conflicto: sin motivo se quita; con el mismo que ya tenía conserva su `detectedAt`; con otro, lo
+   *   detecta `changedAt`.
+   *
+   * Nunca la rechaza por falta de lugar ni por capacidad (FR-024). Comprueba las invariantes de `restore`.
+   * @throws BusinessError con los códigos de `restore` (las fechas, la cantidad de habitaciones y `notes`).
+   */
+  withOtaChange(change: OtaChangeInput): Reservation {
+    const { ota } = this.props;
+    if (this.props.source !== 'OTA' || ota === null) {
+      throw new Error(
+        `La reserva ${this.props.reservationRef} es directa: no se cambia con withOtaChange.`,
+      );
+    }
+    const rooms = change.rooms.map(
+      ({ keptRoomId, room, categoryRoom, guestCount }) => {
+        if (keptRoomId === null) {
+          return ReservationRoom.restore({
+            id: crypto.randomUUID(),
+            roomId: room?.roomId ?? null,
+            roomNumber: room?.roomNumber ?? null,
+            categoryRoom,
+            guestCount,
+            rate: null,
+            stayStatus: INITIAL_STAY_STATUS,
+          });
+        }
+        const kept = this.props.rooms.find(({ id }) => id === keptRoomId);
+        if (kept === undefined) {
+          throw new Error(
+            `La habitación ${keptRoomId} no pertenece a la reserva ${this.props.reservationRef}.`,
+          );
+        }
+        return ReservationRoom.restore({ ...kept.snapshot(), guestCount });
+      },
+    );
+    const { conflict } = this.props;
+    return Reservation.restore({
+      ...this.props,
+      startDate: change.startDate,
+      endDate: change.endDate,
+      rooms,
+      notes: change.notes,
+      guest: Guest.restore({
+        ...this.props.guest.snapshot(),
+        firstName: change.guest.firstName,
+        lastName: change.guest.lastName,
+        contactEmail: change.guest.contactEmail,
+        contactPhone: change.guest.contactPhone,
+        nationality: change.guest.nationality,
+      }),
+      ota: {
+        ...ota,
+        grossAmount: change.grossAmount,
+        ...(change.commission === null
+          ? {}
+          : {
+              commissionAmount: change.commission.commissionAmount,
+              commissionStatus: change.commission.commissionStatus,
+            }),
+      },
+      conflict:
+        change.conflictReason === null
+          ? null
+          : {
+              reason: change.conflictReason,
+              detectedAt:
+                conflict !== null && conflict.reason === change.conflictReason
+                  ? conflict.detectedAt
+                  : change.changedAt,
+            },
+    });
+  }
+
+  /**
    * La reserva con otro `status`, según la tabla de transiciones (FR-006) y las condiciones del plan base:
    * - `IN_PROGRESS`: con al menos una habitación en `CHECKED_IN` (el Check-In de la primera).
    * - `COMPLETED`: sin habitaciones en `EXPECTED` ni en `CHECKED_IN`, y con alguna en `CHECKED_OUT`.
@@ -343,6 +458,67 @@ export class Reservation {
           ? room.withStayStatus('NOT_ARRIVED')
           : room,
       ),
+    });
+  }
+
+  /**
+   * La reserva directa modificada (plan de `update-reservation`, regla 9; T010 y T011):
+   * - las fechas y la lista completa de habitaciones nuevas;
+   * - una habitación conservada guarda su fila (`id`), su `roomNumber` y su `stayStatus`, con sus personas
+   *   y su tarifa nuevas;
+   * - una nueva es otra fila, en `EXPECTED`;
+   * - el titular, si viene, guarda su `id` y su `nationality` (regla 6);
+   * - `notes`, si viene (`null` las borra).
+   *
+   * Comprueba las invariantes de `restore`. Las reglas del orden de la regla 3 (fechas, habitaciones,
+   * capacidad y disponibilidad) ya las revisó quien llama.
+   * @throws BusinessError con los códigos de `restore` o de `ReservationRoom.restore`.
+   */
+  withModification(change: ReservationModification): Reservation {
+    if (this.props.source !== 'DIRECT') {
+      // La Recepcionista solo modifica reservas directas (FR-001a): una de Booking es un error del programa.
+      throw new Error(
+        `La reserva ${this.props.reservationRef} es de Booking: no se modifica con withModification.`,
+      );
+    }
+    const rooms = change.rooms.map(({ keptRoomId, room, guestCount, rate }) => {
+      if (keptRoomId === null) {
+        return ReservationRoom.restore({
+          id: crypto.randomUUID(),
+          roomId: room.roomId,
+          roomNumber: room.roomNumber,
+          categoryRoom: room.categoryRoom,
+          guestCount,
+          rate,
+          stayStatus: INITIAL_STAY_STATUS,
+        });
+      }
+      const kept = this.props.rooms.find(({ id }) => id === keptRoomId);
+      if (kept === undefined) {
+        throw new Error(
+          `La habitación ${keptRoomId} no pertenece a la reserva ${this.props.reservationRef}.`,
+        );
+      }
+      return ReservationRoom.restore({ ...kept.snapshot(), guestCount, rate });
+    });
+    return Reservation.restore({
+      ...this.props,
+      startDate: change.startDate,
+      endDate: change.endDate,
+      rooms,
+      guest:
+        change.guest === undefined
+          ? this.props.guest
+          : Guest.restore({
+              ...this.props.guest.snapshot(),
+              firstName: change.guest.firstName,
+              lastName: change.guest.lastName,
+              documentType: change.guest.documentType,
+              documentNumber: change.guest.documentNumber,
+              contactPhone: change.guest.contactPhone,
+              contactEmail: change.guest.contactEmail,
+            }),
+      notes: change.notes === undefined ? this.props.notes : change.notes,
     });
   }
 
@@ -477,4 +653,39 @@ export type OtaReservationInput = {
   rooms: OtaRoomInput[];
   /** Si alguna habitación traía fechas distintas de las de la reserva (paso 4 de B1). */
   datesDifferPerRoom: boolean;
+};
+
+/**
+ * Lo que cambia `Reservation.withOtaChange` (plan de `update-reservation`, punto 15): el cambio de Booking ya
+ * resuelto por `ApplyOtaChange.prepare`. Son datos simples: el dominio no conoce los tipos de `application/`.
+ */
+export type OtaChangeInput = {
+  startDate: string;
+  endDate: string;
+  /** Una por cada habitación del cambio, en su orden. */
+  rooms: {
+    /** El `id` de la `ReservationRoom` que se conserva, con la misma habitación; `null` en una nueva. */
+    keptRoomId: string | null;
+    /** La habitación de una nueva, o `null` si queda sin asignar. */
+    room: { roomId: string; roomNumber: string } | null;
+    categoryRoom: string;
+    guestCount: number;
+  }[];
+  notes: string | null;
+  guest: {
+    firstName: string;
+    lastName: string;
+    contactEmail: string | null;
+    contactPhone: string | null;
+    nationality: string | null;
+  };
+  grossAmount: Money;
+  /** La comisión recalculada con el porcentaje congelado; `null` si el valor no cambió. */
+  commission: {
+    commissionAmount: Money;
+    commissionStatus: CommissionStatus;
+  } | null;
+  conflictReason: ConflictReason | null;
+  /** La hora del cambio: la del conflicto, si es nuevo. */
+  changedAt: Date;
 };
