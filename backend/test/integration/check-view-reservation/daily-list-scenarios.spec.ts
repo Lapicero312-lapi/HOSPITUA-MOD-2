@@ -174,7 +174,9 @@ describe('check-view-reservation: escenarios 1 a 4 de la historia 4, la lista de
       guest: aGuest({
         firstName: 'Ana',
         lastName: 'Pérez',
+        documentType: 'CC',
         documentNumber: '1234567',
+        nationality: 'Colombia',
         contactPhone: '+57 300 000 0000',
         contactEmail: 'ana@correo.com',
       }),
@@ -213,10 +215,13 @@ describe('check-view-reservation: escenarios 1 a 4 de la historia 4, la lista de
         },
       ],
       guest: {
+        guestRef: couple.guest.id,
         firstName: 'Ana',
         lastName: 'Pérez',
         fullName: 'Ana Pérez',
+        documentType: 'CC',
         documentNumber: '1234567',
+        nationality: 'Colombia',
         contactPhone: '+57 300 000 0000',
         contactEmail: 'ana@correo.com',
       },
