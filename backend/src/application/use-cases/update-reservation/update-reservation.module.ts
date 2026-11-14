@@ -31,8 +31,8 @@ import { CONFIRM_MODIFICATION } from './ports/in/confirm-modification.port.js';
  * `REGISTER_GUEST_MOVEMENTS`, `CheckViewReservationModule` por `DAILY_LIST_CHANGE_RECORDER` y
  * `RESERVATION_LOOKUP`, `GenerateOtaReservationModule` por `OTA_NO_SHOW_REPORTER`, y
  * `ConsultRoomInventoryModule`, `CheckRoomAvailabilityModule` y `CalculateDynamicRateModule` por los puertos
- * de la modificación (reglas 8 y 9). `CheckViewReservationModule` da también `GET_RESERVATION_DETAIL` a la
- * confirmación. Usa
+ * de la modificación (reglas 8 y 9), y `ConfigureOtaModule` por `ARI_CHANGE_RECORDER` (punto 17).
+ * `CheckViewReservationModule` da también `GET_RESERVATION_DETAIL` a la confirmación. Usa
  * `RESERVATION_REPOSITORY`, `RESERVATION_QUERY_PORT`, `PROCESSED_MESSAGE_REPOSITORY` y `TRANSACTION_RUNNER`
  * de `PersistenceModule`, y `CLOSE_DAY_BATCH_SIZE` de `CloseDayConfigModule`, que son globales.
  */
