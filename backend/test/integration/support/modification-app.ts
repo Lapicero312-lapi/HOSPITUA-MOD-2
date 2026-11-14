@@ -179,6 +179,16 @@ export async function startModificationApp(
   const module1 = config.get('MODULE1_BASE_URL', { infer: true });
   const module3 = config.get('MODULE3_BASE_URL', { infer: true });
   server.use(
+    // La lista de una categoría (la usa ApplyOtaChange): como el Módulo 1, filtra por `categoryRoom`.
+    http.get(`${module1}/api/rooms`, ({ request: list }) => {
+      modules.roomCalls += 1;
+      const category = new URL(list.url).searchParams.get('categoryRoom');
+      return HttpResponse.json(
+        MODULE1_ROOMS.filter(
+          ({ categoryRoom }) => category === null || categoryRoom === category,
+        ),
+      );
+    }),
     http.get(`${module1}/api/rooms/:roomId`, ({ params }) => {
       modules.roomCalls += 1;
       const room = MODULE1_ROOMS.find(({ id }) => id === params.roomId);
