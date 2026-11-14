@@ -17,7 +17,6 @@ import {
   INVALID_DOCUMENT_TYPE,
   INVALID_EMAIL,
   INVALID_GUEST_COUNT,
-  INVALID_RESERVATION_CODE,
   INVALID_RESERVATION_DATES,
   INVALID_ROOM_COUNT,
   INVALID_ROOM_ID,
@@ -437,17 +436,27 @@ const codeExample = (
   error: { code: string; message: string },
 ) => errorExample(path, summary, error.code, error.message);
 
-/** Los errores de B1 y B2, en el orden de los pasos (la primera verificación que falla responde). */
+/**
+ * Un ejemplo por cada error de B1 y B2, en el orden en que se revisan (regla 3 y regla 7 de la modificación):
+ * la forma del cuerpo sin consultar nada, la reserva, `updatedAt`, las fechas, las habitaciones con el
+ * Módulo 1, el titular y las observaciones, la disponibilidad y la recotización. La referencia no se valida
+ * por su formato: una que no existe, sea cual sea, es `RESERVATION_NOT_FOUND`.
+ */
 function modificationErrors(path: string) {
   return {
-    [INVALID_RESERVATION_CODE.code]: codeExample(
+    [INVALID_RESERVATION_DATES.code]: codeExample(
       path,
-      'La referencia no es `RSV-` más 8 hexadecimales en mayúscula',
-      INVALID_RESERVATION_CODE,
+      'Una fecha que no es texto; o, ya con la reserva, vacía, inexistente o con la salida no posterior a la entrada',
+      INVALID_RESERVATION_DATES,
+    ),
+    [INVALID_ROOM_COUNT.code]: codeExample(
+      path,
+      '`rooms` que no es una lista, o con más de 10 habitaciones',
+      INVALID_ROOM_COUNT,
     ),
     [INVALID_ROOM_ID.code]: codeExample(
       path,
-      'Un `roomId` que no es un UUID o que el Módulo 1 no conoce',
+      'Un `roomId` que no es un UUID, o que el Módulo 1 no conoce',
       INVALID_ROOM_ID,
     ),
     [INVALID_GUEST_COUNT.code]: codeExample(
@@ -475,11 +484,6 @@ function modificationErrors(path: string) {
       '`updatedAt` no coincide: otra persona la modificó o la canceló',
       CONCURRENT_UPDATE,
     ),
-    [INVALID_RESERVATION_DATES.code]: codeExample(
-      path,
-      'Fechas vacías, inexistentes o salida no posterior a la entrada',
-      INVALID_RESERVATION_DATES,
-    ),
     [START_DATE_IN_PAST.code]: codeExample(
       path,
       'Entrada anterior al día operativo',
@@ -490,15 +494,15 @@ function modificationErrors(path: string) {
       '`rooms` dejaría la reserva sin habitaciones',
       LAST_ROOM_CANNOT_BE_REMOVED,
     ),
-    [INVALID_ROOM_COUNT.code]: codeExample(
-      path,
-      'Más de 10 habitaciones',
-      INVALID_ROOM_COUNT,
-    ),
     [ROOM_ALREADY_IN_RESERVATION.code]: codeExample(
       path,
       'Una habitación repetida en `rooms`',
       ROOM_ALREADY_IN_RESERVATION,
+    ),
+    [INVENTORY_UNAVAILABLE.code]: codeExample(
+      path,
+      'El Módulo 1 no responde al consultar una habitación',
+      INVENTORY_UNAVAILABLE,
     ),
     [GUEST_COUNT_TOO_LOW.code]: codeExample(
       path,
@@ -527,7 +531,7 @@ function modificationErrors(path: string) {
     ),
     [INVALID_CHARACTERS.code]: codeExample(
       path,
-      'Caracteres no válidos en el titular o en `notes`',
+      'Caracteres de control en el titular o en `notes`, o un dato que no es texto',
       INVALID_CHARACTERS,
     ),
     [NOTES_TOO_LONG.code]: codeExample(
@@ -546,14 +550,9 @@ function modificationErrors(path: string) {
       ROOM_NOT_AVAILABLE.code,
       'La habitación 305 no está disponible para el rango de fechas solicitado.',
     ),
-    [INVENTORY_UNAVAILABLE.code]: codeExample(
-      path,
-      'El Módulo 1 no responde (inventario)',
-      INVENTORY_UNAVAILABLE,
-    ),
     [MAINTENANCE_CHECK_UNAVAILABLE.code]: codeExample(
       path,
-      'El Módulo 1 no responde (calendario de mantenimientos)',
+      'El Módulo 1 no responde al consultar el calendario de mantenimientos',
       MAINTENANCE_CHECK_UNAVAILABLE,
     ),
     [RECALCULATION_UNAVAILABLE.code]: codeExample(
@@ -573,14 +572,26 @@ function modificationErrors(path: string) {
 export const MODIFICATION_PREVIEW_ERROR_EXAMPLES =
   modificationErrors(PREVIEW_PATH);
 
-/** Los de B1 más `RATE_CHANGED`, que solo responde la confirmación. */
+/**
+ * Los de B1 más `RATE_CHANGED`, que solo responde la confirmación. Puede salir ya en el paso 1 (si
+ * `expectedRates` no es una lista válida), así que va después de los errores de forma del cuerpo; también
+ * sale al final, si la recotización no coincide con lo que vio el solicitante.
+ */
+const { [REQUEST_NOT_PROCESSED]: unexpected, ...confirmationSteps } =
+  modificationErrors(CONFIRM_PATH);
+const [shapeErrors, laterErrors] = [
+  Object.entries(confirmationSteps).slice(0, 4),
+  Object.entries(confirmationSteps).slice(4),
+];
 export const MODIFICATION_CONFIRMATION_ERROR_EXAMPLES = {
-  ...modificationErrors(CONFIRM_PATH),
+  ...Object.fromEntries(shapeErrors),
   [RATE_CHANGED.code]: codeExample(
     CONFIRM_PATH,
-    'La tarifa cambió entre la vista previa y la confirmación, o faltan las tarifas vistas',
+    '`expectedRates` mal formado, o la tarifa recotizada no es la que vio el solicitante',
     RATE_CHANGED,
   ),
+  ...Object.fromEntries(laterErrors),
+  [REQUEST_NOT_PROCESSED]: unexpected,
 };
 
 /** Los errores de B3: la cabecera `X-User` y después los pasos del punto 16 en orden. */
@@ -632,6 +643,11 @@ export const ROOM_ASSIGNMENT_ERROR_EXAMPLES = {
     'Esa habitación de la reserva ya tiene número, o no es de la reserva',
     ROOM_ALREADY_ASSIGNED,
   ),
+  [INVENTORY_UNAVAILABLE.code]: codeExample(
+    ASSIGNMENT_PATH,
+    'El Módulo 1 no responde al consultar la habitación elegida',
+    INVENTORY_UNAVAILABLE,
+  ),
   [CATEGORY_MISMATCH.code]: codeExample(
     ASSIGNMENT_PATH,
     'La habitación elegida es de otra categoría',
@@ -648,14 +664,9 @@ export const ROOM_ASSIGNMENT_ERROR_EXAMPLES = {
     ROOM_NOT_AVAILABLE.code,
     'La habitación 201 no está disponible para el rango de fechas solicitado.',
   ),
-  [INVENTORY_UNAVAILABLE.code]: codeExample(
-    ASSIGNMENT_PATH,
-    'El Módulo 1 no responde (inventario)',
-    INVENTORY_UNAVAILABLE,
-  ),
   [MAINTENANCE_CHECK_UNAVAILABLE.code]: codeExample(
     ASSIGNMENT_PATH,
-    'El Módulo 1 no responde (calendario de mantenimientos)',
+    'El Módulo 1 no responde al consultar el calendario de mantenimientos',
     MAINTENANCE_CHECK_UNAVAILABLE,
   ),
   [REQUEST_NOT_PROCESSED]: errorExample(

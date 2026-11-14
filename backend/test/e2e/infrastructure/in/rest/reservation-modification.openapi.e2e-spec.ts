@@ -188,7 +188,9 @@ describe('OpenAPI de la modificación y la asignación de habitación (T032 de u
     const assign = Object.keys(errorsOf(ASSIGNMENT, 'patch'));
 
     expect(preview).not.toContain('RATE_CHANGED');
-    expect(confirm).toEqual([...preview, 'RATE_CHANGED']);
+    // B2: los mismos que B1, más RATE_CHANGED (que readExpectedRates puede lanzar ya en el paso 1).
+    expect(confirm.filter((code) => code !== 'RATE_CHANGED')).toEqual(preview);
+    expect(confirm).toContain('RATE_CHANGED');
     for (const code of [
       'RESERVATION_NOT_FOUND',
       'OTA_RESERVATION_READ_ONLY',
