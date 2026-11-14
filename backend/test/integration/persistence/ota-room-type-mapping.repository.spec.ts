@@ -1,4 +1,4 @@
-import { QueryFailedError, type DataSource } from 'typeorm';
+import type { DataSource } from 'typeorm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { OtaRoomTypeMapping } from '../../../src/domain/ota/ota-room-type-mapping.js';
 import { TypeOrmOtaRoomTypeMappingRepository } from '../../../src/infrastructure/out/persistence/repositories/ota-room-type-mapping.repository.js';
@@ -109,12 +109,20 @@ describe('TypeOrmOtaRoomTypeMappingRepository contra PostgreSQL real', () => {
     expect(await mappings.findAll()).toEqual([DOBLE, FAMILIAR, SUITE]);
   });
 
-  it('la base rechaza otro tipo de Channex para una categoría que ya tiene uno', async () => {
+  it('otro tipo de Channex para una categoría que ya tiene uno reemplaza su relación (el anterior se borró a mano)', async () => {
     await mappings.upsert(DOBLE);
+    await mappings.upsert(SUITE);
+    const replacement = {
+      ...DOBLE,
+      channexRoomTypeId: '5d1f0b7e-2a4c-4e9b-8f63-0c7a1e4d9b52',
+      countOfRooms: 4,
+    };
 
-    await expect(
-      mappings.upsert({ ...SUITE, categoryRoom: DOBLE.categoryRoom }),
-    ).rejects.toBeInstanceOf(QueryFailedError);
-    expect(await rows()).toHaveLength(1);
+    await mappings.upsert(replacement);
+
+    expect(await mappings.findAll()).toEqual([replacement, SUITE]);
+    expect(
+      await mappings.findByChannexRoomType(DOBLE.channexRoomTypeId),
+    ).toBeNull();
   });
 });

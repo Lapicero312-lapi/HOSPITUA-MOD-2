@@ -30,21 +30,27 @@ export class TypeOrmOtaRoomTypeMappingRepository implements OtaRoomTypeMappingRe
   }
 
   async upsert(mapping: OtaRoomTypeMapping): Promise<void> {
-    // La categoría no se toca en el UPDATE: renombrarla crea un tipo nuevo (punto 4 del plan).
-    await this.dataSource.query(
-      `INSERT INTO ota_room_type_mapping
-         (channex_room_type_id, category_room, count_of_rooms, occupancy)
-       VALUES ($1, $2, $3, $4)
-       ON CONFLICT (channex_room_type_id) DO UPDATE
-         SET count_of_rooms = EXCLUDED.count_of_rooms,
-             occupancy = EXCLUDED.occupancy`,
-      [
-        mapping.channexRoomTypeId,
-        mapping.categoryRoom,
-        mapping.countOfRooms,
-        mapping.occupancy,
-      ],
-    );
+    const { channexRoomTypeId, categoryRoom, countOfRooms, occupancy } =
+      mapping;
+    await this.dataSource.transaction(async (manager) => {
+      // Si la categoría tenía otro tipo (borrado a mano en Channex, C1 de configure-ota), su relación se
+      // reemplaza: la categoría es única en la tabla.
+      await manager.query(
+        `DELETE FROM ota_room_type_mapping
+         WHERE category_room = $1 AND channex_room_type_id <> $2`,
+        [categoryRoom, channexRoomTypeId],
+      );
+      // La categoría no se toca en el UPDATE: renombrarla crea un tipo nuevo (punto 4 del plan).
+      await manager.query(
+        `INSERT INTO ota_room_type_mapping
+           (channex_room_type_id, category_room, count_of_rooms, occupancy)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (channex_room_type_id) DO UPDATE
+           SET count_of_rooms = EXCLUDED.count_of_rooms,
+               occupancy = EXCLUDED.occupancy`,
+        [channexRoomTypeId, categoryRoom, countOfRooms, occupancy],
+      );
+    });
   }
 }
 

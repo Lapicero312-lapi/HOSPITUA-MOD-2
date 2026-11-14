@@ -229,6 +229,52 @@ describe('SyncRoomTypes (C1 de configure-ota, T007)', () => {
       );
     });
 
+    it('con relación, pero su tipo ya no está en Channex (borrado a mano): crea otro (A2) y la relación pasa a ese, sin mandar A3 al id viejo', async () => {
+      const { service, channex, repository } = serviceWith({
+        roomTypes: [],
+        mappings: [mapping('DOBLE', 3, 2)],
+      });
+
+      await expect(service.sync()).resolves.toEqual({
+        status: 'SYNCED',
+        created: ['DOBLE'],
+      });
+      expect(channex.updateRoomType).not.toHaveBeenCalled();
+      expect(channex.createRoomType).toHaveBeenCalledWith({
+        title: 'DOBLE',
+        countOfRooms: 3,
+        occupancy: 2,
+      });
+      expect(repository.upsert).toHaveBeenCalledWith(
+        mapping('DOBLE', 3, 2, 'new-1'),
+      );
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining(
+          'El tipo de habitación rt-DOBLE de DOBLE ya no está en Channex',
+        ),
+      );
+    });
+
+    it('con relación a un tipo borrado y otro tipo a mano con el nombre: adopta ese (A3)', async () => {
+      const { service, channex, repository } = serviceWith({
+        roomTypes: [roomType('manual', 'DOBLE')],
+        mappings: [mapping('DOBLE', 3, 2)],
+      });
+
+      await expect(service.sync()).resolves.toEqual({
+        status: 'SYNCED',
+        created: [],
+      });
+      expect(channex.createRoomType).not.toHaveBeenCalled();
+      expect(channex.updateRoomType).toHaveBeenCalledWith(
+        'manual',
+        expect.anything(),
+      );
+      expect(repository.upsert).toHaveBeenCalledWith(
+        mapping('DOBLE', 3, 2, 'manual'),
+      );
+    });
+
     it('va por las categorías en orden alfabético, cada una con su cantidad y su mayor capacidad', async () => {
       const { service, channex } = serviceWith({
         rooms: [

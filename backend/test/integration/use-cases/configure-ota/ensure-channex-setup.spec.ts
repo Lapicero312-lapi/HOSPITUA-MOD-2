@@ -25,19 +25,25 @@ import { integrationEnv, truncateAllTables } from '../../support/database.js';
 
 const PROPERTY_ID = '716305c4-561a-4561-a187-7f5b8aeb5920';
 
+/** Los tipos que creó Channex simulado: A1 los devuelve, como el real. */
+const createdTypes: { id: string; title: string; defaultOccupancy: number }[] =
+  [];
+
 /** Channex simulado: A0 con la propiedad configurada, y A1 y A2 para el paso 3 (T007). */
 const channex = {
   listProperties: vi.fn(() =>
     Promise.resolve([{ id: PROPERTY_ID, title: 'Hotel de prueba' }]),
   ),
-  listRoomTypes: vi.fn(() => Promise.resolve([])),
-  createRoomType: vi.fn((input: { title: string; occupancy: number }) =>
-    Promise.resolve({
+  listRoomTypes: vi.fn(() => Promise.resolve([...createdTypes])),
+  createRoomType: vi.fn((input: { title: string; occupancy: number }) => {
+    const created = {
       id: '994d1375-dbbd-4072-8724-b2ab32ce781b',
       title: input.title,
       defaultOccupancy: input.occupancy,
-    }),
-  ),
+    };
+    createdTypes.push(created);
+    return Promise.resolve(created);
+  }),
   updateRoomType: vi.fn(() => Promise.resolve()),
 } as unknown as ChannexPort;
 
@@ -135,6 +141,7 @@ describe('EnsureChannexSetup con los módulos de Nest y PostgreSQL real', () => 
   it('paso 3: crea el tipo de cada categoría y guarda su relación con lo enviado; la segunda vez no cambia nada (T007)', async () => {
     vi.mocked(channex.createRoomType).mockClear();
     vi.mocked(channex.updateRoomType).mockClear();
+    createdTypes.length = 0;
 
     await expect(setup.ensure()).resolves.toBe('READY');
     await expect(setup.ensure()).resolves.toBe('READY');

@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { CLOCK, type Clock } from '../../ports/out/clock.js';
 import {
   MANAGE_OTA,
@@ -25,6 +25,8 @@ import {
  */
 @Injectable()
 export class EnsureChannexSetupService implements EnsureChannexSetup {
+  private readonly logger = new Logger(EnsureChannexSetupService.name);
+
   constructor(
     @Inject(VERIFY_CHANNEX_PROPERTY)
     private readonly verification: VerifyChannexProperty,
@@ -44,7 +46,15 @@ export class EnsureChannexSetupService implements EnsureChannexSetup {
       // Paso 3: un `NOT_SYNCED` ya quedó en el log y no cambia el resultado: la configuración está lista y
       // los tipos se vuelven a sincronizar a las 03:00 (T011). La disponibilidad de los tipos nuevos la envía
       // `PublishDailyAvailability` cuando exista (T011); hasta entonces quedan en 0, como nacen en Channex.
-      await this.roomTypes.sync();
+      try {
+        await this.roomTypes.sync();
+      } catch (error) {
+        // Un error inesperado (por ejemplo, la base al guardar la relación) tampoco lo cambia (C1, T007).
+        this.logger.error(
+          'La sincronización de tipos de habitación falló por un error inesperado: se intenta en la siguiente.',
+          error instanceof Error ? error.stack : String(error),
+        );
+      }
     }
     return result;
   }
