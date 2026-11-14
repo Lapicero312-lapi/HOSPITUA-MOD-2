@@ -19,6 +19,7 @@ import {
 import {
   RESERVATION_REPOSITORY,
   type ReservationRepository,
+  RoomOverlapError,
 } from '../../ports/out/reservation.repository.js';
 import {
   TRANSACTION_RUNNER,
@@ -46,21 +47,28 @@ import {
   type AriChangeRecorder,
 } from '../configure-ota/ports/in/ari-change-recorder.port.js';
 import { assignDirectRooms } from './assign-direct-rooms.js';
-import { readCreationRequest } from './direct-reservation-request.validator.js';
+import {
+  type DirectReservationCreation,
+  readCreationRequest,
+} from './direct-reservation-request.validator.js';
 import { BusinessError } from '../../../domain/shared/business-error.js';
 import {
+  AVAILABILITY_TAKEN,
   IDEMPOTENCY_KEY_REQUIRED,
   IDEMPOTENCY_KEY_REUSED,
 } from './error-codes.js';
-import type { CreateDirectReservation } from './ports/in/create-direct-reservation.port.js';
+import {
+  ASSIGNMENT_MAX_RETRIES,
+  type CreateDirectReservation,
+} from './ports/in/create-direct-reservation.port.js';
 import type { AssignedRoom } from './ports/in/preview-direct-reservation.port.js';
 import { withNewReservationRef } from './with-new-reservation-ref.js';
 
 /**
  * La creación de una reserva directa (plan, B, D2 y punto 12; T008). Las llamadas a los Módulos 1 y 3 van
  * antes de abrir la transacción; dentro solo está la inserción (punto 5 de "Puntos que este plan
- * propone"), con los avisos a la lista del día y a Channex (T010) y la `Idempotency-Key` (punto 15, T019).
- * El reintento ante un solape lo agrega T009.
+ * propone"), con los avisos a la lista del día y a Channex (T010), el reintento ante un solape (T009) y la
+ * `Idempotency-Key` (punto 15, T019).
  */
 @Injectable()
 export class CreateDirectReservationService implements CreateDirectReservation {
@@ -83,6 +91,8 @@ export class CreateDirectReservationService implements CreateDirectReservation {
     private readonly availabilityChanges: AriChangeRecorder,
     @Inject(IDEMPOTENCY_KEY_REPOSITORY)
     private readonly idempotency: IdempotencyKeyRepository,
+    @Inject(ASSIGNMENT_MAX_RETRIES)
+    private readonly maxRetries: number,
   ) {}
 
   /**
@@ -161,7 +171,7 @@ export class CreateDirectReservationService implements CreateDirectReservation {
       endDate,
       categoryRoom,
     });
-    const assignedRooms = assignDirectRooms(request.rooms, availability);
+    let assignedRooms = assignDirectRooms(request.rooms, availability);
 
     // Paso 3: se vuelve a cotizar y se compara con lo que vio el solicitante (decisión D1).
     const quoteRequests = assignedRooms.map(
@@ -183,10 +193,67 @@ export class CreateDirectReservationService implements CreateDirectReservation {
 
     // Paso 4: un titular nuevo, propio de esta reserva (regla 6), y las cotizaciones nuevas.
     const guest = Guest.restore({ id: randomUUID(), ...request.guest });
-    const rooms = roomsWithRates(assignedRooms, quotes);
 
-    // Paso 5: una transacción por intento, porque un error de unicidad la deja abortada (regla 7). Los
-    // avisos van en la misma transacción: si se revierte, no queda ninguno (T010).
+    // Paso 5, con el reintento de asignación (punto 14, T009): si otra solicitud tomó una de las
+    // habitaciones entre la verificación y el COMMIT, la base la rechaza (D3) y esa transacción ya se
+    // revirtió; se vuelve a verificar y a asignar, con las mismas cotizaciones (son por posición y categoría).
+    for (let retry = 0; ; retry += 1) {
+      try {
+        return await this.save(
+          request,
+          guest,
+          roomsWithRates(assignedRooms, quotes),
+          idempotencyKey,
+          requestHash,
+        );
+      } catch (error) {
+        if (!(error instanceof RoomOverlapError)) {
+          throw error;
+        }
+        if (retry >= this.maxRetries) {
+          throw availabilityTaken();
+        }
+        assignedRooms = await this.reassign(request);
+      }
+    }
+  }
+
+  /**
+   * Una nueva verificación de la categoría y una nueva asignación. Si ya no alcanza, si una habitación
+   * pedida por `roomId` ya no está libre o si alguna no tiene capacidad: `AVAILABILITY_TAKEN` (D3).
+   */
+  private async reassign(
+    request: DirectReservationCreation,
+  ): Promise<AssignedRoom[]> {
+    const { startDate, endDate, categoryRoom } = request;
+    const availability = await this.availability.check({
+      startDate,
+      endDate,
+      categoryRoom,
+    });
+    try {
+      return assignDirectRooms(request.rooms, availability);
+    } catch (error) {
+      if (error instanceof BusinessError) {
+        throw availabilityTaken();
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Pasos 5 y 6: una transacción por intento, porque un error de unicidad la deja abortada (regla 7). Los
+   * avisos van en la misma transacción: si se revierte, no queda ninguno (T010). Después del COMMIT, el
+   * detalle con la forma de C3.
+   */
+  private async save(
+    request: DirectReservationCreation,
+    guest: Guest,
+    rooms: DirectRoomInput[],
+    idempotencyKey: string,
+    requestHash: string,
+  ): Promise<ReservationDetail> {
+    const { startDate, endDate, categoryRoom } = request;
     const saved = await withNewReservationRef((reservationRef) =>
       this.transactions.run(async (tx) => {
         const reservation = await this.reservations.insert(
@@ -262,6 +329,11 @@ function canonicalJson(value: unknown): string {
       .join(',')}}`;
   }
   return JSON.stringify(value) ?? 'null';
+}
+
+/** Otra solicitud tomó la última habitación libre (D3). */
+function availabilityTaken(): BusinessError {
+  return new BusinessError(AVAILABILITY_TAKEN.code, AVAILABILITY_TAKEN.message);
 }
 
 /** Cada habitación asignada con la cotización nueva de su posición. */

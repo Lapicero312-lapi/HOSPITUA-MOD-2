@@ -1,5 +1,13 @@
 import type { Response } from 'supertest';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import type { Reservation } from '../../../src/domain/reservation/reservation.js';
 import type {
   CancellationChannel,
@@ -136,14 +144,22 @@ describe('cancel-reservation: escenarios 1 a 6 de la historia 1 (T011)', () => {
     expect(after.status).toBe('CANCELLED');
     expect(after.statusReason).toBe('CANCELLED_BY_RECEPTION');
     expect(await world.blocksInventory(after)).toEqual([false]);
-    // El aviso al Módulo 1: la actualización REMOVED del plan de check-view-reservation, en espera de salir.
+    // El aviso al Módulo 1: la actualización REMOVED del plan de check-view-reservation, que sale apenas se
+    // confirma la cancelación (T029).
+    await vi.waitFor(
+      async () =>
+        expect((await world.listUpdates())[0]?.publish_status).toBe(
+          'PUBLISHED',
+        ),
+      { timeout: 5_000, interval: 50 },
+    );
     expect(await world.listUpdates()).toEqual([
       {
         sequence_number: 2,
         update_type: 'REMOVED',
         removal_reason: 'CANCELLED',
         reservation_ref: EXAMPLE_REF,
-        publish_status: 'PENDING',
+        publish_status: 'PUBLISHED',
         payload: {
           messageId: expect.stringMatching(UUID) as string,
           sequenceNumber: 2,
@@ -185,13 +201,21 @@ describe('cancel-reservation: escenarios 1 a 6 de la historia 1 (T011)', () => {
           status: 'COMPLETED',
         },
       ]);
+      // El REMOVED sale apenas se confirma la cancelación (T029): se espera a que la publicación termine.
+      await vi.waitFor(
+        async () =>
+          expect((await world.listUpdates())[0]?.publish_status).toBe(
+            'PUBLISHED',
+          ),
+        { timeout: 5_000, interval: 50 },
+      );
       expect(await world.listUpdates()).toMatchObject([
         {
           sequence_number: 2,
           update_type: 'REMOVED',
           removal_reason: 'CANCELLED',
           reservation_ref: stored.reservationRef,
-          publish_status: 'PENDING',
+          publish_status: 'PUBLISHED',
         },
       ]);
       expect(await world.availabilityMarks()).toEqual([

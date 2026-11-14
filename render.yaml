@@ -64,18 +64,21 @@ services:
       - key: CHANNEX_PROPERTY_ID
         sync: false
 
-  # Los simuladores del Módulo 1 y del Módulo 3, los dos en el PORT que da Render. No tienen dependencias.
+  # Los simuladores del Módulo 1 y del Módulo 3, los dos en el PORT que da Render. Su única dependencia es
+  # amqplib, para el Módulo 1 por RabbitMQ (con RABBITMQ_URL, la misma de CloudAMQP que usa el backend).
   - type: web
     name: hospitua-m2-simulators
     runtime: node
     plan: free
     region: oregon
-    buildCommand: node --version
+    buildCommand: npx --yes pnpm@12.14.0 install --frozen-lockfile --filter simulators
     startCommand: node simulators/src/main.js
     healthCheckPath: /api/rooms
     envVars:
       - key: NODE_VERSION
         value: '22'
+      - key: RABBITMQ_URL
+        sync: false
 
   # El frontend: un sitio estático. /api/* va al backend, como el proxy de Vite en desarrollo (sin CORS).
   - type: web

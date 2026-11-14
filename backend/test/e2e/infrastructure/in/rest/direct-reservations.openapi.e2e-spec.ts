@@ -20,10 +20,18 @@ import {
   type Module3Port,
   Module3UnavailableError,
 } from '../../../../../src/application/ports/out/module3.port.js';
+import {
+  RESERVATION_REPOSITORY,
+  type ReservationRepository,
+} from '../../../../../src/application/ports/out/reservation.repository.js';
 import { AppModule } from '../../../../../src/app.module.js';
 import { configureApp } from '../../../../../src/configure-app.js';
 import { CloseDayJob } from '../../../../../src/infrastructure/in/jobs/close-day.job.js';
 import { Money } from '../../../../../src/domain/shared/money.js';
+import {
+  aDirectReservation,
+  aDirectRoom,
+} from '../../../../support/builders.js';
 import { ROOM_201, ROOM_202 } from '../../../../support/rooms.js';
 
 /**
@@ -77,18 +85,25 @@ const module1: Partial<Module1Port> = {
 let pricingDown = false;
 let mixedCurrencies = false;
 let quotes = 0;
-const createQuote: Module3Port['createQuote'] = () => {
+/** Lo que pasa mientras el Módulo 3 cotiza, una sola vez: por ejemplo, otra solicitud que guarda su reserva. */
+let whileQuoting: (() => Promise<void>) | null = null;
+const createQuote: Module3Port['createQuote'] = async () => {
   quotes += 1;
+  // El número de esta cotización, antes de esperar: las de una misma solicitud corren a la vez.
+  const quote = quotes;
   if (pricingDown) {
-    return Promise.reject(new Module3UnavailableError('tiempo agotado'));
+    throw new Module3UnavailableError('tiempo agotado');
   }
-  const currency = mixedCurrencies && quotes % 2 === 0 ? 'USD' : 'COP';
-  return Promise.resolve({
-    quoteId: `q-openapi-${quotes}`,
+  const meanwhile = whileQuoting;
+  whileQuoting = null;
+  await meanwhile?.();
+  const currency = mixedCurrencies && quote % 2 === 0 ? 'USD' : 'COP';
+  return {
+    quoteId: `q-openapi-${quote}`,
     currency,
     nightlyRates: [],
     lodgingAmount: Money.of('750000.00', currency),
-  } satisfies RateQuote);
+  } satisfies RateQuote;
 };
 
 const GUEST = {
@@ -204,6 +219,7 @@ describe('OpenAPI de la reserva directa (T017 de generate-direct-reservation)', 
     room202InMaintenance = false;
     pricingDown = false;
     mixedCurrencies = false;
+    whileQuoting = null;
   });
 
   afterAll(async () => {
@@ -459,6 +475,7 @@ describe('OpenAPI de la reserva directa (T017 de generate-direct-reservation)', 
         'ROOM_NOT_AVAILABLE',
         'NO_AVAILABILITY',
         'GUEST_COUNT_EXCEEDS_CAPACITY',
+        'AVAILABILITY_TAKEN',
         'PRICING_UNAVAILABLE',
         'REQUEST_NOT_PROCESSED',
       ]);
@@ -475,10 +492,6 @@ describe('OpenAPI de la reserva directa (T017 de generate-direct-reservation)', 
       ]);
       // La vista previa no la lee.
       expect(operation(PREVIEW).parameters ?? []).toEqual([]);
-    });
-
-    it('lo que todavía no existe no se documenta: AVAILABILITY_TAKEN (T009)', () => {
-      expect(errorCodes(CREATION)).not.toContain('AVAILABILITY_TAKEN');
     });
 
     it('la respuesta real trae los campos documentados y la cabecera Location', async () => {
@@ -669,6 +682,23 @@ describe('OpenAPI de la reserva directa (T017 de generate-direct-reservation)', 
         'INVALID_EMAIL',
         { guest: { ...GUEST, contactEmail: 'valentina@correo' } },
         () => undefined,
+      ],
+      // Va al final: deja la 201 ocupada en `STAY`.
+      [
+        'AVAILABILITY_TAKEN',
+        {},
+        () => {
+          whileQuoting = async () => {
+            await app.get<ReservationRepository>(RESERVATION_REPOSITORY).insert(
+              aDirectReservation({
+                ...STAY,
+                rooms: [
+                  aDirectRoom({ roomId: ROOM_201.id, roomNumber: '201' }),
+                ],
+              }),
+            );
+          };
+        },
       ],
     ] as [string, object, () => void][])(
       'B: %s',

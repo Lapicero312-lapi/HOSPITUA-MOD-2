@@ -314,6 +314,7 @@ habitaciones sin asignar de una reserva de Booking en conflicto. Cabecera `X-Use
 | `errorCode` | Cuándo | `message` |
 |---|---|---|
 | `RESERVATION_NOT_IN_CONFLICT` | La reserva no es de Booking o no está en conflicto | "Solo se puede asignar habitación a una reserva de Booking en conflicto." |
+| `STATUS_NOT_EDITABLE` | La reserva de Booking en conflicto no está en `ACTIVE` ni en `PENDING` (se canceló o no se presentó) | "El estado actual de la reserva no admite modificaciones." (el mismo de B1 y B2) |
 | `ROOM_ALREADY_ASSIGNED` | La habitación de la reserva ya tiene número | "Esa habitación de la reserva ya está asignada." |
 | `CATEGORY_MISMATCH` | La habitación elegida es de otra categoría | "La habitación debe ser de la misma categoría." |
 | `GUEST_COUNT_EXCEEDS_CAPACITY` | La habitación elegida tiene menos capacidad que las personas | "La cantidad de personas supera la capacidad de la habitación." |
@@ -397,6 +398,7 @@ interface OtaChange {
   grossAmount: Money; notes: string | null;
   guest: { firstName: string; lastName: string; contactEmail: string | null;
            contactPhone: string | null; nationality: string | null };
+  datesDifferPerRoom: boolean;  // alguna habitación traía otras fechas (FR-012 de generate-ota-reservation)
 }
 
 interface ApplyOtaChange {
@@ -411,7 +413,8 @@ interface ApplyOtaChange {
 
 - Conserva las habitaciones que siguen libres en las fechas nuevas; para las demás busca otra libre de la
   misma categoría (`assignRooms`) y, si no hay, la deja **sin asignar** (`NO_ROOM_AVAILABLE`). Si alguna
-  supera su `maxCapacity`, marca `CAPACITY_EXCEEDED`.
+  supera su `maxCapacity`, marca `CAPACITY_EXCEEDED`. Si no hay ninguno de los dos y
+  `datesDifferPerRoom` es verdadero, marca `CHANGE_NOT_APPLICABLE` (el mismo orden que `createOta`).
 - **No invoca al Módulo 3**: recalcula la comisión con el porcentaje congelado
   (`RegisterOtaConfirmationAndCommission`).
 - No usa `updatedAt` del cliente: el orden lo da el feed. `apply` compara el `updated_at` que leyó
@@ -1276,7 +1279,7 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
         categoryRoom: string;
         guestCount: number;
       }[];
-      conflictReason: 'NO_ROOM_AVAILABLE' | 'CAPACITY_EXCEEDED' | null;
+      conflictReason: 'NO_ROOM_AVAILABLE' | 'CAPACITY_EXCEEDED' | 'CHANGE_NOT_APPLICABLE' | null;
       commission: CommissionResult | null;  // null si el valor no cambió
     };
     ```
@@ -1292,7 +1295,9 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
        2. si no, **se reasigna** con `assignRooms` (la libre de menor `roomNumber`, sin repetir): fila nueva;
        3. si no, queda **sin asignar**: fila nueva, sin habitación.
     4. El conflicto, en el orden de `createOta`: `NO_ROOM_AVAILABLE` si queda alguna sin asignar; si no,
-       `CAPACITY_EXCEEDED` si alguna asignada tiene menos `maxCapacity` que sus personas; si no, ninguno.
+       `CAPACITY_EXCEEDED` si alguna asignada tiene menos `maxCapacity` que sus personas; si no,
+       `CHANGE_NOT_APPLICABLE` si `change.datesDifferPerRoom` (Booking envió fechas distintas por habitación:
+       se aplican las de la reserva, FR-012 de `generate-ota-reservation`); si no, ninguno.
     5. La comisión: si `grossAmount` cambió (monto o moneda),
        `RegisterOtaConfirmationAndCommission.recalculate(reserva, grossAmount)`, con el porcentaje congelado
        de la reserva. Si no cambió, no se recalcula. **`recalculate` lo agrega esta tarea**: el plan de
@@ -1313,6 +1318,56 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
     5. `DailyListChangeRecorder.record(tx, bloqueada, guardada)`.
     6. `AriChangeRecorder.record` con cada categoría de antes en las fechas de antes (lo que se libera) y
        cada categoría de después en las fechas nuevas (lo que se ocupa), sin repetir.
+
+16. **`AssignRoom` (T027)**, puerto en `ports/in/assign-room.port.ts`, con su símbolo `ASSIGN_ROOM`.
+    `UpdateReservationModule` lo registra y lo exporta.
+
+    ```typescript
+    interface AssignRoom {
+      // @throws BusinessError con los códigos de la tabla de B3 y los de la forma.
+      execute(reservationRef: string, body: unknown): Promise<ReservationDetail>;  // C3, después del COMMIT
+    }
+    ```
+
+    **De dónde sale `reservationRoomId`:** C3 de `check-view-reservation` agrega a cada habitación su
+    `reservationRoomId` (el `id` de la `ReservationRoom`), porque una habitación sin asignar no tiene
+    `roomId` y la Recepcionista necesita decir a cuál le asigna.
+
+    Pasos, en este orden; el primero que falla responde:
+    1. **Forma:** `assignments` es una lista de 1 a 10 elementos, cada uno con un `reservationRoomId` y un
+       `roomId` que son UUID (en minúsculas). Si no: `INVALID_ROOM_ID`. Un `roomId` o un `reservationRoomId`
+       repetido: `ROOM_ALREADY_IN_RESERVATION`.
+    2. **La reserva:** `ReservationLookup.findByRef`. Si no existe, `RESERVATION_NOT_FOUND`; si no es de
+       Booking o no está en conflicto, `RESERVATION_NOT_IN_CONFLICT`; si no está en `ACTIVE` ni en `PENDING`,
+       `STATUS_NOT_EDITABLE` (una reserva cancelada o que no se presentó sigue con la marca de conflicto,
+       pero ya no se le asigna habitación; es el mismo criterio de B2 de `generate-ota-reservation`, que no
+       cambia una reserva de Booking fuera de `ACTIVE` y `PENDING`).
+    3. **`updatedAt`:** `isSameInstant`; si no, `CONCURRENT_UPDATE`.
+    4. **Cada asignación, en su orden:** el `reservationRoomId` es de la reserva y está sin asignar; si no,
+       `ROOM_ALREADY_ASSIGNED`.
+    5. **Cada habitación elegida** con `ConsultRoomInventory.byRoomId`: misma categoría que la sin asignar
+       (`CATEGORY_MISMATCH`) y `maxCapacity` no menor que sus personas (`GUEST_COUNT_EXCEEDS_CAPACITY`).
+    6. **Disponibilidad:** `VerifyAvailability.check({ roomId, fechas, excludeReservationRef })` de cada una;
+       la primera no disponible, `ROOM_NOT_AVAILABLE` con su número.
+    7. **El conflicto que queda:** si aún hay alguna sin asignar, `NO_ROOM_AVAILABLE`, con su `detectedAt`; si
+       el motivo era `CHANGE_NOT_APPLICABLE`, se conserva (asignar no cambia las fechas); si no, con la
+       `maxCapacity` de las demás habitaciones asignadas (`byRoomId`), `CAPACITY_EXCEEDED` si alguna la
+       supera; si no, **se quita**.
+
+    Las consultas al Módulo 1 de los pasos 5 a 7 van en paralelo con el tope `MAINTENANCE_CONCURRENCY`, y
+    si fallan varias responde la primera en orden, como en la regla 8.
+
+    **La transacción:** `findForUpdate`; otra vez `updatedAt` (`CONCURRENT_UPDATE`); `Reservation.withAssignedRooms`
+    (la habitación, su número y `blocks_inventory`, y el conflicto del paso 7, con `Clock.now()` si el motivo
+    cambia); `update` (un `RoomOverlapError` responde `ROOM_NOT_AVAILABLE` con la primera elegida que ocupa
+    otra reserva, como en la regla 9); `DailyListChangeRecorder.record(tx, bloqueada, guardada)`; y
+    `AriChangeRecorder.record` con la categoría y las fechas de la reserva. Después del `COMMIT`,
+    `GetReservationDetail` (C3).
+
+    `ReservationsController` responde `200` en `PATCH /api/reservations/{reservationRef}/room-assignment`.
+    `X-User` es obligatorio (`USER_REQUIRED` o `INVALID_USER`, como en la cancelación) y no se guarda:
+    la reserva no tiene dónde.
+
 17. **Los avisos a Channex (T028, C5).** `AriChangeRecorder.record` va en la transacción de cada cambio que
     ocupa o libera inventario, con la **categoría de cada habitación afectada en las fechas de la reserva**
     (`dateFrom` = `startDate`, `dateTo` = `endDate`, sin repetir), como la cancelación. La marca solo pide
@@ -1326,6 +1381,52 @@ recálculo, y bloqueo en `IN_PROGRESS`, `COMPLETED`, `CANCELLED` y `NO_SHOW`.
     | Check-Out | `ProcessCheckOut`, después de pasar la habitación a `CHECKED_OUT` | La de esa habitación |
     | Modificación (B2) | `ConfirmModification` (regla 9), en su transacción | Las de antes en las fechas de antes y las de después en las fechas nuevas, como `ApplyOtaChange` (punto 15) |
     | Asignación (B3) | `AssignRoom` (punto 16) | Las de las habitaciones asignadas |
+
+16. **`AssignRoom` (T027)**, puerto en `ports/in/assign-room.port.ts`, con su símbolo `ASSIGN_ROOM`.
+    `UpdateReservationModule` lo registra y lo exporta.
+
+    ```typescript
+    interface AssignRoom {
+      // @throws BusinessError con los códigos de la tabla de B3 y los de la forma.
+      execute(reservationRef: string, body: unknown): Promise<ReservationDetail>;  // C3, después del COMMIT
+    }
+    ```
+
+    **De dónde sale `reservationRoomId`:** C3 de `check-view-reservation` agrega a cada habitación su
+    `reservationRoomId` (el `id` de la `ReservationRoom`), porque una habitación sin asignar no tiene
+    `roomId` y la Recepcionista necesita decir a cuál le asigna.
+
+    Pasos, en este orden; el primero que falla responde:
+    1. **Forma:** `assignments` es una lista de 1 a 10 elementos, cada uno con un `reservationRoomId` y un
+       `roomId` que son UUID (en minúsculas). Si no: `INVALID_ROOM_ID`. Un `roomId` o un `reservationRoomId`
+       repetido: `ROOM_ALREADY_IN_RESERVATION`.
+    2. **La reserva:** `ReservationLookup.findByRef`. Si no existe, `RESERVATION_NOT_FOUND`; si no es de
+       Booking o no está en conflicto, `RESERVATION_NOT_IN_CONFLICT`.
+    3. **`updatedAt`:** `isSameInstant`; si no, `CONCURRENT_UPDATE`.
+    4. **Cada asignación, en su orden:** el `reservationRoomId` es de la reserva y está sin asignar; si no,
+       `ROOM_ALREADY_ASSIGNED`.
+    5. **Cada habitación elegida** con `ConsultRoomInventory.byRoomId`: misma categoría que la sin asignar
+       (`CATEGORY_MISMATCH`) y `maxCapacity` no menor que sus personas (`GUEST_COUNT_EXCEEDS_CAPACITY`).
+    6. **Disponibilidad:** `VerifyAvailability.check({ roomId, fechas, excludeReservationRef })` de cada una;
+       la primera no disponible, `ROOM_NOT_AVAILABLE` con su número.
+    7. **El conflicto que queda:** si aún hay alguna sin asignar, `NO_ROOM_AVAILABLE`, con su `detectedAt`; si
+       el motivo era `CHANGE_NOT_APPLICABLE`, se conserva (asignar no cambia las fechas); si no, con la
+       `maxCapacity` de las demás habitaciones asignadas (`byRoomId`), `CAPACITY_EXCEEDED` si alguna la
+       supera; si no, **se quita**.
+
+    Las consultas al Módulo 1 de los pasos 5 a 7 van en paralelo con el tope `MAINTENANCE_CONCURRENCY`, y
+    si fallan varias responde la primera en orden, como en la regla 8.
+
+    **La transacción:** `findForUpdate`; otra vez `updatedAt` (`CONCURRENT_UPDATE`); `Reservation.withAssignedRooms`
+    (la habitación, su número y `blocks_inventory`, y el conflicto del paso 7, con `Clock.now()` si el motivo
+    cambia); `update` (un `RoomOverlapError` responde `ROOM_NOT_AVAILABLE` con la primera elegida que ocupa
+    otra reserva, como en la regla 9); `DailyListChangeRecorder.record(tx, bloqueada, guardada)`; y
+    `AriChangeRecorder.record` con la categoría y las fechas de la reserva. Después del `COMMIT`,
+    `GetReservationDetail` (C3).
+
+    `ReservationsController` responde `200` en `PATCH /api/reservations/{reservationRef}/room-assignment`.
+    `X-User` es obligatorio (`USER_REQUIRED` o `INVALID_USER`, como en la cancelación) y no se guarda:
+    la reserva no tiene dónde.
 
 ## Puntos abiertos
 

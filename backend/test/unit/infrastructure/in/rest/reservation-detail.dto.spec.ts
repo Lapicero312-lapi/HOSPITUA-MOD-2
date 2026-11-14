@@ -12,6 +12,7 @@ import {
 } from '../../../../support/builders.js';
 
 const ROOM_ID = 'a4c2e1f0-3b5d-4c6e-8f7a-9b0c1d2e3f40';
+const RESERVATION_ROOM_ID = '7c1e9a2b-4d6f-4e8a-9b0c-1d2e3f4a5b6c';
 const OTA_ID = '5b0e7c1a-2f4d-4e8b-9c3a-1d6f8e2b7a90';
 
 describe('toReservationDetailBody (plan de check-view-reservation, C3; T016)', () => {
@@ -26,6 +27,7 @@ describe('toReservationDetailBody (plan de check-view-reservation, C3; T016)', (
       updatedAt: '2026-10-08 20:42:10.123456+00',
       rooms: [
         aDirectRoom({
+          id: RESERVATION_ROOM_ID,
           roomId: ROOM_ID,
           roomNumber: '204',
           categoryRoom: 'DOBLE',
@@ -70,6 +72,8 @@ describe('toReservationDetailBody (plan de check-view-reservation, C3; T016)', (
       conflict: null,
       rooms: [
         {
+          // Con él se asigna habitación a una sin asignar (B3 de update-reservation, T027).
+          reservationRoomId: RESERVATION_ROOM_ID,
           roomId: ROOM_ID,
           roomNumber: '204',
           categoryRoom: 'DOBLE',

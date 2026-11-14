@@ -12,6 +12,7 @@ import { CHANNEX_SETUP_STATE } from '../../../../../src/application/ports/out/ch
 import { CHANNEX_PORT } from '../../../../../src/application/ports/out/channex.port.js';
 import { CLOCK } from '../../../../../src/application/ports/out/clock.js';
 import { COMMISSION_AUDIT_REPOSITORY } from '../../../../../src/application/ports/out/commission-audit.repository.js';
+import { EXCLUSIVE_RUNNER } from '../../../../../src/application/ports/out/exclusive-runner.js';
 import { DAILY_LIST_PUBLISHER } from '../../../../../src/application/ports/out/daily-list-publisher.js';
 import { IDEMPOTENCY_KEY_REPOSITORY } from '../../../../../src/application/ports/out/idempotency-key.repository.js';
 import { DAILY_MESSAGE_REPOSITORY } from '../../../../../src/application/ports/out/daily-message.repository.js';
@@ -33,6 +34,8 @@ import {
 } from '../../../../../src/application/use-cases/update-reservation/ports/in/close-day.port.js';
 import { ApplyOtaChangeService } from '../../../../../src/application/use-cases/update-reservation/apply-ota-change.service.js';
 import { APPLY_OTA_CHANGE } from '../../../../../src/application/use-cases/update-reservation/ports/in/apply-ota-change.port.js';
+import { AssignRoomService } from '../../../../../src/application/use-cases/update-reservation/assign-room.service.js';
+import { ASSIGN_ROOM } from '../../../../../src/application/use-cases/update-reservation/ports/in/assign-room.port.js';
 import { ConfirmModificationService } from '../../../../../src/application/use-cases/update-reservation/confirm-modification.service.js';
 import { CONFIRM_MODIFICATION } from '../../../../../src/application/use-cases/update-reservation/ports/in/confirm-modification.port.js';
 import { PREVIEW_MODIFICATION } from '../../../../../src/application/use-cases/update-reservation/ports/in/preview-modification.port.js';
@@ -64,6 +67,7 @@ const GLOBALS = [
   DAILY_MESSAGE_REPOSITORY,
   IDEMPOTENCY_KEY_REPOSITORY,
   DAILY_LIST_PUBLISHER,
+  EXCLUSIVE_RUNNER,
   OTA_REPOSITORY,
   CANCELLATION_REPOSITORY,
   COMMISSION_AUDIT_REPOSITORY,
@@ -126,6 +130,11 @@ describe('UpdateReservationModule (plan base, regla 4)', () => {
       token: CONFIRM_MODIFICATION,
       service: ConfirmModificationService,
       who: 'ReservationsController (T010)',
+    },
+    {
+      token: ASSIGN_ROOM,
+      service: AssignRoomService,
+      who: 'ReservationsController (T027)',
     },
   ])(
     'exporta $token.description: $who lo puede inyectar',

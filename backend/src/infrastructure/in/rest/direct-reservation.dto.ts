@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
+  AVAILABILITY_TAKEN,
   IDEMPOTENCY_KEY_REQUIRED,
   IDEMPOTENCY_KEY_REUSED,
   NO_AVAILABILITY,
@@ -333,9 +334,18 @@ export const CREATION_EXAMPLE: ReservationDetailBody = {
   updatedAt: '2026-10-09T09:14:00.123456-05:00',
   conflict: null,
   rooms: [
-    { roomId: ROOM_201, roomNumber: '201' },
-    { roomId: ROOM_202, roomNumber: '202' },
-  ].map(({ roomId, roomNumber }) => ({
+    {
+      reservationRoomId: '1b2c3d4e-5f6a-4b7c-8d9e-0f1a2b3c4d5e',
+      roomId: ROOM_201,
+      roomNumber: '201',
+    },
+    {
+      reservationRoomId: '2c3d4e5f-6a7b-4c8d-9e0f-1a2b3c4d5e6f',
+      roomId: ROOM_202,
+      roomNumber: '202',
+    },
+  ].map(({ reservationRoomId, roomId, roomNumber }) => ({
+    reservationRoomId,
     roomId,
     roomNumber,
     categoryRoom: 'DOBLE',
@@ -432,7 +442,7 @@ function requestErrors(path: string, withRates: boolean) {
 }
 
 /** Los errores de la disponibilidad, la asignación y la capacidad (pasos 2 a 4 del punto 11), comunes a A y B. */
-function availabilityErrors(path: string) {
+function availabilityErrors(path: string, withTaken: boolean) {
   return {
     [INVENTORY_UNAVAILABLE.code]: errorExample(
       path,
@@ -464,6 +474,17 @@ function availabilityErrors(path: string) {
       GUEST_COUNT_EXCEEDS_CAPACITY.code,
       GUEST_COUNT_EXCEEDS_CAPACITY.message,
     ),
+    // Solo B guarda la reserva: la restricción anti-solape la rechaza y no queda otra habitación (T009, D3).
+    ...(withTaken
+      ? {
+          [AVAILABILITY_TAKEN.code]: errorExample(
+            path,
+            'Otra solicitud ocupó la habitación al guardar y no quedó otra habitación candidata',
+            AVAILABILITY_TAKEN.code,
+            AVAILABILITY_TAKEN.message,
+          ),
+        }
+      : {}),
     [PRICING_UNAVAILABLE.code]: errorExample(
       path,
       'El Módulo 3 no responde al cotizar',
@@ -476,7 +497,7 @@ function availabilityErrors(path: string) {
 /** Un ejemplo por cada error de A, en el orden en que se revisan (punto 13). */
 export const PREVIEW_ERROR_EXAMPLES = {
   ...requestErrors(PREVIEW_PATH, false),
-  ...availabilityErrors(PREVIEW_PATH),
+  ...availabilityErrors(PREVIEW_PATH, false),
   [CURRENCY_MISMATCH.code]: errorExample(
     PREVIEW_PATH,
     'El Módulo 3 cotiza las habitaciones en monedas distintas: no se puede sumar el total',
@@ -537,10 +558,10 @@ export const CREATION_ERROR_EXAMPLES = {
     INVALID_EMAIL.code,
     INVALID_EMAIL.message,
   ),
-  ...availabilityErrors(CREATION_PATH),
+  ...availabilityErrors(CREATION_PATH, true),
   [REQUEST_NOT_PROCESSED]: errorExample(
     CREATION_PATH,
-    'Una excepción inesperada (también, hasta T009, otra solicitud que ocupó la habitación al guardar)',
+    'Una excepción inesperada',
     REQUEST_NOT_PROCESSED,
     REQUEST_NOT_PROCESSED_MESSAGE,
   ),

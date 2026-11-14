@@ -28,8 +28,8 @@ export const DAILY_LIST_CRON = '0 0 0 * * *';
  * - al arrancar hace lo mismo, para cubrir un reinicio o una caída a las 00:00. Como `GenerateDailyList`
  *   no hace nada si la lista del día ya está generada, arrancar varias veces no la duplica.
  *
- * Corre con un bloqueo asesor: si otra instancia lo tiene, se salta esa ejecución. Publicar la lista es
- * de T025, T026 y T029.
+ * Corre con un bloqueo asesor: si otra instancia lo tiene, se salta esa ejecución. La lista sale apenas
+ * se confirma (T029, `afterCommit`), y si no, con la tarea de cada 10 s (`PublishPendingJob`).
  */
 @Injectable()
 export class DailyListJob

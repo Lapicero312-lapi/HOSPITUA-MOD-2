@@ -42,6 +42,14 @@ export class ReservationConflictDto {
 /** Una habitación de la reserva en C3. */
 export class ReservationDetailRoomDto {
   @ApiProperty({
+    format: 'uuid',
+    description:
+      'El `id` de la habitación dentro de la reserva: con él se asigna habitación a una sin asignar (B3 de `update-reservation`).',
+    example: '7c1e9a2b-4d6f-4e8a-9b0c-1d2e3f4a5b6c',
+  })
+  reservationRoomId: string;
+
+  @ApiProperty({
     type: String,
     format: 'uuid',
     nullable: true,
@@ -230,6 +238,7 @@ export function toReservationDetailBody({
         ? null
         : { reason: conflict.reason, detectedAt: conflict.detectedAt },
     rooms: reservation.rooms.map((room) => ({
+      reservationRoomId: room.id,
       roomId: room.roomId,
       roomNumber: room.roomNumber,
       categoryRoom: room.categoryRoom,
@@ -284,6 +293,7 @@ export const RESERVATION_DETAIL_EXAMPLE: ReservationDetailBody = {
   conflict: null,
   rooms: [
     {
+      reservationRoomId: '7c1e9a2b-4d6f-4e8a-9b0c-1d2e3f4a5b6c',
       roomId: 'a4c2e6f8-1b3d-4e5f-8a7b-9c0d1e2f3a4b',
       roomNumber: '204',
       categoryRoom: 'DOBLE',

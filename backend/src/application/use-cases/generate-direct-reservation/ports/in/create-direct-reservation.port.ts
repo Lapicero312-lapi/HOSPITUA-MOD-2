@@ -1,5 +1,11 @@
 import type { ReservationDetail } from '../../../check-view-reservation/ports/in/get-reservation-detail.port.js';
 
+/**
+ * Cuántas veces se reintenta la asignación cuando la base rechaza una habitación por solape
+ * (`ASSIGNMENT_MAX_RETRIES`, por defecto `3`; punto 14 del plan, T009).
+ */
+export const ASSIGNMENT_MAX_RETRIES = Symbol('ASSIGNMENT_MAX_RETRIES');
+
 /** Símbolo con el que Nest inyecta el servicio en el controlador de la reserva directa. */
 export const CREATE_DIRECT_RESERVATION = Symbol('CREATE_DIRECT_RESERVATION');
 
