@@ -1,0 +1,107 @@
+/*
+ * Pantalla "Detalle de la reserva": master-detail. La estadía y sus habitaciones ocupan el plano central;
+ * el huésped y la cancelación viven en una columna inspector a la derecha (en pantallas anchas).
+ */
+
+.detail-header {
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.detail-title {
+  font-family: var(--font-sans);
+}
+
+.detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-left: auto;
+}
+
+/* Estados con tinta semántica */
+/* Confirmada: dorado; En curso (en casa): petróleo (tokens de hospitua) */
+.detail-status--active {
+  --tone-bg: var(--info-bg);
+  --tone-border: var(--info-border);
+  --tone-fg: var(--info-fg);
+}
+
+.detail-status--in_progress {
+  --tone-bg: var(--positive-bg);
+  --tone-border: var(--positive-border);
+  --tone-fg: var(--positive-fg);
+}
+
+.detail-status--pending {
+  --tone-bg: var(--warning-bg);
+  --tone-border: var(--warning-border);
+  --tone-fg: var(--warning-fg);
+}
+
+.detail-status--cancelled,
+.detail-status--no_show {
+  --tone-bg: var(--critical-bg);
+  --tone-border: var(--critical-border);
+  --tone-fg: var(--critical-fg);
+}
+
+.detail-conflict {
+  margin: 0;
+  padding: 0.75rem 0.875rem;
+  background-color: var(--critical-bg);
+  border: 1px solid var(--critical-border);
+  border-radius: var(--radius-lg);
+  color: var(--critical-fg);
+  font-size: 0.8125rem;
+}
+
+.detail-conflict strong {
+  font-weight: 600;
+}
+
+/* Master-detail */
+.detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+.detail-aside {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
+}
+
+@media (min-width: 1200px) {
+  .detail-grid {
+    grid-template-columns: minmax(0, 1fr) 380px;
+  }
+
+  .detail-aside {
+    position: sticky;
+    top: 70px;
+  }
+
+  .detail-fields--stacked {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.875rem;
+  }
+}
+
+.detail-table-wrap {
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+}
+
+.detail-money {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.detail-panel .error-message {
+  margin: 1rem;
+}

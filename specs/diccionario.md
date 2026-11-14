@@ -1,0 +1,140 @@
+### Diccionario General del Proyecto HOSPITUA
+**Creado** : 2026-09-07  
+**Última Actualización** : 2026-10-18  
+
+Glosario técnico-funcional compartido por los tres módulos del proyecto **HOSPITUA**, diseñado para unificar la terminología, entidades, estados y conceptos clave bajo la metodología **Specification-Driven Development (SDD)** y garantizar la alineación estricta entre los diagramas de casos de uso, la arquitectura de mensajes y los documentos de especificación (`spec.md`).
+
+---
+
+#### Convenciones transversales
+
+* **Nomenclatura** : Los atributos y las entidades se escriben en `camelCase` técnico (por ejemplo `roomNumber`, `categoryRoom`, `startDate`, `endDate`, `roomGrossAmount`, `reservationRef`). Los estados del Módulo 1 se escriben tal como los define este diccionario (PascalCase) y los estados propios del Módulo 2 en `MAYÚSCULAS_CON_GUION_BAJO`.
+* **Referencia de reserva (reservationRef)** : Identificador único de una reserva, con el formato `RSV-` seguido de 8 caracteres hexadecimales en mayúscula (un UUID corto), por ejemplo `RSV-3F9A1C7B`. Lo genera el Módulo 2 al crear la reserva, sea directa u OTA, y los demás módulos la referencian con él. No se confunde con el `externalConfirmationCode`, que es el código que asigna la OTA.
+* **Gobernanza** : Este diccionario es el contrato de integración oficial entre los tres módulos. En lo que pertenece al Módulo 1 y al Módulo 3 (nombres, atributos y estados) manda el diccionario y los specs del Módulo 2 se adaptan a él. Lo propio del Módulo 2 se documenta aquí con la misma nomenclatura que sus specs.
+* **Control de errores** : Todo error debe responderse con un código de la familia HTTP 4xx (400 *Bad Request* por defecto), de forma controlada y con un mensaje claro. Están prohibidos los errores HTTP 500 y cualquier respuesta 2xx o 3xx para un error.
+* **Cabeceras `X-Client` y `X-User`** : No hay seguridad entre módulos (es una capa aparte). En las rutas que comparten varios llamadores, quien llama se indica con `X-Client` (`RECEPTIONIST`, `MODULE1` o `MODULE3`); sin ella, o con otro valor, la respuesta es 400 `INVALID_CLIENT`. `X-User` lleva el usuario de la Recepcionista (login simulado en el frontend) y se guarda como `processedBy`.
+
+---
+
+#### Actores
+
+* **Administrador** : Usuario interno con permisos transversales de gestión. En el Módulo 1: administra el catálogo e inventario de habitaciones. En el Módulo 3: gestiona la facturación, configura tarifas base, supervisa liquidaciones y actualiza el porcentaje de IVA vigente.
+* **Personal de limpieza** : Actor operativo del Módulo 1 encargado de la gestión de higiene de las unidades de alojamiento: registra el inicio (`InCleaning`) y la finalización del aseo, cambiando el estado de la habitación a disponible (`Available`).
+* **Personal de mantenimiento** : Actor operativo del Módulo 1 responsable de inhabilitar habitaciones por reparaciones físicas (`DisabledForRepairs`) o bloqueos técnicos preventivos (`TechnicalBlock`), registrando y finalizando dichas intervenciones en el calendario de mantenimiento.
+* **Gerente** : Actor estratégico con permisos de solo lectura para consultar reportes consolidados de ocupación, estado del inventario, volumen de reservas y métricas financieras.
+* **Recepcionista** : Usuario interno del front-desk y actor principal del Módulo 2. Responsable de gestionar reservas directas, procesar modificaciones de estadías, registrar cancelaciones, consultar las reservas, gestionar la atención de huéspedes y generar el archivo SIRE que envía a Migración.
+* **OTA (Online Travel Agency)** : Intermediario externo (ej. Booking, Airbnb, Expedia) que vende habitaciones del hotel. En este proyecto la única es **Booking.com**, conectada a través de **Channex** (entorno de pruebas `staging.channex.io`): el Módulo 2 lee sus reservas del feed de Channex (`Generar reservación por ota`), con el código de confirmación de Booking, y le envía los tipos de habitación y la disponibilidad (`Configurar OTA`); los precios los publica el Módulo 3 en Channex.
+* **Channex** : Intermediario (channel manager) entre el hotel y Booking.com. Entrega las reservas de Booking como revisiones (`new`, `modified`, `cancelled`) en un feed que el Módulo 2 consulta y confirma (`ack`), recibe del Módulo 2 los tipos de habitación (uno por categoría, creados a partir de las habitaciones vendibles del Módulo 1) y la disponibilidad, y recibe del Módulo 3 los planes de tarifa y los precios. La propiedad es una sola y fija, creada a mano en Channex. El acceso usa una clave (`user-api-key`) que se guarda en la configuración del sistema.
+* **Reserva en conflicto** : Reserva de Booking que se registró aunque no se pudo ubicar del todo, porque Booking ya la había aceptado: sin habitación libre (`NO_ROOM_AVAILABLE`), con más personas que la capacidad (`CAPACITY_EXCEEDED`) o con un cambio que no se puede aplicar por su estado (`CHANGE_NOT_APPLICABLE`). Si no hay habitación libre, la habitación queda sin asignar. La Recepcionista la ve marcada y la resuelve; puede asignarle una habitación.
+* **Migración** : Ente gubernamental externo (Migración Colombia) que recibe el reporte SIRE. **No es un actor del sistema**: no accede al Módulo 2. La Recepcionista genera el archivo `.TXT` con la exportación SIRE y lo envía a Migración por los medios que esta disponga, fuera del sistema. El Módulo 2 no realiza envíos automáticos.
+* **Módulo 1 (Gestión de Habitaciones e Inventario de Aforo)** : Módulo externo/sistema dueño del inventario físico de habitaciones (`Room.status`), el calendario de mantenimiento, el Check-In y el Check-Out físicos (que notifica al Módulo 2 por habitación) y la captura inicial de datos migratorios de extranjeros. Solo consulta las reservas de un rango de fechas, para validar un mantenimiento o una baja de habitación. Recibe cada día la lista de reservas del día y sus actualizaciones (`Enviar reservas del día al Módulo 1`) y avisa al Módulo 2 por cola sus mantenimientos y sus cambios de inventario.
+* **Módulo 2 (Operación de Reservas y Cumplimiento Legal)** : Módulo dueño del ciclo de vida de las reservas (`Reservation.status`), orquestador de la verificación de disponibilidad (triangulación entre Módulo 1 y reservas locales) y generador del archivo legal de migración SIRE.
+* **Módulo 3 (Facturación, Consumos y Liquidación)** : Módulo financiero dueño del motor de precios dinámicos (`Calcular tarifa dinámica`), el registro de comisiones OTA, el cálculo de IVA, las liquidaciones y la emisión de facturas fiscales.
+* **Responsable de facturación (rol)** : Rol funcional en las historias de usuario del Módulo 3 que representa al Administrador en su ejercicio de conciliación de ingresos netos, comisiones e impuestos.
+
+---
+
+#### Módulo 1: Gestión de Habitaciones e Inventario de Aforo
+
+* **Habitación (Room)** : Unidad física de alojamiento definida por su identificación única (`id`, `roomNumber`), categoría (`categoryRoom`), capacidad máxima de huéspedes (`maxCapacity`) y tarifa base. El Módulo 2 usa `maxCapacity` para validar la cantidad de personas de una reserva.
+* **Estado de habitación (Room.status)** : Situación operativa física en tiempo real administrada exclusivamente por el Módulo 1, con 7 estados vigentes más 1 solicitado (`Reserved`):
+  * `Available` (Disponible para asignación o reserva)
+  * `Reserved` (**Solicitud de adición al Módulo 1, pendiente de aprobación por su equipo.** Reservada para una reserva del Módulo 2 el día de su llegada; no debe asignarse a un cliente sin reserva)
+  * `Occupied` (Ocupada por un huésped en estadía activa)
+  * `PendingCleaning` (Pendiente de aseo tras un Check-Out)
+  * `InCleaning` (En proceso de limpieza por el personal de aseo)
+  * `DisabledForRepairs` (Inhabilitada por mantenimiento o reparación física)
+  * `TechnicalBlock` (Bloqueada por razones administrativas o de aforo)
+  * `Inactive` (Dada de baja del inventario operativo)
+* **Estado `Reserved`** : Estado de la habitación que maneja el Módulo 1 por su cuenta. El Módulo 1 aparta (`Reserved`) y libera (`Available`) las habitaciones a partir de la lista de reservas del día y sus actualizaciones; el Módulo 2 no le ordena cambios de estado ni recibe el estado de la habitación.
+* **Calendario de Mantenimientos (MaintenanceCalendar)** : Registro de bloqueos e intervenciones programadas por rango de fechas en Módulo 1, consultado de forma síncrona por el Módulo 2 para evitar vender o asignar habitaciones en reparación. El Módulo 1 avisa por cola cada mantenimiento registrado, cambiado o cancelado, para la disponibilidad de Channex.
+* **Tarifa base** : Precio regular configurado para una categoría de habitación en el Módulo 1, utilizado por el Módulo 3 como insumo inicial para la cotización dinámica.
+* **Datos de los Huéspedes (GuestData)** : Registro de datos de **cada** huésped, colombiano o extranjero (no solo el titular de la reserva): `firstName`, `lastName`, `documentType`, `documentNumber`, `birthDate`, `nationality`, `originPlace` (lugar de procedencia) y `destinationPlace` (lugar de destino); SIRE exige estos dos últimos para los extranjeros; para los colombianos pueden venir vacíos. El Módulo 2 los guarda **una sola vez** por reserva y número de documento (`reservationRef` + `documentNumber`); se crean en el Check-In y no se modifican: en el Check-Out el huésped se identifica por su `documentNumber` y solo se le agrega el `DEPARTURE`. El Módulo 1 envía en cada notificación, a nivel de mensaje, el `movementType` (`ENTRY` | `DEPARTURE`) y el `movementDate` (fecha sin hora: `checkInDate` o `checkOutDate`), que valen para todos los huéspedes de la lista `guests` y que asigna sin pedírselos a la Recepcionista, y envía al Módulo 2 los datos de **todos** los huéspedes **ya procesados y completos**. Los envía dentro de las notificaciones de Check-In (`ENTRY`) y de Check-Out (`DEPARTURE`) de cada habitación, en la lista `guests`. El Módulo 2 identifica como extranjero a quien tenga nacionalidad distinta de Colombia y, al exportar el SIRE, selecciona solo a esos. El Módulo 2 da por hecho que los datos llegan completos y correctos: no los valida ni los devuelve.
+
+---
+
+#### Módulo 2: Operación de Reservas y Cumplimiento Legal
+
+* **Reserva (Reservation)** : Entidad principal gobernada por el Módulo 2 que representa la separación de alojamiento para un huésped titular y su grupo, en **una o varias habitaciones** (entre 1 y 10) con las mismas fechas. Atributos: `reservationRef` (identificador único de la reserva y valor con el que el resto de entidades y los demás módulos la referencian), `guestRef` (titular), `guestCount` (cantidad total de personas de la reserva: la suma de los `guestCount` de sus habitaciones), `rooms` (lista de `ReservationRoom`), `startDate`, `endDate`, `source` (`DIRECT` | `OTA`), `externalConfirmationCode`, `commissionPercentage`, `commissionAmount`, `commissionStatus`, `notes` (observaciones de la reserva, opcional, máximo 500 caracteres), `createdAt`, `status` y `updatedAt` (control de concurrencia optimista).
+  * Reserva de canal `DIRECT`: nace en `ACTIVE`, con `externalConfirmationCode` en `null` y comisión en `0`.
+  * Reserva de canal `OTA`: nace directamente en `ACTIVE`, porque Booking la envía ya confirmada (`PENDING` se conserva sin uso, por si en el futuro se agrega una agencia que lo necesite). El titular llega sin documento: el Módulo 1 registra los documentos de los huéspedes en el Check-In. Recibe de la OTA el valor bruto (`grossAmount`, el campo `amount` de la revisión de Channex) y calcula `commissionAmount` como `grossAmount × commissionPercentage / 100` (el porcentaje va de 0 a 100: `30` es el 30 %), con el porcentaje fijo de la agencia. Su `commissionStatus` es `CALCULATED` | `RECONCILED` | `PAID`; la conciliación de comisiones la hace el Módulo 3. Sus datos los envía Booking y no se editan en el hotel: solo Booking la modifica o la cancela, por el feed de Channex; la Recepcionista solo puede asignarle una habitación si está en conflicto. Si Booking la cancela, la reserva pasa a `CANCELLED`; si no llega, a `NO_SHOW`. En los dos casos la comisión no se toca.
+* **Ciclo de Vida de la Reserva (Reservation.status)** : Estados oficiales y únicos, gobernados de forma estricta por el Módulo 2. No existen alias ni otros valores:
+  * `PENDING` : Reservado para una agencia futura que envíe reservas sin confirmar. Hoy no se usa: las reservas de Booking nacen en `ACTIVE`.
+  * `ACTIVE` : Estado oficial de reserva confirmada y habilitada para Check-In (estado inicial de todas las reservas: directas y de Booking).
+  * `IN_PROGRESS` : Transición activada cuando el Módulo 1 notifica el Check-In físico de la primera habitación de la reserva.
+  * `COMPLETED` : Transición final cuando ya no queda ninguna habitación de la reserva ocupada ni por llegar: todas están en `CHECKED_OUT` o `NOT_ARRIVED`.
+  * `CANCELLED` : Anulación de la reserva. Si la reserva estaba en la lista del día, se le avisa de inmediato al Módulo 1 (`REMOVED`), que decide qué hace con la habitación. Aplica solo a solicitudes explícitas de cancelación.
+  * `NO_SHOW` : Estado de una reserva que no se presentó en la fecha de Check-In sin previo aviso, sea de canal OTA o directo.
+* **Habitación de la reserva (ReservationRoom)** : Cada habitación asignada a una `Reservation`. Atributos: `reservationRef`, `roomId` (referencia a `Room.id` del Módulo 1), `roomNumber` (copia del número de habitación del Módulo 1, guardada al asignarla), `categoryRoom`, `guestCount` (cantidad de personas de esa habitación: entero, mayor o igual a 1 y menor o igual a su `maxCapacity`), `roomGrossAmount` (tarifa de esa habitación recibida del Módulo 3, sin cálculos; solo canal `DIRECT`), `quoteId` (identificador de la cotización del Módulo 3 que dio esa tarifa; solo canal `DIRECT`), `currency` y `stayStatus`.
+* **Estado de la habitación en la reserva (ReservationRoom.stayStatus)** : Estado de cada habitación dentro de la reserva, gobernado por el Módulo 2 a partir de las notificaciones del Módulo 1 y del cierre del día. No es el estado físico de la `Room`:
+  * `EXPECTED` : La habitación está asignada y se espera su llegada (estado inicial).
+  * `CHECKED_IN` : El Módulo 1 notificó el Check-In de esa habitación.
+  * `CHECKED_OUT` : El Módulo 1 notificó el Check-Out de esa habitación.
+  * `NOT_ARRIVED` : La habitación no tuvo Check-In al cierre del día de llegada y se liberó en el Módulo 1.
+* **Consultar reservas** : Caso de uso de solo lectura del Módulo 2, usado por la Recepcionista y por los procesos internos. Lista todas las reservas paginadas, las filtra por estado, por un rango de fechas sobre la estadía (`dateFrom`/`dateTo`), por titular y por canal, y busca una reserva por código (`reservationRef` o `externalConfirmationCode`). El Módulo 1 usa solo su consulta por rango de fechas (`X-Client: MODULE1`) y el Módulo 3 su consulta por referencia (`X-Client: MODULE3`); Booking no lo usa.
+* **Enviar reservas del día al Módulo 1** : Parte del caso de uso "Consultar reservas" (historias 4 y 5 de su especificación). Proceso del Módulo 2 que, al iniciar cada día operativo, envía al Módulo 1 por cola la lista de reservas `ACTIVE` con llegada ese día (`DailyReservationList`) con la cantidad de personas, las habitaciones, el titular, la fecha de salida y los detalles de cada reserva, y después envía cada cambio que afecte a esa lista (`DailyReservationUpdate`: `ADDED`, `UPDATED` o `REMOVED`). Es informativo: no aparta ni libera habitaciones.
+* **Lista de reservas del día (DailyReservationList)** : Atributos: `messageId`, `operationalDate`, `generatedAt`, `sequenceNumber` (siempre `1`), `totalReservations`, `totalRooms`, `totalGuests`, `reservations` y `publishStatus` (`PENDING` | `PUBLISHED` | `FAILED`).
+* **Actualización de la lista del día (DailyReservationUpdate)** : Atributos: `messageId`, `operationalDate`, `sequenceNumber` (creciente dentro del día operativo), `updateType` (`ADDED` | `UPDATED` | `REMOVED`), `reservationRef`, `reservation` (detalle completo, en `ADDED` y `UPDATED`), `removalReason` (`CANCELLED` | `DATE_CHANGED` | `NO_SHOW` | `ROOM_UNASSIGNED`, en `REMOVED`), `occurredAt` y `publishStatus`.
+* **Verificar disponibilidades** : Sub-caso de uso centralizado (`«include»`) en Módulo 2 que ejecuta una orquestación síncrona de triple validación antes de crear o modificar cualquier reserva, una vez por cada habitación de la reserva:
+  1. Consulta de las habitaciones vendibles al Módulo 1 (`Consultar inventario de habitaciones`, REST GET): todas son vendibles y no se usa su estado de hoy.
+  2. Consulta de bloqueos en el calendario de mantenimientos al Módulo 1 (`Consultar calendario de mantenimientos`, REST GET).
+  3. Cruce local con las habitaciones de las reservas vigentes en la base de datos del Módulo 2 (`Consultar reservas`), excluyendo su propio `reservationRef` en flujos de actualización para evitar falsos bloqueos por solapamiento propio, y las habitaciones en `CHECKED_OUT` o `NOT_ARRIVED`.
+* **Tarifa Dinámica Informativa (RateQuote)** : Cotización obtenida síncronamente desde el Módulo 3 mediante `REST - POST` a `/pricing/quotes` con un cuerpo JSON que contiene `roomType`, `checkInDate` y `checkOutDate` (nombres de la API del Módulo 3; equivalen a `categoryRoom`, `startDate` y `endDate`). La respuesta trae `quoteId`, `currency`, `nightlyRates` (lista de `date` y `rate`) y `lodgingAmount`. El Módulo 2 la solicita una vez por habitación y relaciona la tarifa recibida con la habitación (`ReservationRoom.roomGrossAmount` = `lodgingAmount`, y `ReservationRoom.quoteId`), de forma **estrictamente informativa**: no calcula diferencias, IVA ni comisiones; su única operación es sumar las tarifas de las habitaciones de una reserva para mostrar su total, que no se guarda, y no modifica el importe retornado.
+* **Canal de origen (source)** : Clasificación del origen de la reserva como `DIRECT` (recepción, teléfono, portal propio; 0% comisión) o `OTA` (agencia externa con porcentaje de comisión y código de confirmación). En la lista de reservas del día que se envía al Módulo 1, `source` viaja como `DIRECTA` o con el nombre de la agencia (`BOOKING` para Booking.com).
+* **Código de confirmación externo (externalConfirmationCode)** : Identificador único asignado por la agencia de viajes externa; obligatorio para reservas de canal `OTA`, utilizado para trazabilidad y aislamiento de consultas por canal.
+* **Huésped (Guest)** : Entidad de datos (no es un actor del sistema) con la persona física que se aloja en el hotel. Atributos: `id`, `firstName`, `lastName` (el nombre completo, `fullName`, se arma uniéndolos), `documentType` (tipo de documento: `RC` (Registro Civil), `TI` (Tarjeta de Identidad), `CC` (Cédula de Ciudadanía), `CE` (Cédula de Extranjería), `PAS` (Pasaporte) o `NIT` (Número de Identificación Tributaria)), `documentNumber`, `nationality` (si no es Colombia, el huésped es extranjero), `contactPhone` y `contactEmail`. Sus datos de huésped los captura el Módulo 1 en el Check-In (`GuestData`). Cada reserva guarda su propio titular: corregir sus datos en una reserva no cambia las demás.
+* **Agencia (Ota)** : Entidad del intermediario externo que origina reservas. Se registra una sola vez, al iniciar (`Configurar OTA`); la Recepcionista no la crea ni la edita, solo la consulta. `connectionStatus` y `lastSyncAt` los administra el sistema a partir de las lecturas del feed de Channex, nunca se editan a mano: pasa a `DISCONNECTED` cuando Channex rechaza la conexión y vuelve a `CONNECTED` cuando una lectura funciona; nace `CONNECTED`; cada lectura que termina bien actualiza `lastSyncAt`. Atributos: `id`, `name`, `linkedAt` (fecha de vinculación), `commissionPercentage` (porcentaje de comisión fijo de la agencia; el sistema lo calcula con su primera reserva y queda vacío hasta entonces), `connectionStatus` (`CONNECTED` | `DISCONNECTED`) y `lastSyncAt` (fecha y hora de la última lectura del feed de Channex que terminó bien).
+* **Tipo de habitación de Channex** : Uno por categoría, con el nombre de la categoría, la cantidad de habitaciones vendibles (`count_of_rooms`) y la capacidad máxima. Lo crea y lo actualiza el Módulo 2 (`Configurar OTA`) a partir de las habitaciones vendibles del Módulo 1; no se borra. Channex admite como máximo 20 por hotel. El Módulo 3 cuelga de él sus planes de tarifa.
+* **Avisos del Módulo 1** : Mensajes por cola con los que el Módulo 1 informa al Módulo 2 un mantenimiento registrado, cambiado o cancelado (`m2.habitacion.mantenimiento.queue`) o una habitación agregada, dada de baja o cambiada (`m2.habitacion.inventario.queue`). El Módulo 2 los usa para mantener al día la disponibilidad de Channex.
+* **Cancelación (Cancellation)** : Registro de auditoría de la anulación de una reserva. Atributos: `cancellationId`, `reservationRef`, `cancellationDate`, `reason` (opcional), `channel` (`RECEPTION` | `OTA_API`), `processedBy` y `status` (`COMPLETED`).
+* **Día operativo** : Día calendario de Colombia, fijo: va de las 00:00 a las 23:59 (UTC-5). La lista de reservas del día se envía al Módulo 1 a las 00:00 y el cierre del día (No-Show y habitaciones no llegadas) ocurre al terminar las 23:59 (se ejecuta a las 00:00:30). No es configurable.
+* **No-Show (Ausencia No Notificada)** : Evento operativo desencadenado al cierre del día cuando ninguna habitación de la reserva tuvo Check-In. La reserva cambia a `NO_SHOW`, sea de canal OTA o directo, y se avisa al Módulo 1 quitando la reserva de la lista del día (`REMOVED`) y el Módulo 1 decide qué hace con las habitaciones. Si llegó solo una parte del grupo, la reserva sigue `IN_PROGRESS` y las habitaciones sin Check-In pasan a `NOT_ARRIVED`. Si la reserva es de Booking, el Módulo 2 le reporta el no-show a Booking por Channex, sin cobrar penalidad, y su comisión no se concilia.
+* **SIRE (Validación y Reporte Migratorio)** : Sistema de Información de Registro de Extranjeros de Migración Colombia. El Módulo 2 consolida los datos de los huéspedes recibidos del Módulo 1 (`GuestData`) en un `MigratoryMovement` por cada huésped y tipo de movimiento, selecciona a los extranjeros y genera un archivo plano estructurado en formato `.TXT`, con una línea por movimiento y toda la información migratoria del huésped, para que la Recepcionista lo descargue y lo envíe a Migración.
+* **Movimiento migratorio (MigratoryMovement)** : Registro del Módulo 2 con un movimiento de entrada o salida de un huésped (colombiano o extranjero) en una estadía; solo los de extranjeros entran al SIRE. Hay uno por cada combinación de reserva, huésped y tipo de movimiento: un huésped que ingresa y sale tiene dos (`ENTRY` y `DEPARTURE`). Lo envía el Módulo 1 siempre completo. Atributos: `movementId`, `reservationRef`, `documentNumber` (referencia a su `GuestData`), `guestRef` (solo si es el titular), `movementType` (`ENTRY` | `DEPARTURE`) y `movementDate`. Los datos del huésped no se copian en el movimiento: se obtienen de su `GuestData`.
+* **Estadía de huésped (GuestStay)** : Fila de la vista de huéspedes alojados de la Recepcionista (`process-guest-data`), una por huésped y reserva. Es derivada: se arma con el `ENTRY` y el `DEPARTURE` del `MigratoryMovement` del huésped en esa reserva (datos del huésped, `reservationRef`, fecha de entrada y fecha de salida, vacía si aún está en el hotel) y no se guarda.
+* **Estado migratorio de la reserva (migrationStatus)** : Valor derivado que la Recepcionista ve en el listado de reservas; nunca se muestra vacío:
+  * `AWAITING_CHECK_IN` : Reserva `ACTIVE` o `PENDING`; los datos migratorios llegan con el Check-In del Módulo 1.
+  * `COMPLETE` : Tiene movimientos migratorios registrados.
+  * `NOT_REQUIRED` : Reserva `IN_PROGRESS` o `COMPLETED` sin huéspedes extranjeros.
+  * `NO_CHECK_IN` : Reserva `CANCELLED` o `NO_SHOW`; nunca hubo ingreso.
+* **Exportación SIRE (SireExport)** : Histórico de exportaciones del reporte. Cada descarga, del periodo o de un solo movimiento, genera una. Atributos: `id` (identificador único de la exportación), `exportDate`, `exportKind` (`PERIOD` | `SINGLE_MOVEMENT`), `recordsCount`, `dateRangeStart`, `dateRangeEnd` y `processedBy` (la Recepcionista).
+* **Configuración SIRE del hotel** : Datos que el sistema usa para armar cada línea del archivo: código del hotel en SIRE (`hotelSireCode`), código de la ciudad (`hotelCityCode`), separador de campos y formato de fecha. El tipo de documento y la nacionalidad se exportan tal cual, sin tablas de códigos. Salen del manual de cargue de SIRE (portal de SIRE, con la cuenta del hotel) y no se fijan en el código.
+
+---
+
+#### Módulo 3: Facturación, Consumos y Liquidación
+
+##### Tarifas
+* **Temporada (Baja / Regular / Alta)** : Clasificación estacional de las fechas que determina el ajuste porcentual aplicado sobre la tarifa base de la habitación.
+* **Tarifa dinámica** : Valor nocturno calculado por el motor oficial de precios del Módulo 3 evaluando temporada, ocupación, anticipación y duración de la estadía.
+* **Valor de hospedaje (bruto)** : Suma acumulada de las tarifas dinámicas de todas las noches de la estancia. Sirve de base para el cálculo de la liquidación.
+
+##### Comisión OTA
+* **Comisión OTA** : Porcentaje fijo de cada agencia, aplicado sobre el valor de hospedaje cuando la reserva proviene de una OTA. El sistema lo calcula solo, con la primera reserva que llega de la agencia: la comisión que informa Channex, dividida por el valor bruto y multiplicada por 100.
+* **Fórmula de comisión** : `-(Valor Hospedaje × % Comisión)`. Solo se aplica a reservas con canal `OTA`; para canal `DIRECT` la comisión es siempre cero (`0`).
+
+##### Impuestos
+* **IVA** : Impuesto al Valor Agregado calculado sobre la base gravable de hospedaje al emitir la factura (nunca sobre la comisión OTA descontada).
+* **Base gravable** : Importe bruto de hospedaje sobre el que se aplica la tasa de IVA configurada.
+* **Porcentaje de IVA vigente** : Tasa tributaria fijada por el Administrador en el Módulo 3, congelada al momento del Check-In.
+
+##### Liquidación
+* **Liquidación** : Entidad financiera que consolida la estancia (hospedaje, comisión e ingreso neto). Se genera a partir de eventos de Check-In o Check-Out.
+* **Estados de la liquidación** :
+  * `Preliminary` (Preliminar: generada al Check-In, modificable si cambia la estadía).
+  * `Final` (Definitivo: generada al Check-Out, inmutable, base de la factura final).
+  * `Cancelled` (Anulada: registrada si el Check-In es anulado).
+* **Ingreso neto** : Valor de hospedaje menos la comisión OTA aplicable, sin incluir impuestos. Es el monto real percibido por el hotel.
+* **Detalle / Desglose de liquidación** : Estructura que detalla el valor de hospedaje, el canal de origen, la comisión aplicada y el ingreso neto.
+
+##### Factura
+* **Prefactura** : Documento borrador no fiscal emitido al Check-In con carácter informativo para el huésped.
+* **Factura fiscal definitiva** : Documento fiscal formal con numeración oficial consecutiva emitido al Check-Out tras el pago.
+* **Numeración consecutiva oficial** : Secuencia numérica fiscal única asignada exclusivamente a facturas definitivas.
+* **Cliente responsable de facturación** : Datos tributarios (NIT, Cédula, Razón Social) del pagador de la factura.
+* **Desglose facturable** : Detalle formal en la factura que expone hospedaje, comisión OTA (referencial), IVA y total neto pagado.
+
+##### Gestión y consulta
+* **Consulta de liquidación** : Petición síncrona realizada por un actor autorizado para obtener el estado y desglose financiero de una estancia.
+* **Resultado de consulta** : Estructura devuelta que contiene hospedaje, comisión OTA, IVA, ingreso neto y la factura asociada.
+* **Resumen consolidado** : Reporte financiero acumulado por rangos de fechas utilizado por el Administrador para conciliar el cobro de comisiones con cada OTA.

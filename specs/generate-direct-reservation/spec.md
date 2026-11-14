@@ -1,186 +1,284 @@
 # Feature Specification: Generar Reservación Directa
 
-**Created**: 2026-09-08
+**Created**: 2026-09-23
+**Updated**: 2026-10-18
 
 ## Use Case (Caso de Uso)
 
 ### Descripción del problema
 
-El hotel capta demanda directa por dos frentes: huéspedes que llaman o llegan a recepción y
-huéspedes que reservan por su cuenta desde el portal web o la aplicación. El negocio necesita
-registrar esas reservas de forma ágil, dejándolas confirmadas de inmediato, sin obligar al
-huésped a pasar por una pasarela de pago al momento de reservar: en HOSPITUA el pago del 100% de
-la estadía se realiza de forma exclusiva en el Check-Out. Si además cada canal se opera con reglas
-distintas o si la disponibilidad se consulta contra sistemas externos, aparecen dos problemas
-costosos. El primero es la sobreventa: dos solicitudes pueden tomar el mismo cupo y el hotel se
-queda sin habitaciones para honrar una reserva ya confirmada. El segundo es un dato de precio poco
-confiable: si el valor del hospedaje no proviene siempre de la misma fuente, o si se mezclan
-impuestos que todavía no corresponden, la información que se le entrega al huésped y la auditoría
-posterior quedan distorsionadas. El negocio necesita una única lógica de captura de reservas de
-canal directo que descuente el inventario por categoría en tiempo real y de forma local, y que
-cotice el valor de hospedaje bruto con el área de precios (Módulo 3) de forma puramente
-informativa, sin impuestos ni comisiones.
+El hotel capta demanda directa cuando los huéspedes llaman o llegan a recepción y la Recepcionista
+registra su reserva. El negocio necesita
+registrar esas reservas de forma ágil, dejándolas confirmadas de inmediato, sin obligar al huésped
+a pasar por una pasarela de pago al momento de reservar: en HOSPITUA el pago del 100% de la estadía
+se realiza de forma exclusiva en el Check-Out, un proceso presencial que ejecuta el Módulo 1. Si
+además la disponibilidad no se valida contra el
+calendario real de la habitación, aparecen dos problemas costosos. El primero es la sobreventa: dos
+solicitudes pueden tomar la misma habitación o una que estará en mantenimiento. El segundo es un
+dato de precio poco confiable: si el valor del hospedaje no proviene siempre de la misma fuente, la
+información que se le entrega al huésped queda distorsionada. El negocio necesita una única lógica
+de captura de reservas de canal directo que valide la disponibilidad antes de reservar, cotice el
+valor de hospedaje bruto con el área de precios (Módulo 3) de forma informativa, y avise al Módulo 1
+de las reservas del día. El Módulo 2 no aparta ni libera habitaciones: el Módulo 1, dueño del estado de
+las habitaciones, decide qué hacer con la lista de reservas del día que le enviamos. Las reservas con
+llegada futura bloquean la disponibilidad en el Módulo 2 y en Channex desde que se crean, y solo se
+avisan al Módulo 1 el día de su llegada.
 
 ### Flujo de Usuario de Alto Nivel
 
-1. El solicitante (el **Recepcionista** desde el canal de recepción, o el **Huésped** desde el
-   portal o la aplicación) indica las fechas de estadía y la categoría de `Habitation` deseada.
-2. El sistema consulta la disponibilidad de cupos para esa categoría y ese rango de fechas de
-   forma **100% local** en la base de datos de reservas del Módulo 2, sin llamar al Módulo 1.
-3. Si hay cupo, el sistema solicita al Módulo 3 el cálculo del valor de hospedaje bruto mediante
-   el caso de uso "Calcular tarifa dinámica" y obtiene un `RateQuote`, que se muestra al huésped
-   de forma informativa.
-4. El solicitante ingresa los datos de identidad del `Guest` titular.
-5. El solicitante confirma la reserva; el sistema descuenta un cupo de la categoría y crea la
-   `Reservation` directamente en estado `ACTIVE`, sin ningún paso de cobro.
+1. La **Recepcionista** indica las fechas de estadía (`startDate` y `endDate`, comunes a toda la
+   reserva), una única `categoryRoom` para toda la reserva, la cantidad de habitaciones de esa categoría
+   (entre 1 y 10) y la cantidad de personas de cada habitación (`guestCount` de la habitación). El sistema asigna automáticamente las
+   `Room` disponibles de esa categoría, la de menor `roomNumber`, salvo que la Recepcionista elija una
+   habitación concreta de la categoría. No puede combinar categorías distintas en una misma reserva desde esta pantalla (para eso existe
+   "Actualizar reservación", que sí permite cambiar una habitación por otra de distinta categoría).
+2. El sistema ejecuta "Verificar disponibilidades" para **cada** habitación: obtiene del Módulo 1 las
+   habitaciones vendibles de la categoría, cruza las fechas contra las reservas locales del Módulo 2 y
+   consulta al Módulo 1 el calendario de mantenimientos. Si una sola habitación no está disponible,
+   no se puede continuar.
+3. El sistema valida que el `guestCount` de cada habitación sea al menos 1 y no supere su capacidad
+   máxima (`maxCapacity`). El `guestCount` de la reserva es la suma de los de sus habitaciones.
+4. Si todas las habitaciones están disponibles, el sistema solicita al Módulo 3 el cálculo del
+   valor de hospedaje bruto de cada habitación mediante "Calcular tarifa dinámica", obtiene un
+   `RateQuote` por habitación y muestra al huésped, de forma informativa, la tarifa de cada una.
+5. El solicitante ingresa los datos de identidad del `Guest` titular y, opcionalmente, las
+   observaciones de la reserva (`notes`, máximo 500 caracteres), y confirma la reserva. Si primero
+   escribe el tipo y el número de documento de un titular que ya tuvo una reserva, el sistema le
+   ofrece los datos de su reserva más reciente para **precargar** el formulario; la Recepcionista los
+   revisa, los corrige si cambiaron y confirma. Los datos se **copian** a la nueva reserva: cada reserva
+   guarda su propio titular y corregirlos en una no cambia las demás.
+6. El sistema crea la `Reservation` directamente en estado `ACTIVE`, sin ningún paso de cobro, con
+   una `ReservationRoom` en `EXPECTED` por cada habitación.
+7. El sistema responde 201 (Created) con la reserva, sin depender del Módulo 1. Si la llegada
+   (`startDate`) es hoy, y la lista del día ya se envió, la reserva se avisa al Módulo 1 mediante
+   "Enviar reservas del día al Módulo 1" (`ADDED`); si la lista del día aún no se envía, la reserva
+   viaja en ella. El Módulo 1 decide qué hace con la habitación: el Módulo 2 no le ordena nada.
+   Si la llegada es futura, no se avisa nada hasta el día de la llegada.
+8. El sistema anota la categoría y las fechas ocupadas para el envío de disponibilidad a Channex
+   ("Configurar OTA").
 
-En ambos canales, el sistema guarda el monto devuelto por el Módulo 3 bajo `grossAmount` (valor de
-hospedaje bruto, suma de las tarifas dinámicas de todas las noches antes de comisión e impuestos),
-con carácter informativo; registra `source` como `DIRECT`, la comisión (`commissionPercentage` y
-`commissionAmount`) en `0` y el `externalConfirmationCode` como `null`. No se calcula ni se
-almacena IVA en esta etapa: el glosario de HOSPITUA estipula que el IVA se fija e incorpora
-únicamente al facturar en el Check-Out. La reserva tampoco asigna un número físico de habitación:
-solo asegura un cupo de la categoría, y la `Habitation` real con su `numberHabitation` se asigna
-en el Check-In.
+El sistema guarda en cada `ReservationRoom` la tarifa devuelta por el Módulo 3 para esa habitación
+(`roomGrossAmount`: tarifa bruta de hospedaje de esa habitación, antes de comisión e impuestos) y el
+`quoteId` de esa cotización, con carácter informativo, y no calcula ni guarda un total de la reserva; registra `source` como `DIRECT`, la comisión (`commissionPercentage` y
+`commissionAmount`) en `0` y el `externalConfirmationCode` como `null`. No se calcula ni se almacena
+IVA en esta etapa: se fija al facturar en el Check-Out.
 
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Creación de Reservación Directa (Priority: P1)
 
-Un solicitante necesita crear una reserva de canal directo para un rango de fechas y una categoría
-de `Habitation`. El proceso es el mismo para los dos canales y ocurre sobre una única interfaz
-visual de reserva: se consulta la disponibilidad de cupos de la categoría de forma local en el
-Módulo 2, se obtiene el valor de hospedaje bruto del Módulo 3 mediante "Calcular tarifa dinámica"
-y se muestra como información al huésped, se capturan los datos del `Guest` titular y se confirma.
-Tanto si el origen es el **Recepcionista** como el **Huésped** de autoservicio, la `Reservation`
-se crea directamente en estado `ACTIVE`: no hay pasarela de pago ni estado intermedio, porque el
-pago del 100% de la estadía ocurre después, en el Check-Out. Por tratarse de un mismo flujo de
-negocio, el camino de éxito de ambos canales y los bloqueos lógicos (sin disponibilidad local,
-caída del Módulo 3, fechas o datos mal formados, concurrencia por el último cupo) se consolidan en
-esta misma historia de usuario y no se modelan como pantallas ni historias separadas, para evitar
-la sobre-atomización.
+La Recepcionista necesita crear, a pedido del huésped, una reserva de canal directo para un rango de
+fechas, una cantidad de personas y una o varias habitaciones. El proceso ocurre sobre una única interfaz: se verifica la
+disponibilidad, se obtiene el valor de hospedaje bruto del Módulo 3 y se muestra como información,
+se capturan los datos del `Guest` titular y se confirma. La `Reservation` se crea directamente en
+estado `ACTIVE` y, si la llegada es hoy, se incluye en la lista de reservas del día del Módulo 1. Por
+tratarse de un mismo flujo de negocio, el
+camino de éxito y los bloqueos lógicos (sin disponibilidad, caída del Módulo 3,
+fechas o datos mal formados, concurrencia por la última habitación) se consolidan en esta misma
+historia de usuario, para evitar la sobre-atomización.
 
 **Why this priority**: Es la funcionalidad nuclear del negocio: sin ella el hotel no puede captar
-ventas directas por ningún canal. Al dejar la reserva confirmada en `ACTIVE` sin exigir un cobro
-al momento de reservar, el proceso es rápido y sin fricción para el huésped y para el
-recepcionista. Al resolver la disponibilidad de forma local y en tiempo real evita la sobreventa,
-y al congelar el valor de hospedaje bruto cotizado por el Módulo 3, de forma informativa y sin
-impuestos, entrega al huésped un precio confiable y deja el dato limpio para la facturación
-posterior en el Check-Out.
+ventas directas. Dejar la reserva confirmada en `ACTIVE` sin exigir cobro hace el proceso rápido y
+sin fricción; validar la disponibilidad contra el Módulo 1 evita la sobreventa; y congelar el valor
+bruto cotizado por el Módulo 3, sin impuestos, entrega al huésped un precio confiable.
 
-**Independent Test**: Se puede probar de forma aislada seleccionando una categoría de `Habitation`
-con cupos disponibles para un rango de fechas y simulando la respuesta del Módulo 3 ("Calcular
-tarifa dinámica") con un valor de hospedaje bruto válido. Se verifica que la `Reservation` se
-persiste directamente en estado `ACTIVE`, con su `RateQuote` asociado de forma informativa,
-`grossAmount` asignado, `commissionAmount` en `0`, `externalConfirmationCode` en `null` y `source`
-en `DIRECT`, y que el inventario local de la categoría queda descontado en un cupo sin que se
-realice ninguna llamada al Módulo 1. La prueba se completa intentando reservar sobre una categoría
-sin cupos y simulando una caída del Módulo 3, confirmando que en ambos casos no se crea ninguna
+**Independent Test**: Se puede probar seleccionando una habitación disponible para un rango de
+fechas y simulando la respuesta del Módulo 3 con un valor bruto válido. Se verifica que la
+`Reservation` se persiste en `ACTIVE` con el `roomGrossAmount` de cada habitación asignado, `commissionAmount` en `0`,
+`externalConfirmationCode` en `null` y `source` en `DIRECT`, y que, si la llegada es hoy, se avisa
+al Módulo 1 con una actualización `ADDED` de la lista del día; con llegada futura no se avisa nada.
+La prueba se completa intentando reservar una habitación
+no disponible y simulando una caída del Módulo 3, confirmando que en ambos casos no se crea ninguna
 reserva y se devuelve un error controlado.
 
 **Acceptance Scenarios**:
 
-1. **Scenario**: Generación de reserva exitosa por Recepcionista o Huésped (Happy Path)
-   - **Given** que existe disponibilidad de cupos para la categoría de habitación seleccionada en
-     las fechas solicitadas en la base de datos de reservas del Módulo 2
-   - **When** el solicitante ingresa los datos del huésped titular, cotiza el valor de hospedaje
-     bruto con el Módulo 3 ("Calcular tarifa dinámica") y confirma la reserva
-   - **Then** el sistema descuenta un cupo de la categoría localmente, persiste la `Reservation`
-     directamente en estado `ACTIVE` con `grossAmount` asignado, guarda la comisión como `0`, el
-     `externalConfirmationCode` como `null`, y asocia el `RateQuote` calculado por el Módulo 3 de
-     forma puramente informativa
+1. **Scenario**: Generación de reserva exitosa por la Recepcionista (Happy Path)
+   - **Given** que la `Room` solicitada está disponible en las fechas indicadas según "Verificar
+     disponibilidades"
+   - **When** la Recepcionista ingresa los datos del huésped titular, cotiza el valor bruto con el
+     Módulo 3 y confirma la reserva
+   - **Then** el sistema persiste la `Reservation` directamente en `ACTIVE` con el `roomGrossAmount`
+     de cada habitación asignado, comisión `0` y `externalConfirmationCode` `null`, guarda el `quoteId` de
+     cada cotización en su habitación, y, si la llegada es hoy, la agrega a la lista del día del Módulo 1 (`ADDED`)
 
-2. **Scenario**: Intento de reserva directa sin cupos de la categoría seleccionada (Error)
-   - **Given** que los cupos para la categoría "Suite Presidencial" están completamente agotados en
-     las fechas deseadas en la base de datos local del Módulo 2
+2. **Scenario**: Intento de reserva sobre una habitación no disponible (Error)
+   - **Given** que la `Room` tiene un mantenimiento programado o una reserva cruzada en las fechas
+     deseadas
    - **When** el solicitante intenta procesar la reserva directa
-   - **Then** el sistema bloquea de inmediato la reserva, impide avanzar al paso de cotización y
-     arroja un error controlado HTTP 400: "Error 400: No hay cupos disponibles de la categoría
-     seleccionada para el rango de fechas solicitado"
+   - **Then** el sistema bloquea la reserva, impide avanzar a la cotización y arroja un error
+     controlado HTTP 400: "Error 400: La habitación no está disponible para el rango de fechas
+     solicitado"
 
-3. **Scenario**: Bloqueo de reserva por caída de comunicación con Módulo 3 (Resiliencia - Bloqueo)
-   - **Given** que existe disponibilidad local en la categoría de habitación solicitada
+3. **Scenario**: Bloqueo de reserva por caída de comunicación con Módulo 3 (Error)
+   - **Given** que la habitación está disponible
    - **When** el sistema intenta cotizar la tarifa y el Módulo 3 no responde (timeout o error de
      red)
-   - **Then** el sistema cancela la transacción de forma segura, libera el cupo bloqueado
-     preventivamente y devuelve un error de negocio controlado HTTP 400: "Error 400: El servicio de
-     cotización de tarifas no se encuentra disponible. Por favor intente más tarde"
+   - **Then** el sistema cancela la transacción de forma segura y devuelve un error controlado HTTP
+     400: "Error 400: El servicio de cotización de tarifas no se encuentra disponible. Por favor
+     intente más tarde"
+
+4. **Scenario**: Reserva directa con llegada futura (Happy Path)
+   - **Given** que la `Room` está disponible y la llegada es dentro de varias semanas
+   - **When** la Recepcionista confirma la reserva
+   - **Then** el sistema persiste la `Reservation` en `ACTIVE`, responde 201 (Created) sin avisar al
+     Módulo 1, y la reserva viaja en la lista del día de su llegada
+
+5. **Scenario**: Reserva de un grupo con varias habitaciones (Happy Path)
+   - **Given** que las `Room` 101 y 102 (capacidad máxima 2 cada una) están disponibles en las
+     fechas indicadas
+   - **When** la Recepcionista registra una reserva con las dos habitaciones y 2 personas en
+     cada una (4 en total), cotiza y confirma
+   - **Then** el sistema persiste una sola `Reservation` en `ACTIVE` con dos `ReservationRoom` en
+     `EXPECTED`, cada una con su `roomGrossAmount`, sin total en la reserva
+
+6. **Scenario**: Una de las habitaciones del grupo no está disponible (Error)
+   - **Given** que la `Room` 101 está disponible y la `Room` 102 tiene un mantenimiento en las fechas
+   - **When** la Recepcionista intenta registrar la reserva con las dos habitaciones
+   - **Then** el sistema no crea la reserva y responde **HTTP 400** indicando que la habitación 102
+     no está disponible para el rango de fechas solicitado
+
+7. **Scenario**: Cantidad de personas fuera de la capacidad (Error)
+   - **Given** dos habitaciones disponibles con capacidad máxima 2 cada una
+   - **When** la Recepcionista ingresa 3 personas en una de las habitaciones, o 0 personas en una
+   - **Then** el sistema no crea la reserva y responde **HTTP 400** con el mensaje "La cantidad de
+     personas supera la capacidad de la habitación." (3) o "Cada habitación debe tener al menos
+     una persona." (0)
+
+8. **Scenario**: Doble envío de la misma solicitud
+   - **Given** una reserva directa ya creada con una solicitud
+   - **When** la misma solicitud llega otra vez (doble clic o reintento)
+   - **Then** el sistema responde la misma reserva, sin crear otra (FR-008)
+
+9. **Scenario**: Fecha de entrada anterior a hoy (Error)
+   - **Given** que el día operativo en curso, cuando se genera la reserva, es el 2026-09-28
+   - **When** la Recepcionista intenta crear una reserva con `startDate` 2026-09-27 o anterior
+   - **Then** el sistema no crea la reserva y responde **HTTP 400** con el mensaje "La fecha de entrada
+     no puede ser anterior a hoy."; una reserva con `startDate` 2026-09-28 sí se acepta. Si la misma
+     solicitud se hace el 2026-09-29, el `startDate` 2026-09-28 ya se rechaza y el mínimo pasa a ser
+     2026-09-29
+
+10. **Scenario**: Precarga del titular de una reserva anterior (Happy Path)
+   - **Given** un titular con tipo y número de documento `CC 123` que ya tuvo una reserva
+   - **When** la Recepcionista escribe ese tipo y número de documento al crear una reserva nueva
+   - **Then** el sistema llena el formulario con el nombre, el apellido, la nacionalidad, el teléfono y
+     el correo de su reserva más reciente; la Recepcionista puede corregirlos antes de confirmar, y la
+     reserva anterior no cambia
+
+11. **Scenario**: Documento sin reservas anteriores
+   - **Given** un tipo y número de documento que no aparece en ninguna reserva
+   - **When** la Recepcionista lo escribe al crear una reserva
+   - **Then** el sistema no precarga nada y la Recepcionista escribe los datos del titular completos
 
 ### Casos Borde
 
-- ¿Qué sucede si un solicitante intenta reservar con un rango de fechas inválido o incoherente
-  (por ejemplo, una fecha de salida anterior a la de llegada, o una fecha inexistente)? El sistema
+- ¿Qué sucede si un solicitante intenta reservar con un rango de fechas inválido o incoherente (por
+  ejemplo, una fecha de salida anterior a la de llegada, o una fecha inexistente)? El sistema
   intercepta la validación de forma local y responde con un error **HTTP 400 (Bad Request)**
-  amigable que indica cómo corregir las fechas, sin llegar a consultar disponibilidad ni a cotizar
-  con el Módulo 3.
-- ¿Qué sucede si dos clientes intentan reservar el último cupo disponible de la misma categoría de
-  forma simultánea? El descuento del inventario de la categoría se realiza dentro de una
-  transacción con control de concurrencia a nivel del cupo local en el Módulo 2, de modo que solo
-  una de las dos solicitudes obtiene el cupo y se registra en `ACTIVE`; a la segunda en confirmar
-  se le responde con un error controlado **HTTP 400** indicando que ya no hay disponibilidad, sin
-  producir sobreventa.
+  amigable, sin llegar a consultar disponibilidad ni a cotizar con el Módulo 3.
+- ¿Qué sucede si dos clientes intentan reservar la misma habitación de forma simultánea? La creación
+  se realiza dentro de una transacción con control de concurrencia, de modo que solo una de las dos
+  solicitudes se registra en `ACTIVE`; a la segunda se le responde con **HTTP 400** indicando que ya
+  no hay disponibilidad, sin producir sobreventa.
+- ¿Qué sucede si se envía la misma habitación dos veces en la reserva? El sistema responde **HTTP
+  400** con el mensaje "La habitación ya forma parte de la reserva."
+- ¿Qué sucede si se envían más de 10 habitaciones o ninguna? El sistema responde **HTTP 400** con el
+  mensaje "Una reserva debe tener entre 1 y 10 habitaciones."
+- ¿Qué sucede si el `guestCount` de una habitación no es un número entero positivo? El sistema
+  responde **HTTP 400** con el mensaje "La cantidad de personas debe ser un número entero mayor que
+  cero."
+- ¿Qué sucede si el Módulo 3 cotiza unas habitaciones y falla en otra? El sistema no crea la
+  reserva y responde con el error de cotización no disponible; no se permite una reserva con
+  habitaciones sin valor.
+- ¿Qué sucede si `notes` supera los 500 caracteres o contiene caracteres no válidos? El sistema
+  responde **HTTP 400** con el mensaje "Las observaciones no pueden superar 500 caracteres." o "El
+  formato de los datos contiene caracteres no válidos."
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **FR-001**: El sistema debe permitir consultar la disponibilidad de cupos por fechas y categoría
-  de habitación de forma local en la base de datos del Módulo 2.
-- **FR-002**: El sistema debe exigir como requisito obligatorio invocar al Módulo 3 ("Calcular
-  tarifa dinámica") para obtener el valor de hospedaje bruto antes de proceder con el registro de
+- **FR-001**: El sistema debe verificar la disponibilidad de cada `Room` de la reserva mediante
+  "Verificar disponibilidades" antes de cotizar o registrar cualquier reserva, y rechazar la
+  reserva completa si una sola no está disponible.
+- **FR-001a**: El sistema debe exigir que la fecha de entrada (`startDate`) sea igual o posterior al
+  día operativo en curso en el momento de crear la reserva. "Hoy" no es una fecha fija: es el día en
+  que se genera la reserva, así que la fecha mínima avanza cada día (si la reserva se crea mañana, la
+  fecha mínima de entrada es mañana; si se crea dentro de 2 días, será ese día). Además, la fecha de
+  salida (`endDate`) debe ser posterior a la de entrada. De lo contrario, debe responder
+  **HTTP 400** con el mensaje "La fecha de entrada no puede ser anterior a hoy." o "La fecha de
+  salida debe ser posterior a la de entrada.", según el caso, sin consultar disponibilidad.
+- **FR-002**: El sistema debe exigir entre 1 y 10 habitaciones distintas por reserva y un
+  `guestCount` entero por habitación, mayor o igual a 1 y menor o igual a su `maxCapacity`. El
+  `guestCount` de la reserva es la suma de los de sus habitaciones. `notes` es opcional, con máximo 500 caracteres.
+  La Recepcionista puede indicar una `Room` concreta de la categoría para cada habitación; si no la
+  indica, el sistema asigna la disponible de menor `roomNumber`.
+- **FR-003**: El sistema debe exigir como requisito obligatorio invocar al Módulo 3 ("Calcular
+  tarifa dinámica") para obtener el valor de hospedaje bruto de cada habitación antes de registrar
   la reserva.
-- **FR-003**: El sistema debe bloquear el flujo de reserva y rechazar el registro de forma
-  controlada si la comunicación con el Módulo 3 falla, arrojando un error amigable HTTP 400.
-- **FR-004**: El sistema debe crear y almacenar la reserva directamente en estado `ACTIVE` una vez
-  confirmada la disponibilidad de cupos de forma local, sin ningún paso de cobro ni estado
-  intermedio.
-- **FR-005**: El sistema debe registrar obligatoriamente el canal de origen en el atributo
-  `source` como `DIRECT`, el atributo `grossAmount` con la tarifa bruta devuelta por el Módulo 3,
-  los atributos `commissionPercentage` y `commissionAmount` con valor `0`, y el
-  `externalConfirmationCode` como `null`; el sistema no debe calcular ni almacenar ningún monto de
-  IVA en esta etapa.
-- **FR-006**: El sistema debe interceptar cualquier error de validación de campos, fechas o
-  integraciones para responder con códigos de error amigables **HTTP 400 (Bad Request)**,
-  prohibiendo explícitamente la propagación de excepciones que deriven en errores de
-  infraestructura **HTTP 500**.
+- **FR-004**: El sistema debe bloquear el flujo y rechazar el registro de forma controlada si la
+  comunicación con el Módulo 3 falla para cualquiera de las habitaciones, arrojando un error
+  amigable HTTP 400.
+- **FR-005**: El sistema debe crear y almacenar la reserva directamente en estado `ACTIVE`, sin
+  ningún paso de cobro ni estado intermedio, con una `ReservationRoom` en `EXPECTED` por habitación.
+- **FR-006**: El sistema debe registrar `source` como `DIRECT`, `roomGrossAmount` en cada habitación
+  con la tarifa bruta devuelta por el Módulo 3 para ella (`lodgingAmount`) y su `quoteId`, sin total
+  en la reserva,
+  `commissionPercentage` y `commissionAmount` con valor `0` y `externalConfirmationCode` como
+  `null`; no debe calcular ni almacenar IVA en esta etapa.
+- **FR-007**: El sistema no debe ordenar al Módulo 1 que aparte o libere habitaciones: el estado de la
+  `Room` es del Módulo 1, que decide qué hacer con la lista de reservas del día. La creación de la
+  reserva no depende del Módulo 1 y responde 201 (Created) una vez persistida.
+- **FR-008**: El sistema no debe crear dos reservas por un mismo envío del formulario: si la misma
+  solicitud de creación llega dos veces (doble clic o reintento), debe responder la reserva ya creada.
+- **FR-009**: El sistema debe avisar al Módulo 1, mediante "Enviar reservas del día al Módulo 1",
+  cada reserva creada con llegada hoy después de enviada la lista del día (`ADDED`).
+- **FR-010**: El sistema debe interceptar cualquier error de validación de campos, fechas o
+  integraciones y responder con **HTTP 400 (Bad Request)**, prohibiendo errores **HTTP 500**.
+- **FR-011**: El sistema debe permitir que la Recepcionista busque, por tipo y número de documento, los
+  datos del titular de la reserva más reciente con ese documento (`firstName`, `lastName`,
+  `documentType`, `documentNumber`, `nationality`, `contactPhone` y `contactEmail`) para precargar el
+  formulario. Los datos se copian a la nueva reserva y no la ligan con la anterior. Si no hay ninguna
+  reserva con ese documento, no precarga nada. Es de solo lectura.
 
 ### Non-Functional Requirements
 
-- **NFR-001**: El procesamiento de verificación de cupos por categoría en la base de datos local
-  del Módulo 2 debe completarse en un tiempo inferior a 200 milisegundos.
+- **NFR-001**: El procesamiento de la verificación local de reservas cruzadas debe completarse en
+  menos de 200 milisegundos.
 
 ### Key Entities *(include if feature involves data)*
 
-- **Reservation**: Representa el contrato de reserva de canal directo. Atributos: `id`, `guestRef`,
-  `categoryHabitation` (categoría de habitación solicitada), `checkInDate`, `checkOutDate`,
-  `grossAmount` (valor de hospedaje bruto calculado por el Módulo 3, informativo, sin comisión ni
-  IVA), `commissionPercentage` (fijado en `0`), `commissionAmount` (fijado en `0`),
-  `externalConfirmationCode` (fijado en `null`), `source` (`DIRECT`), `createdAt`, y `state` con
-  estados permitidos en este flujo: `ACTIVE`, `CHECKED_IN`, `CHECKED_OUT`, `CANCELLED`. Se crea
-  siempre en `ACTIVE`; este flujo no utiliza el estado `PENDING`.
-- **Guest**: Representa al huésped titular de la reserva. Atributos: `id`, `fullName`,
-  `documentNumber`, `nationality`, `contactPhone` y `contactEmail`. Los datos de identidad del
-  titular son obligatorios antes de cotizar y confirmar.
-- **RateQuote**: Representa la cotización del valor de hospedaje bruto calculada por el Módulo 3
-  mediante "Calcular tarifa dinámica" y asociada a la reserva con carácter informativo. Atributos:
-  `reservationRef`, `grossAmount` (suma de las tarifas dinámicas de todas las noches, antes de
-  comisión e impuestos), `currency` y `calculatedAt` (momento del cálculo). Es obligatoria antes
-  de confirmar cualquier reserva.
-- **Habitation**: Representa la habitación física, cuya gestión de estado es propiedad del
-  Módulo 1. En este flujo solo se referencia su categoría para descontar el cupo local; no se
-  realiza ninguna llamada al Módulo 1 ni se asigna un número físico. Atributos: `habitationId`,
-  `numberHabitation` y `stateHabitation` con estados físicos permitidos: `AVAILABLE`, `OCCUPIED`,
-  `CLEANING`, `OUT_OF_SERVICE`.
+- **Reservation**: Contrato de reserva de canal directo. Atributos: `reservationRef`, `guestRef`,
+  `guestCount` (suma de los de sus habitaciones), `startDate`, `endDate`, `notes`,
+  `commissionPercentage` (`0`), `commissionAmount` (`0`), `externalConfirmationCode`
+  (`null`), `source` (`DIRECT`), `createdAt`, y `status` con estados permitidos:
+  `PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`. En este flujo se crea
+  siempre en `ACTIVE`.
+- **ReservationRoom**: Cada habitación de la reserva. Atributos: `reservationRef`, `roomId`,
+  `roomNumber`, `categoryRoom`, `guestCount` (personas de la habitación), `roomGrossAmount` (tarifa de
+  la habitación calculada por el Módulo 3, informativa), `quoteId` (identificador de esa cotización), `currency` y `stayStatus` (nace en
+  `EXPECTED`).
+- **Guest**: Huésped titular. Atributos: `id`, `firstName`, `lastName`, `documentType` (`RC`, `TI`, `CC`, `CE`, `PAS` o `NIT`), `documentNumber`,
+  `nationality` (texto libre, obligatorio; no hay una lista fija de países; el huésped es extranjero
+  si `nationality` no es exactamente `Colombia`; la nacionalidad se escribe con el nombre del país,
+  por ejemplo `Colombia`, `Venezuela` o `Estados Unidos` — no se guarda como un
+  atributo propio, se deriva de `nationality` cuando hace falta), `contactPhone`, `contactEmail`.
+- **RateQuote**: Cotización del valor de hospedaje de una habitación calculada por el Módulo 3, con
+  carácter informativo. Atributos: `quoteId`, `nightlyRates` (lista de `date` y `rate`) y
+  `lodgingAmount`.
+- **Room**: Habitación física del Módulo 1. Atributos que recibe el Módulo 2: `id`, `roomNumber`,
+  `categoryRoom` y `maxCapacity`. El estado físico lo maneja el Módulo 1 y no llega al Módulo 2; el
+  Módulo 2 no la modifica.
 
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
-- **SC-001**: El Huésped o el Recepcionista es capaz de completar una reserva de canal directo en
-  menos de 1 minuto, al no requerir transacciones de pago en esta etapa.
-- **SC-002**: El 100% de las reservas directas registradas cuentan con un valor de comisión de
-  `0`, un código de confirmación externo nulo y el valor de hospedaje bruto almacenado
-  correctamente.
-- **SC-003**: Cero sobreventas de categorías de habitación ocurren en el hotel; el sistema bloquea
-  estrictamente las transacciones si no hay cupos locales en la base de datos del Módulo 2 antes
-  de la confirmación.
+- **SC-001**: La Recepcionista completa una reserva de canal directo en menos de 1
+  minuto, al no requerir transacciones de pago en esta etapa.
+- **SC-002**: El 100% de las reservas directas cuentan con comisión `0`, código de confirmación
+  externo nulo y valor bruto almacenado correctamente.
+- **SC-003**: Cero sobreventas de habitaciones; el sistema bloquea las transacciones sobre una
+  habitación no disponible antes de confirmar.
+- **SC-004**: El 100% de las reservas creadas con llegada hoy llegan al Módulo 1 en la lista del día
+  (`ADDED` o dentro de la lista), y ninguna reserva con llegada futura se avisa antes de su día.

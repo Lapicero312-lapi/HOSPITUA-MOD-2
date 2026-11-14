@@ -1,0 +1,210 @@
+import { HttpService } from '@nestjs/axios';
+import axios from 'axios';
+import { delay, http, HttpResponse } from 'msw';
+import { setupServer } from 'msw/node';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
+import {
+  Module3RejectedError,
+  Module3UnavailableError,
+} from '../../src/application/ports/out/module3.port.js';
+import { Module3HttpAdapter } from '../../src/infrastructure/out/module3/module3-http.adapter.js';
+
+const BASE_URL = 'http://module3.test';
+const URL_QUOTES = `${BASE_URL}/pricing/quotes`;
+const TIMEOUT_MS = 200;
+
+/** Respuesta de ejemplo del contrato (calculate-dynamic-rate, A1), escrita como texto para no tocar los decimales. */
+const QUOTE_ID = 'a1f2c3d4-e5b6-4789-8a9b-0c1d2e3f4a5b';
+const quoteBody = (lodgingAmount = '530000.10', rate = '250000.05') =>
+  `{"quoteId":"${QUOTE_ID}","currency":"COP","nightlyRates":[{"date":"2026-10-10","rate":${rate}},` +
+  `{"date":"2026-10-11","rate":280000.05}],"lodgingAmount":${lodgingAmount}}`;
+
+/** Cuerpo de error del Módulo 3 (formato `ApiError`). */
+const errorBody = (errorCode: string) =>
+  JSON.stringify({
+    errorCode,
+    message: 'Mensaje del Módulo 3',
+    timestamp: '2026-10-27T15:00:00Z',
+    path: '/pricing/quotes',
+  });
+
+const json = (body: string, status = 200) =>
+  new HttpResponse(body, {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+const server = setupServer();
+
+describe('Module3HttpAdapter contra respuestas simuladas del Módulo 3', () => {
+  const adapter = new Module3HttpAdapter(
+    new HttpService(axios.create({ baseURL: BASE_URL, timeout: TIMEOUT_MS })),
+  );
+  const quote = () => adapter.createQuote('DOBLE', '2026-10-10', '2026-10-12');
+
+  beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
+  afterEach(() => server.resetHandlers());
+  afterAll(() => server.close());
+
+  it('envía roomType, checkInDate y checkOutDate, y devuelve la cotización', async () => {
+    let sent: unknown = null;
+    server.use(
+      http.post(URL_QUOTES, async ({ request }) => {
+        sent = await request.json();
+        return json(quoteBody());
+      }),
+    );
+
+    const result = await quote();
+
+    expect(sent).toEqual({
+      roomType: 'DOBLE',
+      checkInDate: '2026-10-10',
+      checkOutDate: '2026-10-12',
+    });
+    expect(result.quoteId).toBe(QUOTE_ID);
+    expect(result.currency).toBe('COP');
+    expect(result.nightlyRates.map((night) => night.date)).toEqual([
+      '2026-10-10',
+      '2026-10-11',
+    ]);
+  });
+
+  it('un 201 también es una cotización', async () => {
+    server.use(http.post(URL_QUOTES, () => json(quoteBody(), 201)));
+
+    expect((await quote()).quoteId).toBe(QUOTE_ID);
+  });
+
+  it('conserva exacto el mayor importe de una columna numeric(14,2)', async () => {
+    server.use(
+      http.post(URL_QUOTES, () => json(quoteBody('999999999999.99', '0.10'))),
+    );
+
+    const result = await quote();
+
+    expect(result.lodgingAmount.amount).toBe('999999999999.99');
+    expect(result.nightlyRates[0].rate.amount).toBe('0.1');
+    expect(result.lodgingAmount.currency).toBe('COP');
+  });
+
+  it('acepta los importes como texto', async () => {
+    server.use(
+      http.post(URL_QUOTES, () =>
+        json(quoteBody('"530000.10"', '"250000.05"')),
+      ),
+    );
+
+    expect((await quote()).lodgingAmount.amount).toBe('530000.1');
+  });
+
+  it.each([
+    ['con más de dos decimales', quoteBody('530000.105')],
+    [
+      'que number redondearía a dos decimales',
+      quoteBody('530000.1000000000000000055'),
+    ],
+    ['en cero', quoteBody('0.00')],
+    ['negativo', quoteBody('-530000')],
+    ['sin quoteId', quoteBody().replace(`"quoteId":"${QUOTE_ID}",`, '')],
+    ['con una moneda inválida', quoteBody().replace('"COP"', '"pesos"')],
+    [
+      'con una noche fuera de la estadía',
+      quoteBody().replace('2026-10-11', '2026-10-12'),
+    ],
+    // T011: respuestas mal formadas.
+    ['que no es JSON', 'Servicio en mantenimiento'],
+    ['vacía', ''],
+    ['que no es un objeto', '[]'],
+    ['null', 'null'],
+    // Convertida en texto sería "COP": la moneda tiene que ser un texto.
+    [
+      'con la moneda dentro de una lista',
+      quoteBody().replace('"COP"', '["COP"]'),
+    ],
+    ['con quoteId vacío', quoteBody().replace(QUOTE_ID, '')],
+    [
+      'sin nightlyRates',
+      `{"quoteId":"${QUOTE_ID}","currency":"COP","lodgingAmount":530000.10}`,
+    ],
+    [
+      'sin lodgingAmount',
+      quoteBody().replace(',"lodgingAmount":530000.10', ''),
+    ],
+    ['sin moneda', quoteBody().replace('"currency":"COP",', '')],
+    [
+      'con una tarifa por noche de más de dos decimales',
+      quoteBody('530000.10', '250000.055'),
+    ],
+    [
+      'con una noche antes de la llegada',
+      quoteBody().replace('2026-10-10', '2026-10-09'),
+    ],
+    [
+      'con una fecha que no existe',
+      quoteBody().replace('2026-10-11', '2026-10-100'),
+    ],
+  ])(
+    'una cotización %s es Module3UnavailableError y no se redondea',
+    async (_, body) => {
+      server.use(http.post(URL_QUOTES, () => json(body)));
+
+      await expect(quote()).rejects.toBeInstanceOf(Module3UnavailableError);
+    },
+  );
+
+  it.each([
+    [400, 'INVALID_QUERY_PARAMS'],
+    [400, 'INVALID_DATE_RANGE'],
+    [404, 'BASE_RATE_NOT_FOUND'],
+  ])(
+    'un %s %s (categoría o fechas rechazadas) es Module3RejectedError con su estado',
+    async (status, errorCode) => {
+      server.use(
+        http.post(URL_QUOTES, () => json(errorBody(errorCode), status)),
+      );
+
+      await expect(quote()).rejects.toEqual(new Module3RejectedError(status));
+    },
+  );
+
+  it.each([
+    [424, 'MODULE1_UNAVAILABLE'],
+    [424, 'INVALID_BASE_RATE'],
+    [422, 'UNEXPECTED_ERROR'],
+  ])(
+    'un %s %s (no puede cotizar) es Module3UnavailableError',
+    async (status, errorCode) => {
+      server.use(
+        http.post(URL_QUOTES, () => json(errorBody(errorCode), status)),
+      );
+
+      await expect(quote()).rejects.toThrow(
+        new Module3UnavailableError(`respondió ${status}`),
+      );
+    },
+  );
+
+  it.each([500, 503])('un %s es Module3UnavailableError', async (status) => {
+    server.use(http.post(URL_QUOTES, () => json('{}', status)));
+
+    await expect(quote()).rejects.toBeInstanceOf(Module3UnavailableError);
+  });
+
+  it('si no responde en el tiempo máximo es Module3UnavailableError', async () => {
+    server.use(
+      http.post(URL_QUOTES, async () => {
+        await delay(TIMEOUT_MS * 3);
+        return json(quoteBody());
+      }),
+    );
+
+    await expect(quote()).rejects.toThrow('tiempo de espera agotado');
+  });
+
+  it('sin conexión es Module3UnavailableError', async () => {
+    server.use(http.post(URL_QUOTES, () => HttpResponse.error()));
+
+    await expect(quote()).rejects.toBeInstanceOf(Module3UnavailableError);
+  });
+});

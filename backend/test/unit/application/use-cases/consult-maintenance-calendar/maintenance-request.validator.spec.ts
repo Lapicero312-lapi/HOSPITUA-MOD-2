@@ -1,0 +1,78 @@
+import { describe, expect, it } from 'vitest';
+import {
+  isValidRoomId,
+  isValidStayDates,
+} from '../../../../../src/application/use-cases/consult-maintenance-calendar/maintenance-request.validator.js';
+
+/**
+ * Ningún plan trae un `roomId` con UUID: es el `room_type_id` de Channex de los planes de `configure-ota`
+ * y `generate-ota-reservation`.
+ */
+const VALID_ROOM_ID = '994d1375-dbbd-4072-8724-b2ab32ce781b';
+
+describe('isValidRoomId', () => {
+  it('acepta un UUID', () => {
+    expect(isValidRoomId(VALID_ROOM_ID)).toBe(true);
+  });
+
+  it('acepta un UUID con mayúsculas y minúsculas mezcladas', () => {
+    expect(isValidRoomId('994D1375-dbbd-4072-8724-B2AB32ce781b')).toBe(true);
+  });
+
+  it('rechaza un roomId vacío', () => {
+    expect(isValidRoomId('')).toBe(false);
+  });
+
+  it('rechaza un roomId con formato inválido (no es un UUID)', () => {
+    expect(isValidRoomId('201')).toBe(false);
+  });
+
+  it.each([
+    [
+      'con un carácter de más al final',
+      '994d1375-dbbd-4072-8724-b2ab32ce781b0',
+    ],
+    [
+      'con un carácter de más al inicio',
+      '0994d1375-dbbd-4072-8724-b2ab32ce781b',
+    ],
+    [
+      'con una letra que no es hexadecimal',
+      '994d1375-dbbd-4072-8724-b2ab32ce781g',
+    ],
+  ])('rechaza un UUID %s', (_, roomId) => {
+    expect(isValidRoomId(roomId)).toBe(false);
+  });
+});
+
+/**
+ * Fechas del ejemplo del plan: estadía del 2026-10-11 al 2026-10-14. La fecha inexistente
+ * (`2026-02-30`) es el ejemplo del plan de `check-view-reservation`; también se usa como salida, con la
+ * llegada el 2026-02-28 (el último día de ese mes). La mal formada (`14/10/2026`) es la salida del
+ * ejemplo en el formato de pantalla del plan base (`dd/mm/aaaa`).
+ */
+describe('isValidStayDates', () => {
+  it('acepta fechas AAAA-MM-DD reales con la salida posterior a la llegada', () => {
+    expect(isValidStayDates('2026-10-11', '2026-10-14')).toBe(true);
+  });
+
+  it('rechaza una salida anterior a la llegada', () => {
+    expect(isValidStayDates('2026-10-14', '2026-10-11')).toBe(false);
+  });
+
+  it('rechaza una salida el mismo día de la llegada', () => {
+    expect(isValidStayDates('2026-10-11', '2026-10-11')).toBe(false);
+  });
+
+  it('rechaza una fecha inexistente', () => {
+    expect(isValidStayDates('2026-02-30', '2026-10-14')).toBe(false);
+  });
+
+  it('rechaza una salida que no existe', () => {
+    expect(isValidStayDates('2026-02-28', '2026-02-30')).toBe(false);
+  });
+
+  it('rechaza una fecha mal formada', () => {
+    expect(isValidStayDates('2026-10-11', '14/10/2026')).toBe(false);
+  });
+});

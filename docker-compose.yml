@@ -1,0 +1,45 @@
+# Servicios para desarrollo local: PostgreSQL y RabbitMQ.
+# Uso:   docker compose up -d      (arranca)
+#        docker compose down       (detiene; los datos se conservan en los volúmenes)
+#        docker compose down -v    (detiene y BORRA los datos)
+# Las credenciales son solo para desarrollo y coinciden con backend/.env.example.
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: hospitua-postgres
+    environment:
+      POSTGRES_DB: hospitua
+      POSTGRES_USER: hospitua
+      POSTGRES_PASSWORD: hospitua
+      TZ: America/Bogota
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U hospitua -d hospitua']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    container_name: hospitua-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: hospitua
+      RABBITMQ_DEFAULT_PASS: hospitua
+    ports:
+      - '5672:5672' # AMQP (lo usa el backend)
+      - '15672:15672' # Panel web: http://localhost:15672
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', '-q', 'ping']
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+volumes:
+  postgres-data:
+  rabbitmq-data:

@@ -1,0 +1,44 @@
+/* Pantalla "Habitaciones": tabla de solo lectura con la piezas `ui-*`. */
+
+.rooms-panel {
+  overflow: hidden;
+}
+
+.rooms-number {
+  color: var(--text-1);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.rooms-category {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.02em;
+}
+
+.rooms-capacity {
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.rooms-maintenance--scheduled {
+  --tone-bg: var(--warning-bg);
+  --tone-border: var(--warning-border);
+  --tone-fg: var(--warning-fg);
+}
+
+.rooms-maintenance--none {
+  --tone-bg: var(--positive-bg);
+  --tone-border: var(--positive-border);
+  --tone-fg: var(--positive-fg);
+}
+
+.rooms-maintenance--unavailable {
+  --tone-bg: var(--neutral-bg);
+  --tone-border: var(--neutral-border);
+  --tone-fg: var(--neutral-fg);
+}
+
+.rooms-panel .error-message {
+  margin: 1rem;
+}

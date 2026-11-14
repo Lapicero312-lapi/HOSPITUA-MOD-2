@@ -1,0 +1,43 @@
+/* Pantalla "Cancelar reserva": la reserva a cancelar y la confirmación, en una columna estrecha. */
+
+.cancel {
+  max-width: 48rem;
+}
+
+.cancel-body,
+.cancel-panel--padded {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  padding: 1.125rem;
+}
+
+.cancel-label {
+  margin-bottom: -0.375rem;
+  color: var(--text-2);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.cancel-check {
+  align-items: flex-start;
+  min-height: 0;
+  padding: 0.75rem 0.875rem;
+  background-color: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-lg);
+  color: var(--warning-fg);
+  font-weight: 500;
+}
+
+.cancel-check input {
+  margin-top: 2px;
+}
+
+.cancel-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding-top: 0.25rem;
+}

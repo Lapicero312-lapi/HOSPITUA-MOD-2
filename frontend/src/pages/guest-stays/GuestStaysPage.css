@@ -1,0 +1,241 @@
+/*
+ * Pantalla "Huéspedes alojados": filtros, tabla con las piezas `ui-*` y el detalle como panel inspector
+ * derecho (drawer en tablet, bottom sheet en móvil).
+ */
+
+.guest-stays-field--search {
+  flex: 1 1 18rem;
+}
+
+.guest-stays-field:not(.guest-stays-field--search) {
+  flex: 0 1 11rem;
+}
+
+.guest-stays-search {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.guest-stays-search input:not([type='checkbox']) {
+  flex: 1;
+  min-width: 0;
+}
+
+.guest-stays-clear {
+  margin-left: auto;
+}
+
+.guest-stays-panel {
+  overflow: hidden;
+}
+
+.guest-stays-table td {
+  white-space: nowrap;
+}
+
+.guest-stays-table th:last-child,
+.guest-stays-table td:last-child {
+  text-align: right;
+}
+
+.guest-stays-name {
+  display: block;
+  color: var(--text-1);
+  font-weight: 500;
+}
+
+.guest-stays-badge--foreign {
+  margin-left: 0.5rem;
+}
+
+.guest-stays-ref {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.guest-stays-date {
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.guest-stays-action {
+  min-height: 30px;
+  padding: 0 0.625rem;
+  font-size: 0.75rem;
+}
+
+.guest-stays-panel .error-message {
+  margin: 1rem;
+}
+
+/* Paginación con números */
+.guest-stays-pagination {
+  flex-wrap: wrap;
+  justify-content: space-between;
+}
+
+.guest-stays-pages {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.guest-stays-pages button {
+  min-width: 32px;
+  padding: 0 0.625rem;
+}
+
+.guest-stays-pages .guest-stays-current {
+  background-color: var(--accent-soft);
+  border-color: var(--accent-ring);
+  color: var(--accent);
+}
+
+.guest-stays-gap {
+  padding: 0 0.25rem;
+  color: var(--text-3);
+}
+
+/* ───────── Panel inspector: detalle del huésped ───────── */
+
+.guest-stays-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  justify-content: flex-end;
+  background-color: var(--veil);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  animation: fade-in var(--base) var(--ease);
+}
+
+.guest-stays-dialog {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 420px;
+  height: calc(100% - 1rem);
+  margin: 0.5rem;
+  overflow: hidden;
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-float), var(--highlight);
+  animation: inspector-in 320ms var(--ease);
+}
+
+.guest-stays-dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.125rem 0.875rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.guest-stays-subtitle {
+  margin: 0;
+  font-size: 0.9375rem;
+}
+
+.guest-stays-dialog-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1rem;
+  min-height: 0;
+  padding: 1rem 1.125rem;
+  overflow-y: auto;
+}
+
+.guest-stays-dialog-body > * {
+  flex-shrink: 0;
+}
+
+.guest-stays-data {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.875rem 1rem;
+  margin: 0;
+  padding: 0.875rem;
+  background-color: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.guest-stays-data dt {
+  color: var(--text-3);
+  font-size: 0.6875rem;
+  font-weight: 500;
+}
+
+.guest-stays-data dd {
+  margin: 0.125rem 0 0;
+  overflow-wrap: anywhere;
+  color: var(--text-1);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.guest-stays-movements {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.guest-stays-dialog .guest-stays-table th:last-child,
+.guest-stays-dialog .guest-stays-table td:last-child {
+  text-align: left;
+}
+
+.guest-stays-dialog .error-message {
+  margin: 0;
+}
+
+.guest-stays-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  padding: 0.75rem 1.125rem;
+  border-top: 1px solid var(--border);
+}
+
+@media (max-width: 1023px) {
+  .guest-stays-dialog {
+    height: 100%;
+    margin: 0;
+    border-width: 0 0 0 1px;
+    border-radius: 0;
+  }
+}
+
+@media (max-width: 639px) {
+  .guest-stays-backdrop {
+    align-items: flex-end;
+  }
+
+  .guest-stays-dialog {
+    max-width: none;
+    height: auto;
+    max-height: 88dvh;
+    border-width: 1px 0 0;
+    border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
+    animation-name: sheet-in;
+  }
+
+  .guest-stays-dialog-actions {
+    flex-direction: column-reverse;
+  }
+
+  .guest-stays-dialog-actions > * {
+    width: 100%;
+  }
+
+  .guest-stays-clear {
+    margin-left: 0;
+  }
+}

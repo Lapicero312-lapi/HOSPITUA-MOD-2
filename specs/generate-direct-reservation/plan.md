@@ -1,0 +1,777 @@
+# Implementation Plan: Generar reservación directa (`generate-direct-reservation`)
+
+**Plan base**: [../base/plan.md](../base/plan.md)
+**Spec**: [./spec.md](spec.md)
+**Guía**: [../base/guia-planes-por-caso-de-uso.md](../base/guia-planes-por-caso-de-uso.md)
+
+## Summary
+
+La Recepcionista registra, a pedido del huésped, una reserva de canal directo: una categoría, entre 1 y
+10 habitaciones de esa categoría, las fechas de la estadía y las personas de cada habitación. El sistema
+**asigna las habitaciones concretas**, verifica la disponibilidad de cada una, obtiene la tarifa de cada
+habitación del Módulo 3, muestra el resultado y, al confirmar, crea la reserva **directamente en `ACTIVE`**,
+sin cobro (el pago del 100 % se hace en el Check-Out, que ejecuta el Módulo 1).
+
+Es una API en **dos pasos**, igual que la modificación (decisión D8 del plan base):
+
+1. **Vista previa** (`POST /api/reservations/direct/preview`): no guarda nada. Asigna habitaciones, verifica
+   disponibilidad y cotiza.
+2. **Creación** (`POST /api/reservations/direct`): vuelve a cotizar y a comparar con lo que vio el
+   solicitante (decisión D1), y crea la reserva en una sola transacción. Responde `201`.
+
+Orquesta tres casos de uso: `check-room-availability` (disponibilidad y asignación),
+`calculate-dynamic-rate` (tarifas) y `check-view-reservation` (aviso `ADDED` a la lista del día). **No le
+ordena nada al Módulo 1**: la reserva se crea sin depender de él.
+
+## Resumen técnico e identificación
+
+| Dato | Valor |
+|---|---|
+| Caso de uso | Generar reservación directa (`generate-direct-reservation`) |
+| Spec | [spec.md](./spec.md), historia 1 y FR-001 a FR-011 |
+| Actor principal | Recepcionista |
+| Disparador | REST: `POST /api/reservations/direct/preview`, `POST /api/reservations/direct` y `GET /api/guests/lookup` (precarga del titular) |
+| Naturaleza | Escribe `reservation`, `reservation_room` y `guest`; no tiene colas propias |
+
+## Technical Context
+
+El stack, la arquitectura hexagonal y el manejo de errores son los del [plan base](../base/plan.md).
+Lo propio de este caso de uso:
+
+- **Dependencias nuevas**: ninguna.
+- **Almacenamiento**: `reservation`, `reservation_room`, `guest` (plan base).
+- **Configuración**: `ASSIGNMENT_MAX_RETRIES` (por defecto `3`): reintentos de asignación cuando la base
+  rechaza una habitación por solape.
+- **Performance** (NFR-001): el cruce local con las reservas se completa en menos de 200 ms.
+
+## Contratos
+
+### A. Vista previa: `POST /api/reservations/direct/preview`
+
+Pantalla de la Recepcionista. **Cabeceras**: `Content-Type: application/json`. Sin seguridad (regla
+transversal 10 del plan base). **No guarda nada.**
+
+**Solicitud**
+
+```json
+{
+  "startDate": "2026-10-12",
+  "endDate": "2026-10-15",
+  "categoryRoom": "DOBLE",
+  "rooms": [
+    { "guestCount": 2 },
+    { "guestCount": 2 }
+  ]
+}
+```
+
+- `categoryRoom`: **una sola** para toda la reserva; no se mezclan categorías (para eso existe "Actualizar
+  reservación").
+- `rooms`: una entrada por habitación (entre 1 y 10), con su `guestCount`. La cantidad de habitaciones es
+  la longitud de la lista.
+- `roomId` es **opcional** en cada entrada. La pantalla permite elegirlo; si no viene, el sistema asigna
+  la disponible de menor `roomNumber`. Si viene, se verifica esa habitación concreta, que debe ser de
+  `categoryRoom`.
+
+**Respuesta 200**
+
+```json
+{
+  "availability": {
+    "startDate": "2026-10-12",
+    "endDate": "2026-10-15",
+    "categoryRoom": "DOBLE",
+    "availableCount": 3,
+    "rooms": [
+      { "roomId": "uuid", "roomNumber": "201", "available": true, "reason": null },
+      { "roomId": "uuid", "roomNumber": "202", "available": true, "reason": null },
+      { "roomId": "uuid", "roomNumber": "203", "available": false, "reason": "RESERVED" }
+    ]
+  },
+  "assignedRooms": [
+    { "position": 1, "roomId": "uuid", "roomNumber": "201", "maxCapacity": 2, "guestCount": 2 },
+    { "position": 2, "roomId": "uuid", "roomNumber": "202", "maxCapacity": 2, "guestCount": 2 }
+  ],
+  "quotes": {
+    "rooms": [
+      {
+        "key": "1",
+        "categoryRoom": "DOBLE",
+        "nights": 3,
+        "nightlyRates": [
+          { "date": "2026-10-12", "rate": { "amount": "250000.00", "currency": "COP" } }
+        ],
+        "lodgingAmount": { "amount": "750000.00", "currency": "COP" }
+      }
+    ],
+    "total": { "amount": "1500000.00", "currency": "COP" }
+  },
+  "reservation": { "guestCount": 4 }
+}
+```
+
+- `availability` y `quotes` usan los DTO compartidos de `check-room-availability` y
+  `calculate-dynamic-rate`.
+- `assignedRooms`: las habitaciones de **menor `roomNumber`** disponibles, sin repetir (`assignRooms`).
+- `quotes.total` es la suma de los `lodgingAmount` y **no se guarda**. El `quoteId` no sale hacia la
+  pantalla.
+- Se cotiza **una vez por habitación**, aunque sean de la misma categoría: cada habitación guarda su
+  propio `quoteId`.
+- Si no hay disponibilidad suficiente, la vista previa responde **400** (ver errores), no un 200 con
+  resultados parciales.
+
+### B. Creación: `POST /api/reservations/direct`
+
+Mismas cabeceras, más **`Idempotency-Key`** (UUID, obligatoria; la pantalla genera una por formulario).
+**Solicitud** = la de la vista previa más el titular, las observaciones y las
+tarifas que el solicitante vio:
+
+```json
+{
+  "startDate": "2026-10-12",
+  "endDate": "2026-10-15",
+  "categoryRoom": "DOBLE",
+  "rooms": [ { "guestCount": 2 }, { "guestCount": 2 } ],
+  "guest": {
+    "firstName": "Valentina",
+    "lastName": "Ospina",
+    "documentType": "CC",
+    "documentNumber": "1144093552",
+    "nationality": "Colombia",
+    "contactPhone": "+57 300 000 0000",
+    "contactEmail": "valentina@correo.com"
+  },
+  "notes": "Llegada después de las 8 p. m.",
+  "expectedRates": [
+    { "position": 1, "lodgingAmount": "750000.00", "currency": "COP" },
+    { "position": 2, "lodgingAmount": "750000.00", "currency": "COP" }
+  ]
+}
+```
+
+- `guest`: `firstName`, `lastName`, `documentType` (`RC`, `TI`, `CC`, `CE`, `PAS` o `NIT`),
+  `documentNumber` y `nationality` (texto libre con el nombre del país; el huésped es extranjero si no es
+  exactamente `Colombia`) son obligatorios; `contactPhone` y `contactEmail` son opcionales.
+- `notes`: opcional, máximo 500 caracteres.
+- `expectedRates`: el `lodgingAmount` y la `currency` de cada habitación que vio el solicitante en la
+  vista previa, por `position`. El
+  servidor **vuelve a cotizar** y compara (decisión D1); si difiere, `RATE_CHANGED`. **Nunca se guarda un
+  monto enviado por el cliente.**
+
+**Respuesta `201 Created`**, con la cabecera `Location: /api/reservations/{reservationRef}` y el detalle
+de la reserva con la forma de `check-view-reservation` (C3):
+
+```json
+{
+  "reservationRef": "RSV-3F9A1C7B",
+  "status": "ACTIVE",
+  "source": "DIRECT",
+  "externalConfirmationCode": null,
+  "startDate": "2026-10-12",
+  "endDate": "2026-10-15",
+  "nights": 3,
+  "guestCount": 4,
+  "notes": "Llegada después de las 8 p. m.",
+  "createdAt": "2026-10-09T09:14:00-05:00",
+  "rooms": [
+    {
+      "roomId": "uuid", "roomNumber": "201", "categoryRoom": "DOBLE", "guestCount": 2,
+      "roomGrossAmount": { "amount": "750000.00", "currency": "COP" },
+      "stayStatus": "EXPECTED"
+    }
+  ],
+  "guest": { "firstName": "Valentina", "lastName": "Ospina", "documentType": "CC", "documentNumber": "1144093552",
+             "nationality": "Colombia", "contactPhone": "+57 300 000 0000", "contactEmail": "valentina@correo.com" },
+  "cancellation": null
+}
+```
+
+**Idempotencia** (FR-008): si la `Idempotency-Key` ya existe (tabla `idempotency_key`, 24 horas) con el
+mismo cuerpo, responde `201` con la misma reserva, sin crear otra ni volver a cotizar; con otro cuerpo,
+`400` `IDEMPOTENCY_KEY_REUSED`. La fila se inserta en la misma transacción que la reserva.
+
+La reserva se guarda con `source` `DIRECT`, `commissionPercentage` y `commissionAmount` en `0`,
+`externalConfirmationCode` en `null`, y **sin total** ni IVA. El `201` se responde una vez persistida, **sin
+esperar al Módulo 1** (FR-007).
+
+### C. Errores 400 (los mismos para A y B; el mensaje es el literal del spec)
+
+| `errorCode` | Cuándo | `message` |
+|---|---|---|
+| `START_DATE_IN_PAST` | `startDate` anterior al día operativo en curso | "La fecha de entrada no puede ser anterior a hoy." |
+| `INVALID_RESERVATION_DATES` | Fechas vacías, inexistentes o salida no posterior a la entrada | "La fecha de salida debe ser posterior a la de entrada." |
+| `INVALID_ROOM_COUNT` | Cero o más de 10 habitaciones | "Una reserva debe tener entre 1 y 10 habitaciones." |
+| `ROOM_ALREADY_IN_RESERVATION` | La misma habitación dos veces | "La habitación ya forma parte de la reserva." |
+| `INVALID_GUEST_COUNT` | `guestCount` no es un entero positivo | "La cantidad de personas debe ser un número entero mayor que cero." |
+| `GUEST_COUNT_TOO_LOW` | `guestCount` igual a 0 | "Cada habitación debe tener al menos una persona." |
+| `GUEST_COUNT_EXCEEDS_CAPACITY` | `guestCount` mayor que el `maxCapacity` | "La cantidad de personas supera la capacidad de la habitación." |
+| `NO_AVAILABILITY` | No hay habitaciones disponibles suficientes | "Error 400: La habitación no está disponible para el rango de fechas solicitado" |
+| `ROOM_NOT_AVAILABLE` | Una habitación pedida por `roomId` no está disponible | "La habitación {roomNumber} no está disponible para el rango de fechas solicitado." |
+| `AVAILABILITY_TAKEN` | Otra solicitud tomó la última habitación | "Ya no hay disponibilidad para las fechas solicitadas." |
+| `PRICING_UNAVAILABLE` | El Módulo 3 no responde al cotizar | "Error 400: El servicio de cotización de tarifas no se encuentra disponible. Por favor intente más tarde" |
+| `RATE_CHANGED` | La tarifa cambió entre la vista previa y la creación | "La tarifa cambió, vuelva a cotizar." |
+| `IDEMPOTENCY_KEY_REQUIRED` | Falta la cabecera `Idempotency-Key` o no es un UUID (solo B) | "Falta el identificador de la solicitud." |
+| `IDEMPOTENCY_KEY_REUSED` | La misma `Idempotency-Key` con otro cuerpo (solo B) | "La solicitud ya se usó con otros datos." |
+| `NOTES_TOO_LONG` | `notes` de más de 500 caracteres | "Las observaciones no pueden superar 500 caracteres." |
+| `INVALID_CHARACTERS` | Caracteres no válidos en `notes` o en los datos del titular | "El formato de los datos contiene caracteres no válidos." |
+| `GUEST_DATA_REQUIRED` | Falta un dato obligatorio del titular | "Los datos del titular son obligatorios." |
+| `INVALID_DOCUMENT_TYPE` | `documentType` fuera de `RC`, `TI`, `CC`, `CE`, `PAS`, `NIT` | "El tipo de documento no es válido." |
+| `INVALID_EMAIL` | `contactEmail` con formato inválido | "El correo electrónico no es válido." |
+| `INVALID_CATEGORY`, `INVENTORY_UNAVAILABLE`, `MAINTENANCE_CHECK_UNAVAILABLE`, `INVALID_ROOM_ID` | Categoría inválida o fallos del Módulo 1 | Los de `consult-room-inventory` y `consult-maintenance-calendar` |
+
+### D. Puertos que usa
+
+| Puerto | De | Para qué |
+|---|---|---|
+| `VerifyAvailability.check` y `assignRooms` | `check-room-availability` | Disponibilidad y asignación de habitaciones |
+| `CalculateDynamicRate.quoteRooms` y `verifyQuotes`, y `reservationTotal` | `calculate-dynamic-rate` | Tarifas por habitación, confirmación y total |
+| `ConsultRoomInventory` | `consult-room-inventory` | `maxCapacity` de cada habitación asignada (viene en `Room`) |
+| Reglas de transición del dominio | Plan base (T011) | Estado inicial `ACTIVE` y `stayStatus` `EXPECTED` (la fábrica `createDirect`) |
+| `DailyListChangeRecorder.record` | `check-view-reservation` | Aviso `ADDED` de la lista del día |
+| `AriChangeRecorder.record` | `configure-ota` | Disponibilidad ocupada para Channex |
+| `Clock` | Plan base | Día operativo en curso |
+| `GuestRepository.findLatestByDocument` | Plan base (persistencia de `guest`) | Precarga del titular (E) |
+
+### E. Precarga del titular: `GET /api/guests/lookup` (FR-011)
+
+Pantalla de la Recepcionista. Solo lectura.
+
+**Solicitud:** `GET /api/guests/lookup?documentType=CC&documentNumber=123`. Los dos parámetros son
+obligatorios.
+
+**Respuesta `200` con datos:** los del titular de la reserva **más reciente** (por `created_at`) con ese
+tipo y número de documento.
+
+```json
+{
+  "found": true,
+  "guest": {
+    "firstName": "Ana",
+    "lastName": "Pérez",
+    "documentType": "CC",
+    "documentNumber": "123",
+    "nationality": "Colombia",
+    "contactPhone": "+57 300 000 0000",
+    "contactEmail": "ana@correo.com"
+  }
+}
+```
+
+**Respuesta `200` sin datos:** `{ "found": false, "guest": null }`. No encontrar al titular no es un
+error: la Recepcionista escribe los datos completos.
+
+- Errores: `INVALID_DOCUMENT_TYPE` si el tipo no es `RC`, `TI`, `CC`, `CE`, `PAS` o `NIT`;
+  `GUEST_DATA_REQUIRED` si falta el tipo o el número; `INVALID_CHARACTERS` si traen caracteres no
+  válidos. Todos 400.
+- Los datos **se copian** en la solicitud de creación (B) como cualquier otro titular: la reserva nueva
+  guarda su propio `guest` y no queda ligada a la anterior.
+- Consulta `guest` por `(document_type, document_number)` con el índice por `document_number` del plan
+  base, unida a `reservation` para tomar la de `created_at` más reciente.
+
+## Reglas de negocio
+
+1. **Una categoría por reserva**, entre 1 y 10 habitaciones distintas, cada una con un `guestCount`
+   entero entre 1 y su `maxCapacity`. El `guestCount` de la reserva es la suma.
+2. **Orden de validación** (el primero que falle responde):
+   1. Estructura del cuerpo y formatos.
+   2. Cantidad de habitaciones (1 a 10) y `guestCount` entero positivo.
+   3. **Fechas**: entrada no anterior al día operativo en curso (el `Clock`, no una fecha fija: si hoy es
+      el 28, el 27 se rechaza y el 28 se acepta; mañana el mínimo es el 29) y salida posterior. **Antes de
+      consultar disponibilidad ni cotizar** (FR-001a).
+   4. `notes` (máximo 500) y caracteres válidos en `notes` y en los datos del titular (solo en la creación
+      se exigen los datos del titular).
+   5. Disponibilidad y asignación (`check-room-availability`).
+   6. Capacidad de cada habitación asignada.
+   7. Cotización (`calculate-dynamic-rate`, contexto `NEW_RESERVATION`), una por habitación, todo o nada.
+   8. Solo en la creación: comparación con `expectedRates`.
+3. **No se cotiza si no hay disponibilidad** (escenario 2): el flujo se detiene antes de llamar al
+   Módulo 3.
+4. **La reserva solo se crea si todas las habitaciones están disponibles y cotizadas.** No existe una
+   reserva con habitaciones sin valor (caso borde).
+5. **Estado inicial `ACTIVE`**, sin paso de cobro ni estado intermedio, y una `ReservationRoom` en
+   `EXPECTED` por habitación.
+6. **Titular propio de la reserva**: se crea un `guest` nuevo ligado a esta reserva (el plan base no
+   comparte titulares entre reservas).
+7. **Referencia**: `RSV-` más 8 caracteres hexadecimales en mayúsculas; si ya existe, se genera otra (hasta
+   5 intentos). Si los 5 chocan, la solicitud responde 400 `REQUEST_NOT_PROCESSED` (excepción inesperada) y
+   no se guarda nada.
+8. **Aviso de la lista del día**: dentro de la transacción, `DailyListChangeRecorder.record(tx, null,
+   reserva)`. Si la llegada es hoy y la lista ya se envió, genera `ADDED`; si aún no se envió, la reserva
+   viaja en la lista; si la llegada es futura, no se avisa nada.
+9. **Mantenimientos al confirmar**: la creación (B) vuelve a ejecutar la verificación de disponibilidad
+   completa (paso 5, con mantenimientos), no reutiliza la de la vista previa. Queda solo el lapso entre esa
+   verificación y el `COMMIT`; un mantenimiento registrado en ese instante lo maneja el Módulo 1, que
+   consulta las reservas antes de registrarlo.
+
+## Diagramas de secuencia
+
+### D1. Vista previa (A)
+
+```mermaid
+sequenceDiagram
+    actor R as Recepcionista
+    participant C as DirectReservationsController
+    participant U as PreviewDirectReservation
+    participant V as VerifyAvailability
+    participant Q as CalculateDynamicRate
+
+    R->>C: POST /api/reservations/direct/preview
+    C->>C: Validar el DTO
+    C->>U: execute(solicitud)
+    U->>U: Validar habitaciones, personas y fechas (día operativo)
+    alt dato inválido
+        U-->>R: 400 con el mensaje del spec, sin consultar disponibilidad ni cotizar
+    end
+    U->>V: check(categoría, fechas)
+    V-->>U: habitaciones con disponibilidad y motivo
+    U->>U: assignRooms(menor roomNumber) y validar capacidad
+    alt faltan habitaciones o una excede su capacidad
+        U-->>R: 400 NO_AVAILABILITY, ROOM_NOT_AVAILABLE o GUEST_COUNT_EXCEEDS_CAPACITY, sin llamar al Módulo 3
+    end
+    U->>Q: quoteRooms(una cotización por habitación, NEW_RESERVATION)
+    alt el Módulo 3 falla en cualquiera
+        U-->>R: 400 PRICING_UNAVAILABLE
+    end
+    Q-->>U: cotizaciones
+    U->>U: reservationTotal (suma, sin guardar)
+    U-->>C: availability, assignedRooms, quotes y total
+    C-->>R: 200 (no se guardó nada)
+```
+
+### D2. Creación exitosa (B, escenarios 1, 4 y 5)
+
+```mermaid
+sequenceDiagram
+    actor R as Recepcionista
+    participant U as CreateDirectReservation
+    participant V as VerifyAvailability
+    participant Q as CalculateDynamicRate
+    participant DB as PostgreSQL
+    participant L as DailyListChangeRecorder
+
+    R->>U: POST /api/reservations/direct (con guest, notes y expectedRates)
+    U->>U: Mismas validaciones de la vista previa y de los datos del titular
+    U->>V: check(categoría, fechas) y asignación
+    U->>Q: verifyQuotes(expectedRates, solicitudes, NEW_RESERVATION)
+    alt la tarifa cambió
+        U-->>R: 400 RATE_CHANGED
+    end
+    Note over U: Las llamadas a los Módulos 1 y 3 se hacen antes de abrir la transacción
+    U->>DB: BEGIN
+    U->>DB: INSERT reservation (ACTIVE, DIRECT, comisión 0, sin código externo)
+    U->>DB: INSERT guest (propio de la reserva)
+    U->>DB: INSERT reservation_room x N (EXPECTED, tarifa, quoteId, moneda, copias de fechas, blocks_inventory)
+    U->>L: record(tx, null, reserva)
+    L->>DB: daily_list_message ADDED si la llegada es hoy y la lista ya se envió
+    U->>DB: COMMIT
+    U-->>R: 201 Created, Location y detalle de la reserva
+    Note over U,L: El Módulo 1 no interviene en la respuesta. Si la llegada es futura no se avisa nada
+```
+
+### D3. Última habitación tomada por otra solicitud (concurrencia)
+
+```mermaid
+sequenceDiagram
+    participant A as Solicitud A
+    participant B as Solicitud B
+    participant U as CreateDirectReservation
+    participant DB as PostgreSQL
+
+    A->>U: crear (habitación 201 disponible)
+    B->>U: crear (habitación 201 disponible)
+    U->>DB: A: BEGIN e INSERT habitación 201
+    U->>DB: B: BEGIN e INSERT habitación 201
+    DB-->>U: A: guardado (COMMIT)
+    DB-->>U: B: la restricción EXCLUDE (D3) rechaza el solape
+    U->>DB: B: ROLLBACK
+    alt la categoría tiene otra habitación libre y los reintentos no se agotaron
+        U->>U: B: asignar la siguiente candidata (ASSIGNMENT_MAX_RETRIES)
+        U->>DB: B: nueva transacción con otra habitación
+    else no queda ninguna
+        U-->>B: 400 AVAILABILITY_TAKEN, "Ya no hay disponibilidad para las fechas solicitadas."
+    end
+    Note over U,DB: Solo una de las dos solicitudes ocupa la habitación: no hay sobreventa
+```
+
+## Modelo de datos y entidades involucradas
+
+**No se crean tablas.** Escribe en las del plan base:
+
+| Tabla | Qué guarda |
+|---|---|
+| `reservation` | `reservation_ref` generada, `source = DIRECT`, `status = ACTIVE`, `start_date`, `end_date`, `guest_count` (suma), `notes`, `commission_percentage = 0`, `commission_amount = 0`; `ota_id`, `external_confirmation_code`, `gross_amount`, `currency` y `commission_status` en `NULL` |
+| `reservation_room` | Una por habitación: `room_id`, `room_number`, `category_room`, `guest_count`, `room_gross_amount`, `quote_id`, `currency` (juntos), `stay_status = EXPECTED`, copias `start_date` y `end_date`, `blocks_inventory = true` |
+| `guest` | Un titular nuevo ligado a la reserva (`reservation_id`) |
+| `daily_list_message`, `daily_sequence` | Los escribe `DailyListChangeRecorder` en la misma transacción |
+
+- Las restricciones `CHECK` del canal `DIRECT` del plan base garantizan comisión `0` y los campos de OTA
+  en `NULL`.
+- **El total no se guarda**: se calcula al mostrarlo (`reservationTotal`).
+- Los `nightlyRates` **no se guardan**: solo se ven en la vista previa.
+- La restricción `EXCLUDE` de D3 sobre `reservation_room` impide el solape aun con solicitudes
+  simultáneas.
+
+**Estado**: la reserva nace en `ACTIVE` y la habitación en `EXPECTED`; el estado inicial lo definen las
+reglas de transición del dominio y lo usa la fábrica `createDirect` (crear no es una transición).
+
+## Reglas de validación y manejo de errores
+
+Todo error sale con `{ "errorCode", "message", "timestamp", "path" }` y **siempre 4xx**; nunca 500.
+
+| Situación | HTTP | `errorCode` |
+|---|---|---|
+| Errores de validación y de integración de la tabla C | 400 | Los de la tabla C |
+| Excepción inesperada | 400 | `REQUEST_NOT_PROCESSED` |
+
+- **Todo o nada**: si falla la disponibilidad, la cotización de una sola habitación o el guardado, **no se
+  crea ninguna reserva** ni se persiste ningún registro (la transacción se revierte).
+- **No se asume ninguna tarifa** por defecto, estimada ni a cero.
+- **Concurrencia**: la violación de la restricción de exclusión (código `23P01` de PostgreSQL) se traduce
+  en reintento con otra habitación o en `AVAILABILITY_TAKEN`; nunca en 500.
+- La referencia duplicada (violación de unicidad de `reservation_ref`) se resuelve generando otra.
+- Los fallos del Módulo 1 o 3 se informan sin detalles de infraestructura.
+
+## Integraciones externas
+
+| Módulo | Dirección | Mecanismo | Contrato | Fallo o tiempo agotado |
+|---|---|---|---|---|
+| Módulo 1 | M2 → M1 | Inventario y mantenimientos (vía `VerifyAvailability`) | Planes de `consult-room-inventory` y `consult-maintenance-calendar` | `INVENTORY_UNAVAILABLE` o `MAINTENANCE_CHECK_UNAVAILABLE` (400); no se crea la reserva |
+| Módulo 3 | M2 → M3 | `POST /pricing/quotes`, por habitación (vía `CalculateDynamicRate`) | Plan de `calculate-dynamic-rate` | `PRICING_UNAVAILABLE` (400); no se crea la reserva |
+| Módulo 1 | M2 → M1 | Lista del día (vía `DailyListChangeRecorder`) | Plan de `check-view-reservation` | Mensaje `PENDING` con reintento en orden; **la creación no se revierte** |
+
+- **No se le ordena nada al Módulo 1**: ni apartar ni liberar habitaciones (FR-007).
+- Las llamadas a los Módulos 1 y 3 se hacen **antes** de abrir la transacción de base de datos, para no
+  mantenerla abierta esperando a un servicio externo.
+- No hay colas propias.
+
+## Arquitectura (capas del plan base)
+
+| Capa | Piezas de este caso de uso |
+|---|---|
+| `domain/reservation/` | Creación del agregado `Reservation` con sus invariantes (1 a 10 habitaciones, capacidad, fechas, estado inicial), generación de `reservationRef` |
+| `application/use-cases/generate-direct-reservation/` | **Entrada**: `PreviewDirectReservation` y `CreateDirectReservation`; validador de la solicitud |
+| `application/ports/out/` | `ReservationRepository`, `Clock` y los puertos de otros casos de uso (D) |
+| `infrastructure/in/rest/` | `DirectReservationsController` |
+| `infrastructure/out/persistence/` | Repositorio con la inserción del agregado y la traducción del error `23P01` |
+
+```text
+backend/src/
+├── domain/reservation/
+│   ├── reservation.ts                      # fábrica createDirect(...) con sus invariantes
+│   └── reservation-ref.ts                  # RSV- + 8 hexadecimales
+├── application/use-cases/generate-direct-reservation/
+│   ├── ports/in/
+│   ├── preview-direct-reservation.service.ts
+│   ├── create-direct-reservation.service.ts
+│   └── direct-reservation-request.validator.ts
+├── infrastructure/in/rest/direct-reservations.controller.ts
+└── infrastructure/out/persistence/reservation.repository.ts
+backend/test/
+├── unit/                                  # espejo de src/: invariantes, validador, referencia
+├── integration/generate-direct-reservation/ # Testcontainers: creación, concurrencia, aviso a la lista
+└── contract/                                # forma de los DTO REST
+frontend/src/pages/reservations/new/         # pantalla "Nueva reserva directa"
+```
+
+## Phase 1: Setup
+
+- [ ] T001 Variable `ASSIGNMENT_MAX_RETRIES` en la configuración validada
+
+## Phase 2: Foundational
+
+- [ ] T002 [P] Fábrica `Reservation.createDirect` con sus invariantes y pruebas unitarias (habitaciones, capacidad, fechas, estado inicial, comisión `0`)
+- [ ] T003 [P] Generador de `reservationRef` con reintento ante duplicado
+- [ ] T004 [P] Validador de la solicitud (formatos, enteros, `notes`, caracteres, titular) con los mensajes literales
+- [ ] T005 `ReservationRepository.insert` en una transacción, con traducción del error `23P01` y de la unicidad de `reservation_ref` (ya la hace el `insert` de la base; la tarea es usarlo desde `CreateDirectReservation`)
+- [ ] T006 Códigos de error y mensajes de la tabla C
+
+## Phase 3: User Story 1 - Creación de reserva directa (P1)
+
+**Goal**: la Recepcionista crea una reserva directa confirmada, con disponibilidad y tarifas del Módulo 3.
+**Independent Test**: habitaciones disponibles y Módulo 3 simulado; reserva en `ACTIVE` con tarifa por
+habitación, comisión `0` y aviso `ADDED` solo con llegada hoy; y los bloqueos por falta de disponibilidad
+y por caída del Módulo 3.
+
+- [ ] T007 [US1] `PreviewDirectReservation` y `POST /api/reservations/direct/preview` (A): validaciones, disponibilidad, asignación, capacidad y cotización
+- [ ] T008 [US1] `CreateDirectReservation` y `POST /api/reservations/direct` (B): `verifyQuotes`, transacción, `201` y `Location`
+- [ ] T009 [US1] Reintento de asignación ante el rechazo por solape y `AVAILABILITY_TAKEN` cuando no hay otra habitación
+- [ ] T010 [US1] Llamadas a `DailyListChangeRecorder` (`ADDED` solo con llegada hoy y lista ya enviada) y a `AriChangeRecorder` (categorías y fechas) dentro de la transacción
+- [ ] T011 [US1] Pruebas de integración de los escenarios 1 a 7 y 9
+- [ ] T012 [US1] Pruebas de todos los casos borde (fechas, habitaciones, personas, `notes`, Módulo 3 parcial, concurrencia)
+- [ ] T013 [US1] Prueba de concurrencia: dos solicitudes simultáneas por la última habitación; solo una se crea
+- [ ] T014 [P] [US1] Frontend: pantalla "Nueva reserva directa" (disponibilidad y tarifa al cambiar categoría, habitaciones y fechas; confirmar)
+- [ ] T018 [US1] `LookupGuest` y `GET /api/guests/lookup` (E): búsqueda por documento y precarga en la pantalla "Nueva reserva directa"; pruebas de los escenarios 10 y 11
+- [ ] T019 [US1] `Idempotency-Key` en B: tabla `idempotency_key`, misma reserva con el mismo cuerpo, `IDEMPOTENCY_KEY_REUSED` con otro, y borrado de las vencidas en el cierre del día; prueba del escenario 8
+
+## Phase N: Polish
+
+- [ ] T015 Prueba de tiempo: el cruce local con las reservas en menos de 200 ms con 50 000 reservas (NFR-001)
+- [ ] T016 Verificar que los logs no escriben datos personales del titular
+- [ ] T017 Documentar A y B en OpenAPI (`@nestjs/swagger`)
+
+## Pruebas por escenario
+
+| Historia | Escenario | Qué se verifica |
+|---|---|---|
+| US1 | 1 creación exitosa | Reserva `ACTIVE`, `roomGrossAmount` y `quoteId` por habitación, comisión `0`, código externo `null`; con llegada hoy y lista ya enviada, aviso `ADDED` |
+| US1 | 2 habitación no disponible | `400` `NO_AVAILABILITY` con el mensaje literal; **el Módulo 3 no recibe ninguna llamada** |
+| US1 | 3 Módulo 3 caído | Tiempo agotado: `400` `PRICING_UNAVAILABLE` con el mensaje literal; no se crea ni se guarda nada |
+| US1 | 4 llegada futura | `201` y ningún mensaje al Módulo 1 |
+| US1 | 5 grupo con varias habitaciones | Una `Reservation` con dos `ReservationRoom` en `EXPECTED`, cada una con su tarifa y sin total |
+| US1 | 6 una habitación no disponible | Habitación pedida por `roomId` con mantenimiento: `400` que nombra la habitación 102 y no se crea nada |
+| US1 | 7 personas fuera de capacidad | 3 personas: "La cantidad de personas supera la capacidad de la habitación."; 0: "Cada habitación debe tener al menos una persona." |
+| US1 | 8 doble envío | La misma solicitud con la misma `Idempotency-Key` dos veces: la misma reserva y una sola fila; con otro cuerpo, `400` `IDEMPOTENCY_KEY_REUSED` |
+| US1 | 10 precarga del titular | Con dos reservas anteriores del mismo documento, `GET /api/guests/lookup` devuelve los datos de la más reciente; la reserva nueva guarda su propio `guest` y la anterior no cambia |
+| US1 | 11 documento sin reservas | `{ "found": false, "guest": null }` y ningún error |
+| US1 | 9 fecha anterior a hoy | Con el reloj simulado: el día anterior se rechaza, el mismo día se acepta, y al día siguiente el mínimo avanza |
+| Casos borde | Fechas | Salida anterior, vacía o inexistente: `400` sin consultar disponibilidad ni cotizar |
+| Casos borde | Concurrencia | Dos creaciones por la última habitación: una `201`, la otra `AVAILABILITY_TAKEN` (o toma otra habitación libre) |
+| Casos borde | Habitaciones | Repetida: "La habitación ya forma parte de la reserva."; cero o más de 10: "Una reserva debe tener entre 1 y 10 habitaciones." |
+| Casos borde | Personas | No entero o negativo: "La cantidad de personas debe ser un número entero mayor que cero." |
+| Casos borde | Módulo 3 parcial | Cotiza unas y falla otra: no se crea la reserva |
+| Casos borde | `notes` | Más de 500 o con caracteres no válidos: los dos mensajes del spec |
+| FR-002, FR-006 | Persistencia | Sin columna de total, sin IVA y con comisión `0` (las restricciones `CHECK` del canal `DIRECT`) |
+| D1 | Tarifa cambió | Dos cotizaciones con importes distintos: `RATE_CHANGED` y nada se guarda |
+| NFR-001 | Tiempo | El cruce local en menos de 200 ms |
+
+## Dependencies & Execution Order
+
+- **Depende de**: `check-room-availability`, `calculate-dynamic-rate`, `consult-room-inventory`,
+  `consult-maintenance-calendar`, `check-view-reservation` (`DailyListChangeRecorder`) y
+  las reglas de transición del dominio (plan base, T011), y la restricción anti-solape (D3).
+- **Necesitan de este caso de uso**: ninguno.
+- **Orden**: T001–T006 → US1 (T007–T014, T018 y T019) → Polish. Va después de `check-room-availability` y de
+  `update-reservation`, que son las que usa.
+
+## Trazabilidad: requisito → componente → tarea
+
+| Requisito | Componente | Tarea |
+|---|---|---|
+| FR-001 | `VerifyAvailability` de cada habitación, todo o nada | T007, T008 |
+| FR-001a | Validación de fechas con el `Clock` | T004, T011 |
+| FR-002 | Invariantes de habitaciones, capacidad y `notes` | T002, T004 |
+| FR-003, FR-004 | `quoteRooms` y bloqueo ante un Módulo 3 caído | T007, T008, T012 |
+| FR-005 | Estado inicial `ACTIVE` y habitaciones `EXPECTED` | T002, T008 |
+| FR-006 | Persistencia de tarifa, `quoteId`, comisión `0` y código `null` | T005, T008 |
+| FR-007 | La creación no depende del Módulo 1 y responde `201` | T008 |
+| FR-008 | `Idempotency-Key` e `idempotency_key` | T019 |
+| FR-009 | `DailyListChangeRecorder` dentro de la transacción | T010 |
+| FR-010 | Mapeo a 400 de toda validación e integración | T006, T012 |
+| FR-011 | `LookupGuest` y `GET /api/guests/lookup` | T018 |
+| NFR-001 | Índice GiST de D3 y prueba de tiempo | T015 |
+| SC-001 a SC-004 | Pruebas por escenario y de concurrencia | T011, T013 |
+
+## Puntos que este plan propone (el spec no los dice)
+
+1. **Una API en dos pasos** (vista previa y creación) y `expectedRates` por `position`, igual que
+   `update-reservation` (decisión D8).
+2. **`roomId` opcional** en cada habitación de la solicitud: sin él se asigna; con él se verifica esa
+   habitación. El flujo del spec asigna automáticamente, pero los escenarios 5 y 6 hablan de habitaciones
+   concretas (101 y 102).
+3. **Asignación por menor `roomNumber`**, la misma regla que el spec de OTA.
+4. **Reintento de asignación** (hasta 3) cuando la base rechaza una habitación por solape, antes de
+   responder `AVAILABILITY_TAKEN`.
+5. **Las llamadas a los Módulos 1 y 3 van antes de abrir la transacción**; dentro solo está la inserción.
+6. **Titular nuevo por reserva** y códigos y mensajes para los datos del titular que el spec no define
+   (`GUEST_DATA_REQUIRED`, `INVALID_DOCUMENT_TYPE`, `INVALID_EMAIL`).
+7. **Códigos de disponibilidad** (un código, un mensaje): `NO_AVAILABILITY` con el literal del spec cuando
+   faltan habitaciones, `ROOM_NOT_AVAILABLE` con el número cuando se pidió una habitación concreta, y
+   `AVAILABILITY_TAKEN` cuando otra solicitud tomó la última; e `INVALID_RESERVATION_DATES` para el mensaje
+   de fechas del spec.
+8. **Fábrica `Reservation.createDirect` (T002).** Recibe la referencia ya generada, las fechas, el titular
+   (`Guest`), las `notes` y, por habitación, la habitación asignada (`roomId`, `roomNumber`,
+   `categoryRoom` y `maxCapacity`), su `guestCount` y su tarifa (`roomGrossAmount` y `quoteId` de la
+   cotización). Crea la reserva en `ACTIVE`, con `source` `DIRECT`, cada habitación en `EXPECTED`, sin
+   agencia ni conflicto, y con comisión `0`. Además de las invariantes que ya comprueba `Reservation`
+   (fechas, de 1 a 10 habitaciones distintas y `notes`):
+   - un `guestCount` mayor que el `maxCapacity` de su habitación da `GUEST_COUNT_EXCEEDS_CAPACITY` ("La
+     cantidad de personas supera la capacidad de la habitación.");
+   - habitaciones de categorías distintas son un error del programa (`Error`), no del usuario: la
+     solicitud trae una sola `categoryRoom` (A), así que no pueden llegar mezcladas.
+
+   La fecha mínima de entrada (`START_DATE_IN_PAST`) no la comprueba la fábrica, porque depende del día
+   operativo (`Clock`); la comprueba el validador de la solicitud (T004), antes de consultar la
+   disponibilidad.
+9. **Precarga del titular (E, T018).** `documentType` y `documentNumber` se leen sin los espacios de los
+   extremos y se comprueban en este orden; el primero que falla da el error:
+   1. falta uno de los dos o llega vacío: `GUEST_DATA_REQUIRED`;
+   2. `documentType` no es exactamente `RC`, `TI`, `CC`, `CE`, `PAS` o `NIT`: `INVALID_DOCUMENT_TYPE`;
+   3. `documentNumber` trae algo distinto de letras, dígitos y guion (los caracteres de la búsqueda por
+      documento de `check-view-reservation`): `INVALID_CHARACTERS`.
+
+   Un parámetro repetido (`?documentType=CC&documentType=TI`) cuenta como valor no válido de ese
+   parámetro. El número se compara exacto, tal como se guardó. El validador de la solicitud (T004) aplica
+   la misma regla al `documentNumber` del titular, para que todo documento guardado se pueda buscar.
+10. **Validador de la solicitud (T004).** Revisa los pasos 1 a 4 de la regla 2 en este orden; el primero
+    que falla da el error. Un campo con otro tipo (por ejemplo `"2"` en vez de `2`) cuenta como valor no
+    válido de ese campo.
+    1. **Formatos:**
+       - `categoryRoom`, con el validador de `consult-room-inventory` (`INVALID_CATEGORY`);
+       - cada `roomId` que venga debe ser un UUID (`INVALID_ROOM_ID`);
+       - solo en B, `expectedRates` debe traer una entrada por habitación, con `position` de 1 a n sin
+         repetir, `lodgingAmount` como decimal positivo de dos decimales y `currency` de 3 letras
+         mayúsculas (`verifyQuotes` compara el valor y la moneda). Si no, `RATE_CHANGED`: la
+         pantalla vuelve a cotizar.
+    2. **Habitaciones:**
+       - `rooms` que no es una lista, o con 0 o más de 10 entradas: `INVALID_ROOM_COUNT`;
+       - un `roomId` repetido: `ROOM_ALREADY_IN_RESERVATION`;
+       - `guestCount` igual a `0`: `GUEST_COUNT_TOO_LOW`;
+       - `guestCount` no entero o negativo: `INVALID_GUEST_COUNT`.
+    3. **Fechas:**
+       - vacías o que no son una `AAAA-MM-DD` real: `INVALID_RESERVATION_DATES`;
+       - entrada anterior al día operativo del `Clock`: `START_DATE_IN_PAST`;
+       - salida no posterior a la entrada: `INVALID_RESERVATION_DATES`.
+    4. **`notes` y titular:**
+       - `notes` es opcional (`null` o ausente); con más de 500 caracteres da `NOTES_TOO_LONG`.
+       - En la creación, falta o llega vacío `firstName`, `lastName`, `documentType`, `documentNumber` o
+         `nationality`: `GUEST_DATA_REQUIRED`.
+       - Después, el tipo y el número de documento según el punto 9.
+       - `INVALID_CHARACTERS` cuando un texto (`notes` o un dato del titular) trae caracteres de control
+         (`\p{Cc}`), salvo el salto de línea y la tabulación en `notes`, o cuando no cabe en su columna.
+         Los límites son: nombre y apellido 100, nacionalidad 60, teléfono 30 y correo 254.
+       - `contactEmail` que no tiene la forma `algo@dominio.ext`, sin espacios: `INVALID_EMAIL`.
+
+       Los textos del titular se guardan sin los espacios de los extremos, y un teléfono o un correo vacío
+       queda en `null`.
+11. **`PreviewDirectReservation` (T007).** Puerto de entrada en
+    `ports/in/preview-direct-reservation.port.ts`:
+
+    ```typescript
+    type DirectReservationPreview = {
+      categoryRoom: string;
+      availability: AvailabilityResult;          // el de VerifyAvailability.check
+      assignedRooms: { position: number; room: Room; guestCount: number }[];
+      quoteRequests: RoomQuoteRequest[];         // key = la posición como texto ("1", "2"…)
+      quotes: RoomQuote[];
+      guestCount: number;                        // la suma de las habitaciones
+    };
+
+    interface PreviewDirectReservation {
+      // @throws BusinessError con los códigos de la tabla C.
+      execute(body: unknown): Promise<DirectReservationPreview>;
+    }
+    ```
+
+    Pasos, en el orden de la regla 2; el primero que falla da el error:
+    1. `readPreviewRequest(body, clock.today())` (punto 10).
+    2. Una sola llamada a `VerifyAvailability.check` con la categoría y las fechas, sin `limit`: la
+       respuesta muestra todas las habitaciones de la categoría.
+    3. **Asignación**, por `position` (el orden de `rooms`, desde 1):
+       - una entrada con `roomId` que no está en el resultado (no existe o es de otra categoría) da
+         `INVALID_ROOM_ID`;
+       - una entrada con `roomId` que no está disponible da `ROOM_NOT_AVAILABLE` con su `roomNumber`;
+       - las entradas sin `roomId` reciben, en su orden, las de menor `roomNumber` con `assignRooms`,
+         sin repetir las elegidas por `roomId`. Si no alcanzan, `NO_AVAILABILITY`.
+    4. **Capacidad:** un `guestCount` mayor que el `maxCapacity` de su habitación da
+       `GUEST_COUNT_EXCEEDS_CAPACITY`.
+    5. `quoteRooms` con una solicitud por habitación y el contexto `NEW_RESERVATION`. No se llama si
+       falló un paso anterior (regla 3).
+
+    Los pasos 2 a 4 van en una función que también usa `CreateDirectReservation` (T008).
+    `DirectReservationsController` convierte el resultado en el JSON de A con `toAvailabilityDto` y
+    `toQuotesDto(quotes, quoteRequests, true)`, y responde `200`.
+12. **`CreateDirectReservation` (T008).** Puerto de entrada en
+    `ports/in/create-direct-reservation.port.ts`:
+
+    ```typescript
+    interface CreateDirectReservation {
+      // @throws BusinessError con los códigos de la tabla C.
+      execute(body: unknown): Promise<ReservationDetail>;   // el de GetReservationDetail (C3)
+    }
+    ```
+
+    Pasos, en el orden de la regla 2; el primero que falla da el error:
+    1. `readCreationRequest(body, clock.today())` (punto 10). La `currency` de cada `expectedRates` se
+       revisa en el paso 1, con el `lodgingAmount`.
+    2. Disponibilidad, asignación y capacidad: la misma función de la vista previa (punto 11, pasos 2 a 4),
+       con una consulta nueva a `VerifyAvailability.check`, también de los mantenimientos (regla 9).
+    3. `verifyQuotes` con una solicitud por habitación (`key` = la posición como texto, contexto
+       `NEW_RESERVATION`) y, por `key`, el `lodgingAmount` y la `currency` de `expectedRates`. Guarda las
+       cotizaciones nuevas, nunca los montos que envió el cliente.
+    4. `Reservation.createDirect` (punto 8) con un titular nuevo, las `notes` y, por habitación, la
+       habitación asignada, su `guestCount` y su cotización (`lodgingAmount` y `quoteId`).
+    5. `withNewReservationRef` (regla 7): cada intento abre su propia transacción con `TransactionRunner` e
+       inserta la reserva con `ReservationRepository.insert`.
+    6. Después del `COMMIT`, `GetReservationDetail.execute(reservationRef)` (regla 6 del plan base): la
+       respuesta tiene la misma forma que C3, con su `updatedAt`.
+
+    `DirectReservationsController` responde `201` con `Location: /api/reservations/{reservationRef}` y el
+    cuerpo de `toReservationDetailBody`.
+
+    Lo agregan sus tareas: el reintento ante `RoomOverlapError` y `AVAILABILITY_TAKEN` (T009), las
+    llamadas a `DailyListChangeRecorder` y a `AriChangeRecorder` dentro de la transacción (T010) y la
+    `Idempotency-Key` (T019). Hasta T009, un solape rechazado por la base responde
+    `REQUEST_NOT_PROCESSED`.
+13. **OpenAPI (T017).** `/api/docs` documenta A y B **como responden hoy**:
+    - **A:** el cuerpo con su ejemplo, la respuesta `200` con el ejemplo de A, y la `400` con un ejemplo por
+      cada código que A puede responder. A no recibe titular, observaciones ni tarifas, así que no lleva sus
+      errores (`RATE_CHANGED`, `NOTES_TOO_LONG`, `GUEST_DATA_REQUIRED`, `INVALID_DOCUMENT_TYPE`,
+      `INVALID_CHARACTERS` ni `INVALID_EMAIL`). Sí lleva `CURRENCY_MISMATCH`: el total de la vista previa lo
+      suma `reservationTotal` (B3 de `calculate-dynamic-rate`), que lo responde si el Módulo 3 cotiza las
+      habitaciones en monedas distintas.
+    - **B:** el cuerpo con su ejemplo, la respuesta `201` con la cabecera `Location` y el detalle con la forma
+      de C3 de `check-view-reservation`, y la `400` con un ejemplo por cada código que B puede responder.
+    - **Los ejemplos de error** van en el orden de la regla 2 (punto 10), después los de la disponibilidad y
+      la asignación (punto 11) y al final los de la cotización y `REQUEST_NOT_PROCESSED`.
+    - **Lo que todavía no existe no se documenta:** la cabecera `Idempotency-Key` con
+      `IDEMPOTENCY_KEY_REQUIRED` e `IDEMPOTENCY_KEY_REUSED` los agrega T019, y `AVAILABILITY_TAKEN`, T009,
+      cuando los programen.
+    - **Las clases:** las de C3 van en `reservation-detail.dto.ts`, junto a `toReservationDetailBody`, para
+      que la documentación de `GET /api/reservations/{reservationRef}` (T037 de `check-view-reservation`)
+      las reutilice; las de `availability` y `quotes`, en los archivos de sus DTO compartidos.
+14. **Reintento de asignación (T009).** Si en el paso 5 del punto 12 `insert` lanza `RoomOverlapError`
+    (otra solicitud tomó una de las habitaciones entre la verificación y el `COMMIT`), esa transacción ya
+    se revirtió. Entonces:
+    1. vuelve a consultar `VerifyAvailability.check` y a asignar con `assignDirectRooms` (punto 11, pasos
+       2 a 4);
+    2. conserva las cotizaciones del paso 3, que son por posición y categoría, no por habitación;
+    3. intenta de nuevo en una transacción nueva, hasta `ASSIGNMENT_MAX_RETRIES` (3) reintentos.
+
+    Si la nueva asignación ya no alcanza, si una habitación pedida por `roomId` ya no está libre, si
+    alguna no tiene capacidad o si se agotan los reintentos, responde `AVAILABILITY_TAKEN`, "Ya no hay
+    disponibilidad para las fechas solicitadas." (D3).
+15. **`Idempotency-Key` (T019).** Cómo se cumple lo de B ("Idempotencia", FR-008):
+    - **La cabecera:** `DirectReservationsController` la lee y la pasa a
+      `CreateDirectReservation.execute(body, idempotencyKey)`. Si falta o no es un UUID,
+      `IDEMPOTENCY_KEY_REQUIRED`, antes del paso 1 del punto 12 (sin consultar nada).
+    - **El cuerpo:** `requestHash` es el SHA-256 en hexadecimal (64 caracteres, la columna `request_hash`)
+      del cuerpo en JSON con las claves ordenadas, así el mismo cuerpo con las claves en otro orden es el
+      mismo.
+    - **Antes del paso 1:** `IdempotencyKeyRepository.find(key)` (puerto de salida nuevo, sobre
+      `idempotency_key`). Si existe y tiene menos de 24 horas:
+      - con el mismo `requestHash`, responde `201` con el detalle de esa reserva (`GetReservationDetail`), sin
+        validar, verificar ni cotizar otra vez;
+      - con otro, `IDEMPOTENCY_KEY_REUSED`.
+
+      Si existe pero venció, se trata como una clave nueva.
+    - **En la transacción del paso 5:** `IdempotencyKeyRepository.save(tx, { key, requestHash,
+      reservationId, createdAt }, expiredBefore)`, después de insertar la reserva y en cada intento del
+      reintento del punto 14.
+      - `createdAt` es `Clock.now()` y se guarda en `created_at`, también al reemplazar una fila vencida.
+        No se usa `now()` de la base: el vencimiento se decide con `Clock.now()`, y las dos horas deben
+        salir del mismo reloj; con otro reloj (las pruebas lo fijan), una clave recién guardada parecería
+        vencida.
+      - `expiredBefore` es `Clock.now()` menos 24 horas: una fila con la misma clave creada en ese instante
+        o antes ya venció y se reemplaza. Si la que existe sigue vigente, `save` lanza
+        `DuplicateIdempotencyKeyError`.
+    - **La carrera:** si la creación falla por cualquier motivo, se vuelve a buscar la clave antes de
+      responder el error. Esto incluye el solape, el `AVAILABILITY_TAKEN` del punto 14 y
+      `DuplicateIdempotencyKeyError`. Dos envíos simultáneos con la misma clave pasan los dos "Antes del
+      paso 1" sin encontrarla, asignan la misma habitación y el segundo falla antes de guardar la suya.
+      - Con una clave vigente del mismo `requestHash`, se responde la reserva ganadora.
+      - Con otro `requestHash`, `IDEMPOTENCY_KEY_REUSED`.
+      - Sin clave, el error sale tal cual.
+    - **La limpieza:** `IdempotencyKeyRepository.deleteExpired(before)` borra las filas con `created_at`
+      anterior a `before`. `CloseDay` la llama al terminar, con `Clock.now()` menos 24 horas (punto 13 de
+      `update-reservation`: "el borrado de las `idempotency_key` vencidas, que se agrega con su
+      repositorio").
+
+## Puntos abiertos
+
+Ninguno: los puntos de este plan quedaron resueltos.
+
+## Notes
+
+- `[P]` marca tareas paralelizables; `[US1]` las liga a su historia de usuario.
+- Commit por tarea o grupo lógico, con Gitflow.
+- Este plan no modifica el spec ni el plan base.

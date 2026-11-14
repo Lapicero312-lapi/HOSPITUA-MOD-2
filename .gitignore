@@ -1,37 +1,28 @@
-HELP.md
-.gradle
+# Dependencias y compilación
+node_modules/
+dist/
 build/
-!gradle/wrapper/gradle-wrapper.jar
-!**/src/main/**/build/
-!**/src/test/**/build/
+coverage/
+*.tsbuildinfo
 
-### STS ###
-.apt_generated
-.classpath
-.factorypath
-.project
-.settings
-.springBeans
-.sts4-cache
-bin/
-!**/src/main/**/bin/
-!**/src/test/**/bin/
+# Variables de entorno: NUNCA se suben (aquí va la clave de Channex).
+# Solo se versionan los archivos .env.example, que no llevan secretos.
+.env
+.env.*
+!.env.example
 
-### IntelliJ IDEA ###
-.idea
-*.iws
+# Registros
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Editores
+.idea/
 *.iml
+*.iws
 *.ipr
-out/
-!**/src/main/**/out/
-!**/src/test/**/out/
-
-### NetBeans ###
-/nbproject/private/
-/nbbuild/
-/dist/
-/nbdist/
-/.nb-gradle/
-
-### VS Code ###
 .vscode/

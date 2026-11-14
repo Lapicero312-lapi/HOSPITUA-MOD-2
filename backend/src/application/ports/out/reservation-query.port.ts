@@ -1,0 +1,241 @@
+import type { Reservation } from '../../../domain/reservation/reservation.js';
+import type {
+  CommissionStatus,
+  ReservationSource,
+  ReservationStatus,
+} from '../../../domain/shared/enums.js';
+import type { Money } from '../../../domain/shared/money.js';
+import type { Transaction } from './transaction.js';
+
+/** Tamaño fijo de una página de A1 de `register-ota-information-commission` (no hay `pageSize`). */
+export const OTA_COMMISSION_PAGE_SIZE = 100;
+
+/** Los filtros de A1 de `register-ota-information-commission`, ya validados (punto C1 de su plan). */
+export type OtaCommissionFilters = {
+  /** Rango inclusivo sobre la `end_date` de la reserva, en `AAAA-MM-DD`. */
+  dateFrom: string;
+  dateTo: string;
+  /** `null`: todos. */
+  commissionStatus: CommissionStatus | null;
+  reservationStatus: ReservationStatus | null;
+  otaId: string | null;
+};
+
+/** Una reserva de OTA con su comisión, como la muestra A1. */
+export type OtaCommissionRow = {
+  reservationRef: string;
+  otaId: string;
+  otaName: string;
+  externalConfirmationCode: string;
+  status: ReservationStatus;
+  startDate: string;
+  endDate: string;
+  grossAmount: Money;
+  /** De 0 a 100, con dos decimales, el congelado en la reserva. */
+  commissionPercentage: string;
+  commissionAmount: Money;
+  commissionStatus: CommissionStatus;
+};
+
+/** Una página de A1: las de la página pedida y el total con los mismos filtros. */
+export type OtaCommissionRows = {
+  totalItems: number;
+  items: OtaCommissionRow[];
+};
+
+/** Símbolo con el que Nest inyecta el puerto (plan base, regla 4). */
+export const RESERVATION_QUERY_PORT = Symbol('RESERVATION_QUERY_PORT');
+
+/** Una habitación que ya ocupa inventario y la reserva que la ocupa (`check-room-availability`, A1). */
+export type BlockingRoom = { roomId: string; reservationRef: string };
+
+/**
+ * Las habitaciones de una categoría que ocupan inventario en una noche (`check-view-reservation`,
+ * "`ReservationLookup.blockingRoomsByCategory`"): cada `roomId` una vez, en orden.
+ */
+export type NightBlockingRooms = { date: string; roomIds: string[] };
+
+/** Tamaño fijo de una página del listado (`check-view-reservation`, C1: no hay `pageSize`). */
+export const RESERVATION_PAGE_SIZE = 10;
+
+/** Los filtros de C1 ya validados (`check-view-reservation`, "Consulta del listado", T005). */
+export type ReservationListFilters = {
+  /** `null`: todos los estados. */
+  status: ReservationStatus | null;
+  source: ReservationSource | null;
+  /** Solo llega con `source = OTA` (lo valida T007). */
+  otaId: string | null;
+  /** `true`: solo las que tienen `conflict_reason` (FR-002a). */
+  inConflict: boolean;
+  /** Cruce con la estadía: `start_date <= dateTo` y `end_date > dateFrom`, en `AAAA-MM-DD`. */
+  stayRange: { dateFrom: string; dateTo: string } | null;
+  /** Solo las que llegan ese día: `start_date = arrivalDate`, en `AAAA-MM-DD` (FR-003b). */
+  arrivalDate: string | null;
+  /** Por `start_date` y, si empatan, por `reservation_ref`, en el mismo sentido. */
+  order: 'asc' | 'desc';
+  /**
+   * La búsqueda ya resuelta (`check-view-reservation`, "La búsqueda en `listReservations`", T015 y T020);
+   * `null` sin `search`. Con `CODE` se ignoran los demás filtros; con `DOCUMENT` y `NAME`, se combinan.
+   */
+  search: ReservationSearch | null;
+};
+
+/** Un criterio de búsqueda del listado, de los pasos 3, 5 y 6 del algoritmo de búsqueda. */
+export type ReservationSearch =
+  /** `reservation_ref` o `external_confirmation_code` exactos, sin distinguir mayúsculas. */
+  | { kind: 'CODE'; code: string }
+  /** El documento del titular, exacto (FR-004). */
+  | { kind: 'DOCUMENT'; documentNumber: string }
+  /** Parte del nombre completo del titular, sin distinguir mayúsculas ni tildes. */
+  | { kind: 'NAME'; name: string };
+
+/** Una reserva de la página, con lo que hace falta para armar su fila (T010). */
+export type ReservationListItem = {
+  /** Con su titular y todas sus habitaciones. */
+  reservation: Reservation;
+  /** El nombre de la agencia en las reservas `OTA`; `null` en las directas. */
+  otaName: string | null;
+  /** Si tiene movimientos migratorios de huéspedes extranjeros, para `deriveMigrationStatus` (FR-005b). */
+  hasForeignMovement: boolean;
+};
+
+export type ReservationListPage = {
+  /** Con los mismos filtros, sin paginar. */
+  totalItems: number;
+  items: ReservationListItem[];
+};
+
+/**
+ * Las consultas de solo lectura sobre las reservas (`check-view-reservation`, `ReservationQueryPort`).
+ * Cada tarea agrega el método que le toca.
+ */
+export interface ReservationQueryPort {
+  /**
+   * Las habitaciones de `roomIds` que ya ocupan inventario en `[startDate, endDate)`, sin las de la
+   * reserva `excludeReservationRef` (`check-room-availability`, A1). Una habitación bloquea si su reserva
+   * está en `PENDING`, `ACTIVE` o `IN_PROGRESS` y ella en `EXPECTED` o `CHECKED_IN`: en la base es
+   * `reservation_room.blocks_inventory` (D3).
+   */
+  findBlockingRooms(
+    roomIds: string[],
+    startDate: string,
+    endDate: string,
+    excludeReservationRef?: string,
+  ): Promise<BlockingRoom[]>;
+
+  /**
+   * T016c: una entrada por cada noche de `[dateFrom, dateTo)`, en orden de fecha, con las habitaciones de
+   * `categoryRoom` que esa noche ocupan inventario (`blocks_inventory`, como `findBlockingRooms`). La
+   * categoría es la que guardó la reserva (`reservation_room.category_room`). Las noches sin ninguna
+   * ocupada también vienen, con `roomIds` vacío.
+   */
+  blockingRoomsByCategory(
+    categoryRoom: string,
+    dateFrom: string,
+    dateTo: string,
+  ): Promise<NightBlockingRooms[]>;
+
+  /**
+   * T005: una página de `RESERVATION_PAGE_SIZE` reservas con los filtros de C1, con `page` desde 1. Si
+   * `page` pasa de la última, devuelve `items` vacío con el `totalItems` real: el ajuste a la última
+   * página válida es de T011. La búsqueda por código, documento o nombre la agregan T015 y T020.
+   * @throws Error si `page` no es un entero de 1 en adelante: es un error del programa (lo valida T007).
+   */
+  listReservations(
+    filters: ReservationListFilters,
+    page: number,
+  ): Promise<ReservationListPage>;
+
+  /**
+   * A1 de `register-ota-information-commission` (punto C1 de su plan): solo las reservas `OTA` con
+   * `end_date` en el rango inclusivo, con los demás filtros, ordenadas por `end_date` y
+   * `reservation_ref` ascendentes, de a `OTA_COMMISSION_PAGE_SIZE`. Una página que pasa de la última
+   * devuelve `items` vacío con el `totalItems` real: el ajuste lo hace el caso de uso.
+   */
+  listOtaCommissions(
+    filters: OtaCommissionFilters,
+    page: number,
+  ): Promise<OtaCommissionRows>;
+
+  /**
+   * T023: las reservas `ACTIVE` con `startDate` igual a `operationalDate` (`AAAA-MM-DD`), completas y con
+   * el nombre de su agencia, ordenadas por `reservationRef`. Lee en `tx`, después del bloqueo de la fila
+   * del día (`GenerateDailyList`, paso 2). Quién de ellas entra a la lista lo decide el dominio
+   * (`DailyListMembership.belongs`).
+   */
+  findArrivals(
+    operationalDate: string,
+    tx: Transaction,
+  ): Promise<DailyListArrival[]>;
+
+  /**
+   * T012: cuántas reservas se esperan ese día (C2, FR-005a), contadas por reserva y no por habitación.
+   * `operationalDate` es `AAAA-MM-DD`.
+   */
+  countExpectedArrivalsAndDepartures(
+    operationalDate: string,
+  ): Promise<ExpectedArrivalsAndDepartures>;
+
+  /**
+   * El cierre del día (`update-reservation`, punto 13): las `reservationRef` de las reservas con
+   * `startDate` igual a `operationalDate` (`AAAA-MM-DD`) y en `ACTIVE`, `PENDING` o `IN_PROGRESS`, mayores
+   * que `afterRef` (o desde la primera si es `null`), en orden de `reservationRef` y como mucho `limit`. Así
+   * el lote siguiente empieza después del anterior aunque las reservas ya cerradas salgan de la selección.
+   */
+  findToClose(
+    operationalDate: string,
+    afterRef: string | null,
+    limit: number,
+  ): Promise<string[]>;
+
+  /**
+   * La recuperación del cierre del día (`update-reservation`, punto 14): los días (`AAAA-MM-DD`) anteriores
+   * a `today` que tienen alguna reserva en `ACTIVE` o `PENDING`, o en `IN_PROGRESS` con alguna habitación
+   * en `EXPECTED`, del más antiguo al más reciente y sin repetir.
+   */
+  findDaysToClose(today: string): Promise<string[]>;
+
+  /**
+   * T033: las reservas `PENDING`, `ACTIVE` o `IN_PROGRESS` cuya estadía se cruza con el rango
+   * (`start_date <= dateTo` y `end_date > dateFrom`), cada una con todas sus habitaciones (C5 y
+   * "Consulta del Módulo 1"). Con `roomId`, solo las que tienen esa habitación entre las suyas, en
+   * cualquier `stayStatus`. Ordenadas por `startDate` y después `reservationRef`, ascendentes; las
+   * habitaciones, por `roomNumber`. Las fechas son `AAAA-MM-DD`.
+   */
+  findByStayRange(
+    dateFrom: string,
+    dateTo: string,
+    roomId: string | null,
+  ): Promise<StayRangeReservation[]>;
+}
+
+/** Una reserva de la consulta por fechas del Módulo 1 (C5): sin datos del huésped ni financieros. */
+export type StayRangeReservation = {
+  reservationRef: string;
+  status: 'PENDING' | 'ACTIVE' | 'IN_PROGRESS';
+  /** `AAAA-MM-DD`. */
+  startDate: string;
+  endDate: string;
+  /** Todas las de la reserva. Una sin asignar trae `roomId` y `roomNumber` en `null`. */
+  rooms: {
+    roomId: string | null;
+    roomNumber: string | null;
+    categoryRoom: string;
+  }[];
+};
+
+/** Las dos cifras del resumen del día (C2). */
+export type ExpectedArrivalsAndDepartures = {
+  /** Reservas `ACTIVE` o `PENDING` con `startDate` igual al día. */
+  expectedArrivals: number;
+  /** Reservas `IN_PROGRESS` con `endDate` igual al día. */
+  expectedDepartures: number;
+};
+
+/** Una llegada del día, con lo que hace falta para proyectarla en la lista (T023). */
+export type DailyListArrival = {
+  /** Con su titular y todas sus habitaciones. */
+  reservation: Reservation;
+  /** El nombre de la agencia en las reservas `OTA`; `null` en las directas. */
+  otaName: string | null;
+};

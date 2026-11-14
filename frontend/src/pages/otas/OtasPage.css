@@ -1,0 +1,52 @@
+/* Pantalla "Agencias OTA": tabla de solo lectura con la conexión como estado. */
+
+.otas-panel {
+  overflow: hidden;
+}
+
+.otas-name {
+  color: var(--text-1);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.otas-commission,
+.otas-count {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.otas-table th:nth-child(2),
+.otas-table th:last-child {
+  text-align: right;
+}
+
+.otas-commission--none {
+  color: var(--text-3);
+}
+
+.otas-date {
+  color: var(--text-2);
+  white-space: nowrap;
+}
+
+.otas-count {
+  color: var(--text-1);
+  font-weight: 600;
+}
+
+.otas-connection--connected {
+  --tone-bg: var(--positive-bg);
+  --tone-border: var(--positive-border);
+  --tone-fg: var(--positive-fg);
+}
+
+.otas-connection--disconnected {
+  --tone-bg: var(--neutral-bg);
+  --tone-border: var(--neutral-border);
+  --tone-fg: var(--neutral-fg);
+}
+
+.otas-panel .error-message {
+  margin: 1rem;
+}

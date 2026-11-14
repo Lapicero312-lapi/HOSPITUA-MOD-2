@@ -1,6 +1,7 @@
 # Feature Specification: Registrar Confirmación y Comisión de OTA
 
 **Created**: 2026-09-08
+**Updated**: 2026-10-18
 
 ## Use Case (Caso de Uso)
 
@@ -17,23 +18,26 @@ fórmula contractual y deje el importe neto listo para la conciliación mensual 
 ### Flujo de Usuario de Alto Nivel
 
 1. El caso de uso "Generar Reservación por OTA" invoca internamente "Registrar confirmación y
-   comisión de ota" al validar una nueva reserva, enviando el `totalAmount` recibido de la OTA y el
+   comisión de ota" al validar una nueva reserva, enviando el `grossAmount` recibido de la OTA y el
    `externalConfirmationCode`.
-2. El sistema consulta el `commissionPercentage` contractual configurado para esa `Ota`.
+2. El sistema consulta el `commissionPercentage` fijo de esa `Ota`. Si todavía no lo tiene, lo calcula con
+   esta primera reserva: la comisión que Booking informa por Channex (`ota_commission`) ÷ `grossAmount` ×
+   100, con dos decimales y redondeo `ROUND_HALF_UP`. Lo guarda en la `Ota`.
 3. El sistema calcula el `commissionAmount` aplicando estrictamente la fórmula del glosario:
-   `totalAmount × commissionPercentage`.
+   `grossAmount × commissionPercentage / 100` (el porcentaje va de 0 a 100: `30` es el 30 %).
 4. El sistema persiste el `commissionAmount` y el `commissionPercentage` en la `Reservation`, junto
    con el `externalConfirmationCode`, y marca el `commissionStatus` como `CALCULATED`.
-5. Durante el ciclo de vida de la reserva, el sistema permite conciliar la comisión contra el
-   cierre contable mensual, cambiando el `commissionStatus` a `RECONCILED` o `PAID`, o ajustándolo
-   a cero cuando la reserva se cancela sin cobro de penalidad.
+5. Durante el ciclo de vida de la reserva, el Módulo 3 (finanzas) concilia la comisión contra el
+   cierre contable mensual, y el sistema cambia el `commissionStatus` a `RECONCILED` o `PAID`
+   según lo que el Módulo 3 le indica. Si la OTA cancela la reserva o el huésped no llega (`NO_SHOW`),
+   el sistema solo cambia su `status`: no toca la comisión ni la concilia, porque Booking no la cobrará.
 
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - Cálculo y Registro de Comisión al Confirmar una Reserva OTA (Priority: P1)
 
-Al validarse una nueva reserva proveniente de una `Ota`, el sistema aplica el porcentaje
-contractual configurado para esa agencia sobre el `totalAmount` recibido, calcula el
+Al validarse una nueva reserva proveniente de una `Ota`, el sistema aplica el porcentaje fijo de
+la agencia, calculado con su primera reserva, sobre el `grossAmount` recibido, calcula el
 `commissionAmount` y lo persiste junto con el `externalConfirmationCode` en la `Reservation`, con
 `commissionStatus` `CALCULATED`. Esta historia es el flujo maestro (Happy Path), invocado siempre
 como parte de "Generar Reservación por OTA".
@@ -42,100 +46,142 @@ como parte de "Generar Reservación por OTA".
 terceros: sin ella, el hotel recibiría reservas de OTA sin registrar con exactitud la comisión
 pactada ni el ingreso neto real de cada una.
 
-**Independent Test**: Se prueba invocando el caso de uso con un `totalAmount` de \$400 y un
-`commissionPercentage` del 15% configurado para la agencia. Se verifica que el sistema calcule un
-`commissionAmount` de \$60, lo persista junto al `externalConfirmationCode`, y marque el
-`commissionStatus` como `CALCULATED`. Se completa enviando un `commissionPercentage` inválido,
-confirmando el rechazo con **HTTP 400**.
+**Independent Test**: Llega una primera reserva de Booking con un `grossAmount` de \$400 y una
+comisión informada de \$60. El sistema guarda el porcentaje `15.00` en la agencia, calcula un
+`commissionAmount` de \$60, lo persiste junto al `externalConfirmationCode` y marca el
+`commissionStatus` como `CALCULATED`. Una segunda reserva de \$200 usa el mismo `15.00` y da \$30. Se
+completa con una primera reserva sin comisión informada, que no se registra.
 
 **Acceptance Scenarios**:
 
 1. **Scenario**: Registro exitoso de comisión al confirmar una reserva OTA (Happy Path)
-   - **Given** una reserva proveniente de una `Ota` válida con `commissionPercentage`
-     contractual configurado
+   - **Given** una reserva proveniente de una `Ota` válida con su `commissionPercentage` fijo ya
+     calculado
    - **When** "Generar Reservación por OTA" invoca "Registrar confirmación y comisión de ota" con
-     el `totalAmount` y el `externalConfirmationCode`
-   - **Then** el sistema calcula el `commissionAmount` aplicando `totalAmount ×
-     commissionPercentage`, lo persiste en la `Reservation`, y marca el `commissionStatus` como
+     el `grossAmount` y el `externalConfirmationCode`
+   - **Then** el sistema calcula el `commissionAmount` aplicando `grossAmount ×
+     commissionPercentage / 100`, lo persiste en la `Reservation`, y marca el `commissionStatus` como
      `CALCULATED`
 
-2. **Scenario**: Rechazo controlado por porcentaje de comisión inválido (Error)
-   - **Given** una solicitud de registro de comisión
-   - **When** el `commissionPercentage` configurado para el canal es menor a cero o superior al
-     100%
-   - **Then** el sistema intercepta la solicitud, responde con **HTTP 400 (Bad Request)**
-     indicando que el porcentaje de comisión no es válido, y no persiste la reserva
+2. **Scenario**: Primera reserva de la agencia
+   - **Given** una `Ota` sin `commissionPercentage`
+   - **When** llega su primera revisión `new` con `ota_commission` y un `grossAmount` mayor que 0
+   - **Then** el sistema calcula el porcentaje (`ota_commission ÷ grossAmount × 100`, con dos decimales y
+     `ROUND_HALF_UP`), lo guarda en la `Ota` y lo aplica a esta reserva y a las siguientes
+
+3. **Scenario**: Primera reserva sin comisión o con una comisión inválida (Error)
+   - **Given** una `Ota` sin porcentaje
+   - **When** llega una revisión sin `ota_commission`, o con una que da un porcentaje fuera de 0 a 100
+   - **Then** el sistema no registra la reserva ni confirma la revisión a Channex, y deja el error en el
+     log; nunca inventa una comisión
+
+4. **Scenario**: Comisión que no coincide con el porcentaje (Advertencia)
+   - **Given** una `Ota` con porcentaje `15.00`
+   - **When** llega una reserva cuya comisión informada da un porcentaje que difiere en más de 0.01 puntos
+   - **Then** el sistema aplica igual el `15.00` y registra una advertencia en el log (puede ser un cambio
+     de contrato o una promoción)
 
 ---
 
 ### User Story 2 - Conciliación Financiera de Comisiones OTA (Priority: P2)
 
-La Recepcionista o el analista financiero revisa el reporte de comisiones de un periodo mensual,
-comparando las reservas con `commissionStatus` `CALCULATED` contra aquellas que completaron su
-estadía (`CHECKED_OUT`) o que se cancelaron con cobro de penalidad. El sistema permite marcar las
-comisiones como `RECONCILED` o `PAID`, y ajustar a cero las reservas canceladas sin costo.
+El Módulo 3 (finanzas) revisa las comisiones de un periodo mensual, comparando las reservas con
+`commissionStatus` `CALCULATED` contra las que completaron su estadía (`COMPLETED`). El Módulo 2
+pone a su disposición esos datos y marca las comisiones como `RECONCILED` o `PAID` cuando el Módulo 3
+se lo indica. La Recepcionista no concilia comisiones. Las reservas canceladas por la OTA o en `NO_SHOW`
+no cambian su comisión ni se concilian.
 
 **Why this priority**: Es un flujo de auditoría contable importante para la liquidación mensual con
 los proveedores de distribución, pero no interviene en la ingesta síncrona diaria de reservas.
 
 **Independent Test**: Se genera el listado de comisiones de un canal sobre un conjunto de reservas
-en `CHECKED_OUT`. Se ejecuta la conciliación y se comprueba que las comisiones pasen a
-`RECONCILED` y que las asociadas a reservas `CANCELLED` sin penalidad ajusten su comisión a cero.
+en `COMPLETED`. El Módulo 3 ejecuta la conciliación y se comprueba que las comisiones pasen a
+`RECONCILED`, y que las reservas `CANCELLED` por la OTA conserven su comisión sin ningún cambio.
 
 **Acceptance Scenarios**:
 
-1. **Scenario**: Conciliación exitosa de comisiones para reservas con Check-Out completado
-   - **Given** un conjunto de reservas OTA con `commissionStatus` `CALCULATED` en `state`
-     `CHECKED_OUT`
-   - **When** el usuario financiero ejecuta el proceso de conciliación del periodo
+1. **Scenario**: Conciliación exitosa de comisiones para reservas con estadía finalizada
+   - **Given** un conjunto de reservas OTA con `commissionStatus` `CALCULATED` en `status`
+     `COMPLETED`
+   - **When** el Módulo 3 ejecuta el proceso de conciliación del periodo
    - **Then** el sistema confirma la coincidencia de montos y actualiza el `commissionStatus` de
      esas reservas a `RECONCILED`
 
-2. **Scenario**: Anulación de comisión por cancelación libre de penalidad
-   - **Given** una reserva de canal OTA que pasó a `state` `CANCELLED` sin cobro de penalidad
-   - **When** el sistema procesa la conciliación de comisiones
-   - **Then** el sistema ajusta el `commissionAmount` a cero y marca el `commissionStatus` como
-     `RECONCILED`, evitando una obligación de pago indebida hacia la agencia
+2. **Scenario**: Cancelación de la reserva por la OTA
+   - **Given** una reserva de canal OTA que la Ota canceló y pasó a `status` `CANCELLED`
+   - **When** el sistema registra la cancelación o procesa la conciliación de comisiones
+   - **Then** el sistema no modifica el `commissionAmount` ni el `commissionStatus`: la agencia ya
+     sabe que no cobrará comisión por esa reserva porque ella misma la canceló
+
+3. **Scenario**: Reserva en `NO_SHOW`
+   - **Given** una reserva de Booking en `NO_SHOW`, cuyo no-show se reportó a Booking por Channex
+   - **When** el Módulo 3 intenta conciliar su comisión
+   - **Then** el sistema la rechaza (`RESERVATION_NO_SHOW`) y no modifica el `commissionAmount` ni el
+     `commissionStatus`
 
 ---
 
-### User Story 3 - Configuración del Porcentaje Contractual por Canal OTA (Priority: P3)
+### User Story 3 - Registro de la Agencia y Estado de la Conexión (Priority: P3)
 
-La Recepcionista o un Administrador configura los parámetros de una nueva `Ota`, especificando su
-`name` y el `commissionPercentage` contractual por defecto que se aplicará a sus futuras reservas.
+La agencia **Booking.com** se registra una sola vez ("Configurar OTA"), sin porcentaje: el porcentaje
+se calcula con su primera reserva. El sistema lleva el estado de la conexión con Channex y la fecha y hora de la
+última lectura del feed. La Recepcionista no crea ni edita agencias: solo las consulta en la pantalla de
+agencias.
 
-**Why this priority**: Es una función administrativa de soporte para incorporar nuevos canales
-comerciales, pero no interviene en la ingesta diaria de reservas existentes.
+**Why this priority**: Es una función de soporte para operar el canal, pero no interviene en el cálculo
+de cada comisión.
 
-**Independent Test**: Se registra una nueva `Ota` con un 15% de comisión por defecto. Se envía una
-reserva de prueba sobre ese canal y se verifica que el sistema aplique automáticamente el 15% al
-calcular el `commissionAmount`.
+**Independent Test**: Se arranca el sistema y se verifica que exista una sola `Ota` "Booking.com", sin
+porcentaje. Llega su primera reserva y queda con el porcentaje calculado. Al reiniciar, no se duplica ni
+pierde su porcentaje.
 
 **Acceptance Scenarios**:
 
-1. **Scenario**: Registro exitoso de nuevo canal OTA con comisión contractual
-   - **Given** la consola de configuración de canales
-   - **When** el Administrador registra una nueva `Ota` con un `commissionPercentage` válido
-   - **Then** el sistema guarda la nueva `Ota` y la habilita para calcular comisiones de forma
-     automática en sus futuras reservas
+1. **Scenario**: Registro de la agencia al iniciar
+   - **Given** la configuración de Channex válida
+   - **When** el sistema inicia y la agencia no existe
+   - **Then** el sistema registra la `Ota` "Booking.com" con su `linkedAt`, en `CONNECTED` y sin
+     `commissionPercentage`
 
-2. **Scenario**: Rechazo de configuración por nombre de canal ausente (Error)
-   - **Given** el formulario de alta de canal OTA
-   - **When** el Administrador intenta guardar el registro con el campo `name` vacío
-   - **Then** el sistema responde con **HTTP 400 (Bad Request)** especificando los campos
-     requeridos faltantes
+2. **Scenario**: Reinicio
+   - **Given** la `Ota` "Booking.com" ya registrada, con o sin porcentaje
+   - **When** el sistema inicia otra vez
+   - **Then** no crea otra agencia y conserva su porcentaje
+
+3. **Scenario**: Channex rechaza la conexión (cambio a `DISCONNECTED`)
+   - **Given** la `Ota` en `CONNECTED`
+   - **When** Channex rechaza la lectura del feed por una clave de acceso inválida o sin permiso
+   - **Then** el sistema cambia el `connectionStatus` a `DISCONNECTED`; la `Ota` y sus reservas se
+     conservan, y la Recepcionista la ve en la pantalla de agencias como "Desconectada"
+
+4. **Scenario**: La conexión se recupera (cambio a `CONNECTED`)
+   - **Given** la `Ota` en `DISCONNECTED`
+   - **When** una lectura del feed vuelve a funcionar
+   - **Then** el sistema cambia el `connectionStatus` a `CONNECTED` sin perder el `linkedAt` original
+
+5. **Scenario**: Cada lectura del feed actualiza la última sincronización
+   - **Given** la `Ota` registrada
+   - **When** una lectura del feed termina bien, traiga o no reservas
+   - **Then** el sistema actualiza su `lastSyncAt` con la fecha y hora de esa lectura
 
 ### Casos Borde
 
-- ¿Qué sucede si se modifica el `commissionPercentage` contractual de una `Ota` con reservas ya
-  registradas? El nuevo porcentaje aplica exclusivamente a las reservas futuras; las reservas
-  existentes conservan el `commissionAmount` calculado al momento de su creación.
-- ¿Qué sucede si se recibe una nueva reserva reutilizando un `externalConfirmationCode` ya
-  registrado para la misma `Ota`? El sistema rechaza el intento por duplicidad, responde con **HTTP
-  400 (Bad Request)**, y no genera un registro de comisión duplicado.
-- ¿Cómo maneja el sistema una cancelación tardía con penalidad parcial de una reserva OTA? El
-  sistema recalcula el `commissionAmount` aplicando el `commissionPercentage` exclusivamente sobre
-  la porción cobrada por penalidad, manteniendo la consistencia financiera.
+- ¿Con qué estado nace una `Ota`? Nace en `CONNECTED` al registrarse al iniciar ("Configurar OTA"); desde ese
+  momento su estado y su `lastSyncAt` solo cambian por las lecturas del feed de Channex. La
+  Recepcionista nunca los cambia.
+- ¿Qué sucede con las reservas ya registradas de una `Ota` que pasa a `DISCONNECTED`? No cambian: conservan
+  su `status`, su `commissionAmount` y su `commissionStatus`. La desvinculación solo cambia el estado de la
+  conexión de la agencia.
+- ¿Se recalcula el porcentaje de una agencia? No: queda fijo desde su primera reserva. Si una reserva
+  posterior trae una comisión que da otro porcentaje, se registra una advertencia y se aplica el fijo.
+  Corregirlo es una tarea manual de administración, en la base de datos.
+- ¿Qué muestra la agencia antes de su primera reserva? El `commissionPercentage` vacío.
+- ¿Qué sucede si llega una reserva con un `externalConfirmationCode` ya registrado para la misma
+  `Ota`? No se crea otra reserva ni otra comisión: la revisión se aplica a la reserva que ya existe
+  (ver "Generar reservación por OTA").
+- ¿Cómo maneja el sistema la cancelación de una reserva OTA, incluso si es tardía? Solo la cancela
+  Booking, por el feed de Channex. El sistema marca la reserva como `CANCELLED` y no toca la comisión: el manejo
+  financiero de esa cancelación es entre la agencia y el hotel, fuera de este módulo.
 - ¿Cómo maneja el sistema dos actualizaciones simultáneas de la misma reserva OTA? El sistema
   procesa secuencialmente los eventos para garantizar que el `commissionStatus` final refleje la
   versión de datos más reciente.
@@ -145,24 +191,38 @@ calcular el `commissionAmount`.
 ### Functional Requirements
 
 - **FR-001**: El sistema debe calcular automáticamente el `commissionAmount` aplicando la fórmula
-  `totalAmount × commissionPercentage` al validar una nueva reserva de canal OTA.
-- **FR-002**: El sistema debe consultar el `commissionPercentage` contractual configurado para la
-  `Ota` que origina cada reserva.
+  `grossAmount × commissionPercentage / 100` (el porcentaje va de 0 a 100), con el porcentaje fijo de la
+  agencia, al registrar una nueva reserva de canal OTA, y recalcularlo con el mismo porcentaje congelado si Booking cambia el valor de la reserva.
+- **FR-002**: El sistema debe usar el `commissionPercentage` fijo de la `Ota` que origina cada reserva.
+  Si la agencia aún no lo tiene, debe calcularlo con su primera revisión `new` que traiga la comisión de
+  Booking (`ota_commission ÷ grossAmount × 100`, con dos decimales y `ROUND_HALF_UP`) y guardarlo en la
+  `Ota`. Las revisiones `modified` y `cancelled` no lo calculan, y no se recalcula después.
 - **FR-003**: El sistema debe asignar el `commissionStatus` inicial `CALCULATED` a toda reserva OTA
   registrada correctamente.
-- **FR-004**: El sistema debe rechazar el registro de reservas OTA cuyo `commissionPercentage` sea
-  menor a cero o superior al 100%.
-- **FR-005**: El sistema debe rechazar cualquier intento de registrar una reserva OTA con un
-  `externalConfirmationCode` ya existente para el mismo canal.
-- **FR-006**: El sistema debe proveer una función de conciliación que cambie el `commissionStatus`
-  de `CALCULATED` a `RECONCILED` o `PAID`.
-- **FR-007**: El sistema debe ajustar a cero el `commissionAmount` de las reservas que pasen a
-  `state` `CANCELLED` sin cobro de penalización.
-- **FR-008**: El sistema debe permitir configurar y actualizar el `name` y el `commissionPercentage`
-  por defecto de cada `Ota`.
+- **FR-004**: El sistema no debe calcular comisiones sin porcentaje, ni con uno fuera de 0 a 100. Una
+  primera revisión sin comisión informada, o con una que da un porcentaje fuera de 0 a 100, no se procesa
+  ni se confirma a Channex, y queda en el log.
+- **FR-004a**: El sistema debe registrar una advertencia cuando la comisión que informa Booking en una
+  reserva da un porcentaje que difiere en más de 0.01 puntos del fijo de la agencia, sin cambiar la
+  comisión calculada.
+- **FR-005**: El sistema no debe registrar dos reservas OTA con el mismo `externalConfirmationCode` para
+  la misma `Ota`: una revisión con un código ya registrado se aplica a esa reserva.
+- **FR-006**: El sistema debe proveer al Módulo 3 (finanzas) una función de conciliación que cambie
+  el `commissionStatus` de `CALCULATED` a `RECONCILED` o `PAID`, solo para reservas `COMPLETED`. La
+  Recepcionista no concilia comisiones.
+- **FR-007**: El sistema no debe modificar el `commissionAmount` ni el `commissionStatus` de una
+  reserva OTA cuando Booking la cancela ni cuando queda en `NO_SHOW`: solo cambia su `status`. Booking
+  no cobra comisión por una cancelación, y el no-show se le reporta por Channex sin cobrar penalidad al
+  huésped ("Generar reservación por OTA"), así que tampoco la cobra. Esas comisiones no se concilian.
+- **FR-008**: El sistema debe registrar la `Ota` "Booking.com" al iniciar, con su `name` y sin
+  porcentaje, sin duplicarla. La Recepcionista no crea ni edita agencias; solo las consulta.
+- **FR-008a**: El sistema debe cambiar el `connectionStatus` a `DISCONNECTED` cuando Channex rechace la
+  lectura del feed por la clave de acceso o los permisos, y de nuevo a `CONNECTED` cuando una lectura
+  vuelva a funcionar; debe actualizar el `lastSyncAt` con cada lectura que termine bien, y no debe
+  eliminar la `Ota` ni modificar sus reservas al cambiar de estado.
 - **FR-009**: El sistema debe interceptar cualquier error de validación de entrada o integración y
   responder con **HTTP 400 (Bad Request)**, prohibiendo que se propaguen como fallas **HTTP 500**.
-- **FR-010**: El sistema debe mantener un registro auditable de cada comisión calculada, ajustada o
+- **FR-010**: El sistema debe mantener un registro auditable de cada comisión calculada o
   conciliada, incluyendo la fecha, el canal responsable y los importes aplicados.
 
 ### Non-Functional Requirements
@@ -175,29 +235,34 @@ calcular el `commissionAmount`.
 ### Key Entities *(include if feature involves data)*
 
 - **Reservation**: Representa la reserva de canal OTA sobre la que se calcula la comisión.
-  Atributos: `reservationRef`, `guestRef`, categoría o habitación asignada, `totalAmount` (valor
-  bruto recibido de la OTA), `commissionAmount` (comisión calculada), `commissionPercentage`
-  (porcentaje contractual aplicado), `commissionStatus` (`CALCULATED` | `RECONCILED` | `PAID` |
-  `DISPUTED`), `externalConfirmationCode`, `source` (`OTA`), y `state` con estados permitidos en
-  este flujo: `ACTIVE`, `CHECKED_IN`, `CHECKED_OUT`, `CANCELLED`. Al provenir de un canal que ya
-  respalda y garantiza la reserva del lado de la agencia, se persiste siempre directamente en
-  `ACTIVE`; este flujo no utiliza el estado `PENDING`.
-- **Ota**: Representa al intermediario externo que origina la reserva. Atributos: `id`, `name`, y
-  `commissionPercentage` (porcentaje de comisión pactado por defecto).
-- **Guest**: Representa al huésped titular de la reserva. Atributos: `id`, `fullName`,
-  `documentNumber`, `nationality`.
+  Atributos: `reservationRef`, `guestRef`, `guestCount`, `grossAmount` (valor bruto total de todas
+  las habitaciones, recibido de la OTA), `currency`, `commissionAmount` (comisión calculada sobre el
+  `grossAmount` completo; se recalcula si Booking cambia el valor), `commissionPercentage`
+  (porcentaje fijo de la agencia, congelado en la reserva), `commissionStatus` (`CALCULATED` | `RECONCILED` |
+  `PAID`), `externalConfirmationCode`, `source` (`OTA`), y `status` con estados permitidos:
+  `PENDING`, `ACTIVE`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `NO_SHOW`. Una reserva de Booking se crea
+  directamente en `ACTIVE`, porque Booking ya la confirmó; la comisión se calcula desde el momento de su
+  registro.
+- **Ota**: Representa al intermediario externo que origina la reserva. Se registra al iniciar
+  ("Configurar OTA"); la Recepcionista no la crea ni la edita. Atributos: `id`, `name`,
+  `linkedAt` (fecha de vinculación), `commissionPercentage` (porcentaje fijo de la agencia, calculado
+  con su primera reserva; vacío hasta entonces), `connectionStatus`
+  (`CONNECTED` | `DISCONNECTED`: `DISCONNECTED` cuando Channex rechaza la conexión) y `lastSyncAt`
+  (fecha y hora de la última lectura del feed de Channex que terminó bien).
+- **Guest**: Representa al huésped titular de la reserva. Atributos: `id`, `firstName`, `lastName`,
+  `documentType`, `documentNumber`, `nationality`.
 
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
 - **SC-001**: El 100% de las reservas con `source` `OTA` cuentan con `commissionAmount` y
-  `commissionStatus` `CALCULATED` calculados de forma exacta al momento de su registro.
-- **SC-002**: El 100% de los intentos de registro con `externalConfirmationCode` duplicado o
-  `commissionPercentage` inválido son rechazados con **HTTP 400 (Bad Request)**.
+  `commissionStatus` `CALCULATED` registrados al momento de su registro.
+- **SC-002**: Cero reservas OTA duplicadas por un mismo `externalConfirmationCode`, y cero comisiones
+  calculadas con un porcentaje fuera de 0 a 100.
 - **SC-003**: Cero errores de servidor **HTTP 500** son provocados por fallos en el cálculo o
   conciliación de comisiones OTA; el 100% se responde con **HTTP 400**.
-- **SC-004**: El 100% de las reservas canceladas libres de costo ajustan su `commissionAmount` a
-  cero en el proceso de conciliación mensual.
+- **SC-004**: El 100% de las reservas OTA canceladas por la agencia o en `NO_SHOW` conservan su `commissionAmount` y
+  su `commissionStatus` sin cambios.
 - **SC-005**: El tiempo de respuesta para el registro y cálculo de comisión de una reserva OTA es
   inferior a 1 segundo.

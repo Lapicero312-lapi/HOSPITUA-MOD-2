@@ -1,180 +1,285 @@
 # Feature Specification: Generar Reservación por OTA
 
-**Created**: 2026-09-08
+**Created**: 2026-09-23
+**Updated**: 2026-10-18
 
 ## Use Case (Caso de Uso)
 
 ### Descripción del problema
 
-Una parte importante de las ventas del hotel llega a través de agencias de viaje en línea (OTA)
-como Booking o Expedia. Estas plataformas no operan sobre una pantalla del hotel: envían las
-reservas de sistema a sistema, de forma asíncrona y en cualquier momento del día. Si el Módulo 2
-no ofrece un punto de entrada confiable para recibirlas, el personal termina copiando reservas a
-mano desde los portales de cada agencia, con retraso y con errores. Eso produce dos riesgos
-graves. El primero es la sobreventa: mientras la reserva de la OTA no se registra, su cupo sigue
-figurando como libre y puede venderse dos veces. El segundo es el descuadre financiero con el
-canal: cada agencia cobra una comisión pactada sobre el valor del hospedaje, y si esa comisión no
-se calcula y se asienta en el momento del registro, la conciliación posterior con la OTA se vuelve
-imprecisa. El negocio necesita un endpoint de integración que reciba la reserva, descuente el cupo
-de la categoría de forma local y confiable, y registre de inmediato la comisión del intermediario.
+Una parte importante de las ventas del hotel llega por agencias de viajes en línea (OTA). En este
+proyecto la única agencia es **Booking.com**, conectada a través de **Channex** (entorno de pruebas
+`staging.channex.io`). Booking no opera sobre una pantalla del hotel: las reservas llegan de sistema a
+sistema, en cualquier momento del día, y pueden cambiar o cancelarse después. Si el Módulo 2 no las
+lee y las registra de forma confiable, el personal termina copiándolas a mano desde el portal de la
+agencia, con retraso y con errores. Eso produce dos riesgos graves: la **sobreventa**, porque mientras
+la reserva de Booking no se registra su habitación sigue figurando como libre, y el **descuadre
+financiero** con la agencia, porque la comisión pactada se calcula sobre el valor de cada reserva.
 
-### Flujo de Integración de Alto Nivel
+El negocio necesita un proceso automático que lea las reservas de Booking desde Channex, las registre
+con su comisión, aplique sus cambios y cancelaciones, y deje cada reserva lista para la lista de
+reservas del día del Módulo 1. La configuración de la agencia, la relación de tipos de habitación y el
+envío de disponibilidad a Channex son de "Configurar OTA"; los precios los envía el Módulo 3. El Módulo 2 no aparta ni libera
+habitaciones: el Módulo 1 decide qué hace con la lista del día.
 
-1. La **Ota** envía a la API del Módulo 2 una solicitud de reserva con su estructura JSON, que
-   incluye las fechas de estadía, la categoría de `Habitation`, los datos del `Guest` titular, el
-   valor bruto del hospedaje y el `externalConfirmationCode` de la agencia.
-2. El sistema valida que la solicitud tenga la estructura JSON correcta y que estén presentes
-   todos los campos obligatorios, incluido el `externalConfirmationCode`.
-3. El sistema comprueba la disponibilidad de cupos para esa categoría y ese rango de fechas de
-   forma **100% local** en la base de datos de reservas del Módulo 2, sin consultar al Módulo 1.
-4. Si hay cupo, el sistema lo descuenta y ejecuta el caso de uso interno "Registrar confirmación y
-   comisión de ota", que calcula el `commissionAmount` aplicando la fórmula del glosario:
-   `totalAmount × commissionPercentage`, con el porcentaje configurado para esa agencia.
-5. El sistema registra el valor bruto recibido tal cual, sin recalcular la tarifa: en este flujo
-   no interviene el caso de uso "Calcular tarifa dinámica" del Módulo 3.
-6. El sistema persiste la `Reservation` directamente en estado `ACTIVE`, ya que el acuerdo y la
-   garantía de cobro fueron validados previamente por la plataforma de la OTA.
-7. El sistema retorna una respuesta JSON de confirmación con el identificador interno generado.
+### Flujo de Usuario de Alto Nivel
 
-La reserva no asigna un número físico de habitación: solo asegura y descuenta un cupo de la
-categoría. La asignación de la `Habitation` real, con su `numberHabitation`, se posterga hasta el
-momento del Check-In.
+1. Cada 30 segundos, el sistema consulta a Channex las **revisiones de reserva** pendientes de la
+   propiedad (el *feed*), de la más antigua a la más reciente. Cada revisión es una reserva nueva
+   (`new`), un cambio (`modified`) o una cancelación (`cancelled`).
+2. El sistema procesa cada revisión **una sola vez**: si ya procesó esa revisión, solo la confirma.
+3. **Reserva nueva (`new`)**: el sistema relaciona cada habitación con su categoría (según
+   "Configurar OTA"), asigna una `Room` disponible de esa categoría mediante "Verificar
+   disponibilidades" (la de menor `roomNumber`), y registra la `Reservation` directamente en
+   **`ACTIVE`** (Booking ya la confirmó), con `source` `OTA`, el código de Booking como
+   `externalConfirmationCode` y el valor bruto y la moneda que envía Booking. Ejecuta "Registrar
+   confirmación y comisión de ota" para calcular la comisión con el porcentaje fijo de la agencia (si es su
+   primera reserva, ese porcentaje se calcula con la comisión que informa Booking).
+4. **Cambio (`modified`)**: el sistema aplica el cambio a la reserva mediante "Actualizar
+   reservación" (fechas, habitaciones, personas, valor, observaciones y datos del titular).
+5. **Cancelación (`cancelled`)**: el sistema cancela la reserva mediante "Cancelar reservación", por
+   el canal `OTA_API`.
+6. Booking ya aceptó la reserva o el cambio, así que el sistema **no los rechaza**: si no hay
+   habitación disponible, si se supera la capacidad, si el cambio no se puede aplicar o si sus
+   habitaciones traen fechas distintas a las de la reserva, registra la reserva y la marca **en conflicto** con su motivo, para que la Recepcionista lo resuelva. Si no hay
+   ninguna habitación libre de la categoría, la habitación queda **sin asignar**.
+7. Después de guardar, el sistema **confirma la revisión a Channex** (`ack`). Si el guardado falla por
+   un problema temporal, no la confirma y la vuelve a procesar en la siguiente consulta.
+8. Si la reserva llega hoy, la lista del día ya se envió y **ninguna habitación quedó sin asignar**, el
+   sistema avisa al Módulo 1 mediante
+   "Enviar reservas del día al Módulo 1" (`ADDED`, `UPDATED` o `REMOVED`). Una reserva con alguna
+   habitación sin asignar **no se envía** al Módulo 1 hasta que se asigne. Cada cambio se anota para el
+   envío de disponibilidad a Channex ("Configurar OTA").
+9. Si una reserva de Booking pasa a `NO_SHOW` en el cierre del día ("Actualizar reservación"), el
+   sistema le reporta el no-show a Booking por Channex, sin cobrar penalidad, para que Booking no cobre
+   comisión por esa reserva.
 
 ## User Scenarios & Testing *(mandatory)*
 
-### User Story 1 - Procesamiento de Reservación por API Externa (Priority: P1)
+### User Story 1 - Recepción de Reservas Nuevas de Booking (Priority: P1)
 
-Una **Ota** confirma una reserva en su plataforma y la transmite a la API del Módulo 2 mediante un
-webhook. El sistema procesa esa solicitud de forma transaccional y asíncrona, sin ninguna
-intervención humana ni pantalla: valida la estructura del payload y la presencia del
-`externalConfirmationCode`, comprueba la disponibilidad de la categoría de `Habitation` de forma
-local, descuenta el cupo, calcula y registra la comisión pactada con esa agencia, y persiste la
-`Reservation` directamente en estado `ACTIVE` con el valor bruto enviado por la OTA. Por tratarse
-de un único flujo de integración, tanto el camino de éxito como los rechazos controlados (sin
-disponibilidad local, código de confirmación ausente, fechas o datos mal formados, concurrencia
-por el último cupo) se consolidan en esta misma historia de usuario y no se modelan como flujos ni
-historias separadas.
+El sistema lee del feed de Channex las reservas nuevas de Booking, les asigna habitación, las registra
+en `ACTIVE` con su comisión y confirma cada revisión a Channex. Las reservas que no se pueden ubicar
+se registran igual, marcadas en conflicto.
 
-**Why this priority**: Es la funcionalidad que permite al hotel captar de forma automática las
-ventas de los canales globales, sin transcripción manual y sin ventana de tiempo en la que el cupo
-quede expuesto a doble venta. Además, al calcular y asentar la comisión en el mismo acto de
-registro, deja la información financiera lista para la conciliación posterior con cada agencia.
-Sin esta integración, el hotel no puede operar con OTAs de forma segura ni escalable.
+**Why this priority**: Permite captar automáticamente las ventas de Booking, sin transcripción manual y
+sin ventana de doble venta, con la comisión asentada en el mismo acto.
 
-**Independent Test**: Se puede probar de forma independiente enviando a la API un payload JSON de
-reserva simulando a la OTA, con una categoría de `Habitation` que tiene cupos disponibles para el
-rango de fechas. Se verifica que la `Reservation` se crea directamente en estado `ACTIVE`, que el
-inventario local de la categoría queda descontado en un cupo, que se persiste el
-`externalConfirmationCode` recibido, y que el `commissionAmount` almacenado es exactamente
-`totalAmount × commissionPercentage` para esa agencia. La prueba se completa reenviando payloads
-sin disponibilidad, sin `externalConfirmationCode` y con fechas incoherentes, confirmando que
-ninguno crea una reserva y que todos devuelven una respuesta JSON de error estructurada, sin
-interactuar con ninguna pantalla.
+**Independent Test**: Se crea una reserva de prueba en el hotel de Booking conectado a Channex staging
+y se verifica que, en menos de dos minutos, exista una `Reservation` en `ACTIVE` con el código de
+Booking, el valor bruto, la moneda, la comisión calculada y la habitación asignada, y que la revisión
+ya no aparezca en el feed.
 
 **Acceptance Scenarios**:
 
-1. **Scenario**: Generación exitosa de reserva por OTA (Happy Path)
-   - **Given** que existe disponibilidad de cupos para la categoría de `Habitation` seleccionada
-     en las fechas solicitadas en la base de datos local del Módulo 2
-   - **When** la **Ota** envía un payload JSON válido con todos los datos requeridos, incluyendo el
-     `externalConfirmationCode` y el valor bruto de la estadía
-   - **Then** el sistema descuenta un cupo de la categoría localmente, ejecuta el caso de uso
-     "Registrar confirmación y comisión de ota" aplicando la fórmula del glosario para guardar el
-     porcentaje y el importe de comisión, persiste la `Reservation` directamente en estado
-     `ACTIVE` y retorna un código HTTP 201 (Created) con el ID interno generado
+1. **Scenario**: Registro de una reserva nueva (Happy Path)
+   - **Given** una revisión `new` de Booking por una habitación de un tipo relacionado con la
+     categoría `DOBLE`, con la `Room` 201 libre en esas fechas
+   - **When** el sistema lee el feed
+   - **Then** registra la `Reservation` en `ACTIVE` con `source` `OTA`, el `externalConfirmationCode`
+     igual al código de Booking, el valor bruto y la moneda de Booking, la `Room` 201 en `EXPECTED` y
+     la comisión `grossAmount × commissionPercentage / 100`; luego confirma la revisión a Channex
 
-2. **Scenario**: Intento de reserva por OTA sin disponibilidad de cupos (Error)
-   - **Given** que no existen cupos disponibles para la categoría seleccionada en las fechas
-     enviadas en la base de datos local del Módulo 2
-   - **When** la **Ota** envía la solicitud de reserva mediante el API
-   - **Then** el sistema rechaza la transacción de forma controlada, no altera el inventario local
-     y retorna un error JSON estructurado con código HTTP 409 (Conflict):
-     `{"errorCode": "NO_AVAILABILITY", "message": "No hay disponibilidad local para la categoría seleccionada"}`
+2. **Scenario**: Revisión repetida
+   - **Given** una revisión ya procesada
+   - **When** Channex la vuelve a entregar
+   - **Then** el sistema no crea otra reserva y solo la confirma
 
-3. **Scenario**: Rechazo de reserva por ausencia de código de confirmación externo (Error)
-   - **Given** que el canal de origen de la transacción es "OTA"
-   - **When** la solicitud API no incluye el atributo obligatorio `externalConfirmationCode` o este
-     se encuentra vacío
-   - **Then** el sistema intercepta la validación localmente y rechaza el registro retornando un
-     código de error de negocio controlado HTTP 400 (Bad Request) que detalla la obligatoriedad
-     del campo
+3. **Scenario**: Varias habitaciones de la misma categoría
+   - **Given** una revisión `new` con dos habitaciones del tipo relacionado con `DOBLE` y las `Room`
+     201, 202 y 203 libres
+   - **When** el sistema la procesa
+   - **Then** asigna la 201 y la 202 y registra una sola `Reservation` con dos `ReservationRoom`
+
+4. **Scenario**: Sin habitación disponible (conflicto)
+   - **Given** una revisión `new` para la categoría `SUITE`, cuya única habitación ya está ocupada en
+     esas fechas
+   - **When** el sistema la procesa
+   - **Then** registra la `Reservation` en `ACTIVE` con la habitación **sin asignar**, la marca en
+     conflicto con el motivo `NO_ROOM_AVAILABLE` y confirma la revisión
+
+5. **Scenario**: Capacidad superada (conflicto)
+   - **Given** una revisión `new` con 3 personas para una categoría de capacidad máxima 2
+   - **When** el sistema la procesa
+   - **Then** registra la reserva, la marca en conflicto con el motivo `CAPACITY_EXCEEDED` y confirma
+     la revisión
+
+6. **Scenario**: Tipo de habitación sin relación
+   - **Given** una revisión con un tipo de habitación de Channex que no está relacionado con ninguna
+     categoría, o con una habitación que llega sin tipo de Channex (no está mapeada en Channex)
+   - **When** el sistema la procesa
+   - **Then** no registra la reserva, lo deja en el log y **no** confirma la revisión, para volver a
+     procesarla cuando se complete la relación en "Configurar OTA" o el mapeo en Channex
+
+7. **Scenario**: Channex no responde (Error)
+   - **Given** la consulta del feed
+   - **When** Channex no responde o responde que se superó su límite de solicitudes
+   - **Then** el sistema no registra nada en esa consulta y lo intenta de nuevo en la siguiente; ante el
+     límite, pausa un minuto y luego reintenta con espera creciente
+
+8. **Scenario**: Habitaciones con fechas distintas a las de la reserva (conflicto)
+   - **Given** una revisión `new` del 10 al 13 con una habitación del 10 al 12
+   - **When** el sistema la procesa
+   - **Then** registra la reserva con las fechas de la reserva (10 al 13), la marca en conflicto con el
+     motivo `CHANGE_NOT_APPLICABLE` para que la Recepcionista la revise y confirma la revisión
+
+---
+
+### User Story 2 - Cambios y Cancelaciones de Booking (Priority: P1)
+
+El sistema aplica a la reserva los cambios y las cancelaciones que Booking envía por el feed. Lo que
+no se puede aplicar queda marcado en conflicto.
+
+**Why this priority**: Booking es la fuente de verdad de sus reservas. Si un cambio o una cancelación
+no llega, el hotel espera a un huésped que no vendrá, o le asigna una estadía distinta a la que pagó.
+
+**Independent Test**: Se modifica en Booking la fecha de salida de una reserva de prueba y se verifica
+que la `Reservation` cambie su `endDate`, su valor bruto y su comisión. Se cancela y se verifica que
+pase a `CANCELLED` con una `Cancellation` del canal `OTA_API`.
+
+**Acceptance Scenarios**:
+
+1. **Scenario**: Cambio de fechas (Happy Path)
+   - **Given** una `Reservation` OTA en `ACTIVE` del 10 al 12, con la `Room` 201 libre hasta el 13
+   - **When** llega una revisión `modified` con salida el 13 y un valor bruto nuevo
+   - **Then** el sistema cambia la `endDate`, el valor bruto y la comisión (con el porcentaje
+     congelado de la reserva) mediante "Actualizar reservación", y confirma la revisión
+
+2. **Scenario**: Cambio sin disponibilidad (conflicto)
+   - **Given** una `Reservation` OTA en `ACTIVE` cuya habitación está ocupada en las fechas nuevas y
+     sin otra habitación libre de su categoría
+   - **When** llega la revisión `modified`
+   - **Then** el sistema aplica las fechas nuevas con la habitación sin asignar, marca la reserva en
+     conflicto con `NO_ROOM_AVAILABLE` y confirma la revisión
+
+3. **Scenario**: Cancelación (Happy Path)
+   - **Given** una `Reservation` OTA en `ACTIVE`
+   - **When** llega una revisión `cancelled`
+   - **Then** el sistema la cancela mediante "Cancelar reservación" (canal `OTA_API`), sin tocar la
+     comisión, y confirma la revisión
+
+4. **Scenario**: Cambio o cancelación que no se puede aplicar (conflicto)
+   - **Given** una `Reservation` OTA en `IN_PROGRESS`, `COMPLETED` o `NO_SHOW`
+   - **When** llega una revisión `modified` o `cancelled`
+   - **Then** el sistema no cambia la reserva, la marca en conflicto con el motivo
+     `CHANGE_NOT_APPLICABLE` y confirma la revisión
+
+5. **Scenario**: Cancelación de una reserva ya cancelada
+   - **Given** una `Reservation` OTA en `CANCELLED`
+   - **When** llega otra revisión `cancelled`
+   - **Then** el sistema no hace nada más y confirma la revisión
+
+6. **Scenario**: No-show reportado a Booking
+   - **Given** una `Reservation` de Booking en `ACTIVE` con llegada ayer y sin ningún Check-In
+   - **When** el cierre del día la pasa a `NO_SHOW`
+   - **Then** el sistema deja pendiente el reporte del no-show y lo envía a Channex sin cobrar
+     penalidad; si Channex no responde, la reserva sigue en `NO_SHOW` y el reporte se reintenta
 
 ### Casos Borde
 
-- ¿Qué sucede si un canal de OTA envía una solicitud de reserva con un formato de fecha inválido o
-  lógicamente incoherente (por ejemplo, una fecha de salida anterior a la de llegada)? El sistema
-  intercepta la validación en el controlador de la API del Módulo 2 y retorna una respuesta
-  estructurada **HTTP 400**, sin descontar inventario ni permitir que la excepción escale a una
-  falla de infraestructura **HTTP 500**.
-- ¿Cómo maneja el sistema si se recibe una solicitud de reserva de la OTA con datos de huésped
-  duplicados o con caracteres maliciosos en el texto libre? El sistema sanea y valida los datos
-  del `Guest` antes de persistir: normaliza y deduplica al titular contra los registros
-  existentes, rechaza cualquier contenido con patrones de inyección o caracteres no permitidos con
-  una respuesta **HTTP 400** estructurada, y nunca almacena el valor crudo ni lo propaga a una
-  falla interna.
-- ¿Qué sucede si dos solicitudes API de diferentes OTAs intentan descontar simultáneamente el
-  último cupo disponible de la misma categoría? El descuento del inventario se realiza dentro de
-  una transacción con bloqueo a nivel de la base de datos de reservas del Módulo 2, de modo que
-  solo una de las dos solicitudes obtiene el cupo y se registra en `ACTIVE`; la otra recibe una
-  respuesta **HTTP 409 (Conflict)** con `errorCode` `NO_AVAILABILITY` y no produce sobreventa.
+- ¿Qué datos del titular llegan? Nombre, apellido, correo, teléfono y país. Booking **no envía el
+  documento**: el tipo y el número quedan vacíos hasta el Check-In, donde el Módulo 1 registra los
+  documentos de todos los huéspedes.
+- ¿Cómo se guarda el país? Channex lo envía como código de dos letras (`CO`, `US`); el sistema lo
+  convierte al nombre del país (`Colombia`, `Estados Unidos`) con una tabla fija y lo guarda como
+  nacionalidad **informativa** del titular. Si el código no está en la tabla, la nacionalidad queda
+  vacía. La nacionalidad que decide el reporte SIRE es la de cada huésped en el Check-In.
+- ¿Cuántas personas tiene cada habitación? La suma de adultos y niños de esa habitación; los bebés no
+  se cuentan.
+- ¿Qué pasa si las observaciones superan los 500 caracteres o traen caracteres no válidos? Se sanean y
+  se recortan a 500 caracteres; la reserva no se rechaza.
+- ¿Qué pasa si llega un cambio de una reserva que el sistema no tiene (por ejemplo, creada antes de
+  conectar Channex)? Se registra como una reserva nueva. Si es una cancelación, solo se confirma y se
+  deja en el log.
+- ¿Qué pasa si dos revisiones de la misma reserva llegan juntas? Se procesan en orden, de la más
+  antigua a la más reciente.
+- ¿Qué pasa si el guardado de una revisión falla? No se confirma a Channex y se procesa en la siguiente
+  consulta. Las demás revisiones de esa consulta se procesan igual.
+- ¿Qué pasa con una reserva de Booking que la agencia nunca confirma? No existe ese caso: Booking envía
+  las reservas ya confirmadas. El estado `PENDING` se conserva sin uso, por si en el futuro se agrega
+  una agencia que lo necesite.
 
 ## Requirements *(mandatory)*
 
 ### Functional Requirements
 
-- **FR-001**: El sistema debe proveer un endpoint de API REST seguro para la recepción de
-  solicitudes de reservas de canales externos (`Ota`).
-- **FR-002**: El sistema debe exigir como parámetro obligatorio en el canal OTA la presencia del
-  atributo de texto `externalConfirmationCode`.
-- **FR-003**: El sistema debe validar la disponibilidad de cupos para la categoría de `Habitation`
-  seleccionada de forma interna en la base de datos local del Módulo 2.
-- **FR-004**: Al persistir la reserva, el sistema debe registrar el canal de origen en el campo
-  `source` como `OTA` y calcular la comisión pactada (`commissionAmount`) basándose en el
-  porcentaje de comisión configurado para ese canal, aplicando estrictamente la fórmula:
-  `totalAmount × commissionPercentage`.
-- **FR-005**: El sistema debe registrar el valor bruto del hospedaje enviado por la OTA en
-  `totalAmount` sin recalcularlo, sin invocar el caso de uso "Calcular tarifa dinámica" del
-  Módulo 3.
-- **FR-006**: El sistema debe guardar la reserva directamente en estado `ACTIVE` una vez validada
-  la disponibilidad local y completados los datos obligatorios.
-- **FR-007**: El sistema debe interceptar cualquier inconsistencia de datos o fallo de validación
-  en la API para retornar respuestas de error JSON estructuradas con código **HTTP 400 (Bad
-  Request)** o **HTTP 409 (Conflict)**, prohibiendo rigurosamente la generación de códigos **HTTP
-  500 (Internal Server Error)**.
+- **FR-001**: El sistema debe consultar cada 30 segundos el feed de revisiones de reserva de Channex
+  para la propiedad configurada y procesarlas de la más antigua a la más reciente.
+- **FR-002**: El sistema debe procesar cada revisión una sola vez (por su identificador) y confirmarla
+  a Channex después de guardar el resultado. Si el guardado falla por un problema temporal, o si el
+  tipo de habitación no tiene relación o la habitación no está mapeada en Channex, no debe confirmarla.
+- **FR-003**: Ante una revisión `new`, el sistema debe registrar la `Reservation` en `ACTIVE` con
+  `source` `OTA`, la agencia Booking.com, el código de Booking como `externalConfirmationCode`, el
+  valor bruto (`grossAmount`, el campo `amount` de la revisión de Channex) y la moneda (`currency`) de
+  Booking sin recalcularlos, y una
+  `ReservationRoom` en `EXPECTED` por cada habitación, con su categoría (según "Configurar OTA") y la
+  `Room` asignada mediante "Verificar disponibilidades".
+- **FR-004**: El sistema debe calcular la comisión con "Registrar confirmación y comisión de ota":
+  `grossAmount × commissionPercentage / 100`, con el porcentaje fijo de la agencia, que queda congelado en
+  la reserva. Si la agencia todavía no tiene porcentaje, se calcula con la comisión que informa Booking en
+  esta revisión (`ota_commission`); si no la trae, la revisión no se procesa ni se confirma a Channex.
+- **FR-005**: Ante una revisión `modified`, el sistema debe aplicar el cambio mediante "Actualizar
+  reservación" y recalcular la comisión con el porcentaje congelado de la reserva.
+- **FR-006**: Ante una revisión `cancelled`, el sistema debe cancelar la reserva mediante "Cancelar
+  reservación", por el canal `OTA_API`, sin modificar la comisión.
+- **FR-007**: El sistema no debe rechazar una reserva ni un cambio que Booking ya aceptó: si no hay
+  habitación disponible, si se supera la capacidad o si el cambio no se puede aplicar por el estado de
+  la reserva, debe registrar lo que corresponda y marcar la reserva en conflicto con el motivo
+  (`NO_ROOM_AVAILABLE`, `CAPACITY_EXCEEDED` o `CHANGE_NOT_APPLICABLE`). Sin habitación libre de la
+  categoría, la habitación queda sin asignar.
+- **FR-008**: El sistema debe tomar del titular el nombre, el apellido, el correo y el teléfono, y
+  convertir el código de país al nombre del país como nacionalidad informativa. El tipo y el número de
+  documento quedan vacíos.
+- **FR-009**: El sistema no debe ordenar al Módulo 1 que aparte o libere habitaciones. Debe avisar al
+  Módulo 1, mediante "Enviar reservas del día al Módulo 1", cada reserva nueva, cambiada o cancelada
+  con llegada hoy después de enviada la lista del día, y anotar cada cambio para el envío de
+  disponibilidad de "Configurar OTA".
+- **FR-010**: Una falla de Channex no debe dejar reservas a medias: cada revisión se guarda en una sola
+  transacción, y las que fallan se procesan en la siguiente consulta, con una pausa de un minuto y espera
+  creciente ante respuestas `429` o fallas repetidas.
+- **FR-011**: Cuando una reserva de Booking pase a `NO_SHOW` en el cierre del día ("Actualizar
+  reservación"), el sistema debe reportar el no-show a Booking por Channex, sin cobrar penalidad al
+  huésped, para que Booking no cobre comisión por esa reserva. Un fallo de Channex no revierte el
+  `NO_SHOW`: el reporte queda pendiente y se reintenta. Channex lo acepta desde la medianoche del día de
+  llegada y hasta 48 horas después.
+- **FR-012**: Si las habitaciones de una revisión traen fechas distintas a las de la reserva, el sistema
+  debe registrar la reserva con las fechas de la reserva y marcarla en conflicto
+  (`CHANGE_NOT_APPLICABLE`) para que la Recepcionista la revise.
 
 ### Non-Functional Requirements
 
-- **NFR-001**: El endpoint de la API de reservas por OTA debe procesar y responder a la solicitud
-  transaccional en un tiempo inferior a 1.5 segundos en condiciones normales de carga.
+- **NFR-001**: Una reserva creada en Booking debe quedar registrada en el Módulo 2 en menos de 2 minutos
+  en condiciones normales.
+- **NFR-002**: Los datos personales del titular no deben escribirse en los logs.
 
 ### Key Entities *(include if feature involves data)*
 
-- **Reservation**: Representa el contrato de reserva registrado desde el canal externo. Atributos:
-  `id`, `guestRef`, `categoryHabitation` (categoría de habitación reservada), `startDate`,
-  `endDate`, `totalAmount` (valor bruto enviado por la OTA), `commissionAmount` (comisión
-  calculada localmente), `externalConfirmationCode` (código de confirmación de la agencia),
-  `source` (`OTA` en este flujo), `createdAt`, y `state` con estados permitidos: `PENDING`,
-  `ACTIVE`, `CHECKED_IN`, `CHECKED_OUT`, `CANCELLED`. En este flujo se persiste siempre en
-  `ACTIVE`.
-- **Guest**: Representa al huésped titular de la reserva. Atributos: `id`, `fullName`,
-  `documentNumber`, `nationality`, `contactPhone` y `contactEmail`, extraídos del payload de la
-  OTA.
-- **Ota**: Representa al intermediario externo que origina la reserva. Atributos: `id`, `name`
-  (nombre de la agencia) y `commissionPercentage` (porcentaje de comisión pactado, aplicado sobre
-  `totalAmount` para obtener `commissionAmount`).
-- **Habitation**: Representa la habitación física, cuya gestión de estado es propiedad del
-  Módulo 1. En este flujo solo se referencia su categoría para descontar el cupo local; no se
-  realiza ninguna llamada al Módulo 1 ni se asigna un número físico. Atributos: `habitationId`,
-  `numberHabitation` y `stateHabitation` con estados físicos permitidos: `AVAILABLE`, `OCCUPIED`,
-  `CLEANING`, `OUT_OF_SERVICE`.
+- **Reservation**: Reserva registrada desde Booking. Atributos: `reservationRef`, `guestRef`,
+  `guestCount` (suma de los de sus habitaciones), `startDate`, `endDate`, `grossAmount` (valor bruto
+  total enviado por Booking), `currency`, `commissionPercentage`, `commissionAmount`,
+  `externalConfirmationCode` (código de Booking), `notes`, `source` (`OTA`), `createdAt`, `status` (en
+  este flujo nace en `ACTIVE`), `conflictReason` (vacío si no hay conflicto) y `conflictDetectedAt`.
+- **ReservationRoom**: Cada habitación de la reserva. Atributos: `reservationRef`, `roomId` (vacío si
+  quedó sin asignar), `roomNumber`, `categoryRoom`, `guestCount` y `stayStatus` (nace en `EXPECTED`).
+  En canal OTA no tiene valor por habitación: el valor es el `grossAmount` de la reserva.
+- **Guest**: Titular de la reserva. Atributos: `firstName`, `lastName`, `contactEmail`,
+  `contactPhone`, `nationality` (informativa) y `documentType` y `documentNumber` (vacíos en reservas
+  de Booking).
+- **Ota**: La agencia Booking.com, con su `commissionPercentage` fijo, calculado con su primera reserva (ver
+  "Registrar confirmación y comisión de ota").
+- **BookingRevision**: Revisión de reserva de Channex. Atributos usados: `id`, `booking_id`, `status` (`new`,
+  `modified`, `cancelled`), `ota_reservation_code`, `arrival_date`, `departure_date`, `amount`,
+  `ota_commission` (comisión que cobra Booking), `currency`, `customer` (`name`, `surname`, `mail`, `phone`, `country`), `rooms` (`room_type_id`,
+  `occupancy`, `checkin_date`, `checkout_date`) y `notes`.
 
 ## Success Criteria *(mandatory)*
 
 ### Measurable Outcomes
 
-- **SC-001**: El 100% de las reservas registradas a través de la API externa cuentan con un
-  `externalConfirmationCode` y con el porcentaje e importe de comisión calculados y almacenados de
-  manera exacta en la base de datos local.
-- **SC-002**: El 100% de los rechazos por falta de disponibilidad o por formato inválido devuelven
-  payloads JSON estructurados con respuestas HTTP 400 o HTTP 409, con cero propagaciones de
-  errores de infraestructura HTTP 500.
+- **SC-001**: El 100% de las revisiones de Booking se procesan una sola vez y se confirman a Channex.
+- **SC-002**: El 100% de las reservas de Booking quedan registradas con su `externalConfirmationCode` y
+  su comisión exacta.
+- **SC-003**: Cero reservas de Booking se pierden por falta de disponibilidad: todas quedan registradas,
+  en conflicto si no se pudieron ubicar.
+- **SC-004**: El 100% de las reservas de Booking con llegada hoy y todas sus habitaciones asignadas
+  llegan al Módulo 1 en la lista del día, y ninguna con llegada futura se avisa antes de su día.
