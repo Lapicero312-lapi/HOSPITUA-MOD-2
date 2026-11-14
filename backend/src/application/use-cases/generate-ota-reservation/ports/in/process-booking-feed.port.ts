@@ -7,6 +7,9 @@ export const PROCESS_BOOKING_FEED = Symbol('PROCESS_BOOKING_FEED');
  * `ChannexSyncJob`, con su bloqueo asesor.
  */
 export interface ProcessBookingFeed {
-  /** Nunca lanza por una revisión: la que falla se deja para el ciclo siguiente. */
-  run(): Promise<void>;
+  /**
+   * Devuelve si leyó el feed: `false` si la lectura dio `NOT_READ` (Channex no respondió bien). Una revisión
+   * que falla no cambia el resultado: se deja para el ciclo siguiente, sin lanzar.
+   */
+  run(): Promise<boolean>;
 }

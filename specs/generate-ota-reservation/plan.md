@@ -576,13 +576,15 @@ revisión se confirma.
 
    interface ProcessBookingFeed {
      // Un ciclo: repite los ack pendientes, lee el feed, procesa en orden y confirma.
-     run(): Promise<void>;
+     // Devuelve si leyó el feed: false con NOT_READ (B3 de configure-ota, FR-007).
+     run(): Promise<boolean>;
    }
    ```
 
    - **`ProcessBookingFeed.run` (T007).** Primero repite los `ack` de
-     `OtaBookingRevisionRepository.findPendingAck()`. Después llama a `ReadBookingFeed.read()` y, si da
-     `READ`, procesa las revisiones en el orden del feed. Con cada `ACKNOWLEDGE` llama a
+     `OtaBookingRevisionRepository.findPendingAck()`. Después llama a `ReadBookingFeed.read()`: con
+     `NOT_READ` devuelve `false` sin procesar nada; con `READ` procesa las revisiones en el orden del feed y
+     devuelve `true`, aunque alguna dé `RETRY` o falle. Con cada `ACKNOWLEDGE` llama a
      `ChannexPort.ackBookingRevision(id)` y, si Channex responde, a `markAcked`. Si el `ack` falla, la fila
      queda con `acked_at` vacío y se repite en el ciclo siguiente (regla 2). Si una revisión da `RETRY`, o
      lanza un error inesperado (que se registra sin datos personales), se saltan las siguientes del mismo

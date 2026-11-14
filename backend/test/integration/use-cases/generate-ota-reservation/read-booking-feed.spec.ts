@@ -132,12 +132,12 @@ describe('ReadBookingFeed y ChannexSyncJob contra PostgreSQL real', () => {
     const feed = feedWith(fake.channex);
     const job = new ChannexSyncJob(
       // El ciclo del feed (T007) reducido a la lectura: la prueba es del bloqueo.
+      { run: async () => (await feed.read()).status === 'READ' },
+      // Sin disponibilidad ni no-shows pendientes: la prueba es de la lectura del feed.
       {
-        run: async () => {
-          await feed.read();
-        },
+        publish: () => Promise.resolve({ status: 'NOTHING_PENDING' as const }),
       },
-      // Sin no-shows pendientes: la prueba es de la lectura del feed.
+      // (los no-shows): la prueba es de la lectura del feed.
       {
         publish: () =>
           Promise.resolve({ reported: 0, rejected: 0, pending: 0 }),

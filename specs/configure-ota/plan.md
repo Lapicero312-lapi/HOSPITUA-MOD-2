@@ -298,7 +298,9 @@ Pasos, en este orden (reglas 2, 3, 4 y 8; D2):
 
    Solo se envían las noches marcadas, no todo el tramo entre la primera y la última. Si el Módulo 1 no
    responde para una categoría (`INVENTORY_UNAVAILABLE` o `MAINTENANCE_CHECK_UNAVAILABLE`), esa categoría
-   no se envía y **sus marcas se conservan**; las demás siguen (regla 3).
+   no se envía y **sus marcas se conservan**; las demás siguen (regla 3). Cualquier otro error (por ejemplo,
+   `INVALID_CATEGORY` o `INVALID_ROOM_ID`) sale tal cual: no se envía nada, las marcas quedan y la tarea lo
+   registra en el log.
 5. **Un solo envío A4** con los rangos de todas las categorías (`toChannexRanges`, del `roomTypeId` de cada
    una). Las marcas que se borran son **solo las leídas en el paso 1** de las categorías enviadas: las que
    llegaron mientras tanto quedan para el siguiente ciclo.
@@ -317,7 +319,18 @@ Pasos, en este orden (reglas 2, 3, 4 y 8; D2):
 
 **Quién lo llama:** `ChannexSyncJob`, cada `CHANNEX_SYNC_INTERVAL_SECONDS`, con su bloqueo asesor: primero el
 feed (`ProcessBookingFeed`), después `PublishPendingAvailability` y al final los no-shows
-(`PublishPendingNoShows`). Un error inesperado de un paso queda en el log y no impide los siguientes.
+(`PublishPendingNoShows`). Si el feed **no se leyó** (`ProcessBookingFeed.run()` da `false`: Channex respondió
+`5xx`, `429` o no respondió) o falló por un error inesperado, **no se envía la disponibilidad** en ese ciclo:
+FR-007 pide procesar antes las reservas pendientes de Channex, para no devolverle a Booking un cupo que ya
+descontó por una reserva nueva; las marcas se conservan para el siguiente. Los no-shows no dependen del
+feed: se envían igual. Un error inesperado de cualquier paso queda en el log.
+
+**Caso conocido:** si el feed se leyó pero **una revisión no se guardó** (da `RETRY` o falla; por ejemplo, el
+Módulo 1 no respondió o su tipo no tiene relación), la disponibilidad **sí se envía**, calculada sin esa
+reserva. Saltar el envío por una revisión que no se guarda congelaría la disponibilidad de todas las
+categorías mientras siga sin guardarse, y una revisión de un tipo sin relación se reintenta en cada ciclo
+hasta que alguien la arregle. Si en ese lapso Booking vende de más, la reserva llega como conflicto
+(`NO_ROOM_AVAILABLE`), como cualquier venta en el instante entre la lectura y el envío.
 
 ### C. Sincronización de tipos de habitación
 
