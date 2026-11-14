@@ -80,6 +80,7 @@ const aChange = (changes: Partial<OtaChange> = {}): OtaChange => ({
     contactPhone: null,
     nationality: 'Estados Unidos',
   },
+  datesDifferPerRoom: false,
   ...changes,
 });
 
@@ -335,6 +336,31 @@ describe('ApplyOtaChangeService (plan de update-reservation, C4 y punto 15; FR-0
       );
 
       expect(plan.rooms[0].room?.roomNumber).toBe('203');
+      expect(plan.conflictReason).toBe('CAPACITY_EXCEEDED');
+    });
+
+    it('fechas distintas por habitación y sin otro motivo: CHANGE_NOT_APPLICABLE (FR-012)', async () => {
+      const { service } = anApply();
+
+      const plan = await service.prepare(
+        aReservation(),
+        aChange({ datesDifferPerRoom: true }),
+      );
+
+      expect(plan.conflictReason).toBe('CHANGE_NOT_APPLICABLE');
+    });
+
+    it('la capacidad va antes que las fechas distintas por habitación', async () => {
+      const { service } = anApply();
+
+      const plan = await service.prepare(
+        aReservation(),
+        aChange({
+          rooms: [{ categoryRoom: 'DOBLE', guestCount: 3 }],
+          datesDifferPerRoom: true,
+        }),
+      );
+
       expect(plan.conflictReason).toBe('CAPACITY_EXCEEDED');
     });
 

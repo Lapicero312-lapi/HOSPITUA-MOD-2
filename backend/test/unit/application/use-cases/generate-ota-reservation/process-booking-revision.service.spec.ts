@@ -30,6 +30,10 @@ import type { AriChangeRecorder } from '../../../../../src/application/use-cases
 import { ProcessBookingRevisionService } from '../../../../../src/application/use-cases/generate-ota-reservation/process-booking-revision.service.js';
 import type { ManageOta } from '../../../../../src/application/use-cases/register-ota-information-commission/ports/in/manage-ota.port.js';
 import type {
+  ApplyOtaChange,
+  OtaChangePlan,
+} from '../../../../../src/application/use-cases/update-reservation/ports/in/apply-ota-change.port.js';
+import type {
   CommissionResult,
   RegisterOtaConfirmationAndCommission,
 } from '../../../../../src/application/use-cases/register-ota-information-commission/ports/in/register-ota-confirmation-and-commission.port.js';
@@ -125,6 +129,9 @@ type Options = {
   commission?: () => Promise<CommissionResult>;
   insert?: (reservation: Reservation) => Promise<Reservation>;
   record?: () => Promise<void>;
+  /** Lo que guarda `ApplyOtaChange.apply`: por defecto, la reserva que recibió `prepare`. */
+  apply?: (plan: OtaChangePlan) => Promise<Reservation>;
+  prepare?: () => Promise<void>;
 };
 
 function aService(options: Options = {}) {
@@ -149,7 +156,7 @@ function aService(options: Options = {}) {
     options.insert ??
       ((reservation: Reservation) => Promise.resolve(reservation)),
   );
-  const update = vi.fn((reservation: Reservation) =>
+  const update = vi.fn((reservation: Reservation, _tx?: Transaction) =>
     Promise.resolve(reservation),
   );
   const findByChannexRoomType = vi.fn((id: string) =>
@@ -175,6 +182,25 @@ function aService(options: Options = {}) {
   const dailyList = vi.fn(() => Promise.resolve());
   const ari = vi.fn(() => Promise.resolve());
   const cancel = vi.fn(() => Promise.resolve({} as Reservation));
+  const prepare = vi.fn(
+    async (
+      reservation: Reservation,
+      change: Parameters<ApplyOtaChange['prepare']>[1],
+    ): Promise<OtaChangePlan> => {
+      await options.prepare?.();
+      return {
+        reservation,
+        change,
+        rooms: [],
+        conflictReason: null,
+        commission: null,
+      };
+    },
+  );
+  const apply = vi.fn(
+    (_tx: Transaction, plan: OtaChangePlan): Promise<Reservation> =>
+      options.apply?.(plan) ?? Promise.resolve(plan.reservation),
+  );
   const clock: Clock = { today: () => '2026-11-10', now: () => NOW };
 
   const service = new ProcessBookingRevisionService(
@@ -199,6 +225,7 @@ function aService(options: Options = {}) {
     { record: dailyList } as unknown as DailyListChangeRecorder,
     { record: ari } as unknown as AriChangeRecorder,
     { cancel } as unknown as CancelReservation,
+    { prepare, apply } as unknown as ApplyOtaChange,
   );
   return {
     service,
@@ -217,6 +244,8 @@ function aService(options: Options = {}) {
     dailyList,
     ari,
     cancel,
+    prepare,
+    apply,
   };
 }
 
@@ -224,7 +253,7 @@ function aService(options: Options = {}) {
 const inserted = (insert: ReturnType<typeof aService>['insert']) =>
   insert.mock.calls[0][0];
 
-describe('ProcessBookingRevision (plan de generate-ota-reservation, B1, B3 y punto 9)', () => {
+describe('ProcessBookingRevision (plan de generate-ota-reservation, B1, B2, B3 y punto 9)', () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -560,21 +589,208 @@ describe('ProcessBookingRevision (plan de generate-ota-reservation, B1, B3 y pun
     });
   });
 
-  describe('una reserva que ya existe, hasta T009', () => {
-    it.each(['new', 'modified'] as const)(
-      'una %s de una reserva que ya existe: RETRY pendiente de ApplyOtaChange, sin tocar nada',
+  describe('modified (T009): B2 con ApplyOtaChange', () => {
+    const modified = (changes: Partial<BookingRevision> = {}) =>
+      aRevision({ status: 'modified', ...changes });
+
+    it.each(['modified', 'new'] as const)(
+      'una %s de una reserva ACTIVE: prepare con el cambio de Booking, apply en la transacción y la revisión APPLIED',
       async (status) => {
-        const deps = aService({ existing: anOtaReservation(OTA_ID) });
+        const existing = anOtaReservation(OTA_ID, { status: 'ACTIVE' });
+        const deps = aService({ existing });
 
-        const outcome = await deps.service.process(aRevision({ status }));
-
-        expect(outcome).toEqual({
-          kind: 'RETRY',
-          reason: `revisión ${aRevision().id}: pendiente de ApplyOtaChange (T009)`,
+        expect(await deps.service.process(modified({ status }))).toEqual({
+          kind: 'ACKNOWLEDGE',
         });
-        expect(deps.run).not.toHaveBeenCalled();
+        expect(deps.prepare).toHaveBeenCalledWith(existing, {
+          startDate: '2026-11-10',
+          endDate: '2026-11-12',
+          rooms: [{ categoryRoom: 'DOBLE', guestCount: 2 }],
+          grossAmount: Money.of('220.00', 'USD'),
+          notes: 'Llegada tarde',
+          guest: {
+            firstName: 'Ana',
+            lastName: 'Pérez',
+            contactEmail: 'ana@correo.com',
+            contactPhone: '+57 300 000 0000',
+            nationality: 'Colombia',
+          },
+          datesDifferPerRoom: false,
+        });
+        expect(deps.apply).toHaveBeenCalledWith(
+          TX,
+          expect.objectContaining({ reservation: existing }),
+        );
+        expect(deps.recordRevision).toHaveBeenCalledWith(
+          expect.objectContaining({
+            status,
+            reservationId: existing.id,
+            result: 'APPLIED',
+          }),
+          TX,
+        );
+        // Lo guarda y lo avisa ApplyOtaChange: aquí no se inserta, ni se actualiza, ni se avisa nada.
+        expect(deps.insert).not.toHaveBeenCalled();
+        expect(deps.update).not.toHaveBeenCalled();
+        expect(deps.dailyList).not.toHaveBeenCalled();
+        expect(deps.calculate).not.toHaveBeenCalled();
       },
     );
+
+    it('una PENDING también se cambia', async () => {
+      const deps = aService({
+        existing: anOtaReservation(OTA_ID, { status: 'PENDING' }),
+      });
+
+      expect((await deps.service.process(modified())).kind).toBe('ACKNOWLEDGE');
+      expect(deps.apply).toHaveBeenCalledTimes(1);
+    });
+
+    it('si la reserva guardada quedó en conflicto: la revisión CONFLICT', async () => {
+      const existing = anOtaReservation(OTA_ID);
+      const deps = aService({
+        existing,
+        apply: () =>
+          Promise.resolve(existing.withConflict('CHANGE_NOT_APPLICABLE', NOW)),
+      });
+
+      await deps.service.process(modified());
+
+      expect(deps.recordRevision).toHaveBeenCalledWith(
+        expect.objectContaining({ result: 'CONFLICT' }),
+        TX,
+      );
+    });
+
+    it('habitaciones con fechas distintas de las de la reserva: datesDifferPerRoom (FR-012)', async () => {
+      const deps = aService({ existing: anOtaReservation(OTA_ID) });
+
+      await deps.service.process(
+        modified({
+          rooms: [aRevisionRoom({ checkoutDate: '2026-11-11' })],
+        }),
+      );
+
+      expect(deps.prepare.mock.calls[0][1].datesDifferPerRoom).toBe(true);
+    });
+
+    it.each(['IN_PROGRESS', 'COMPLETED', 'NO_SHOW', 'CANCELLED'] as const)(
+      'en %s: no la cambia, la marca CHANGE_NOT_APPLICABLE y la revisión CONFLICT',
+      async (status) => {
+        const existing = anOtaReservation(OTA_ID, { status });
+        const deps = aService({ existing });
+
+        expect((await deps.service.process(modified())).kind).toBe(
+          'ACKNOWLEDGE',
+        );
+        expect(deps.prepare).not.toHaveBeenCalled();
+        expect(deps.update.mock.calls[0][0].conflict).toEqual({
+          reason: 'CHANGE_NOT_APPLICABLE',
+          detectedAt: NOW,
+        });
+        expect(deps.update.mock.calls[0][1]).toBe(TX);
+        expect(deps.recordRevision).toHaveBeenCalledWith(
+          expect.objectContaining({
+            reservationId: existing.id,
+            result: 'CONFLICT',
+          }),
+          TX,
+        );
+      },
+    );
+
+    it('un tipo de habitación sin relación: RETRY, sin preparar nada', async () => {
+      const deps = aService({
+        existing: anOtaReservation(OTA_ID),
+        mappings: {},
+      });
+
+      expect((await deps.service.process(modified())).kind).toBe('RETRY');
+      expect(deps.prepare).not.toHaveBeenCalled();
+      expect(deps.run).not.toHaveBeenCalled();
+    });
+
+    it('si prepare lanza un BusinessError (el Módulo 1 no responde): RETRY con el código, un log sin datos personales y nada guardado', async () => {
+      const warn = vi
+        .spyOn(Logger.prototype, 'warn')
+        .mockImplementation(() => {});
+      const deps = aService({
+        existing: anOtaReservation(OTA_ID),
+        prepare: () =>
+          Promise.reject(
+            new BusinessError(
+              'INVENTORY_UNAVAILABLE',
+              'El Módulo 1 no responde.',
+            ),
+          ),
+      });
+
+      expect(await deps.service.process(modified())).toEqual({
+        kind: 'RETRY',
+        reason: `revisión ${aRevision().id}: INVENTORY_UNAVAILABLE`,
+      });
+      expect(deps.run).not.toHaveBeenCalled();
+      const logged = warn.mock.calls.map(([message]) => String(message)).join();
+      expect(logged).toContain('INVENTORY_UNAVAILABLE');
+      expect(logged).not.toContain('Ana');
+      expect(logged).not.toContain('Pérez');
+    });
+
+    it('un error inesperado de prepare se propaga', async () => {
+      const deps = aService({
+        existing: anOtaReservation(OTA_ID),
+        prepare: () => Promise.reject(new Error('inesperado')),
+      });
+
+      await expect(deps.service.process(modified())).rejects.toThrow(
+        'inesperado',
+      );
+    });
+
+    it.each([
+      [
+        'la reserva cambió desde prepare (CONCURRENT_UPDATE)',
+        () =>
+          new BusinessError(
+            'CONCURRENT_UPDATE',
+            'Esta reserva ya fue actualizada o cancelada recientemente',
+          ),
+      ],
+      [
+        'la restricción anti-solape rechaza una habitación',
+        () => new RoomOverlapError(),
+      ],
+    ])('si %s: RETRY, sin ack', async (_case, error) => {
+      const deps = aService({
+        existing: anOtaReservation(OTA_ID),
+        apply: () => Promise.reject(error()),
+      });
+
+      expect((await deps.service.process(modified())).kind).toBe('RETRY');
+      expect(deps.recordRevision).not.toHaveBeenCalled();
+    });
+
+    it('si otra lectura registró la misma revisión a la vez: ACKNOWLEDGE', async () => {
+      const deps = aService({
+        existing: anOtaReservation(OTA_ID),
+        record: () =>
+          Promise.reject(new DuplicateOtaBookingRevisionError(aRevision().id)),
+      });
+
+      expect((await deps.service.process(modified())).kind).toBe('ACKNOWLEDGE');
+    });
+
+    it('otro BusinessError de apply se propaga', async () => {
+      const deps = aService({
+        existing: anOtaReservation(OTA_ID),
+        apply: () =>
+          Promise.reject(new BusinessError('OTRO', 'Otro error de negocio.')),
+      });
+
+      await expect(deps.service.process(modified())).rejects.toThrow(
+        'Otro error de negocio.',
+      );
+    });
   });
 
   describe('cancelled (T010): B3', () => {
