@@ -54,7 +54,12 @@ function aJob({
   );
   const scheduler = new SchedulerRegistry();
   const job = new ChannexSyncJob(
-    { read },
+    // El ciclo del feed (T007): aquí solo cuenta que se llame, como antes la lectura.
+    {
+      run: async () => {
+        await read();
+      },
+    },
     { publish },
     state,
     { runExclusive } as unknown as AdvisoryLock,
