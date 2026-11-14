@@ -150,17 +150,7 @@ export class SyncRoomTypesService implements SyncRoomTypes {
       occupancy: group.occupancy,
     };
 
-    const deleted =
-      mapping !== null &&
-      !roomTypes.some(({ id }) => id === mapping.channexRoomTypeId);
-    if (deleted) {
-      // Lo borraron a mano en Channex: se trata como sin relación, para no mandar A3 a un id que no existe.
-      this.logger.warn(
-        `El tipo de habitación ${mapping.channexRoomTypeId} de ${categoryRoom} ya no está en Channex: se adopta o se crea otro y la relación pasa a ese. Hay que volver a mapearlo a Booking.`,
-      );
-    }
-
-    if (mapping !== null && !deleted) {
+    if (mapping !== null) {
       // Con relación: solo si cambió la cantidad o la capacidad enviadas la última vez (A3).
       if (
         mapping.countOfRooms === group.countOfRooms &&

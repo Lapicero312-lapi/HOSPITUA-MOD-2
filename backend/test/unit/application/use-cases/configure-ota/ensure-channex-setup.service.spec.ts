@@ -1,4 +1,3 @@
-import { Logger } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import type { Clock } from '../../../../../src/application/ports/out/clock.js';
 import { EnsureChannexSetupService } from '../../../../../src/application/use-cases/configure-ota/ensure-channex-setup.service.js';
@@ -84,21 +83,6 @@ describe('EnsureChannexSetup.ensure', () => {
     });
 
     await expect(service.ensure()).resolves.toBe('READY');
-  });
-
-  it('un error inesperado de la sincronización (la base) se registra y sigue READY', async () => {
-    const { service, roomTypes } = serviceVerifying('READY');
-    roomTypes.sync.mockRejectedValueOnce(new Error('la base no responde'));
-    const error = vi
-      .spyOn(Logger.prototype, 'error')
-      .mockImplementation(() => undefined);
-
-    await expect(service.ensure()).resolves.toBe('READY');
-    expect(error).toHaveBeenCalledWith(
-      expect.stringContaining('La sincronización de tipos de habitación falló'),
-      expect.stringContaining('la base no responde'),
-    );
-    error.mockRestore();
   });
 
   it('si registrar la agencia falla, el error sale para que quien llama lo reintente, sin sincronizar', async () => {

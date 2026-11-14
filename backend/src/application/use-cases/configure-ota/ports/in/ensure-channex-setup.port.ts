@@ -14,7 +14,7 @@ export interface EnsureChannexSetup {
   /**
    * Paso 1: verifica la propiedad. Pasos 2 y 3, solo si da `READY`: registra la agencia Booking.com sin
    * duplicarla y sincroniza los tipos de habitación (`SyncRoomTypes`, T007). Una sincronización que no se
-   * completa, o que falla por un error inesperado, no cambia el resultado.
+   * completa no cambia el resultado.
    */
   ensure(): Promise<ChannexVerification>;
 }

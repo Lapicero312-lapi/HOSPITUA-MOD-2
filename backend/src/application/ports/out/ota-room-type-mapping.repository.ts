@@ -20,8 +20,7 @@ export interface OtaRoomTypeMappingRepository {
 
   /**
    * C1: guarda la relación. Si el tipo ya tenía una, cambia solo su cantidad y su capacidad: la categoría
-   * no cambia, porque renombrarla crea un tipo nuevo (punto 4 de "Puntos que este plan propone"). Si la
-   * categoría tenía otro tipo (lo borraron a mano en Channex), su relación se reemplaza por esta.
+   * no cambia, porque renombrarla crea un tipo nuevo (punto 4 de "Puntos que este plan propone").
    */
   upsert(mapping: OtaRoomTypeMapping): Promise<void>;
 }
