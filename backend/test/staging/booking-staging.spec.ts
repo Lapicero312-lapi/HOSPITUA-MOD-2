@@ -279,11 +279,15 @@ describe.skipIf(!configured)(
         MODULE1_BASE_URL,
         MODULE3_BASE_URL,
       });
-      // Solo sale a la red lo que va a Channex staging; cualquier otra llamada sin simular falla.
+      // Solo sale a la red lo que va a Channex staging. Cualquier otra llamada sin simular se corta: el error
+      // hace que msw la responda con un 500 sin enviarla (avisar con `print.error()` no la corta).
       server.listen({
-        onUnhandledRequest: (request, print) => {
-          if (new URL(request.url).hostname !== STAGING_HOST) {
-            print.error();
+        onUnhandledRequest: (request) => {
+          const { hostname } = new URL(request.url);
+          if (hostname !== STAGING_HOST) {
+            throw new Error(
+              `Llamada sin simular cortada: ${request.method} ${hostname}`,
+            );
           }
         },
       });
