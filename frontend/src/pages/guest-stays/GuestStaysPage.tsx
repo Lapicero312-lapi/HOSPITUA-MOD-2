@@ -307,7 +307,7 @@ function GuestStayRow({
   onOpen: (guest: GuestKey) => void;
 }) {
   const { guest, reservationRef } = stay;
-  const name = `${guest.firstName} ${guest.lastName}`;
+  const name = `${orEmpty(guest.firstName)} ${orEmpty(guest.lastName)}`;
   return (
     <tr>
       <td>
@@ -317,7 +317,7 @@ function GuestStayRow({
         </span>
       </td>
       <td>
-        {guest.nationality}
+        {orEmpty(guest.nationality)}
         {guest.isForeign && (
           <span className="guest-stays-badge guest-stays-badge--foreign">
             Extranjero
@@ -337,10 +337,12 @@ function GuestStayRow({
         {stay.entryDate === null ? EMPTY : formatDate(stay.entryDate)}
       </td>
       <td className="guest-stays-date">
-        {stay.exitDate === null ? (
+        {stay.inHotel ? (
           <span className="guest-stays-badge guest-stays-badge--in-hotel">
             En el hotel
           </span>
+        ) : stay.exitDate === null ? (
+          EMPTY
         ) : (
           formatDate(stay.exitDate)
         )}
@@ -371,7 +373,7 @@ function Pagination({
 }) {
   const from = (list.page - 1) * list.pageSize + 1;
   const to = from + list.items.length - 1;
-  const pages = Array.from({ length: list.totalPages }, (_, i) => i + 1);
+  const pages = pageWindow(list.page, list.totalPages);
   return (
     <nav className="guest-stays-pagination" aria-label="Paginación">
       <span>
@@ -387,18 +389,25 @@ function Pagination({
         >
           ← Anterior
         </button>
-        {pages.map((page) => (
-          <button
-            key={page}
-            type="button"
-            className={page === list.page ? 'guest-stays-current' : undefined}
-            aria-current={page === list.page ? 'page' : undefined}
-            aria-label={`Página ${page}`}
-            onClick={() => onPage(page)}
-          >
-            {page}
-          </button>
-        ))}
+        {pages.map((page, index) =>
+          page === null ? (
+            // Un salto entre números: no hay otra clave estable que su posición.
+            <span key={`gap-${index}`} className="guest-stays-gap">
+              …
+            </span>
+          ) : (
+            <button
+              key={page}
+              type="button"
+              className={page === list.page ? 'guest-stays-current' : undefined}
+              aria-current={page === list.page ? 'page' : undefined}
+              aria-label={`Página ${page}`}
+              onClick={() => onPage(page)}
+            >
+              {page}
+            </button>
+          ),
+        )}
         <button
           type="button"
           disabled={list.page >= list.totalPages}
@@ -409,6 +418,26 @@ function Pagination({
       </span>
     </nav>
   );
+}
+
+/** Cuántas páginas se muestran a cada lado de la actual. */
+const PAGE_WINDOW = 2;
+
+/**
+ * Los números de página que se muestran: la primera, la última y las vecinas de la actual; `null` marca un
+ * salto. Con 50 000 movimientos (NFR-003) hay miles de páginas y no caben todas.
+ */
+function pageWindow(page: number, totalPages: number): (number | null)[] {
+  const pages: (number | null)[] = [];
+  for (let current = 1; current <= totalPages; current++) {
+    const near = Math.abs(current - page) <= PAGE_WINDOW;
+    if (current === 1 || current === totalPages || near) {
+      pages.push(current);
+    } else if (pages[pages.length - 1] !== null) {
+      pages.push(null);
+    }
+  }
+  return pages;
 }
 
 /**
@@ -449,7 +478,7 @@ function GuestDialog({
   const title =
     data === undefined
       ? 'Detalle del huésped'
-      : `${data.guest.firstName ?? EMPTY} ${data.guest.lastName ?? EMPTY}`;
+      : `${orEmpty(data.guest.firstName)} ${orEmpty(data.guest.lastName)}`;
 
   return (
     <div className="guest-stays-backdrop">
@@ -544,9 +573,14 @@ function Datum({ label, value }: { label: string; value: string | null }) {
   return (
     <div>
       <dt>{label}</dt>
-      <dd>{value === null || value.trim() === '' ? EMPTY : value}</dd>
+      <dd>{orEmpty(value)}</dd>
     </div>
   );
+}
+
+/** Un dato vacío (`null` o en blanco) como una raya "—". */
+function orEmpty(value: string | null): string {
+  return value === null || value.trim() === '' ? EMPTY : value;
 }
 
 /** `2026-10-09` como `09/10/2026` (plan base, "Fechas"). */

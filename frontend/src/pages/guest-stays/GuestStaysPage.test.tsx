@@ -495,6 +495,51 @@ describe('Huéspedes alojados', () => {
     ).toHaveTextContent('Mostrando 21–21 de 21 huéspedes · página 3 de 3');
   });
 
+  it.each([
+    [1, ['1', '2', '3', '…', '2500']],
+    [50, ['1', '…', '48', '49', '50', '51', '52', '…', '2500']],
+    [2500, ['1', '…', '2498', '2499', '2500']],
+  ])(
+    'con miles de páginas (NFR-003) en la página %i solo muestra la primera, la última y las vecinas',
+    async (page, expected) => {
+      backend({
+        list: () =>
+          jsonResponse(
+            pageOf([JOHN], { page, totalItems: 25000, totalPages: 2500 }),
+          ),
+      });
+      renderAt(`/huespedes?page=${page}`);
+      await table();
+
+      const pagination = screen.getByRole('navigation', { name: 'Paginación' });
+      const numbers = Array.from(
+        pagination.querySelectorAll('.guest-stays-pages > *'),
+      )
+        .map((element) => element.textContent)
+        .slice(1, -1);
+      expect(numbers).toEqual(expected);
+      expect(
+        within(pagination).getByRole('button', { name: `Página ${page}` }),
+      ).toHaveAttribute('aria-current', 'page');
+    },
+  );
+
+  it('un dato vacío del listado sale como una raya, y sin "En el hotel" la salida vacía también', async () => {
+    // El backend avisa que un dato obligatorio puede llegar como texto vacío; en C1 no viaja `null`.
+    const empty: GuestStay = {
+      ...ANA,
+      guest: { ...ANA.guest, firstName: '', nationality: '' },
+      exitDate: null,
+      inHotel: false,
+    };
+    backend({ list: () => jsonResponse(pageOf([empty])) });
+    renderAt('/huespedes');
+
+    expect(await rows()).toEqual([
+      ['— PérezCC 1020304050', '—', 'RSV-0A1B2C3D', '02/03/2026', '—'],
+    ]);
+  });
+
   describe('escenario 6: detalle de un huésped', () => {
     it('muestra todos sus datos, sus movimientos y el enlace a la reserva', async () => {
       backend({});

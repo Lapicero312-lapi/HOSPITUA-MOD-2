@@ -277,3 +277,8 @@
   gap: 0.75rem;
   padding: 0 1.25rem;
 }
+
+.guest-stays-gap {
+  align-self: center;
+  padding: 0 0.25rem;
+}
