@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
@@ -183,6 +184,12 @@ export async function startDirectReservationApp(
   return app;
 }
 
-/** B: `POST /api/reservations/direct`. */
+/**
+ * B: `POST /api/reservations/direct`, con una `Idempotency-Key` nueva por solicitud, como la pantalla (punto 15,
+ * T019): dos solicitudes distintas nunca comparten la clave.
+ */
 export const createDirect = (app: INestApplication<App>, body: object) =>
-  request(app.getHttpServer()).post('/api/reservations/direct').send(body);
+  request(app.getHttpServer())
+    .post('/api/reservations/direct')
+    .set('Idempotency-Key', randomUUID())
+    .send(body);

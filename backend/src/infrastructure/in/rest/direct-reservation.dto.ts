@@ -1,6 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   AVAILABILITY_TAKEN,
+  IDEMPOTENCY_KEY_REQUIRED,
+  IDEMPOTENCY_KEY_REUSED,
   NO_AVAILABILITY,
 } from '../../../application/use-cases/generate-direct-reservation/error-codes.js';
 import type { DirectReservationPreview } from '../../../application/use-cases/generate-direct-reservation/ports/in/preview-direct-reservation.port.js';
@@ -512,6 +514,19 @@ export const PREVIEW_ERROR_EXAMPLES = {
 
 /** Un ejemplo por cada error de B, en el orden en que se revisan (punto 13). */
 export const CREATION_ERROR_EXAMPLES = {
+  // La `Idempotency-Key` se revisa antes del paso 1 (punto 15, T019).
+  [IDEMPOTENCY_KEY_REQUIRED.code]: errorExample(
+    CREATION_PATH,
+    'Falta la cabecera `Idempotency-Key` o no es un UUID',
+    IDEMPOTENCY_KEY_REQUIRED.code,
+    IDEMPOTENCY_KEY_REQUIRED.message,
+  ),
+  [IDEMPOTENCY_KEY_REUSED.code]: errorExample(
+    CREATION_PATH,
+    'La misma `Idempotency-Key`, en las últimas 24 horas, con otro cuerpo',
+    IDEMPOTENCY_KEY_REUSED.code,
+    IDEMPOTENCY_KEY_REUSED.message,
+  ),
   ...requestErrors(CREATION_PATH, true),
   [NOTES_TOO_LONG.code]: errorExample(
     CREATION_PATH,
