@@ -14,9 +14,16 @@ import './RoomsPage.css';
  */
 export function RoomsPage() {
   return (
-    <section className="rooms">
-      <h1 className="rooms-title">Habitaciones</h1>
-      <div className="rooms-panel">
+    <section className="rooms ui-page">
+      <header className="ui-page-header">
+        <div>
+          <h1 className="rooms-title ui-page-title">Habitaciones</h1>
+          <p className="ui-page-subtitle">
+            Inventario vendible con capacidad y mantenimiento próximo.
+          </p>
+        </div>
+      </header>
+      <div className="rooms-panel ui-panel">
         <RoomsContent />
       </div>
     </section>
@@ -34,7 +41,9 @@ function RoomsContent() {
 
   if (rooms.isPending) {
     return (
-      <p className="rooms-state rooms-state--loading">Cargando habitaciones…</p>
+      <p className="rooms-state rooms-state--loading ui-state ui-state--loading">
+        Cargando habitaciones…
+      </p>
     );
   }
   // Si falla el inventario, solo el error: nunca una lista parcial (plan, "Pruebas por escenario").
@@ -42,41 +51,49 @@ function RoomsContent() {
     return <ErrorMessage error={rooms.error} />;
   }
   if (rooms.data.items.length === 0) {
-    return <p className="rooms-state">No hay habitaciones registradas.</p>;
+    return (
+      <p className="rooms-state ui-state">No hay habitaciones registradas.</p>
+    );
   }
   return <RoomsTable rooms={rooms.data.items} />;
 }
 
 function RoomsTable({ rooms }: { rooms: Room[] }) {
   return (
-    <table className="rooms-table">
-      <thead>
-        <tr>
-          <th scope="col">N.º</th>
-          <th scope="col">Categoría</th>
-          <th scope="col">Capacidad</th>
-          <th scope="col">Mantenimiento próximo</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rooms.map((room) => (
-          <tr key={room.id}>
-            <td className="rooms-number">{`Hab. ${room.roomNumber}`}</td>
-            <td>
-              <span className="rooms-category">{room.categoryRoom}</span>
-            </td>
-            <td className="rooms-capacity">{capacityText(room.maxCapacity)}</td>
-            <td>
-              <span
-                className={`rooms-maintenance rooms-maintenance--${room.maintenance.status.toLowerCase()}`}
-              >
-                {maintenanceText(room.maintenance)}
-              </span>
-            </td>
+    <div className="ui-scroll-x">
+      <table className="rooms-table ui-table ui-table--sticky">
+        <thead>
+          <tr>
+            <th scope="col">N.º</th>
+            <th scope="col">Categoría</th>
+            <th scope="col">Capacidad</th>
+            <th scope="col">Mantenimiento próximo</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {rooms.map((room) => (
+            <tr key={room.id}>
+              <td className="rooms-number">{`Hab. ${room.roomNumber}`}</td>
+              <td>
+                <span className="rooms-category ui-badge ui-badge--plain">
+                  {room.categoryRoom}
+                </span>
+              </td>
+              <td className="rooms-capacity">
+                {capacityText(room.maxCapacity)}
+              </td>
+              <td>
+                <span
+                  className={`rooms-maintenance ui-badge rooms-maintenance--${room.maintenance.status.toLowerCase()}`}
+                >
+                  {maintenanceText(room.maintenance)}
+                </span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

@@ -68,15 +68,17 @@ export function ReservationDetailPage() {
   });
 
   return (
-    <section className="detail">
-      <Link className="detail-back" to="/reservas">
+    <section className="detail ui-page">
+      <Link className="detail-back ui-back" to="/reservas">
         ← Volver a reservas
       </Link>
       {detail.isPending && (
-        <p className="detail-state detail-state--loading">Cargando reserva…</p>
+        <p className="detail-state detail-state--loading ui-panel ui-state ui-state--loading">
+          Cargando reserva…
+        </p>
       )}
       {detail.isError && (
-        <div className="detail-panel">
+        <div className="detail-panel ui-panel">
           <ErrorMessage error={detail.error} />
         </div>
       )}
@@ -98,21 +100,24 @@ function Detail({ reservation }: { reservation: ReservationDetail }) {
 
   return (
     <>
-      <header className="detail-header">
-        <h1 className="detail-title">Reserva {reservationRef}</h1>
+      <header className="detail-header ui-page-header">
+        <h1 className="detail-title ui-page-title">Reserva {reservationRef}</h1>
         <span
-          className={`detail-status detail-status--${reservation.status.toLowerCase()}`}
+          className={`detail-status ui-badge detail-status--${reservation.status.toLowerCase()}`}
         >
           {STATUS_LABELS[reservation.status]}
         </span>
         <span className="detail-actions">
           {editable && (
             <>
-              <Link to={`/reservas/${reservationRef}/modificar`}>
+              <Link
+                className="ui-link-button"
+                to={`/reservas/${reservationRef}/modificar`}
+              >
                 Modificar
               </Link>
               <Link
-                className="detail-action--danger"
+                className="detail-action--danger ui-link-button ui-button--danger-soft"
                 to={`/reservas/${reservationRef}/cancelar`}
               >
                 Cancelar reserva
@@ -120,7 +125,10 @@ function Detail({ reservation }: { reservation: ReservationDetail }) {
             </>
           )}
           {assignable && (
-            <Link to={`/reservas/${reservationRef}/asignar-habitacion`}>
+            <Link
+              className="ui-link-button ui-button--primary"
+              to={`/reservas/${reservationRef}/asignar-habitacion`}
+            >
               Asignar habitación
             </Link>
           )}
@@ -136,66 +144,71 @@ function Detail({ reservation }: { reservation: ReservationDetail }) {
         </p>
       )}
 
-      <div className="detail-panel">
-        <h2>Estadía y tarifa</h2>
-        <dl className="detail-fields">
-          <Field label="Canal">
-            {reservation.source === 'DIRECT'
-              ? 'Directo'
-              : `OTA · ${reservation.otaName ?? EMPTY}`}
-          </Field>
-          {reservation.source === 'OTA' && (
-            <Field label="Código de la OTA">
-              {reservation.externalConfirmationCode ?? EMPTY}
-            </Field>
-          )}
-          <Field label="Fecha de entrada">
-            {formatDate(reservation.startDate)}
-          </Field>
-          <Field label="Fecha de salida">
-            {formatDate(reservation.endDate)}
-          </Field>
-          <Field label="Noches">{reservation.nights}</Field>
-          <Field label="Personas">{reservation.guestCount}</Field>
-          <Field label="Creada el">
-            {reservation.createdAt === null
-              ? EMPTY
-              : formatDateTime(reservation.createdAt)}
-          </Field>
-          <Field label="Observaciones">
-            {reservation.notes === null || reservation.notes === ''
-              ? EMPTY
-              : reservation.notes}
-          </Field>
-        </dl>
-        <RoomsTable rooms={reservation.rooms} />
-      </div>
-
-      <div className="detail-panel">
-        <h2>Datos del huésped</h2>
-        <GuestFields guest={reservation.guest} />
-      </div>
-
-      {reservation.cancellation !== null && (
-        <div className="detail-panel">
-          <h2>Cancelación</h2>
-          <dl className="detail-fields">
-            <Field label="Fecha">
-              {formatDateTime(reservation.cancellation.cancellationDate)}
-            </Field>
+      <div className="detail-grid">
+        <div className="detail-panel ui-panel detail-main">
+          <h2 className="ui-panel-title">Estadía y tarifa</h2>
+          <dl className="detail-fields ui-fields">
             <Field label="Canal">
-              {CANCELLATION_CHANNEL_LABELS[reservation.cancellation.channel] ??
-                reservation.cancellation.channel}
+              {reservation.source === 'DIRECT'
+                ? 'Directo'
+                : `OTA · ${reservation.otaName ?? EMPTY}`}
             </Field>
-            <Field label="Motivo">
-              {reservation.cancellation.reason ?? EMPTY}
+            {reservation.source === 'OTA' && (
+              <Field label="Código de la OTA">
+                {reservation.externalConfirmationCode ?? EMPTY}
+              </Field>
+            )}
+            <Field label="Fecha de entrada">
+              {formatDate(reservation.startDate)}
             </Field>
-            <Field label="Procesada por">
-              {reservation.cancellation.processedBy}
+            <Field label="Fecha de salida">
+              {formatDate(reservation.endDate)}
+            </Field>
+            <Field label="Noches">{reservation.nights}</Field>
+            <Field label="Personas">{reservation.guestCount}</Field>
+            <Field label="Creada el">
+              {reservation.createdAt === null
+                ? EMPTY
+                : formatDateTime(reservation.createdAt)}
+            </Field>
+            <Field label="Observaciones">
+              {reservation.notes === null || reservation.notes === ''
+                ? EMPTY
+                : reservation.notes}
             </Field>
           </dl>
+          <RoomsTable rooms={reservation.rooms} />
         </div>
-      )}
+
+        <aside className="detail-aside">
+          <div className="detail-panel ui-panel">
+            <h2 className="ui-panel-title">Datos del huésped</h2>
+            <GuestFields guest={reservation.guest} />
+          </div>
+
+          {reservation.cancellation !== null && (
+            <div className="detail-panel ui-panel">
+              <h2 className="ui-panel-title">Cancelación</h2>
+              <dl className="detail-fields ui-fields">
+                <Field label="Fecha">
+                  {formatDateTime(reservation.cancellation.cancellationDate)}
+                </Field>
+                <Field label="Canal">
+                  {CANCELLATION_CHANNEL_LABELS[
+                    reservation.cancellation.channel
+                  ] ?? reservation.cancellation.channel}
+                </Field>
+                <Field label="Motivo">
+                  {reservation.cancellation.reason ?? EMPTY}
+                </Field>
+                <Field label="Procesada por">
+                  {reservation.cancellation.processedBy}
+                </Field>
+              </dl>
+            </div>
+          )}
+        </aside>
+      </div>
     </>
   );
 }
@@ -217,39 +230,41 @@ function Field({
 
 function RoomsTable({ rooms }: { rooms: DetailRoom[] }) {
   return (
-    <table className="detail-table">
-      <thead>
-        <tr>
-          <th scope="col">Habitación</th>
-          <th scope="col">Categoría</th>
-          <th scope="col">Personas</th>
-          <th scope="col">Valor bruto</th>
-          <th scope="col">Estado en la reserva</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rooms.map((room, index) => (
-          // Varias habitaciones pueden estar sin asignar: no hay otra clave estable.
-          <tr key={room.roomId ?? index}>
-            <td>{room.roomNumber ?? 'Sin asignar'}</td>
-            <td>{room.categoryRoom}</td>
-            <td>{room.guestCount}</td>
-            <td className="detail-money">
-              {room.roomGrossAmount === null
-                ? EMPTY
-                : formatMoney(room.roomGrossAmount)}
-            </td>
-            <td>{STAY_STATUS_LABELS[room.stayStatus] ?? room.stayStatus}</td>
+    <div className="ui-scroll-x detail-table-wrap">
+      <table className="detail-table ui-table">
+        <thead>
+          <tr>
+            <th scope="col">Habitación</th>
+            <th scope="col">Categoría</th>
+            <th scope="col">Personas</th>
+            <th scope="col">Valor bruto</th>
+            <th scope="col">Estado en la reserva</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {rooms.map((room, index) => (
+            // Varias habitaciones pueden estar sin asignar: no hay otra clave estable.
+            <tr key={room.roomId ?? index}>
+              <td>{room.roomNumber ?? 'Sin asignar'}</td>
+              <td>{room.categoryRoom}</td>
+              <td>{room.guestCount}</td>
+              <td className="detail-money">
+                {room.roomGrossAmount === null
+                  ? EMPTY
+                  : formatMoney(room.roomGrossAmount)}
+              </td>
+              <td>{STAY_STATUS_LABELS[room.stayStatus] ?? room.stayStatus}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
 function GuestFields({ guest }: { guest: DetailGuest }) {
   return (
-    <dl className="detail-fields">
+    <dl className="detail-fields ui-fields detail-fields--stacked">
       <Field label="Nombre completo">
         {guest.firstName} {guest.lastName}
       </Field>

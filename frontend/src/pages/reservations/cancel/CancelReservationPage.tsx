@@ -30,16 +30,18 @@ export function CancelReservationPage() {
   });
 
   return (
-    <section className="cancel">
-      <Link className="cancel-back" to={`/reservas/${reservationRef}`}>
+    <section className="cancel ui-page">
+      <Link className="cancel-back ui-back" to={`/reservas/${reservationRef}`}>
         ← Volver al detalle
       </Link>
-      <h1 className="cancel-title">Cancelar reserva</h1>
+      <h1 className="cancel-title ui-page-title">Cancelar reserva</h1>
       {reservation.isPending && (
-        <p className="cancel-state cancel-state--loading">Cargando reserva…</p>
+        <p className="cancel-state cancel-state--loading ui-panel ui-state ui-state--loading">
+          Cargando reserva…
+        </p>
       )}
       {reservation.isError && (
-        <div className="cancel-panel">
+        <div className="cancel-panel ui-panel">
           <ErrorMessage error={reservation.error} />
         </div>
       )}
@@ -95,9 +97,9 @@ function Cancellation({
 
   return (
     <>
-      <div className="cancel-panel">
-        <h2>Reserva a cancelar</h2>
-        <dl className="cancel-fields">
+      <div className="cancel-panel ui-panel">
+        <h2 className="ui-panel-title">Reserva a cancelar</h2>
+        <dl className="cancel-fields ui-fields">
           <Field label="Referencia">{reservationRef}</Field>
           <Field label="Huésped">
             {reservation.guest.firstName} {reservation.guest.lastName}
@@ -120,7 +122,7 @@ function Cancellation({
       </div>
 
       {blocked !== null ? (
-        <div className="cancel-panel">
+        <div className="cancel-panel cancel-panel--padded ui-panel">
           {/* Si la cancelación falló porque otra persona la cambió, su mensaje sigue a la vista. */}
           {cancellation.isError && <ErrorMessage error={cancellation.error} />}
           <p role="alert" className="error-message">
@@ -128,37 +130,48 @@ function Cancellation({
           </p>
         </div>
       ) : (
-        <form className="cancel-panel" onSubmit={submit} noValidate>
-          <h2>Confirmación</h2>
-          <label className="cancel-label" htmlFor="cancel-reason">
-            Motivo (opcional)
-          </label>
-          <textarea
-            id="cancel-reason"
-            value={reason}
-            maxLength={MAX_REASON_LENGTH}
-            rows={3}
-            placeholder="Ej. el huésped canceló su viaje"
-            onChange={(event) => setReason(event.target.value)}
-          />
-          <label className="cancel-check">
-            <input
-              type="checkbox"
-              checked={acknowledged}
-              onChange={(event) => setAcknowledged(event.target.checked)}
+        <form className="cancel-panel ui-panel" onSubmit={submit} noValidate>
+          <h2 className="ui-panel-title">Confirmación</h2>
+          <div className="cancel-body">
+            <label className="cancel-label" htmlFor="cancel-reason">
+              Motivo (opcional)
+            </label>
+            <textarea
+              id="cancel-reason"
+              value={reason}
+              maxLength={MAX_REASON_LENGTH}
+              rows={3}
+              placeholder="Ej. el huésped canceló su viaje"
+              onChange={(event) => setReason(event.target.value)}
             />
-            Entiendo que la cancelación no se puede deshacer.
-          </label>
-          {cancellation.isError && <ErrorMessage error={cancellation.error} />}
-          <div className="cancel-buttons">
-            <button
-              type="submit"
-              className="cancel-confirm"
-              disabled={!acknowledged || cancellation.isPending}
-            >
-              {cancellation.isPending ? 'Cancelando…' : 'Confirmar cancelación'}
-            </button>
-            <Link to={`/reservas/${reservationRef}`}>Volver sin cancelar</Link>
+            <label className="cancel-check ui-check">
+              <input
+                type="checkbox"
+                checked={acknowledged}
+                onChange={(event) => setAcknowledged(event.target.checked)}
+              />
+              Entiendo que la cancelación no se puede deshacer.
+            </label>
+            {cancellation.isError && (
+              <ErrorMessage error={cancellation.error} />
+            )}
+            <div className="cancel-buttons">
+              <button
+                type="submit"
+                className="cancel-confirm ui-button--danger"
+                disabled={!acknowledged || cancellation.isPending}
+              >
+                {cancellation.isPending
+                  ? 'Cancelando…'
+                  : 'Confirmar cancelación'}
+              </button>
+              <Link
+                className="ui-link-button"
+                to={`/reservas/${reservationRef}`}
+              >
+                Volver sin cancelar
+              </Link>
+            </div>
           </div>
         </form>
       )}
@@ -182,13 +195,20 @@ function blockedMessage(reservation: ReservationToCancel): string | null {
 
 function Done({ result }: { result: CancellationResult }) {
   return (
-    <div className="cancel-panel">
-      <p role="status" className="cancel-done">
+    <div className="cancel-panel cancel-panel--padded ui-panel">
+      <p role="status" className="cancel-done ui-notice tone-positive">
         La reserva {result.reservationRef} quedó cancelada.
       </p>
       <div className="cancel-buttons">
-        <Link to={`/reservas/${result.reservationRef}`}>Ver el detalle</Link>
-        <Link to="/reservas">Volver a reservas</Link>
+        <Link
+          className="ui-link-button ui-button--primary"
+          to={`/reservas/${result.reservationRef}`}
+        >
+          Ver el detalle
+        </Link>
+        <Link className="ui-link-button" to="/reservas">
+          Volver a reservas
+        </Link>
       </div>
     </div>
   );

@@ -1,191 +1,106 @@
 /*
- * Pantalla "Detalle de la reserva". Todo cuelga de `.detail`, así no cambia ninguna otra pantalla. Usa los
- * colores base de `index.css`: un panel por sección.
+ * Pantalla "Detalle de la reserva": master-detail. La estadía y sus habitaciones ocupan el plano central;
+ * el huésped y la cancelación viven en una columna inspector a la derecha (en pantallas anchas).
  */
 
-.detail {
-  --detail-radius: 12px;
-  --detail-radius-pill: 999px;
-  --detail-shadow:
-    0 1px 2px rgba(31, 41, 51, 0.04), 0 8px 24px rgba(31, 41, 51, 0.06);
-  --detail-error-background: #fef3f2;
-  max-width: 64rem;
-}
-
-.detail-back {
-  display: inline-block;
-  margin-bottom: 1rem;
-  text-decoration: none;
-}
-
 .detail-header {
-  display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 0.75rem 1rem;
-  margin-bottom: 1rem;
+  justify-content: flex-start;
 }
 
 .detail-title {
-  margin: 0;
-  font-size: 1.5rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-
-.detail-status {
-  padding: 0.125rem 0.75rem;
-  border-radius: var(--detail-radius-pill);
-  font-size: 0.8125rem;
-  font-weight: 600;
-}
-
-.detail-status--active,
-.detail-status--in_progress {
-  background-color: #e5f4ea;
-  color: #1d6b3f;
-}
-
-.detail-status--pending {
-  background-color: #fff4e0;
-  color: #8a5a00;
-}
-
-.detail-status--completed {
-  background-color: var(--color-surface);
-  color: var(--color-muted);
-}
-
-.detail-status--cancelled,
-.detail-status--no_show {
-  background-color: #fef3f2;
-  color: var(--color-error);
+  font-family: var(--font-sans);
 }
 
 .detail-actions {
   display: flex;
-  gap: 0.75rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
   margin-left: auto;
 }
 
-.detail-actions a {
-  padding: 0.4375rem 0.875rem;
-  border: 1px solid var(--color-accent);
-  border-radius: 8px;
-  font-weight: 600;
-  text-decoration: none;
+/* Estados con tinta semántica */
+.detail-status--active {
+  --tone-bg: var(--positive-bg);
+  --tone-border: var(--positive-border);
+  --tone-fg: var(--positive-fg);
 }
 
-.detail-actions a.detail-action--danger {
-  border-color: var(--color-error);
-  color: var(--color-error);
+.detail-status--in_progress {
+  --tone-bg: var(--info-bg);
+  --tone-border: var(--info-border);
+  --tone-fg: var(--info-fg);
+}
+
+.detail-status--pending {
+  --tone-bg: var(--warning-bg);
+  --tone-border: var(--warning-border);
+  --tone-fg: var(--warning-fg);
+}
+
+.detail-status--cancelled,
+.detail-status--no_show {
+  --tone-bg: var(--critical-bg);
+  --tone-border: var(--critical-border);
+  --tone-fg: var(--critical-fg);
 }
 
 .detail-conflict {
-  margin: 0 0 1rem;
-  padding: 0.75rem 1.25rem;
-  background-color: #fef3f2;
-  border-left: 4px solid var(--color-error);
-  border-radius: 4px;
-}
-
-.detail-panel {
-  margin-bottom: 1rem;
-  padding: 1.25rem;
-  background-color: var(--color-background);
-  border: 1px solid var(--color-border);
-  border-radius: var(--detail-radius);
-  box-shadow: var(--detail-shadow);
-}
-
-.detail-panel h2 {
-  margin: 0 0 1rem;
-  font-size: 1rem;
-  font-weight: 700;
-}
-
-.detail-fields {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
-  gap: 1rem;
   margin: 0;
+  padding: 0.75rem 0.875rem;
+  background-color: var(--critical-bg);
+  border: 1px solid var(--critical-border);
+  border-radius: var(--radius-lg);
+  color: var(--critical-fg);
+  font-size: 0.8125rem;
 }
 
-.detail-field dt {
-  color: var(--color-muted);
-  font-size: 0.75rem;
+.detail-conflict strong {
   font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
 }
 
-.detail-field dd {
-  margin: 0.125rem 0 0;
-  overflow-wrap: anywhere;
+/* Master-detail */
+.detail-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
 }
 
-.detail-table {
-  width: 100%;
-  margin-top: 1.25rem;
-  border-collapse: collapse;
-  font-size: 0.875rem;
+.detail-aside {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  min-width: 0;
 }
 
-.detail-table th,
-.detail-table td {
-  padding: 0.625rem 0.75rem;
-  border-bottom: 1px solid var(--color-border);
-  text-align: left;
+@media (min-width: 1200px) {
+  .detail-grid {
+    grid-template-columns: minmax(0, 1fr) 380px;
+  }
+
+  .detail-aside {
+    position: sticky;
+    top: 70px;
+  }
+
+  .detail-fields--stacked {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.875rem;
+  }
 }
 
-.detail-table thead th {
-  background-color: var(--color-surface);
-  color: var(--color-muted);
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+.detail-table-wrap {
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
 }
 
 .detail-money {
   font-variant-numeric: tabular-nums;
+  text-align: right;
   white-space: nowrap;
 }
 
-.detail-state {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin: 0;
-  padding: 2.5rem 0;
-  color: var(--color-muted);
-}
-
-.detail-state--loading::before {
-  content: '';
-  width: 1rem;
-  height: 1rem;
-  border: 2px solid var(--color-border);
-  border-top-color: var(--color-accent);
-  border-radius: 50%;
-  animation: detail-spin 0.8s linear infinite;
-}
-
-@keyframes detail-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .detail-state--loading::before {
-    animation: none;
-  }
-}
-
 .detail-panel .error-message {
-  margin: 0;
-  padding: 1rem 1.25rem;
-  background-color: var(--detail-error-background);
-  border-left: 4px solid var(--color-error);
+  margin: 1rem;
 }

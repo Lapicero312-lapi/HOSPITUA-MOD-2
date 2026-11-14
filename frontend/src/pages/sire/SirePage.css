@@ -1,277 +1,297 @@
 /*
- * Pantalla "Exportar archivo SIRE". Todo cuelga de `.sire`, así no cambia ninguna otra pantalla. Usa los
- * colores base de `index.css`: el panel del periodo, el de los movimientos y la vista previa encima.
+ * Pantalla "Exportar archivo SIRE": el periodo en una barra, la cifra del periodo en la cinta, la tabla de
+ * movimientos y la vista previa como panel inspector derecho (drawer en tablet, bottom sheet en móvil).
  */
 
-.sire {
-  --sire-radius: 12px;
-  --sire-shadow:
-    0 1px 2px rgba(31, 41, 51, 0.04), 0 8px 24px rgba(31, 41, 51, 0.06);
-  --sire-row-hover: #f0f6fb;
-  --sire-error-background: #fef3f2;
-  --sire-notice-background: #e5f4ea;
-  --sire-notice: #1d6b3f;
-  --sire-backdrop: rgba(31, 41, 51, 0.45);
-  max-width: 72rem;
-}
-
-.sire-title {
-  margin: 0 0 1rem;
-  font-size: 1.5rem;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-
-.sire-subtitle {
-  margin: 0;
-  padding: 1rem 1.25rem 0.75rem;
-  font-size: 1rem;
-  font-weight: 600;
-}
-
-/* La cifra del periodo: una tarjeta entre el periodo y la tabla (`sStats` del wireframe). */
-.sire-stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-  margin: 0 0 1.25rem;
-}
-
-.sire-stat {
-  min-width: 12rem;
-  padding: 0.875rem 1.25rem;
-  background-color: var(--color-background);
-  border: 1px solid var(--color-border);
-  border-radius: var(--sire-radius);
-  box-shadow: var(--sire-shadow);
-}
-
-.sire-stat dt {
-  color: var(--color-muted);
-  font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-}
-
-.sire-stat dd {
-  margin: 0.25rem 0 0;
-  font-size: 1.75rem;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
-
-.sire-panel {
-  margin-bottom: 1.25rem;
-  overflow: hidden;
-  background-color: var(--color-background);
-  border: 1px solid var(--color-border);
-  border-radius: var(--sire-radius);
-  box-shadow: var(--sire-shadow);
-}
-
-/* El periodo: las dos fechas, los atajos y la descarga del periodo, en una fila que se acomoda. */
-.sire-fields {
-  display: flex;
-  flex-wrap: wrap;
+.sire-period .sire-fields {
   align-items: flex-end;
-  gap: 0.75rem;
-  padding: 1rem 1.25rem;
 }
 
-.sire-field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.8125rem;
-  color: var(--color-muted);
+.sire-period .sire-field {
+  flex: 0 1 11rem;
+}
+
+/* Atajos como control segmentado */
+.sire-shortcuts {
+  display: inline-flex;
+  padding: 2px;
+  background-color: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.sire-shortcuts button {
+  min-height: 32px;
+  padding: 0 0.75rem;
+  background-color: transparent;
+  border-color: transparent;
+  border-radius: 6px;
+  box-shadow: none;
+  color: var(--text-2);
+}
+
+.sire-shortcuts button:hover:not(:disabled) {
+  background-color: var(--surface);
+  border-color: var(--border);
+  color: var(--text-1);
+  box-shadow: var(--shadow-control);
 }
 
 .sire-download-all {
   margin-left: auto;
 }
 
-.sire-primary {
-  background-color: var(--color-accent);
-  border-color: var(--color-accent);
-  color: #fff;
+.sire-period > .error-message,
+.sire-period > .sire-notice {
+  margin: 0 1rem 1rem;
 }
 
-.sire button:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
+.sire-stats {
+  max-width: 22rem;
 }
 
-.sire-notice {
-  margin: 0;
-  padding: 0.75rem 1.25rem;
-  background-color: var(--sire-notice-background);
-  color: var(--sire-notice);
-  font-size: 0.875rem;
+.sire-stats > div:only-child {
+  grid-column: 1 / -1;
 }
 
-.sire-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.875rem;
-}
-
-.sire-table th {
-  padding: 0.75rem 1.25rem;
-  background-color: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
-  color: var(--color-muted);
+.sire-ref {
+  color: var(--text-1);
+  font-family: var(--font-mono);
   font-size: 0.75rem;
-  font-weight: 600;
-  letter-spacing: 0.05em;
-  text-align: left;
-  text-transform: uppercase;
+  font-weight: 500;
   white-space: nowrap;
-}
-
-.sire-table td {
-  padding: 0.75rem 1.25rem;
-  border-bottom: 1px solid var(--color-border);
-  vertical-align: middle;
-}
-
-.sire-table tbody tr:hover {
-  background-color: var(--sire-row-hover);
-}
-
-.sire-ref,
-.sire-value {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 0.8125rem;
 }
 
 .sire-guest,
 .sire-movement {
   display: block;
-  font-weight: 600;
+  color: var(--text-1);
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .sire-secondary {
   display: block;
-  color: var(--color-muted);
-  font-size: 0.8125rem;
+  color: var(--text-3);
+  font-size: 0.75rem;
 }
 
 .sire-actions {
   display: flex;
-  gap: 0.5rem;
-  justify-content: flex-end;
+  gap: 0.375rem;
+  white-space: nowrap;
 }
 
-.sire-pagination {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.75rem;
-  padding: 0.75rem 1.25rem;
-  font-size: 0.875rem;
-}
-
-/* Sin periodo, mientras carga o sin extranjeros: un mensaje centrado dentro del panel. */
-.sire-state {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.75rem;
-  margin: 0;
-  padding: 2.5rem 1.25rem;
-  color: var(--color-muted);
-}
-
-.sire-state--loading::before {
-  content: '';
-  width: 1rem;
-  height: 1rem;
-  border: 2px solid var(--color-border);
-  border-top-color: var(--color-accent);
-  border-radius: 50%;
-  animation: sire-spin 0.8s linear infinite;
-}
-
-@keyframes sire-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .sire-state--loading::before {
-    animation: none;
-  }
-}
-
-/* La vista previa: una ventana encima de la pantalla. */
-.sire-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 10;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-  background-color: var(--sire-backdrop);
-}
-
-.sire-dialog {
-  width: min(44rem, 100%);
-  max-height: calc(100vh - 2rem);
-  overflow: auto;
-  padding-bottom: 1rem;
-  background-color: var(--color-background);
-  border-radius: var(--sire-radius);
-  box-shadow: var(--sire-shadow);
-}
-
-.sire-dialog > .sire-secondary {
-  padding: 0 1.25rem 0.75rem;
-}
-
-.sire-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1.5rem;
-  margin: 0 0 0.75rem;
-  padding: 0 1.25rem;
-}
-
-.sire-meta dt {
-  color: var(--color-muted);
+.sire-actions button {
+  min-height: 32px;
+  padding: 0 0.625rem;
   font-size: 0.75rem;
 }
 
-.sire-meta dd {
+.sire-panel .error-message {
+  margin: 1rem;
+}
+
+/* ───────── Panel inspector: vista previa ───────── */
+
+.sire-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  justify-content: flex-end;
+  background-color: var(--veil);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  animation: fade-in var(--base) var(--ease);
+}
+
+.sire-dialog {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: 420px;
+  height: calc(100% - 1rem);
+  margin: 0.5rem;
+  overflow: hidden;
+  background-color: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-float), var(--highlight);
+  animation: inspector-in 320ms var(--ease);
+}
+
+@keyframes inspector-in {
+  from {
+    opacity: 0;
+    transform: translateX(24px);
+  }
+}
+
+.sire-dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.125rem 0.875rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.sire-dialog-header .sire-subtitle {
   margin: 0;
-  font-weight: 600;
+  font-size: 0.9375rem;
+}
+
+.sire-dialog-header .sire-secondary {
+  margin: 0.125rem 0 0;
+}
+
+.sire-dialog-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.875rem;
+  min-height: 0;
+  padding: 1rem 1.125rem;
+  overflow-y: auto;
+}
+
+.sire-dialog-body > * {
+  flex-shrink: 0;
+}
+
+.sire-dialog-body > .sire-secondary {
+  margin: 0;
+}
+
+.sire-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem 1rem;
+  margin: 0;
+  padding: 0.875rem;
+  background-color: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.sire-meta > div:nth-child(2) {
+  grid-column: 1 / -1;
+  order: -1;
+}
+
+.sire-meta dt {
+  color: var(--text-3);
+  font-size: 0.6875rem;
+  font-weight: 500;
+}
+
+.sire-meta dd {
+  margin: 0.125rem 0 0;
+  color: var(--text-1);
+  font-size: 0.8125rem;
+  font-weight: 500;
+}
+
+.sire-fields-table {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.sire-fields-table .ui-table td {
+  padding: 0.5rem 0.75rem;
+}
+
+.sire-fields-table .ui-table th {
+  padding: 0 0.75rem;
+}
+
+.sire-value {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
 }
 
 .sire-line {
-  margin: 0 1.25rem 1rem;
+  margin: 0;
   padding: 0.75rem;
   overflow-x: auto;
-  background-color: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 8px;
-  font-size: 0.8125rem;
-  white-space: pre;
+  background-color: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  color: var(--text-1);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.sire-dialog .error-message {
+  margin: 0;
 }
 
 .sire-dialog-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 0.75rem;
-  padding: 0 1.25rem;
+  gap: 0.5rem;
+  padding: 0.75rem 1.125rem;
+  background-color: var(--surface-float);
+  border-top: 1px solid var(--border);
 }
 
-/* El mensaje de error (`ErrorMessage`) dentro de un panel o de la vista previa. */
-.sire-panel .error-message,
-.sire-dialog .error-message {
-  margin: 0 0 0.75rem;
-  padding: 1rem 1.25rem;
-  background-color: var(--sire-error-background);
-  border-left: 4px solid var(--color-error);
+/* Tablet: drawer sobre el contenido, sin comprimir columnas */
+@media (max-width: 1023px) {
+  .sire-dialog {
+    height: 100%;
+    margin: 0;
+    border-width: 0 0 0 1px;
+    border-radius: 0;
+  }
+}
+
+/* Móvil: bottom sheet */
+@media (max-width: 639px) {
+  .sire-backdrop {
+    align-items: flex-end;
+  }
+
+  .sire-dialog {
+    max-width: none;
+    height: auto;
+    max-height: 88dvh;
+    border-width: 1px 0 0;
+    border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
+    animation-name: sheet-in;
+  }
+
+  .sire-dialog::before {
+    content: '';
+    align-self: center;
+    width: 36px;
+    height: 4px;
+    margin-top: 0.5rem;
+    border-radius: var(--radius-full);
+    background-color: var(--border-strong);
+  }
+
+  .sire-dialog-actions {
+    flex-direction: column-reverse;
+  }
+
+  .sire-dialog-actions button {
+    width: 100%;
+  }
+
+  .sire-download-all {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(100%);
+  }
 }

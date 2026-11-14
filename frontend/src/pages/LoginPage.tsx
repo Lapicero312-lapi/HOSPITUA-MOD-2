@@ -1,14 +1,27 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type CSSProperties, type FormEvent } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router';
+import {
+  ArrowRightIcon,
+  BrandGlyph,
+  MoonIcon,
+  SunIcon,
+} from '../components/icons.tsx';
 import { currentUser, nameError, signIn } from '../services/session.ts';
+import { useTheme } from '../services/theme.ts';
+import { LoginVisual } from './LoginVisual.tsx';
+import './LoginPage.css';
 
 /** De dónde venía la Recepcionista antes de que se le pidiera el nombre. */
 type LoginState = { from?: string } | null;
+
+/** El orden de entrada en cascada de cada pieza del formulario. */
+const step = (index: number) => ({ '--i': index }) as CSSProperties;
 
 /** Login simulado: solo pide el nombre de la Recepcionista (plan base, regla 10). */
 export function LoginPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { theme, toggle } = useTheme();
   const [name, setName] = useState('');
   const [error, setError] = useState<string | null>(null);
   const from = (location.state as LoginState)?.from ?? '/';
@@ -29,29 +42,89 @@ export function LoginPage() {
   };
 
   return (
-    <main className="layout-main">
-      <h1>HOSPITUA · Recepción</h1>
-      <form className="login-form" onSubmit={submit} noValidate>
-        <label htmlFor="receptionist-name">Nombre de la Recepcionista</label>
-        <input
-          id="receptionist-name"
-          value={name}
-          onChange={(event) => setName(event.target.value)}
-          aria-invalid={error !== null}
-          aria-describedby={error ? 'receptionist-name-error' : undefined}
-          autoComplete="name"
-        />
-        {error && (
-          <p
-            id="receptionist-name-error"
-            role="alert"
-            className="error-message"
+    <div className="login">
+      <div className="login-side">
+        <header className="login-top">
+          <span className="login-brand">
+            <span className="brand-mark" aria-hidden="true">
+              <BrandGlyph />
+            </span>
+            HOSPITUA
+          </span>
+          <button
+            type="button"
+            className="icon-button"
+            aria-label={
+              theme === 'dark'
+                ? 'Cambiar a tema claro'
+                : 'Cambiar a tema oscuro'
+            }
+            onClick={toggle}
           >
-            {error}
-          </p>
-        )}
-        <button type="submit">Ingresar</button>
-      </form>
-    </main>
+            {theme === 'dark' ? <SunIcon size={16} /> : <MoonIcon size={16} />}
+          </button>
+        </header>
+
+        <main className="login-main">
+          <div className="login-card">
+            <span className="login-eyebrow login-step" style={step(0)}>
+              Inicio de turno
+            </span>
+            <h1 className="login-title login-step" style={step(1)}>
+              HOSPITUA · Recepción
+            </h1>
+            <p className="login-lead login-step" style={step(2)}>
+              Escriba su nombre para registrar quién opera las reservas y el
+              cumplimiento legal durante este turno.
+            </p>
+            <form className="login-form" onSubmit={submit} noValidate>
+              <div className="login-field login-step" style={step(3)}>
+                <label htmlFor="receptionist-name">
+                  Nombre de la Recepcionista
+                </label>
+                <input
+                  id="receptionist-name"
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  aria-invalid={error !== null}
+                  aria-describedby={
+                    error ? 'receptionist-name-error' : undefined
+                  }
+                  autoComplete="name"
+                  placeholder="Ej. Ana Pérez"
+                />
+                {error && (
+                  <p
+                    id="receptionist-name-error"
+                    role="alert"
+                    className="error-message"
+                  >
+                    {error}
+                  </p>
+                )}
+              </div>
+              <button
+                type="submit"
+                className="ui-button--primary login-submit login-step"
+                style={step(4)}
+              >
+                Ingresar
+                <ArrowRightIcon size={15} />
+              </button>
+            </form>
+            <p className="login-foot login-step" style={step(5)}>
+              El nombre se guarda solo en esta pestaña y se envía con cada
+              operación.
+            </p>
+          </div>
+        </main>
+
+        <footer className="login-bottom">
+          Módulo 2 · Operación de reservas y cumplimiento legal
+        </footer>
+      </div>
+
+      <LoginVisual />
+    </div>
   );
 }

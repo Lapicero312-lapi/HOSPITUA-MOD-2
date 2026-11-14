@@ -15,9 +15,16 @@ import './OtasPage.css';
  */
 export function OtasPage() {
   return (
-    <section className="otas">
-      <h1 className="otas-title">Agencias OTA</h1>
-      <div className="otas-panel">
+    <section className="otas ui-page">
+      <header className="ui-page-header">
+        <div>
+          <h1 className="otas-title ui-page-title">Agencias OTA</h1>
+          <p className="ui-page-subtitle">
+            Comisión, conexión con Channex y reservas activas de cada agencia.
+          </p>
+        </div>
+      </header>
+      <div className="otas-panel ui-panel">
         <OtasContent />
       </div>
     </section>
@@ -31,57 +38,63 @@ function OtasContent() {
   });
 
   if (otas.isPending) {
-    return <p className="otas-state otas-state--loading">Cargando agencias…</p>;
+    return (
+      <p className="otas-state otas-state--loading ui-state ui-state--loading">
+        Cargando agencias…
+      </p>
+    );
   }
   if (otas.isError) {
     return <ErrorMessage error={otas.error} />;
   }
   if (otas.data.items.length === 0) {
-    return <p className="otas-state">No hay agencias registradas.</p>;
+    return <p className="otas-state ui-state">No hay agencias registradas.</p>;
   }
   return <OtasTable otas={otas.data.items} />;
 }
 
 function OtasTable({ otas }: { otas: Ota[] }) {
   return (
-    <table className="otas-table">
-      <thead>
-        <tr>
-          <th scope="col">Agencia</th>
-          <th scope="col">Comisión</th>
-          <th scope="col">Conexión</th>
-          <th scope="col">Vinculada el</th>
-          <th scope="col">Última sincronización</th>
-          <th scope="col">Reservas activas</th>
-        </tr>
-      </thead>
-      <tbody>
-        {otas.map((ota) => (
-          <tr key={ota.id}>
-            <td className="otas-name">{ota.name}</td>
-            <td
-              className={
-                ota.commissionPercentage === null
-                  ? 'otas-commission otas-commission--none'
-                  : 'otas-commission'
-              }
-            >
-              {commissionText(ota.commissionPercentage)}
-            </td>
-            <td>
-              <span
-                className={`otas-connection otas-connection--${ota.connectionStatus.toLowerCase()}`}
-              >
-                {connectionText(ota.connectionStatus)}
-              </span>
-            </td>
-            <td className="otas-date">{formatDate(ota.linkedAt)}</td>
-            <td className="otas-date">{formatDateTime(ota.lastSyncAt)}</td>
-            <td className="otas-count">{ota.activeReservations}</td>
+    <div className="ui-scroll-x">
+      <table className="otas-table ui-table ui-table--sticky">
+        <thead>
+          <tr>
+            <th scope="col">Agencia</th>
+            <th scope="col">Comisión</th>
+            <th scope="col">Conexión</th>
+            <th scope="col">Vinculada el</th>
+            <th scope="col">Última sincronización</th>
+            <th scope="col">Reservas activas</th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {otas.map((ota) => (
+            <tr key={ota.id}>
+              <td className="otas-name">{ota.name}</td>
+              <td
+                className={
+                  ota.commissionPercentage === null
+                    ? 'otas-commission otas-commission--none'
+                    : 'otas-commission'
+                }
+              >
+                {commissionText(ota.commissionPercentage)}
+              </td>
+              <td>
+                <span
+                  className={`otas-connection ui-badge otas-connection--${ota.connectionStatus.toLowerCase()}`}
+                >
+                  {connectionText(ota.connectionStatus)}
+                </span>
+              </td>
+              <td className="otas-date">{formatDate(ota.linkedAt)}</td>
+              <td className="otas-date">{formatDateTime(ota.lastSyncAt)}</td>
+              <td className="otas-count">{ota.activeReservations}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
