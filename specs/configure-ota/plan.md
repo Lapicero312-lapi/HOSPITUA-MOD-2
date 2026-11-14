@@ -441,6 +441,18 @@ Mensajes planos del exchange `hospitua.events`, con las reglas de mensajería de
 - `previousCategoryRoom` solo si cambió de categoría.
 - El sistema ejecuta la sincronización de tipos (C1), con el mismo bloqueo asesor de las tareas de Channex, y anota los 90 días de `categoryRoom` y, si viene,
   de `previousCategoryRoom`.
+- **Pasos (`HandleInventoryNotice`, T012b):**
+  1. Un `messageId` ya procesado se confirma sin efectos y sin sincronizar.
+  2. Con el bloqueo asesor de las tareas de Channex (`channex-sync`, regla 7), se ejecuta `SyncRoomTypes`
+     (C1).
+  3. En una transacción, se anotan (B2) los 90 días de `categoryRoom` y, si viene, de
+     `previousCategoryRoom`, y se registra el mensaje en `processed_message`.
+- **Bloqueo ocupado** (una tarea de Channex está corriendo): el aviso no se procesa ni se anota; sale como
+  fallo temporal y se reintenta con la espera creciente de la cola (plan base). Agotados los reintentos, va
+  a la dead-letter queue.
+- **`NOT_SYNCED`** (el Módulo 1 o Channex no responden): las marcas se anotan y el aviso se confirma igual;
+  los tipos se corrigen en la sincronización de las 03:00 (T011). Con la configuración de Channex no válida
+  no se sincroniza: solo se anotan las marcas, como en E1.
 
 Un mensaje sin `messageId`, `roomId` o `categoryRoom`, con fechas inválidas o con una `action` desconocida
 va a la dead-letter queue sin procesar. Un `messageId` repetido se confirma sin efectos.
