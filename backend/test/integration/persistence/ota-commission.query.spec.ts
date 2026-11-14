@@ -120,13 +120,18 @@ describe('TypeOrmReservationQuery.listOtaCommissions contra PostgreSQL real (reg
     expect(row.commissionAmount.equals(Money.of('60.00', 'USD'))).toBe(true);
   });
 
-  it('solo las de canal OTA: una directa en el periodo no sale', async () => {
+  it('solo las de canal OTA: una directa en el periodo no sale ni cuenta en totalItems', async () => {
     await reservations.insert(
       aDirectReservation({ startDate: '2026-10-20', endDate: '2026-10-22' }),
     );
     const ota = await anOtaLeaving(booking, '2026-10-22');
 
-    expect(await refsOf()).toEqual([ota.reservationRef]);
+    const page = await query.listOtaCommissions(filters(), 1);
+
+    expect(page.items.map((row) => row.reservationRef)).toEqual([
+      ota.reservationRef,
+    ]);
+    expect(page.totalItems).toBe(1);
   });
 
   it('el rango es inclusivo sobre end_date: entran las que salen el primer y el último día, no las de un día antes o después', async () => {

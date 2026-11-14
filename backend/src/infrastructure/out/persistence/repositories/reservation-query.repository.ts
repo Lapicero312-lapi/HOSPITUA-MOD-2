@@ -276,7 +276,7 @@ export class TypeOrmReservationQuery implements ReservationQueryPort {
       value: unknown,
     ) => {
       params.push(value);
-      conditions.push(condition(`${params.length}`));
+      conditions.push(condition(`$${params.length}`));
     };
     if (filters.commissionStatus !== null) {
       add((p) => `r.commission_status = ${p}`, filters.commissionStatus);
@@ -315,7 +315,7 @@ export class TypeOrmReservationQuery implements ReservationQueryPort {
        FROM reservation r JOIN ota o ON o.id = r.ota_id
        ${where}
        ORDER BY r.end_date ASC, r.reservation_ref ASC
-       LIMIT ${OTA_COMMISSION_PAGE_SIZE} OFFSET ${params.length + 1}`,
+       LIMIT ${OTA_COMMISSION_PAGE_SIZE} OFFSET $${params.length + 1}`,
       [...params, (page - 1) * OTA_COMMISSION_PAGE_SIZE],
     );
     return {
