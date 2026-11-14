@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { Inject, Injectable } from '@nestjs/common';
 import { Guest } from '../../../domain/guest/guest.js';
 import {
@@ -11,6 +11,11 @@ import type {
   RoomQuoteRequest,
 } from '../../integration/room-quote.js';
 import { CLOCK, type Clock } from '../../ports/out/clock.js';
+import {
+  IDEMPOTENCY_KEY_REPOSITORY,
+  type IdempotencyKeyRepository,
+  type StoredIdempotencyKey,
+} from '../../ports/out/idempotency-key.repository.js';
 import {
   RESERVATION_REPOSITORY,
   type ReservationRepository,
@@ -47,7 +52,11 @@ import {
   readCreationRequest,
 } from './direct-reservation-request.validator.js';
 import { BusinessError } from '../../../domain/shared/business-error.js';
-import { AVAILABILITY_TAKEN } from './error-codes.js';
+import {
+  AVAILABILITY_TAKEN,
+  IDEMPOTENCY_KEY_REQUIRED,
+  IDEMPOTENCY_KEY_REUSED,
+} from './error-codes.js';
 import {
   ASSIGNMENT_MAX_RETRIES,
   type CreateDirectReservation,
@@ -58,8 +67,8 @@ import { withNewReservationRef } from './with-new-reservation-ref.js';
 /**
  * La creación de una reserva directa (plan, B, D2 y punto 12; T008). Las llamadas a los Módulos 1 y 3 van
  * antes de abrir la transacción; dentro solo está la inserción (punto 5 de "Puntos que este plan
- * propone"), con los avisos a la lista del día y a Channex (T010) y el reintento ante un solape (T009). La
- * `Idempotency-Key` la agrega T019.
+ * propone"), con los avisos a la lista del día y a Channex (T010), el reintento ante un solape (T009) y la
+ * `Idempotency-Key` (punto 15, T019).
  */
 @Injectable()
 export class CreateDirectReservationService implements CreateDirectReservation {
@@ -80,11 +89,78 @@ export class CreateDirectReservationService implements CreateDirectReservation {
     private readonly dailyList: DailyListChangeRecorder,
     @Inject(ARI_CHANGE_RECORDER)
     private readonly availabilityChanges: AriChangeRecorder,
+    @Inject(IDEMPOTENCY_KEY_REPOSITORY)
+    private readonly idempotency: IdempotencyKeyRepository,
     @Inject(ASSIGNMENT_MAX_RETRIES)
     private readonly maxRetries: number,
   ) {}
 
-  async execute(body: unknown): Promise<ReservationDetail> {
+  /**
+   * Punto 15 (T019): antes del paso 1, la `Idempotency-Key`. Con la misma clave y el mismo cuerpo, en las
+   * últimas 24 horas, responde la misma reserva sin validar, verificar ni cotizar otra vez; con otro cuerpo,
+   * `IDEMPOTENCY_KEY_REUSED`.
+   */
+  async execute(
+    body: unknown,
+    idempotencyKey: unknown,
+  ): Promise<ReservationDetail> {
+    const key = readIdempotencyKey(idempotencyKey);
+    const requestHash = hashOf(body);
+    const replay = await this.replayOf(
+      await this.idempotency.find(key),
+      requestHash,
+    );
+    if (replay !== null) {
+      return replay;
+    }
+    try {
+      return await this.create(body, key, requestHash);
+    } catch (error) {
+      // Otra solicitud con la misma clave pudo confirmar primero: su reserva ocupa las mismas habitaciones,
+      // así que esta falla por el solape (o por la clave, `DuplicateIdempotencyKeyError`) antes de guardar
+      // la suya. Se responde como si hubiera llegado después: la reserva ganadora, o
+      // `IDEMPOTENCY_KEY_REUSED` si la ganadora traía otro cuerpo. Sin clave ganadora, el error sale tal cual.
+      const winner = await this.replayOf(
+        await this.idempotency.find(key),
+        requestHash,
+      );
+      if (winner === null) {
+        throw error;
+      }
+      return winner;
+    }
+  }
+
+  /** La reserva de una clave vigente con el mismo cuerpo; `null` si no hay clave vigente. */
+  private async replayOf(
+    stored: StoredIdempotencyKey | null,
+    requestHash: string,
+  ): Promise<ReservationDetail | null> {
+    if (
+      stored === null ||
+      stored.createdAt.getTime() <= this.expiredBefore().getTime()
+    ) {
+      return null;
+    }
+    if (stored.requestHash !== requestHash) {
+      throw new BusinessError(
+        IDEMPOTENCY_KEY_REUSED.code,
+        IDEMPOTENCY_KEY_REUSED.message,
+      );
+    }
+    return this.detail.execute(stored.reservationRef);
+  }
+
+  /** Una clave creada en este instante o antes ya venció: vale menos de 24 horas (D16). */
+  private expiredBefore(): Date {
+    return new Date(this.clock.now().getTime() - IDEMPOTENCY_TTL_MS);
+  }
+
+  private async create(
+    body: unknown,
+    idempotencyKey: string,
+    requestHash: string,
+  ): Promise<ReservationDetail> {
     // Paso 1: regla 2, pasos 1 a 4, antes de consultar la disponibilidad o cotizar (FR-001a).
     const request = readCreationRequest(body, this.clock.today());
     const { startDate, endDate, categoryRoom } = request;
@@ -127,6 +203,8 @@ export class CreateDirectReservationService implements CreateDirectReservation {
           request,
           guest,
           roomsWithRates(assignedRooms, quotes),
+          idempotencyKey,
+          requestHash,
         );
       } catch (error) {
         if (!(error instanceof RoomOverlapError)) {
@@ -172,6 +250,8 @@ export class CreateDirectReservationService implements CreateDirectReservation {
     request: DirectReservationCreation,
     guest: Guest,
     rooms: DirectRoomInput[],
+    idempotencyKey: string,
+    requestHash: string,
   ): Promise<ReservationDetail> {
     const { startDate, endDate, categoryRoom } = request;
     const saved = await withNewReservationRef((reservationRef) =>
@@ -193,6 +273,17 @@ export class CreateDirectReservationService implements CreateDirectReservation {
         await this.availabilityChanges.record(tx, [
           { categoryRoom, dateFrom: startDate, dateTo: endDate },
         ]);
+        // La clave va en la misma transacción: si la reserva se revierte, la clave tampoco queda (B).
+        await this.idempotency.save(
+          tx,
+          {
+            key: idempotencyKey,
+            requestHash,
+            reservationId: reservation.id,
+            createdAt: this.clock.now(),
+          },
+          this.expiredBefore(),
+        );
         return reservation;
       }),
     );
@@ -200,6 +291,44 @@ export class CreateDirectReservationService implements CreateDirectReservation {
     // Paso 6: la misma forma que C3, con su `updatedAt`.
     return this.detail.execute(saved.reservationRef);
   }
+}
+
+/** Cuánto vive una `Idempotency-Key` (D16 del plan base). */
+const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
+
+/** Un UUID en su forma estándar `8-4-4-4-12`. */
+const UUID_FORMAT =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** La cabecera `Idempotency-Key`, obligatoria y UUID; queda en minúsculas, porque es el mismo UUID. */
+function readIdempotencyKey(value: unknown): string {
+  if (typeof value !== 'string' || !UUID_FORMAT.test(value.trim())) {
+    throw new BusinessError(
+      IDEMPOTENCY_KEY_REQUIRED.code,
+      IDEMPOTENCY_KEY_REQUIRED.message,
+    );
+  }
+  return value.trim().toLowerCase();
+}
+
+/** SHA-256 en hexadecimal del cuerpo en JSON con las claves ordenadas: el orden de las claves no cuenta. */
+function hashOf(body: unknown): string {
+  return createHash('sha256').update(canonicalJson(body)).digest('hex');
+}
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalJson).join(',')}]`;
+  }
+  if (value !== null && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, item]) => item !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    return `{${entries
+      .map(([name, item]) => `${JSON.stringify(name)}:${canonicalJson(item)}`)
+      .join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'null';
 }
 
 /** Otra solicitud tomó la última habitación libre (D3). */
