@@ -36,6 +36,7 @@ import {
   REQUEST_NOT_PROCESSED_MESSAGE,
 } from '../../shared/api-error.js';
 import { errorExample } from './openapi-examples.js';
+import type { ReservationDetailBody } from './reservation-detail.dto.js';
 import { type MoneyDto, QuotesDto, toQuotesDto } from './quotes.dto.js';
 
 /** Una habitación verificada en la vista previa: si está libre en las fechas que quedarían. */
@@ -428,6 +429,49 @@ export const ROOM_ASSIGNMENT_EXAMPLE = {
       roomId: UUID_EXAMPLE,
     },
   ],
+};
+
+/**
+ * La respuesta del ejemplo de B3: la reserva de Booking del cuerpo de ejemplo, con la habitación que estaba sin
+ * asignar ya en la 201 y sin conflicto (no queda ninguna sin asignar ni capacidad superada). Como toda
+ * reserva de Booking, sin tarifa por habitación y sin el documento del titular.
+ */
+export const ROOM_ASSIGNMENT_RESPONSE_EXAMPLE: ReservationDetailBody = {
+  reservationRef: EXAMPLE_REF,
+  status: 'ACTIVE',
+  source: 'OTA',
+  externalConfirmationCode: '9996013801',
+  otaName: 'Booking.com',
+  startDate: '2026-11-20',
+  endDate: '2026-11-22',
+  nights: 2,
+  guestCount: 2,
+  notes: 'Llegada tarde',
+  createdAt: '2026-11-08T09:30:00-05:00',
+  updatedAt: '2026-11-08T10:05:12.345678-05:00',
+  conflict: null,
+  rooms: [
+    {
+      reservationRoomId:
+        ROOM_ASSIGNMENT_EXAMPLE.assignments[0].reservationRoomId,
+      roomId: ROOM_ASSIGNMENT_EXAMPLE.assignments[0].roomId,
+      roomNumber: '201',
+      categoryRoom: 'DOBLE',
+      guestCount: 2,
+      roomGrossAmount: null,
+      stayStatus: 'EXPECTED',
+    },
+  ],
+  guest: {
+    firstName: 'John',
+    lastName: 'Smith',
+    documentType: null,
+    documentNumber: null,
+    nationality: 'Estados Unidos',
+    contactPhone: null,
+    contactEmail: 'john@correo.com',
+  },
+  cancellation: null,
 };
 
 const codeExample = (

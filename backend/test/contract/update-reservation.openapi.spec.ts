@@ -311,6 +311,40 @@ describe('OpenAPI de B1, B2 y B3: lo documentado es lo que hace el código (T032
       }
     });
 
+    it('el ejemplo de respuesta de B3 es una reserva de Booking, sin conflicto, con la habitación del cuerpo de ejemplo ya asignada; el de B2, una directa', () => {
+      const ok = (path: string) =>
+        (document.paths[path] as Record<string, Operation>).patch.responses[
+          '200'
+        ].content?.['application/json'].example as {
+          source: string;
+          otaName: string | null;
+          externalConfirmationCode: string | null;
+          conflict: unknown;
+          rooms: {
+            reservationRoomId: string;
+            roomId: string | null;
+            roomGrossAmount: unknown;
+          }[];
+        };
+      const assigned = ok(ASSIGNMENT);
+      const [assignment] = ROOM_ASSIGNMENT_EXAMPLE.assignments;
+
+      expect(assigned).toMatchObject({
+        source: 'OTA',
+        otaName: 'Booking.com',
+        conflict: null,
+      });
+      expect(assigned.externalConfirmationCode).toEqual(expect.any(String));
+      expect(assigned.rooms).toEqual([
+        expect.objectContaining({
+          reservationRoomId: assignment.reservationRoomId,
+          roomId: assignment.roomId,
+          roomGrossAmount: null,
+        }),
+      ]);
+      expect(ok(CONFIRMATION).source).toBe('DIRECT');
+    });
+
     it('el ejemplo de la vista previa es coherente: recotiza solo la agregada, con una tarifa por noche', () => {
       const { quotes, changes } = MODIFICATION_PREVIEW_EXAMPLE;
 

@@ -113,6 +113,7 @@ import {
   ModificationRequestDto,
   ROOM_ASSIGNMENT_ERROR_EXAMPLES,
   ROOM_ASSIGNMENT_EXAMPLE,
+  ROOM_ASSIGNMENT_RESPONSE_EXAMPLE,
   RoomAssignmentRequestDto,
   toModificationPreviewBody,
 } from './reservation-modification.dto.js';
@@ -607,8 +608,9 @@ export class ReservationsController {
   })
   @ApiOkResponse({
     type: ReservationDetailDto,
-    description: 'El detalle de la reserva (C3), con la habitación asignada.',
-    example: RESERVATION_DETAIL_EXAMPLE,
+    description:
+      'El detalle de la reserva de Booking (C3), con la habitación asignada y, si ya no queda ninguna sin asignar ni capacidad superada, sin conflicto.',
+    example: ROOM_ASSIGNMENT_RESPONSE_EXAMPLE,
   })
   @ApiBadRequestResponse({
     type: ApiErrorBody,
