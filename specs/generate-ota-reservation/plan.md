@@ -617,8 +617,25 @@ revisión se confirma.
           - Si está en `IN_PROGRESS`, `COMPLETED` o `NO_SHOW`: el conflicto `CHANGE_NOT_APPLICABLE` con
             `ReservationRepository.update`, y `record` `CONFLICT`.
           - En todos estos casos responde `ACKNOWLEDGE`.
-        - **`modified`:** hasta T009, `RETRY` con el motivo "pendiente de ApplyOtaChange (T009)"; queda en el
-          feed sin `ack`.
+        - **`modified` (T009):** B2. También una `new` de una reserva que ya existe. Si la reserva no existe,
+          los pasos de `new`.
+          - Si está en `ACTIVE` o `PENDING`:
+            - relaciona cada habitación con su categoría como en `new`; si falta una relación o el tipo
+              llega vacío, `RETRY`;
+            - arma el `OtaChange` con lo que da `mapBookingRevision`: las fechas de la reserva, cada
+              habitación con su categoría y sus personas, el `grossAmount`, las observaciones, el titular
+              (nombre, apellido, correo, teléfono y nacionalidad) y `datesDifferPerRoom` (FR-012);
+            - `ApplyOtaChange.prepare(reserva, cambio)` antes de la transacción; un `BusinessError` (el
+              Módulo 1 no responde) da `RETRY` con el `revisionId` y el código;
+            - en una transacción: `ApplyOtaChange.apply(tx, plan)` (guarda la reserva, la auditoría de la
+              comisión y los avisos a la lista del día y a Channex) y `record` de la revisión, `APPLIED` si
+              la reserva guardada no quedó en conflicto o `CONFLICT` si quedó;
+            - `CONCURRENT_UPDATE` (la reserva cambió desde `prepare`) y `RoomOverlapError` dan `RETRY`;
+              `DuplicateOtaBookingRevisionError` da `ACKNOWLEDGE`.
+          - Si está en `IN_PROGRESS`, `COMPLETED`, `NO_SHOW` o `CANCELLED`: el conflicto
+            `CHANGE_NOT_APPLICABLE` con `ReservationRepository.update` (como en `cancelled`) y `record`
+            `CONFLICT`.
+          - Fuera de los `RETRY`, responde `ACKNOWLEDGE`.
 
 ## Puntos abiertos
 
