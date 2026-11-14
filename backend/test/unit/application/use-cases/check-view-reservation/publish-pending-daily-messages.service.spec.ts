@@ -13,6 +13,8 @@ import {
   PublishPendingDailyMessagesService,
   UNPUBLISHED_BATCH,
 } from '../../../../../src/application/use-cases/check-view-reservation/publish-pending-daily-messages.service.js';
+import { ALWAYS_EXCLUSIVE } from '../../../../support/publication.js';
+import type { ExclusiveRunner } from '../../../../../src/application/ports/out/exclusive-runner.js';
 
 const NOW = new Date('2026-10-09T15:00:00.000Z');
 const CLOCK: Clock = { today: () => '2026-10-09', now: () => NOW };
@@ -109,7 +111,9 @@ describe('PublishPendingDailyMessages (T026)', () => {
   const serviceWith = (
     repository: DailyMessageRepository,
     publisher: DailyListPublisher,
-  ) => new PublishPendingDailyMessagesService(repository, publisher, CLOCK);
+    lock: ExclusiveRunner = ALWAYS_EXCLUSIVE,
+  ) =>
+    new PublishPendingDailyMessagesService(repository, publisher, CLOCK, lock);
 
   it('publica en orden de secuencia y marca cada uno apenas sale, con la hora del Clock', async () => {
     const { repository, calls } = repositoryWith([
@@ -320,5 +324,65 @@ describe('PublishPendingDailyMessages (T026)', () => {
     await serviceWith(repository, publisher).execute();
 
     expect(calls.filter((call) => call.startsWith('find'))).toHaveLength(1);
+  });
+
+  describe('el bloqueo daily-list-publish (T029)', () => {
+    /** Un bloqueo que responde, en orden, lo que dice `answers` (`true`: lo consigue). */
+    function lockAnswering(...answers: boolean[]) {
+      const names: string[] = [];
+      const lock: ExclusiveRunner = {
+        runExclusive: async (name, work) => {
+          names.push(name);
+          const got = answers.shift() ?? true;
+          if (got) {
+            await work();
+          }
+          return got;
+        },
+      };
+      return { lock, names };
+    }
+
+    it('publica con el bloqueo daily-list-publish', async () => {
+      const { repository } = repositoryWith([aMessage(1)]);
+      const { publisher } = publisherFailing();
+      const { lock, names } = lockAnswering(true);
+
+      expect(await serviceWith(repository, publisher, lock).execute()).toBe(1);
+      expect(names).toEqual(['daily-list-publish']);
+    });
+
+    it('si otra ejecución tiene el bloqueo, no lee ni publica y devuelve 0', async () => {
+      const { repository } = repositoryWith([aMessage(1)]);
+      const { publisher } = publisherFailing();
+      const { lock } = lockAnswering(false);
+
+      expect(await serviceWith(repository, publisher, lock).execute()).toBe(0);
+      expect(repository.findUnpublished).not.toHaveBeenCalled();
+      expect(publisher.publish).not.toHaveBeenCalled();
+    });
+
+    it('después de una que no consiguió el bloqueo, la siguiente vuelve a leer una vez al terminar (NFR-005)', async () => {
+      const { repository } = repositoryWith([aMessage(1)]);
+      const { publisher } = publisherFailing();
+      const { lock, names } = lockAnswering(false, true, true);
+      const service = serviceWith(repository, publisher, lock);
+
+      await service.execute();
+      expect(await service.execute()).toBe(1);
+
+      expect(names).toHaveLength(3);
+      expect(repository.findUnpublished).toHaveBeenCalledTimes(2);
+    });
+
+    it('sin una que se haya cruzado, no vuelve a leer', async () => {
+      const { repository } = repositoryWith([aMessage(1)]);
+      const { publisher } = publisherFailing();
+      const { lock, names } = lockAnswering(true, true);
+
+      await serviceWith(repository, publisher, lock).execute();
+
+      expect(names).toHaveLength(1);
+    });
   });
 });

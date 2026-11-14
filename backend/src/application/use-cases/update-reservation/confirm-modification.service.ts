@@ -7,6 +7,7 @@ import { BusinessError } from '../../../domain/shared/business-error.js';
 import { RESERVATION_NOT_FOUND } from '../../../domain/shared/error-codes.js';
 import { Money } from '../../../domain/shared/money.js';
 import type { RoomQuote } from '../../integration/room-quote.js';
+import type { AriChange } from '../../ports/out/ari-pending-change.repository.js';
 import { CLOCK, type Clock } from '../../ports/out/clock.js';
 import {
   RESERVATION_REPOSITORY,
@@ -39,6 +40,10 @@ import {
   RESERVATION_LOOKUP,
   type ReservationLookup,
 } from '../check-view-reservation/ports/in/reservation-lookup.port.js';
+import {
+  ARI_CHANGE_RECORDER,
+  type AriChangeRecorder,
+} from '../configure-ota/ports/in/ari-change-recorder.port.js';
 import {
   CONSULT_ROOM_INVENTORY,
   type ConsultRoomInventory,
@@ -91,6 +96,8 @@ export class ConfirmModificationService implements ConfirmModification {
     private readonly dailyList: DailyListChangeRecorder,
     @Inject(GET_RESERVATION_DETAIL)
     private readonly detail: GetReservationDetail,
+    @Inject(ARI_CHANGE_RECORDER)
+    private readonly ariChanges: AriChangeRecorder,
   ) {
     this.steps = new ModificationSteps(
       lookup,
@@ -166,6 +173,8 @@ export class ConfirmModificationService implements ConfirmModification {
           tx,
         );
         await this.dailyList.record(tx, locked, saved);
+        // Punto 17 (T028): lo que se libera y lo que se ocupa, para Channex.
+        await this.ariChanges.record(tx, occupancyChanges(locked, saved));
       });
     } catch (error) {
       if (error instanceof RoomOverlapError) {
@@ -204,6 +213,31 @@ export class ConfirmModificationService implements ConfirmModification {
     }
     return roomNotAvailable(room.roomNumber);
   }
+}
+
+/**
+ * Punto 17 (T028): cada categoría de antes en las fechas de antes (lo que se libera) y cada categoría de
+ * después en las fechas nuevas (lo que se ocupa), sin repetir.
+ */
+function occupancyChanges(
+  before: Reservation,
+  after: Reservation,
+): AriChange[] {
+  const changes = new Map<string, AriChange>();
+  for (const reservation of [before, after]) {
+    for (const { categoryRoom } of reservation.rooms) {
+      const change = {
+        categoryRoom,
+        dateFrom: reservation.startDate,
+        dateTo: reservation.endDate,
+      };
+      changes.set(
+        `${change.categoryRoom}|${change.dateFrom}|${change.dateTo}`,
+        change,
+      );
+    }
+  }
+  return [...changes.values()];
 }
 
 /**

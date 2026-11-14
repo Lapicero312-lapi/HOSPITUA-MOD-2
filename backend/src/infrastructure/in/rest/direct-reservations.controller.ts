@@ -1,7 +1,16 @@
-import { Body, Controller, HttpCode, Inject, Post, Res } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Headers,
+  HttpCode,
+  Inject,
+  Post,
+  Res,
+} from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiBody,
+  ApiHeader,
   ApiCreatedResponse,
   ApiOkResponse,
   ApiOperation,
@@ -86,14 +95,21 @@ export class DirectReservationsController {
   /**
    * B, `POST /api/reservations/direct`: crea la reserva (punto 12). Responde `201` con
    * `Location: /api/reservations/{reservationRef}` y el detalle con la forma de C3 de
-   * `check-view-reservation`; los errores de la tabla C salen por el filtro global como `400`. La
-   * `Idempotency-Key` la agrega T019.
+   * `check-view-reservation`; los errores de la tabla C salen por el filtro global como `400`. Lee la cabecera
+   * `Idempotency-Key` (punto 15, T019): sin ella o sin un UUID, `IDEMPOTENCY_KEY_REQUIRED`.
    */
   @Post()
   @HttpCode(201)
   @ApiOperation({
     summary:
       'Crea una reserva directa en `ACTIVE`: vuelve a verificar la disponibilidad, a asignar y a cotizar, compara con las tarifas que vio el solicitante y la guarda. Nunca guarda un monto enviado por el cliente.',
+  })
+  @ApiHeader({
+    name: 'Idempotency-Key',
+    required: true,
+    description:
+      'Un UUID por formulario (punto 15, T019): con la misma clave y el mismo cuerpo, en las últimas 24 horas, responde la misma reserva sin crear otra; con otro cuerpo, `IDEMPOTENCY_KEY_REUSED`.',
+    schema: { type: 'string', format: 'uuid' },
   })
   @ApiBody({
     type: DirectReservationCreationRequestDto,
@@ -124,9 +140,13 @@ export class DirectReservationsController {
   })
   async create(
     @Body() body: unknown,
+    @Headers('idempotency-key') idempotencyKey: unknown,
     @Res({ passthrough: true }) response: Response,
   ): Promise<ReservationDetailBody> {
-    const detail = await this.createDirectReservation.execute(body);
+    const detail = await this.createDirectReservation.execute(
+      body,
+      idempotencyKey,
+    );
     response.setHeader(
       'Location',
       `/api/reservations/${detail.reservation.reservationRef}`,

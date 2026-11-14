@@ -28,6 +28,16 @@ export interface ReservationRepository {
   ): Promise<boolean>;
 
   /**
+   * La reserva de la agencia con ese código de confirmación, o `null` (punto 9 del plan de
+   * `generate-ota-reservation`, paso 3: buscar la reserva de una revisión de Booking).
+   */
+  findByOtaConfirmationCode(
+    otaId: string,
+    externalConfirmationCode: string,
+    tx?: Transaction,
+  ): Promise<Reservation | null>;
+
+  /**
    * Lee la reserva y la bloquea (`SELECT … FOR UPDATE`) hasta que termine la transacción, para
    * serializar dos cambios de la misma reserva.
    */

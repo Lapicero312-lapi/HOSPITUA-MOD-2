@@ -1,3 +1,4 @@
+import type { Reservation } from '../../../../../domain/reservation/reservation.js';
 import type { Money } from '../../../../../domain/shared/money.js';
 import type { Transaction } from '../../../../ports/out/transaction.js';
 
@@ -28,7 +29,7 @@ export type CommissionResult = {
 
 /**
  * Cálculo de la comisión de una reserva OTA nueva (plan, B1). Lo usa `generate-ota-reservation` dentro de
- * su transacción. `recalculate` lo agrega su tarea del plan.
+ * su transacción, y `recalculate`, `ApplyOtaChange` cuando Booking cambia el valor.
  */
 export interface RegisterOtaConfirmationAndCommission {
   /**
@@ -37,6 +38,14 @@ export interface RegisterOtaConfirmationAndCommission {
    * `DUPLICATE_CONFIRMATION_CODE`.
    */
   calculate(input: CommissionInput): Promise<CommissionResult>;
+
+  /**
+   * Booking cambió el valor de la reserva: la comisión nueva con el porcentaje **congelado** de la reserva
+   * (FR-002; plan, B1). No persiste: `ApplyOtaChange` guarda los importes y llama a `recordAudit`. Nunca
+   * aprende un porcentaje (`learnedPercentage` es `false`).
+   * @throws Error si la reserva no es de OTA: es un error del programa.
+   */
+  recalculate(reservation: Reservation, grossAmount: Money): CommissionResult;
 
   /**
    * T007: deja la fila `CALCULATED` de `commission_audit` en la transacción de quien llama, después de que

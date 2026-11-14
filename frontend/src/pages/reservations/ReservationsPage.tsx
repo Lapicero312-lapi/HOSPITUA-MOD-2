@@ -136,6 +136,12 @@ export function ReservationsPage() {
             Busque, filtre y abra las reservas del hotel.
           </p>
         </div>
+        <Link
+          className="reservations-new ui-link-button ui-button--primary"
+          to="/reservas/nueva"
+        >
+          + Nueva reserva directa
+        </Link>
       </header>
       <DaySummaryPanel />
       <Filters key={filters.search} filters={filters} onChange={change} />

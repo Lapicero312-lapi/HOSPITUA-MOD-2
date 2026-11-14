@@ -118,6 +118,7 @@ function serviceWith({
       runs.push(work);
       return work(TX);
     },
+    afterCommit: () => {},
   };
   const lockByRef = vi
     .fn<ReservationRepository['lockByRef']>()

@@ -18,6 +18,7 @@ import {
   anOta,
   anOtaReservation,
   anOtaRoom,
+  otaTerms,
 } from '../../support/builders.js';
 import { openTestDataSource, truncateAllTables } from '../support/database.js';
 
@@ -54,6 +55,61 @@ describe('TypeOrmReservationRepository contra PostgreSQL real', () => {
     await new TypeOrmOtaRepository(dataSource).insert(ota);
     return ota.id;
   }
+
+  describe('findByOtaConfirmationCode (punto 9 de generate-ota-reservation)', () => {
+    it('la reserva de esa agencia con ese código, completa', async () => {
+      const otaId = await aSavedOta();
+      const saved = await repository.insert(
+        anOtaReservation(otaId, {
+          ota: otaTerms(otaId, { externalConfirmationCode: '9996013801' }),
+        }),
+      );
+
+      const found = await repository.findByOtaConfirmationCode(
+        otaId,
+        '9996013801',
+      );
+
+      expect(found?.id).toBe(saved.id);
+      expect(found?.reservationRef).toBe(saved.reservationRef);
+      expect(found?.ota?.externalConfirmationCode).toBe('9996013801');
+      expect(found?.rooms).toHaveLength(saved.rooms.length);
+    });
+
+    it('null si el código no existe, o si es de otra agencia', async () => {
+      const otaId = await aSavedOta();
+      const other = anOta({ name: 'Expedia' });
+      await new TypeOrmOtaRepository(dataSource).insert(other);
+      await repository.insert(
+        anOtaReservation(other.id, {
+          ota: otaTerms(other.id, { externalConfirmationCode: '9996013801' }),
+        }),
+      );
+
+      expect(
+        await repository.findByOtaConfirmationCode(otaId, '9996013801'),
+      ).toBeNull();
+      expect(
+        await repository.findByOtaConfirmationCode(other.id, '1111111111'),
+      ).toBeNull();
+    });
+
+    it('dentro de una transacción ve lo que esa transacción insertó', async () => {
+      const otaId = await aSavedOta();
+
+      const found = await transactions.run(async (tx) => {
+        await repository.insert(
+          anOtaReservation(otaId, {
+            ota: otaTerms(otaId, { externalConfirmationCode: '9996013801' }),
+          }),
+          tx,
+        );
+        return repository.findByOtaConfirmationCode(otaId, '9996013801', tx);
+      });
+
+      expect(found).not.toBeNull();
+    });
+  });
 
   describe('insert y lectura', () => {
     it('guarda la reserva directa con sus habitaciones y su titular, y la lee igual', async () => {

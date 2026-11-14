@@ -121,13 +121,6 @@
   animation: inspector-in 320ms var(--ease);
 }
 
-@keyframes inspector-in {
-  from {
-    opacity: 0;
-    transform: translateX(24px);
-  }
-}
-
 .sire-dialog-header {
   display: flex;
   align-items: flex-start;
@@ -287,11 +280,5 @@
   .sire-download-all {
     margin-left: 0;
     width: 100%;
-  }
-}
-
-@keyframes sheet-in {
-  from {
-    transform: translateY(100%);
   }
 }

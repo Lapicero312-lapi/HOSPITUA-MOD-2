@@ -425,3 +425,38 @@ describe('RegisterOtaConfirmationAndCommission.recordAudit (T007)', () => {
     expect(audits.record).not.toHaveBeenCalled();
   });
 });
+
+describe('RegisterOtaConfirmationAndCommission.recalculate (lo usa ApplyOtaChange, T026 de update-reservation)', () => {
+  const service = () => serviceWith(null);
+
+  it('el importe nuevo con el porcentaje congelado de la reserva, sin aprenderlo', () => {
+    const reservation = anOtaReservation('ota-1', {
+      ota: otaTerms('ota-1', { commissionPercentage: '15' }),
+    });
+
+    expect(service().recalculate(reservation, usd('500.00'))).toEqual({
+      otaId: 'ota-1',
+      commissionPercentage: '15',
+      learnedPercentage: false,
+      commissionAmount: usd('75.00'),
+      commissionStatus: 'CALCULATED',
+    });
+  });
+
+  it('redondea a dos decimales como calculate (ROUND_HALF_UP) y en la moneda del valor nuevo', () => {
+    const reservation = anOtaReservation('ota-1', {
+      ota: otaTerms('ota-1', { commissionPercentage: '12.5' }),
+    });
+
+    expect(
+      service().recalculate(reservation, Money.of('100.05', 'EUR'))
+        .commissionAmount,
+    ).toEqual(Money.of('12.51', 'EUR'));
+  });
+
+  it('una reserva directa es un error del programa', () => {
+    expect(() =>
+      service().recalculate(aDirectReservation(), usd('500.00')),
+    ).toThrow(/no es de OTA/);
+  });
+});

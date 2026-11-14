@@ -1,0 +1,128 @@
+/*
+ * Pantalla "Modificar": a la izquierda el formulario y a la derecha el resumen de disponibilidad y tarifa,
+ * fijo al desplazar en pantallas anchas. Usa las piezas `ui-*` de `index.css`.
+ */
+
+.modify {
+  max-width: 72rem;
+}
+
+.modify-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1rem;
+  align-items: start;
+}
+
+@media (min-width: 1100px) {
+  .modify-grid {
+    grid-template-columns: minmax(0, 1fr) 380px;
+  }
+
+  .modify-aside {
+    position: sticky;
+    top: 70px;
+  }
+}
+
+.modify-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+  padding: 1.125rem;
+}
+
+.modify-panel h2 {
+  margin: 0.375rem 0 -0.125rem;
+  padding-top: 0.875rem;
+  border-top: 1px solid var(--border);
+  color: var(--text-1);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.modify-panel h2:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.modify-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: flex-end;
+}
+
+.modify-field {
+  display: flex;
+  flex: 1 1 10rem;
+  flex-direction: column;
+  gap: 0.375rem;
+  min-width: 0;
+}
+
+.modify-field label {
+  color: var(--text-2);
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.modify-hint {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 0.8125rem;
+}
+
+.modify-table {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.modify-table tfoot th,
+.modify-table tfoot td {
+  padding: 0.6875rem 1rem;
+  background-color: var(--surface-2);
+  border-top: 1px solid var(--border);
+  color: var(--text-1);
+  font-weight: 600;
+  text-align: left;
+}
+
+.modify-money {
+  font-variant-numeric: tabular-nums;
+  text-align: right !important;
+  white-space: nowrap;
+}
+
+.modify-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  padding-top: 0.25rem;
+}
+
+.modify-buttons button[type='submit'] {
+  flex: 1;
+}
+
+.modify-table input:not([type='checkbox']) {
+  width: 4.5rem;
+}
+
+.modify-add {
+  align-self: flex-start;
+}
+
+/* Solo para lectores de pantalla: el encabezado de la columna de "Quitar". */
+.modify-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

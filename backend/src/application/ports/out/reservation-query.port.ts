@@ -1,9 +1,47 @@
 import type { Reservation } from '../../../domain/reservation/reservation.js';
 import type {
+  CommissionStatus,
   ReservationSource,
   ReservationStatus,
 } from '../../../domain/shared/enums.js';
+import type { Money } from '../../../domain/shared/money.js';
 import type { Transaction } from './transaction.js';
+
+/** Tamaño fijo de una página de A1 de `register-ota-information-commission` (no hay `pageSize`). */
+export const OTA_COMMISSION_PAGE_SIZE = 100;
+
+/** Los filtros de A1 de `register-ota-information-commission`, ya validados (punto C1 de su plan). */
+export type OtaCommissionFilters = {
+  /** Rango inclusivo sobre la `end_date` de la reserva, en `AAAA-MM-DD`. */
+  dateFrom: string;
+  dateTo: string;
+  /** `null`: todos. */
+  commissionStatus: CommissionStatus | null;
+  reservationStatus: ReservationStatus | null;
+  otaId: string | null;
+};
+
+/** Una reserva de OTA con su comisión, como la muestra A1. */
+export type OtaCommissionRow = {
+  reservationRef: string;
+  otaId: string;
+  otaName: string;
+  externalConfirmationCode: string;
+  status: ReservationStatus;
+  startDate: string;
+  endDate: string;
+  grossAmount: Money;
+  /** De 0 a 100, con dos decimales, el congelado en la reserva. */
+  commissionPercentage: string;
+  commissionAmount: Money;
+  commissionStatus: CommissionStatus;
+};
+
+/** Una página de A1: las de la página pedida y el total con los mismos filtros. */
+export type OtaCommissionRows = {
+  totalItems: number;
+  items: OtaCommissionRow[];
+};
 
 /** Símbolo con el que Nest inyecta el puerto (plan base, regla 4). */
 export const RESERVATION_QUERY_PORT = Symbol('RESERVATION_QUERY_PORT');
@@ -105,6 +143,17 @@ export interface ReservationQueryPort {
     filters: ReservationListFilters,
     page: number,
   ): Promise<ReservationListPage>;
+
+  /**
+   * A1 de `register-ota-information-commission` (punto C1 de su plan): solo las reservas `OTA` con
+   * `end_date` en el rango inclusivo, con los demás filtros, ordenadas por `end_date` y
+   * `reservation_ref` ascendentes, de a `OTA_COMMISSION_PAGE_SIZE`. Una página que pasa de la última
+   * devuelve `items` vacío con el `totalItems` real: el ajuste lo hace el caso de uso.
+   */
+  listOtaCommissions(
+    filters: OtaCommissionFilters,
+    page: number,
+  ): Promise<OtaCommissionRows>;
 
   /**
    * T023: las reservas `ACTIVE` con `startDate` igual a `operationalDate` (`AAAA-MM-DD`), completas y con

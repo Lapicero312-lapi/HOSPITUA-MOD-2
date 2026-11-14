@@ -53,6 +53,10 @@ import {
   type ReservationListResult,
 } from '../../../application/use-cases/check-view-reservation/ports/in/list-reservations.port.js';
 import {
+  ASSIGN_ROOM,
+  type AssignRoom,
+} from '../../../application/use-cases/update-reservation/ports/in/assign-room.port.js';
+import {
   CONFIRM_MODIFICATION,
   type ConfirmModification,
 } from '../../../application/use-cases/update-reservation/ports/in/confirm-modification.port.js';
@@ -98,7 +102,19 @@ import {
   toReservationDetailBody,
 } from './reservation-detail.dto.js';
 import {
+  MODIFICATION_CONFIRMATION_ERROR_EXAMPLES,
+  MODIFICATION_CONFIRMATION_EXAMPLE,
+  MODIFICATION_PREVIEW_ERROR_EXAMPLES,
+  MODIFICATION_PREVIEW_EXAMPLE,
+  MODIFICATION_REQUEST_EXAMPLE,
+  ModificationConfirmationRequestDto,
   type ModificationPreviewBody,
+  ModificationPreviewDto,
+  ModificationRequestDto,
+  ROOM_ASSIGNMENT_ERROR_EXAMPLES,
+  ROOM_ASSIGNMENT_EXAMPLE,
+  ROOM_ASSIGNMENT_RESPONSE_EXAMPLE,
+  RoomAssignmentRequestDto,
   toModificationPreviewBody,
 } from './reservation-modification.dto.js';
 import { readReservationListQuery } from './reservation-list-query.dto.js';
@@ -211,6 +227,8 @@ export class ReservationsController {
     private readonly findByStayRange: FindReservationsByStayRange,
     @Inject(PREVIEW_MODIFICATION)
     private readonly previewModification: PreviewModification,
+    @Inject(ASSIGN_ROOM)
+    private readonly assignRoom: AssignRoom,
     @Inject(CONFIRM_MODIFICATION)
     private readonly confirmModification: ConfirmModification,
   ) {}
@@ -465,6 +483,38 @@ export class ReservationsController {
    */
   @Post(':reservationRef/modification-preview')
   @HttpCode(200)
+  @ApiOperation({
+    summary:
+      'B1: la vista previa de la modificación de una reserva directa en `ACTIVE` o `PENDING`. No guarda nada: valida, verifica la disponibilidad de lo que cambia, recotiza lo que corresponda y devuelve el resumen. Responde los mismos errores que la confirmación (B2), salvo `RATE_CHANGED`.',
+  })
+  @ApiParam({
+    name: 'reservationRef',
+    description:
+      'La referencia de la reserva: `RSV-` y 8 hexadecimales en mayúscula.',
+    schema: { type: 'string', pattern: RESERVATION_REF_PATTERN },
+    example: 'RSV-3F9A1C7B',
+  })
+  @ApiBody({
+    type: ModificationRequestDto,
+    examples: {
+      PLAN: {
+        summary: 'El cuerpo de cambio del contrato B del plan',
+        value: MODIFICATION_REQUEST_EXAMPLE,
+      },
+    },
+  })
+  @ApiOkResponse({
+    type: ModificationPreviewDto,
+    description:
+      'Los cambios, la disponibilidad verificada, las tarifas recotizadas y el total de las habitaciones que quedarían.',
+    example: MODIFICATION_PREVIEW_EXAMPLE,
+  })
+  @ApiBadRequestResponse({
+    type: ApiErrorBody,
+    description:
+      'Los de la tabla de B, en el orden de los pasos: la primera verificación que falla responde.',
+    examples: MODIFICATION_PREVIEW_ERROR_EXAMPLES,
+  })
   async modificationPreview(
     @Param('reservationRef') reservationRef: string,
     @Body() body: unknown,
@@ -482,12 +532,99 @@ export class ReservationsController {
    * B salen por el filtro global como `400`.
    */
   @Patch(':reservationRef')
+  @ApiOperation({
+    summary:
+      'B2: confirma la modificación de una reserva directa. Repite las validaciones de B1, vuelve a cotizar y compara con `expectedRates` (`RATE_CHANGED` si difieren: nunca guarda un monto del cliente), y guarda con el aviso a la lista del día. Responde el detalle de C3 con el `updatedAt` nuevo.',
+  })
+  @ApiParam({
+    name: 'reservationRef',
+    description:
+      'La referencia de la reserva: `RSV-` y 8 hexadecimales en mayúscula.',
+    schema: { type: 'string', pattern: RESERVATION_REF_PATTERN },
+    example: 'RSV-3F9A1C7B',
+  })
+  @ApiBody({
+    type: ModificationConfirmationRequestDto,
+    examples: {
+      PLAN: {
+        summary: 'El ejemplo de B2 del plan',
+        value: MODIFICATION_CONFIRMATION_EXAMPLE,
+      },
+    },
+  })
+  @ApiOkResponse({
+    type: ReservationDetailDto,
+    description:
+      'El detalle de la reserva modificada (C3), con su `updatedAt` nuevo.',
+    example: RESERVATION_DETAIL_EXAMPLE,
+  })
+  @ApiBadRequestResponse({
+    type: ApiErrorBody,
+    description:
+      'Los de B1 más `RATE_CHANGED`. Con cualquiera, nada queda a medias.',
+    examples: MODIFICATION_CONFIRMATION_ERROR_EXAMPLES,
+  })
   async confirmModificationOf(
     @Param('reservationRef') reservationRef: string,
     @Body() body: unknown,
   ): Promise<ReservationDetailBody> {
     return toReservationDetailBody(
       await this.confirmModification.execute(reservationRef, body),
+    );
+  }
+
+  /**
+   * B3 de `update-reservation`, `PATCH /api/reservations/{reservationRef}/room-assignment`: la Recepcionista
+   * asigna habitación a las sin asignar de una reserva de Booking en conflicto (FR-025, punto 16). `X-User`
+   * es obligatorio (`USER_REQUIRED` o `INVALID_USER`) y no se guarda. Responde `200` con el detalle de C3;
+   * los errores salen por el filtro global como `400`.
+   */
+  @Patch(':reservationRef/room-assignment')
+  @ApiOperation({
+    summary:
+      'B3: la Recepcionista asigna habitación a las sin asignar de una reserva de Booking en conflicto, en `ACTIVE` o `PENDING` (FR-025). Es lo único que puede cambiarle. Verifica la categoría, la capacidad y la disponibilidad; si ya no queda ninguna sin asignar ni capacidad superada, quita el conflicto. Responde el detalle de C3.',
+  })
+  @ApiParam({
+    name: 'reservationRef',
+    description:
+      'La referencia de la reserva: `RSV-` y 8 hexadecimales en mayúscula.',
+    schema: { type: 'string', pattern: RESERVATION_REF_PATTERN },
+    example: 'RSV-3F9A1C7B',
+  })
+  @ApiHeader({
+    name: 'X-User',
+    required: true,
+    description:
+      'La Recepcionista que asigna (máximo 100 caracteres). No se guarda: la reserva no tiene dónde.',
+  })
+  @ApiBody({
+    type: RoomAssignmentRequestDto,
+    examples: {
+      PLAN: {
+        summary: 'El ejemplo de B3 del plan',
+        value: ROOM_ASSIGNMENT_EXAMPLE,
+      },
+    },
+  })
+  @ApiOkResponse({
+    type: ReservationDetailDto,
+    description:
+      'El detalle de la reserva de Booking (C3), con la habitación asignada y, si ya no queda ninguna sin asignar ni capacidad superada, sin conflicto.',
+    example: ROOM_ASSIGNMENT_RESPONSE_EXAMPLE,
+  })
+  @ApiBadRequestResponse({
+    type: ApiErrorBody,
+    description:
+      'La cabecera `X-User` y después los pasos del punto 16, en orden. Nada queda a medias.',
+    examples: ROOM_ASSIGNMENT_ERROR_EXAMPLES,
+  })
+  async assignRoomOf(
+    @Param('reservationRef') reservationRef: string,
+    @UserHeader() _user: string,
+    @Body() body: unknown,
+  ): Promise<ReservationDetailBody> {
+    return toReservationDetailBody(
+      await this.assignRoom.execute(reservationRef, body),
     );
   }
 }

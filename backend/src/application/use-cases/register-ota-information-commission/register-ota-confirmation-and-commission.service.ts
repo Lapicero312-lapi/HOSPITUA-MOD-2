@@ -6,6 +6,7 @@ import {
 } from '../../../domain/ota/commission.js';
 import { isPercentage } from '../../../domain/ota/ota.js';
 import { BusinessError } from '../../../domain/shared/business-error.js';
+import type { Reservation } from '../../../domain/reservation/reservation.js';
 import type { Money } from '../../../domain/shared/money.js';
 import {
   COMMISSION_AUDIT_REPOSITORY,
@@ -104,6 +105,22 @@ export class RegisterOtaConfirmationAndCommissionService implements RegisterOtaC
         input.grossAmount,
         commissionPercentage,
       ),
+      commissionStatus: 'CALCULATED',
+    };
+  }
+
+  recalculate(reservation: Reservation, grossAmount: Money): CommissionResult {
+    if (reservation.ota === null) {
+      throw new Error(
+        `La reserva ${reservation.reservationRef} no es de OTA: no tiene comisión que recalcular.`,
+      );
+    }
+    const { otaId, commissionPercentage } = reservation.ota;
+    return {
+      otaId,
+      commissionPercentage,
+      learnedPercentage: false,
+      commissionAmount: calculateCommission(grossAmount, commissionPercentage),
       commissionStatus: 'CALCULATED',
     };
   }

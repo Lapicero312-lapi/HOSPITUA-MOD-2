@@ -16,4 +16,12 @@ export interface TransactionRunner {
    * error. Las llamadas a otros módulos van antes, nunca dentro (plan base, regla 6).
    */
   run<T>(work: (tx: Transaction) => Promise<T>): Promise<T>;
+
+  /**
+   * Corre `work` cuando la transacción `tx` se confirme, nunca si se revierte (plan de
+   * `check-view-reservation`, "Quién lo llama (T029)"). No se espera: `run` termina sin aguardarlo, y si
+   * `work` falla, el error queda en el log.
+   * @throws Error si `tx` no es una transacción abierta por `run` (un error del programa).
+   */
+  afterCommit(tx: Transaction, work: () => Promise<unknown>): void;
 }

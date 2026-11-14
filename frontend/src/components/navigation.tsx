@@ -2,6 +2,7 @@ import type { ComponentType, SVGProps } from 'react';
 import {
   BedIcon,
   CalendarIcon,
+  UsersIcon,
   FileTextIcon,
   GlobeIcon,
   HomeIcon,
@@ -31,6 +32,12 @@ export const NAV_ITEMS: NavItem[] = [
     description: 'Consultar, filtrar y abrir reservas',
     end: true,
     icon: CalendarIcon,
+  },
+  {
+    to: '/huespedes',
+    label: 'Huéspedes alojados',
+    description: 'Quién está en el hotel y su detalle',
+    icon: UsersIcon,
   },
   {
     to: '/sire',
@@ -63,10 +70,17 @@ export function crumbsFor(pathname: string): string[] {
   if (pathname === '/') {
     return ['Inicio'];
   }
+  if (pathname.startsWith('/reservas/nueva')) {
+    return ['Reservas', 'Nueva reserva directa'];
+  }
   const reservation = pathname.match(/^\/reservas\/([^/]+)(\/cancelar)?\/?$/);
   if (reservation) {
     const ref = decodeURIComponent(reservation[1]);
     return reservation[2] ? ['Reservas', ref, 'Cancelar'] : ['Reservas', ref];
+  }
+  const modify = pathname.match(/^\/reservas\/([^/]+)\/modificar\/?$/);
+  if (modify) {
+    return ['Reservas', decodeURIComponent(modify[1]), 'Modificar'];
   }
   const item = NAV_ITEMS.find(
     (nav) => nav.to !== '/' && pathname.startsWith(nav.to),

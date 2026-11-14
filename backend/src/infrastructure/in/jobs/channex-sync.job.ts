@@ -15,9 +15,9 @@ import {
   type PublishPendingNoShows,
 } from '../../../application/use-cases/generate-ota-reservation/ports/in/publish-pending-no-shows.port.js';
 import {
-  READ_BOOKING_FEED,
-  type ReadBookingFeed,
-} from '../../../application/use-cases/generate-ota-reservation/ports/in/read-booking-feed.port.js';
+  PROCESS_BOOKING_FEED,
+  type ProcessBookingFeed,
+} from '../../../application/use-cases/generate-ota-reservation/ports/in/process-booking-feed.port.js';
 import { AdvisoryLock } from './advisory-lock.js';
 
 /** El nombre del temporizador en el `SchedulerRegistry`. */
@@ -27,10 +27,11 @@ export const CHANNEX_SYNC_INTERVAL = 'channex-sync';
 export const CHANNEX_SYNC_LOCK = 'channex-sync';
 
 /**
- * La tarea de Channex (plan de `generate-ota-reservation`, puntos 7 y 8): cada
- * `CHANNEX_SYNC_INTERVAL_SECONDS` lee el feed y después envía los no-shows pendientes (A3), aunque la
- * lectura no haya podido leerlo: el reporte no depende del feed. Procesar las revisiones (T006) y enviar la
- * disponibilidad (`configure-ota`, que va antes de los no-shows) se agregan en sus tareas. No hace nada
+ * La tarea de Channex (plan de `generate-ota-reservation`, puntos 7, 8 y 9): cada
+ * `CHANNEX_SYNC_INTERVAL_SECONDS` corre el ciclo del feed (`ProcessBookingFeed`: repite los `ack` pendientes,
+ * lee, procesa las revisiones y las confirma) y después envía los no-shows pendientes (A3), aunque la
+ * lectura no haya podido leerlo: el reporte no depende del feed. Enviar la disponibilidad (`configure-ota`,
+ * que va antes de los no-shows) se agrega en su tarea. No hace nada
  * mientras la configuración de Channex no esté lista, y corre con un bloqueo asesor para que dos
  * ejecuciones no se crucen.
  */
@@ -41,8 +42,8 @@ export class ChannexSyncJob
   private readonly logger = new Logger(ChannexSyncJob.name);
 
   constructor(
-    @Inject(READ_BOOKING_FEED)
-    private readonly feed: ReadBookingFeed,
+    @Inject(PROCESS_BOOKING_FEED)
+    private readonly feed: ProcessBookingFeed,
     @Inject(PUBLISH_PENDING_NO_SHOWS)
     private readonly noShows: PublishPendingNoShows,
     @Inject(CHANNEX_SETUP_STATE)
@@ -79,7 +80,8 @@ export class ChannexSyncJob
     }
     try {
       return await this.lock.runExclusive(CHANNEX_SYNC_LOCK, async () => {
-        await this.feed.read();
+        // T007: repite los ack pendientes, lee el feed, procesa las revisiones y confirma.
+        await this.feed.run();
         await this.noShows.publish();
       });
     } catch (error) {
