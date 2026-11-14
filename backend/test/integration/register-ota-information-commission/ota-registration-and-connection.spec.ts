@@ -183,7 +183,7 @@ describe('Registro de la agencia y estado de la conexión (register-ota-informat
   /** Channex responde el feed con `revisions` o con el estado de error `status`. */
   function channexFeedAnswers(answer: unknown[] | 401 | 403): void {
     server.use(
-      http.get(`${CHANNEX_BASE_URL}/api/v1/booking_revisions/feed`, () =>
+      http.get(`${CHANNEX_BASE_URL}/api/v1/booking_revisions`, () =>
         Array.isArray(answer)
           ? HttpResponse.json({
               meta: { total: answer.length, page: 1, limit: 100 },

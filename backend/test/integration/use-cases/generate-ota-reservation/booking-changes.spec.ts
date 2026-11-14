@@ -216,7 +216,7 @@ describe('generate-ota-reservation: cambios y cancelaciones de Booking (T011, es
           ],
         }),
       ),
-      http.get(`${CHANNEX_BASE_URL}/api/v1/booking_revisions/feed`, () =>
+      http.get(`${CHANNEX_BASE_URL}/api/v1/booking_revisions`, () =>
         HttpResponse.json({
           meta: { total: feed.length, page: 1, limit: 100 },
           data: feed,

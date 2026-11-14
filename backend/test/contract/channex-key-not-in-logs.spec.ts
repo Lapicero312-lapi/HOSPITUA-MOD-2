@@ -248,7 +248,7 @@ describe('La clave de Channex no sale en los logs (NFR-002, T014 de configure-ot
     it('una feed con una revisión ilegible deja un aviso en el log y sin la clave', async () => {
       const logs = captureLogs();
       server.use(
-        http.get(`${BASE_URL}/api/v1/booking_revisions/feed`, () =>
+        http.get(`${BASE_URL}/api/v1/booking_revisions`, () =>
           HttpResponse.json({
             meta: { total: 1, page: 1, limit: 100 },
             data: [{ type: 'booking_revision', id: 'rev-1', attributes: {} }],
