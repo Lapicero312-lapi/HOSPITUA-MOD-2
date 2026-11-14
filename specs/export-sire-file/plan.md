@@ -456,6 +456,7 @@ solo movimiento.
 - [ ] T016 Prueba de tiempo: 500 movimientos en menos de 2 s (NFR-001) y un archivo grande (`SIRE_MAX_RECORDS`) sin agotar la memoria
 - [ ] T017 Verificar que ningún log escribe datos personales de los huéspedes (NFR-002)
 - [ ] T018 Documentar A, B y C en OpenAPI (`@nestjs/swagger`)
+- [ ] T019 [US1] Frontend: sin periodo en la dirección, la pantalla abre con hoy como inicio y fin y lista sus movimientos; atajo "Hoy" (FR-002a, escenario 8). Solo frontend: no cambia ningún contrato
 
 ## Pruebas por escenario
 

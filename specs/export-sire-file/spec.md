@@ -1,7 +1,7 @@
 # Feature Specification: Exportar Archivo SIRE
 
 **Created**: 2026-09-19
-**Updated**: 2026-10-18
+**Updated**: 2026-11-14
 
 ## Use Case (Caso de Uso)
 
@@ -21,7 +21,9 @@ no es un actor del sistema.
 
 1. La **Recepcionista** inicia sesión (login simulado en el frontend) y abre la pantalla de exportación SIRE.
 2. La Recepcionista define el periodo del reporte (`startDate` y `endDate`), que se compara con la
-   fecha de cada movimiento migratorio (`movementDate`).
+   fecha de cada movimiento migratorio (`movementDate`). Al abrir la pantalla, el periodo es **hoy**
+   (el día operativo, como inicio y fin), así que ya se ven los movimientos del día; lo cambia con las
+   fechas o con los atajos "Hoy", "Últimos 7 días" y "Últimos 30 días".
 3. El sistema ejecuta "Procesar datos de huéspedes" para obtener los movimientos del
    periodo, tanto de entrada (`ENTRY`) como de salida (`DEPARTURE`), **seleccionando solo los de
    huéspedes extranjeros** (nacionalidad distinta de Colombia). Los movimientos de huéspedes
@@ -110,6 +112,13 @@ controlado.
    - **Then** el sistema entrega un `.TXT` con una sola línea y registra una `SireExport` con un
      registro incluido
 
+8. **Scenario**: Al abrir la pantalla se ven los movimientos de hoy
+   - **Given** el día operativo 2026-10-09, un `ENTRY` de un huésped extranjero el 2026-10-09 y otro el
+     2026-10-08
+   - **When** la Recepcionista abre la pantalla de exportación SIRE
+   - **Then** el periodo aparece del 2026-10-09 al 2026-10-09 y el sistema lista solo el movimiento del
+     2026-10-09; con el atajo "Hoy" vuelve a ese periodo después de cambiarlo
+
 ### Casos Borde
 
 - ¿Qué sucede si el rango de fechas supera 1 año y sobrecarga el sistema? El sistema detiene la
@@ -141,6 +150,9 @@ controlado.
   generar y descargar el archivo. El sistema no debe enviar el archivo a Migración.
 - **FR-002**: El sistema debe filtrar por un periodo obligatorio (`startDate` y `endDate`, máximo un
   año), aplicado a la `movementDate` de cada movimiento migratorio.
+- **FR-002a**: Al abrir la pantalla sin un periodo elegido, la pantalla de la Recepcionista debe usar el
+  día operativo como inicio y fin del periodo, y ofrecer el atajo "Hoy" junto a "Últimos 7 días" y
+  "Últimos 30 días". No cambia el contrato: el periodo sigue siendo obligatorio en la API.
 - **FR-003**: El sistema debe incluir los movimientos `ENTRY` y `DEPARTURE` de todos los huéspedes
   extranjeros (nacionalidad distinta de Colombia) de las reservas del periodo, no solo del titular, sin
   incluir a los colombianos y sin depender del estado actual de la reserva.
