@@ -166,7 +166,7 @@ sincronización. Mientras tanto, una reserva con más personas que la capacidad 
 | `200` | Guarda el resultado (A2, A3) o borra las marcas enviadas (A4) |
 | `401` o `403` | Conserva lo pendiente y registra el error; la `Ota` pasa a `DISCONNECTED` |
 | `429` | Conserva lo pendiente, pausa los envíos de la propiedad **un minuto** y después reintenta con espera creciente |
-| `422` (datos inválidos) | Registra el detalle y descarta ese envío, para no repetir un error permanente |
+| `422` (datos inválidos) | Registra el detalle. En el envío de disponibilidad (A4) descarta ese envío, para no repetir un error permanente. En un tipo de habitación (A2 o A3) no guarda nada y se reintenta en la siguiente sincronización (C1) |
 | `5xx`, tiempo agotado o error de red | Conserva lo pendiente y lo intenta en el siguiente ciclo |
 
 ### B. Puertos internos
