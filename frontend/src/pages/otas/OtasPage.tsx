@@ -19,9 +19,6 @@ export function OtasPage() {
       <header className="ui-page-header">
         <div>
           <h1 className="otas-title ui-page-title">Agencias OTA</h1>
-          <p className="ui-page-subtitle">
-            Comisión, conexión con Channex y reservas activas de cada agencia.
-          </p>
         </div>
       </header>
       <div className="otas-panel ui-panel">

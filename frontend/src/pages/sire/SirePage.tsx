@@ -100,9 +100,6 @@ export function SirePage() {
       <header className="ui-page-header">
         <div>
           <h1 className="sire-title ui-page-title">Exportar archivo SIRE</h1>
-          <p className="ui-page-subtitle">
-            Movimientos migratorios de huéspedes extranjeros y su archivo .TXT.
-          </p>
         </div>
       </header>
       <div className="sire-panel sire-period ui-panel">

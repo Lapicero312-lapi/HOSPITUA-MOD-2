@@ -18,9 +18,6 @@ export function RoomsPage() {
       <header className="ui-page-header">
         <div>
           <h1 className="rooms-title ui-page-title">Habitaciones</h1>
-          <p className="ui-page-subtitle">
-            Inventario vendible con capacidad y mantenimiento próximo.
-          </p>
         </div>
       </header>
       <div className="rooms-panel ui-panel">

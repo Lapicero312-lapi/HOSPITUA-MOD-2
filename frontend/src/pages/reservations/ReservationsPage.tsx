@@ -132,9 +132,6 @@ export function ReservationsPage() {
           <h1 className="reservations-title ui-page-title">
             Consultar reservas
           </h1>
-          <p className="ui-page-subtitle">
-            Busque, filtre y abra las reservas del hotel.
-          </p>
         </div>
         <Link
           className="reservations-new ui-link-button ui-button--primary"

@@ -113,9 +113,6 @@ export function GuestStaysPage() {
           <h1 className="guest-stays-title ui-page-title">
             Huéspedes alojados
           </h1>
-          <p className="ui-page-subtitle">
-            Quién se aloja en el hotel, con su entrada, salida y detalle.
-          </p>
         </div>
       </header>
       <Filters key={filters.search} filters={filters} onChange={change} />

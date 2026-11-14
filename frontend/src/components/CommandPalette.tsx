@@ -19,9 +19,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
     if (term === '') {
       return NAV_ITEMS;
     }
-    return NAV_ITEMS.filter((item) =>
-      normalize(`${item.label} ${item.description}`).includes(term),
-    );
+    return NAV_ITEMS.filter((item) => normalize(item.label).includes(term));
   }, [query]);
 
   useEffect(() => {
@@ -105,12 +103,7 @@ export function CommandPalette({ onClose }: { onClose: () => void }) {
                 <span className="palette-item-icon">
                   <ItemIcon size={16} />
                 </span>
-                <span className="palette-item-text">
-                  <span className="palette-item-label">{item.label}</span>
-                  <span className="palette-item-description">
-                    {item.description}
-                  </span>
-                </span>
+                <span className="palette-item-label">{item.label}</span>
                 {index === active ? (
                   <kbd>
                     <CornerDownLeftIcon size={11} />

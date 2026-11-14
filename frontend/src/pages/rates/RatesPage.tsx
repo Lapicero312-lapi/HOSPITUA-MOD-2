@@ -19,10 +19,6 @@ export function RatesPage() {
       <header className="ui-page-header">
         <div>
           <h1 className="rates-title ui-page-title">Tarifas</h1>
-          <p className="ui-page-subtitle">
-            Tarifa de referencia por categoría y noche, con el ajuste de
-            temporada.
-          </p>
         </div>
       </header>
       <div className="rates-panel ui-panel">

@@ -105,17 +105,10 @@
 }
 
 .login-title {
-  margin: 0;
+  margin: 0 0 1.75rem;
   font-size: 1.75rem;
   line-height: 1.15;
   letter-spacing: -0.03em;
-}
-
-.login-lead {
-  margin: 0.625rem 0 1.75rem;
-  color: var(--text-2);
-  font-size: 0.875rem;
-  line-height: 1.6;
 }
 
 .login-form {
@@ -153,13 +146,6 @@
 
 .login-submit:hover svg {
   transform: translateX(2px);
-}
-
-.login-foot {
-  margin: 1.25rem 0 0;
-  color: var(--text-3);
-  font-size: 0.75rem;
-  line-height: 1.5;
 }
 
 .login-bottom {
@@ -426,10 +412,10 @@
 }
 
 .glass--modules {
-  top: 14px;
+  top: -14px;
   right: 0;
   z-index: 1;
-  width: 200px;
+  width: 210px;
   transform: translateZ(20px);
 }
 
@@ -461,35 +447,4 @@
   border-radius: 50%;
   background-color: var(--positive-fg);
   opacity: 0.85;
-}
-
-.login-visual-caption {
-  position: absolute;
-  right: 2rem;
-  bottom: 1.75rem;
-  left: 2rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.login-visual-caption span {
-  color: var(--accent);
-  font-size: 0.6875rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.login-visual-caption p {
-  max-width: 28rem;
-  margin: 0;
-  color: var(--text-2);
-  font-size: 0.875rem;
-}
-
-@media (max-height: 640px) {
-  .login-visual-caption {
-    display: none;
-  }
 }

@@ -73,12 +73,8 @@ export function LoginPage() {
             <h1 className="login-title login-step" style={step(1)}>
               HOSPITUA · Recepción
             </h1>
-            <p className="login-lead login-step" style={step(2)}>
-              Escriba su nombre para registrar quién opera las reservas y el
-              cumplimiento legal durante este turno.
-            </p>
             <form className="login-form" onSubmit={submit} noValidate>
-              <div className="login-field login-step" style={step(3)}>
+              <div className="login-field login-step" style={step(2)}>
                 <label htmlFor="receptionist-name">
                   Nombre de la Recepcionista
                 </label>
@@ -106,16 +102,12 @@ export function LoginPage() {
               <button
                 type="submit"
                 className="ui-button--primary login-submit login-step"
-                style={step(4)}
+                style={step(3)}
               >
                 Ingresar
                 <ArrowRightIcon size={15} />
               </button>
             </form>
-            <p className="login-foot login-step" style={step(5)}>
-              El nombre se guarda solo en esta pestaña y se envía con cada
-              operación.
-            </p>
           </div>
         </main>
 

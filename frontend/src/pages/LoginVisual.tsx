@@ -1,11 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import {
-  BedIcon,
-  CalendarIcon,
-  FileTextIcon,
-  GlobeIcon,
-  TagIcon,
-} from '../components/icons.tsx';
+import { NAV_ITEMS } from '../components/navigation.tsx';
 
 const ZONE = 'America/Bogota';
 
@@ -177,34 +171,18 @@ export function LoginVisual() {
           >
             <span className="glass-label">En un solo lienzo</span>
             <ul>
-              <li>
-                <CalendarIcon size={14} /> Reservas
-                <span className="glass-dot" />
-              </li>
-              <li>
-                <FileTextIcon size={14} /> Exportar SIRE
-                <span className="glass-dot" />
-              </li>
-              <li>
-                <BedIcon size={14} /> Habitaciones
-                <span className="glass-dot" />
-              </li>
-              <li>
-                <TagIcon size={14} /> Tarifas
-                <span className="glass-dot" />
-              </li>
-              <li>
-                <GlobeIcon size={14} /> Agencias OTA
-                <span className="glass-dot" />
-              </li>
+              {NAV_ITEMS.filter((item) => item.to !== '/').map((item) => {
+                const ItemIcon = item.icon;
+                return (
+                  <li key={item.to}>
+                    <ItemIcon size={14} /> {item.label}
+                    <span className="glass-dot" />
+                  </li>
+                );
+              })}
             </ul>
           </div>
         </div>
-      </div>
-
-      <div className="login-visual-caption">
-        <span>Recepción</span>
-        <p>Reservas, habitaciones y cumplimiento SIRE, en un mismo turno.</p>
       </div>
     </div>
   );
