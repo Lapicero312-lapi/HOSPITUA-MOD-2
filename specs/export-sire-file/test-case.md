@@ -54,6 +54,8 @@ Colombia:
     escribe en `utf-8` (`export-sire-file-edge-cases.spec.ts`);
   * una generación que falla a mitad, sin dejar `SireExport` (`export-sire-file-edge-cases.spec.ts`);
   * NFR-001, 500 movimientos en menos de 2 s (`export-sire-file-time.spec.ts`).
+* Que las reservas canceladas o en No-Show no aparezcan en el periodo estos pasos no lo arman; lo cubre
+  `backend/test/integration/export-sire-file/export-sire-file-edge-cases.spec.ts`.
 * Que una descarga quede registrada en `SireExport` se ve en el `Export-Id` y en el nombre del archivo. Revisar
   la tabla es opcional y necesita acceso a la base de la demo.
 
@@ -156,11 +158,12 @@ Colombia:
   paso 8).
 * **EC-005** : ¿Qué pasa si la generación falla a mitad? No queda `SireExport`; está en las limitaciones.
 * **EC-006** : ¿Aparecen las reservas canceladas o que no se presentaron? No: nunca tuvieron Check-In, así que no
-  tienen movimientos.
+  tienen movimientos; está en las limitaciones.
 * **EC-007** : ¿Qué pasa con un huésped que entró y salió en el periodo? Dos líneas, una de entrada y otra de
   salida (sección 2, paso 3, con John y Ana).
 * **EC-008** : ¿Qué pasa con un huésped con varias estadías en el periodo? Las líneas de cada una, porque cada
-  movimiento es real.
+  movimiento es su propia línea (sección 2, paso 3, con una estadía por huésped). Un huésped con dos estadías en
+  el periodo no se arma en estos pasos, y ninguna prueba automatizada lo cubre aparte.
 * **EC-009** : ¿Se borran las `SireExport`? No: son un registro auditable (sección 2, paso 7).
 
 --------------------------------------------------------------------------------

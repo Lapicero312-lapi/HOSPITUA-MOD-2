@@ -46,8 +46,9 @@ cual la recibe:
   noche.
 * En la demo, los simuladores del Módulo 1 y del Módulo 3 son un solo servicio: no se puede dejar sin responder
   solo al Módulo 3. La sección 4 se ejecuta en local.
-* La demo no configura `RATE_REFERENCE`, así que su pantalla "Tarifas" no tiene tarifas de referencia. La
-  sección 5 se ejecuta en local, con la de `backend/.env.example`.
+* La demo no configura `RATE_REFERENCE`, así que su pantalla "Tarifas" no tiene tarifas de referencia y
+  muestra "No hay tarifas de referencia configuradas." (lo cubre `frontend/src/pages/rates/RatesPage.test.tsx`).
+  La sección 5 se ejecuta en local, con la de `backend/.env.example`.
 * NFR-001 (menos de 1,5 s para la llamada al Módulo 3) no se puede medir sola a mano. El tiempo de la consulta
   de disponibilidad y tarifa es una cota superior: también incluye al Módulo 1.
 * No se pueden provocar a mano estos casos. Los cubren las pruebas de integración:
@@ -148,19 +149,25 @@ Se ejecuta en local, con el `RATE_REFERENCE` de `backend/.env.example`: ajuste d
 --------------------------------------------------------------------------------
 
 ##### Edge Cases & Boundary Conditions
-* **EC-001** : ¿Qué pasa si se cotiza una categoría que no existe en el catálogo? Responde `400`, nunca `500`
+* **EC-001** : ¿Qué pasa si el Módulo 3 no responde al cotizar una reserva nueva? `400` "Error 400: El servicio
+  de cotización de tarifas no se encuentra disponible. Por favor intente más tarde" y no se crea la reserva, ni
+  con una tarifa por defecto (sección 4, pasos 3 y 4).
+* **EC-002** : ¿Qué pasa si el Módulo 3 no responde al recotizar una reserva activa? `400` "No se pudo calcular
+  la nueva tarifa en este momento. Intente más tarde." y la reserva conserva sus fechas y sus tarifas (sección
+  4, paso 5).
+* **EC-003** : ¿Qué pasa si se cotiza una categoría que no existe en el catálogo? Responde `400`, nunca `500`
   (sección 3, paso 2).
-* **EC-002** : ¿Qué pasa con un rango de fechas incoherente (la salida igual o antes de la entrada)? Responde
+* **EC-004** : ¿Qué pasa con un rango de fechas incoherente (la salida igual o antes de la entrada)? Responde
   `400` sin llamar al Módulo 3 (sección 3, paso 3).
-* **EC-003** : ¿Qué recibe el Módulo 3 de una reserva de Booking? Con `X-Client` `MODULE3`, `quoteIds` vacío: su
-  valor lo informa la agencia y no se cotiza (FR-010).
-* **EC-004** : ¿Qué pasa con una habitación que se quita al modificar? Se va con su tarifa, sin llamar al
-  Módulo 3, y no se muestra en la tarifa nueva.
-* **EC-005** : ¿Qué pasa si falla una sola de varias cotizaciones? No se guarda ninguna tarifa (FR-002a); está
+* **EC-005** : ¿Qué recibe el Módulo 3 de una reserva de Booking? Con `X-Client` `MODULE3`, `quoteIds` vacío: su
+  valor lo informa la agencia y no se cotiza (FR-010; TC-010-GenerateOtaReservation, sección 1, paso 6).
+* **EC-006** : ¿Qué pasa con una habitación que se quita al modificar? Se va con su tarifa, sin llamar al
+  Módulo 3, y no se muestra en la tarifa nueva (TC-013-UpdateReservation, sección 1, paso 6).
+* **EC-007** : ¿Qué pasa si falla una sola de varias cotizaciones? No se guarda ninguna tarifa (FR-002a); está
   en las limitaciones.
-* **EC-006** : ¿Qué muestra "Tarifas" si `RATE_REFERENCE` no está configurada, como en la demo? "No hay tarifas
-  de referencia configuradas.", sin error.
-* **EC-007** : ¿Cambia la tarifa con la cantidad de personas? No: depende de la categoría y de las fechas
+* **EC-008** : ¿Qué muestra "Tarifas" si `RATE_REFERENCE` no está configurada, como en la demo? "No hay tarifas
+  de referencia configuradas.", sin error; está en las limitaciones.
+* **EC-009** : ¿Cambia la tarifa con la cantidad de personas? No: depende de la categoría y de las fechas
   (sección 1, paso 4).
 
 --------------------------------------------------------------------------------

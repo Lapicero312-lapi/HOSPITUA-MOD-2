@@ -53,6 +53,12 @@ que Booking necesita para vender el hotel sin sobreventa:
     deja reservar una habitación en mantenimiento, y los mantenimientos del simulador son fijos;
     `availability-scenarios.spec.ts`;
   * el tope de 20 tipos de habitación por propiedad (FR-008): `sync-room-types-scenarios.spec.ts`.
+* Estos pasos no los arman, y los cubren otras pruebas automatizadas:
+  * las fechas pasadas que no se envían y la cantidad que nunca baja de 0:
+    `backend/test/unit/application/use-cases/configure-ota/publish-pending-availability.service.spec.ts`;
+  * el mismo aviso publicado dos veces: `maintenance.consumer.spec.ts` e `inventory.consumer.spec.ts`, en
+    `backend/test/integration/use-cases/configure-ota/`;
+  * el aviso mal formado, que va a la dead-letter: `backend/test/integration/messaging/messaging.module.spec.ts`.
 * Que Booking muestre los mismos valores que Channex solo se puede revisar con acceso a la extranet del hotel
   de prueba `10485037` y con la categoría mapeada en Channex. Sin ese acceso, se verifica en Channex.
 
@@ -192,23 +198,30 @@ pueden empezar otra vez en `sequenceNumber` 1.
 --------------------------------------------------------------------------------
 
 ##### Edge Cases & Boundary Conditions
-* **EC-001** : ¿Qué pasa con las fechas pasadas? No se envían. El Módulo 1 simulado tiene un mantenimiento
-  de la habitación 1001 (`DOBLE`) de ayer a mañana: después del envío de las 03:00, `DOBLE` muestra una
-  habitación menos `hoy` y `hoy+1`, y la fecha de ayer no cambia en Channex.
-* **EC-002** : ¿Qué capacidad se usa si las habitaciones de una categoría tienen capacidades distintas? La
+* **EC-001** : ¿Quién crea los planes de tarifa y envía los precios? El Módulo 3, directamente a Channex; el
+  Módulo 2 no lo hace. Este caso no los revisa (Dependencies & Assumptions), y ninguna prueba automatizada lo
+  cubre aparte.
+* **EC-002** : ¿Qué pasa con los mantenimientos? El Módulo 1 avisa cada uno por cola, y la disponibilidad baja
+  solo en sus fechas (sección 3, pasos 7 y 8). Si el aviso llega tarde y Booking alcanza a vender la
+  habitación, la reserva entra en conflicto (TC-010-GenerateOtaReservation, EC-009).
+* **EC-003** : ¿Qué pasa si el Módulo 1 agrega, da de baja o cambia una habitación? Lo avisa por cola, y el
+  tipo de habitación y su disponibilidad se actualizan sin esperar a las 03:00 (sección 5, pasos 3 a 6).
+* **EC-004** : ¿Qué capacidad se usa si las habitaciones de una categoría tienen capacidades distintas? La
   mayor: `SUITE` (4, 4 y 5) va a Channex con 5 adultos, y `DOBLE` (2 y 3) con 3 (sección 2, paso 3).
-* **EC-003** : ¿Qué pasa si hay más reservas que habitaciones en una categoría, por un conflicto? Se envía
-  `0`, nunca un número negativo.
-* **EC-004** : ¿Qué pasa si se publica dos veces el mismo aviso (el mismo `messageId`)? El segundo se ignora:
-  no se vuelve a sincronizar ni a anotar nada.
-* **EC-005** : ¿Qué pasa con un aviso mal formado (sin `messageId` o con fechas inválidas)? Va a la
-  dead-letter queue sin procesar, y la disponibilidad en Channex no cambia.
-* **EC-006** : ¿Qué pasa si la demo está dormida a las 03:00? El envío completo no corre ese día. Los
-  cambios anotados se envían en el primer ciclo después de que despierte.
-* **EC-007** : ¿El Módulo 2 crea planes de tarifa o envía precios? No: los planes de tarifa de la propiedad
-  en Channex son solo los que crea el Módulo 3.
-* **EC-008** : ¿Qué pasa si en el futuro se agrega otra agencia (por ejemplo, Airbnb)? Los tipos de
-  habitación y la disponibilidad son de la propiedad, no de la agencia, así que no cambian.
+* **EC-005** : ¿Qué pasa si hay más reservas que habitaciones en una categoría, por un conflicto? Se envía
+  `0`, nunca un número negativo; está en las limitaciones.
+* **EC-006** : ¿Qué pasa con las fechas pasadas? No se envían; está en las limitaciones. En la demo se puede
+  ver con el mantenimiento de la habitación 1001 (`DOBLE`), de ayer a mañana: después del envío de las 03:00,
+  `DOBLE` muestra una habitación menos `hoy` y `hoy+1`, y la fecha de ayer no cambia en Channex.
+* **EC-007** : ¿Qué pasa si en el futuro se agrega otra agencia (por ejemplo, Airbnb)? Los tipos de
+  habitación y la disponibilidad son de la propiedad, no de la agencia, así que no cambian. No se puede probar
+  hoy: la propiedad solo tiene Booking.com.
+* **EC-008** : ¿Qué pasa si se publica dos veces el mismo aviso (el mismo `messageId`)? El segundo se ignora:
+  no se vuelve a sincronizar ni a anotar nada; está en las limitaciones.
+* **EC-009** : ¿Qué pasa con un aviso mal formado (sin `messageId` o con fechas inválidas)? Va a la
+  dead-letter queue sin procesar, y la disponibilidad en Channex no cambia; está en las limitaciones.
+* **EC-010** : ¿Qué pasa si la demo está dormida a las 03:00? El envío completo no corre ese día. Los
+  cambios anotados se envían en el primer ciclo después de que despierte; está en las limitaciones.
 
 --------------------------------------------------------------------------------
 

@@ -59,6 +59,15 @@ solos al Módulo 2 por el feed de Channex:
   * el cambio sin disponibilidad y la cancelación de una reserva ya cancelada (`booking-changes.spec.ts`);
   * Channex sin responder o con `429` (`read-booking-feed.spec.ts`);
   * el reporte de no-show que Channex no acepta y se reintenta (`no-show-report.spec.ts`).
+* Estos pasos no los arman, y los cubren las pruebas de
+  `backend/test/unit/application/use-cases/generate-ota-reservation/`:
+  * las personas de cada habitación (adultos más niños, sin los bebés) y las observaciones saneadas y recortadas
+    a 500 caracteres (`booking-revision.mapper.spec.ts`);
+  * el cambio de una reserva que el sistema no tiene, que se registra como nueva
+    (`process-booking-revision.service.spec.ts`); su cancelación solo se confirma (`process-booking-feed.spec.ts`,
+    en la carpeta de integración de arriba);
+  * la revisión que no se puede guardar, que no se confirma a Channex y espera a la siguiente lectura
+    (`process-booking-feed.service.spec.ts`).
 * La prueba automatizada contra Channex staging de la tarea #306 (`backend/test/staging/booking-staging.spec.ts`,
   con `pnpm test:staging` en `backend`) repite la creación, el cambio y la cancelación. La corre quien tiene la
   clave de Channex, con la demo pausada y el feed vacío, como dice su archivo.
@@ -144,16 +153,19 @@ solos al Módulo 2 por el feed de Channex:
   1, paso 4).
 * **EC-002** : ¿Cómo se guarda el país? Como nombre del país, informativo: `US` queda `Estados Unidos` (sección
   1, paso 4). Un código que no está en la tabla deja la nacionalidad vacía.
-* **EC-003** : ¿Cuántas personas tiene cada habitación? Adultos más niños; los bebés no cuentan.
+* **EC-003** : ¿Cuántas personas tiene cada habitación? Adultos más niños; los bebés no cuentan. Está en las
+  limitaciones.
 * **EC-004** : ¿Qué pasa con observaciones de más de 500 caracteres o con caracteres no válidos? Se sanean y se
-  recortan; la reserva no se rechaza.
+  recortan; la reserva no se rechaza. Está en las limitaciones.
 * **EC-005** : ¿Qué pasa con un cambio de una reserva que el sistema no tiene? Se registra como nueva; una
-  cancelación solo se confirma.
+  cancelación solo se confirma. Está en las limitaciones.
 * **EC-006** : ¿Qué pasa con dos revisiones de la misma reserva juntas? Se procesan en orden (sección 2, pasos
   3 y 5, si se hacen seguidos).
 * **EC-007** : ¿Qué pasa si falla el guardado de una revisión? No se confirma a Channex y se procesa en la
   siguiente lectura; está en las limitaciones.
-* **EC-008** : ¿Qué pasa si Booking vende una habitación que ya no hay? La reserva se registra sin habitación
+* **EC-008** : ¿Qué pasa con una reserva de Booking que la agencia nunca confirma? No existe ese caso: Booking
+  envía las reservas ya confirmadas, y llegan "Activa" (sección 1, paso 3).
+* **EC-009** : ¿Qué pasa si Booking vende una habitación que ya no hay? La reserva se registra sin habitación
   asignada y en conflicto; está en las limitaciones.
 
 --------------------------------------------------------------------------------

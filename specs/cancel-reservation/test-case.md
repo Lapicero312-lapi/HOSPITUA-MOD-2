@@ -51,6 +51,8 @@ y que una cancelación inválida se rechaza:
   navegador también incluye la red. Lo cubre `backend/test/integration/cancel-reservation/cancel-reservation-time.spec.ts`.
 * Que el aviso `REMOVED` quede pendiente y se reintente cuando falla la publicación al Módulo 1 no se puede
   provocar a mano en la demo. Lo cubre `backend/test/integration/cancel-reservation/cancel-reservation-edge-cases.spec.ts`.
+* Que Booking repita la cancelación de una reserva ya cancelada no se puede provocar a mano desde el hotel de
+  prueba. Lo cubre `backend/test/integration/use-cases/generate-ota-reservation/booking-changes.spec.ts`.
 
 ##### Dependencies & Assumptions
 * TC-004-CheckViewReservation debe pasar primero: la reserva se localiza en "Consultar reservas" y la lista del
@@ -168,10 +170,11 @@ registra sus datos ni su movimiento migratorio.
   curso y responde `400` (sección 3, paso 2). Las habitaciones que no lleguen quedan sin llegar en el cierre
   del día.
 * **EC-005** : ¿Se puede cancelar solo una habitación de una reserva con varias? No: la cancelación siempre es
-  de la reserva completa. Para quitar una habitación se usa "Actualizar reservación".
+  de la reserva completa, con un solo aviso al Módulo 1 (sección 1, pasos 3 y 6). Para quitar una habitación se
+  usa "Actualizar reservación" (TC-013-UpdateReservation, sección 1, paso 6).
 * **EC-006** : ¿Qué pasa si Booking envía la cancelación de una reserva que ya está en curso o completada?
-  "Generar reservación por OTA" la marca en conflicto (`CHANGE_NOT_APPLICABLE`); si ya estaba cancelada, la
-  ignora.
+  "Generar reservación por OTA" la marca en conflicto (`CHANGE_NOT_APPLICABLE`) (TC-010-GenerateOtaReservation,
+  sección 3, paso 2). Si ya estaba cancelada, la ignora; está en las limitaciones.
 
 --------------------------------------------------------------------------------
 
