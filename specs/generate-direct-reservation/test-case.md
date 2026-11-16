@@ -44,7 +44,8 @@ habitaciones, sin sobreventa y sin cobro:
 * La pantalla no deja elegir una habitación concreta: asigna sola la disponible de menor número. La habitación
   pedida por su `roomId` se prueba por la API (sección 5, paso 2).
 * En la demo, el Módulo 1 y el Módulo 3 son el mismo simulador: si se suspende, primero falla el inventario. El
-  Módulo 3 sin responder se prueba en local, como en TC-001-CalculateDynamicRate (sección 7, paso 1).
+  Módulo 3 sin responder se prueba en local, como en TC-001-CalculateDynamicRate, sección 4 (aquí, sección 7,
+  paso 1).
 * No se pueden provocar a mano, y los cubre `backend/test/integration/generate-direct-reservation/`:
   * dos creaciones exactamente a la vez sobre la última habitación (`AVAILABILITY_TAKEN`):
     `direct-reservation-concurrency.spec.ts`;

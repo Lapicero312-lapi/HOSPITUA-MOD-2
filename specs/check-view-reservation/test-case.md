@@ -53,11 +53,16 @@ la lista del día al día:
   corren al despertar.
 * No se pueden armar a mano en la demo, y los cubren las pruebas automatizadas:
   * un día sin llegadas (lista con cero reservas): `daily-list-scenarios.spec.ts`;
-  * la publicación que falla y se reintenta en orden: `daily-list-rabbitmq-outage.spec.ts`;
+  * la publicación que falla y se reintenta en orden, con las actualizaciones esperando detrás de la lista:
+    `daily-list-rabbitmq-outage.spec.ts`;
   * la reserva de Booking que queda con una habitación sin asignar (`ROOM_UNASSIGNED`):
     `daily-list-updates-scenarios.spec.ts`;
   * un texto que coincide a la vez con la referencia de una reserva y el código de Booking de otra:
-    `search-and-detail-scenarios.spec.ts`.
+    `search-and-detail-scenarios.spec.ts`;
+  * una reserva `PENDING` con llegada hoy, porque Booking envía las reservas confirmadas:
+    `backend/test/integration/use-cases/check-view-reservation/generate-daily-list.spec.ts`.
+* Que una reserva que ya tuvo Check-In antes del día de su llegada no viaje en la lista lo cubre la misma
+  `generate-daily-list.spec.ts`; estos pasos no la arman.
 * NFR-001 (búsqueda por código en menos de 500 ms), NFR-002 (una página en menos de 1 s con 50 000 reservas),
   NFR-004 (la lista en menos de 1 min con 500 reservas) y NFR-005 (cada actualización en menos de 5 s) se miden
   en `check-view-load.spec.ts` y `daily-list-publication.spec.ts`. A mano solo se observan como cota superior.
@@ -210,17 +215,36 @@ Todos por la documentación de la API, con `GET /api/reservations` y `X-Client` 
   (sección 6, paso 6).
 * **EC-006** : ¿Cómo se filtran por fecha las reservas canceladas o que no se presentaron? Por sus fechas
   planeadas (sección 1, paso 10, con R3).
-* **EC-007** : ¿Se repite una reserva de varias habitaciones? No: una fila, con todas sus habitaciones
+* **EC-007** : ¿Qué pasa si cambian las reservas mientras se pasan las páginas? Cada página se calcula al
+  pedirla: una reserva nueva puede mover otra a la página siguiente o a la anterior. No se provoca aparte; si
+  pasa en la sección 1, paso 14, porque alguien más usa la demo, el total cambia y no es un defecto.
+* **EC-008** : ¿Se repite una reserva de varias habitaciones? No: una fila, con todas sus habitaciones
   (sección 1, paso 10).
-* **EC-008** : ¿Qué pasa con caracteres especiales o intentos de inyección? `400`, nunca `500` (sección 6,
+* **EC-009** : ¿Qué pasa con caracteres especiales o intentos de inyección? `400`, nunca `500` (sección 6,
   paso 10).
-* **EC-009** : ¿Qué pasa con una reserva creada para hoy antes de enviar la lista? Va dentro de la lista, sin
+* **EC-010** : ¿Qué devuelve una consulta sobre una reserva cuyo estado cambia en ese momento? El último estado
+  guardado; la consulta siguiente ya muestra el cambio, como el "En curso" tras el Check-In (sección 5, paso 5).
+* **EC-011** : ¿Usan la vista y la búsqueda la OTA o el Módulo 1? No: con `X-Client` `MODULE1`, la misma ruta
+  responde la consulta por fechas y rechaza los filtros de la Recepcionista (sección 2, pasos 10 y 11). Booking
+  no llama al Módulo 2.
+* **EC-012** : ¿Qué pasa con una reserva creada para hoy antes de enviar la lista? Va dentro de la lista, sin
   actualización aparte (sección 4, pasos 1 a 4).
-* **EC-010** : ¿Qué pasa si una reserva de la lista tiene Check-In? No se envía nada (sección 5, paso 5).
-* **EC-011** : ¿Qué pasa con las actualizaciones del día anterior que salen después de medianoche? Llevan la
-  fecha del día al que pertenecen (sección 5, paso 8).
-* **EC-012** : ¿Qué pasa si falla la publicación al Módulo 1? El cambio no se revierte y el aviso se reintenta
+* **EC-013** : ¿Qué pasa si falla la publicación al Módulo 1? El cambio no se revierte y el aviso se reintenta
   en orden; está en las limitaciones.
+* **EC-014** : ¿Qué pasa si la lista del día no sale y mientras tanto hay cambios? Las actualizaciones esperan
+  detrás de la lista: el Módulo 1 nunca recibe una antes que la lista de ese día; está en las limitaciones.
+* **EC-015** : ¿Qué pasa si una reserva de la lista tiene Check-In? No se envía nada (sección 5, paso 5).
+* **EC-016** : ¿Viaja en la lista una reserva que ya tuvo Check-In antes del día de su llegada? No, porque el
+  Módulo 1 ya registró su ingreso; está en las limitaciones.
+* **EC-017** : ¿Viaja en la lista una reserva `PENDING` con llegada hoy? No, hasta que se confirme. Hoy no
+  ocurre, porque Booking envía las reservas confirmadas; está en las limitaciones.
+* **EC-018** : ¿Qué pasa si una reserva de la lista cambia varias veces seguidas? Sale una actualización por
+  cada cambio, cada una con su secuencia (sección 5, pasos 2, 3 y 7).
+* **EC-019** : ¿Qué pasa con las actualizaciones del día anterior que salen después de medianoche? Llevan la
+  fecha del día al que pertenecen (sección 5, paso 8).
+* **EC-020** : ¿Qué pasa si el titular no tiene teléfono ni correo? Esos campos viajan vacíos y no impiden el
+  envío. Los logs del simulador solo muestran los totales, así que a mano no se ve, y ninguna prueba
+  automatizada lo cubre aparte.
 
 --------------------------------------------------------------------------------
 

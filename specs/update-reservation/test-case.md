@@ -45,18 +45,21 @@ Este caso de prueba verifica que la reserva cambia solo por los caminos permitid
 * La sección 8 se ejecuta en dos días seguidos: el cierre del día corre a las 00:00:30 o, si la demo estaba
   dormida, al arrancar.
 * En la demo, el Módulo 1 y el Módulo 3 son el mismo simulador: el Módulo 3 sin responder se prueba en local,
-  como en TC-001-CalculateDynamicRate (sección 5, paso 3).
+  como en TC-001-CalculateDynamicRate, sección 4 (aquí, sección 5, paso 3).
 * El simulador del Módulo 1 revisa el `reservationRef`, el `roomId` y que haya huéspedes antes de publicar: una
   notificación sin identificadores no se puede enviar desde él.
 * Booking solo vende y cambia lo que Channex le dice que hay: no se puede provocar a mano un cambio de Booking
   sin disponibilidad, ni asignar la habitación de una reserva en conflicto (escenarios 13 y 14).
-* No se pueden provocar a mano, y los cubre `backend/test/integration/update-reservation/`:
+* No se pueden provocar a mano, y los cubre `backend/test/integration/use-cases/update-reservation/`:
   * el cambio de Booking sin disponibilidad, con capacidad superada, y la asignación de habitación
     (`ota-reservation-scenarios.spec.ts`);
+  * el Check-In de una reserva de Booking en `PENDING`, porque Booking envía las reservas confirmadas
+    (`room-stay-scenarios.spec.ts`);
   * la notificación sin identificadores y el salto de secuencia (`check-in.consumer.spec.ts` y
     `check-out.consumer.spec.ts`);
   * una modificación y un Check-In de la misma reserva a la vez (`modification-check-in-concurrency.spec.ts`);
-  * el Módulo 3 que falla en una sola de las habitaciones (`modification-scenarios.spec.ts`);
+  * el Módulo 3 que falla en una sola de las habitaciones, y una sola habitación sin disponibilidad dentro de
+    una reserva de varias (`modification-scenarios.spec.ts`);
   * el fallo de una reserva dentro del lote del cierre, la zona horaria distinta y la base que se cae
     (`close-day.spec.ts` y `close-day-job.spec.ts`);
   * NFR-001 a NFR-003 (`update-reservation-time.spec.ts`).
@@ -145,7 +148,8 @@ Se miran los logs de `hospitua-m2-simulators` en Render después de cada cambio.
 | 6 | Habitación repetida o más de 10 | En pantalla, agregar habitaciones. Por la API, la misma habitación dos veces y 11 habitaciones | N/A | En pantalla, una habitación ya elegida no se puede elegir en otra fila y "+ Agregar habitación" desaparece en la décima. La API responde `400` con "La habitación ya forma parte de la reserva." y con "Una reserva debe tener entre 1 y 10 habitaciones." | [ ] | |
 | 7 | Observaciones inválidas | En pantalla, Observaciones. Por la API, `notes` | 501 caracteres; `<script>alert(1)</script>` | La pantalla no deja escribir más de 500. La API responde `400` con "Las observaciones no pueden superar 500 caracteres." y con "El formato de los datos contiene caracteres no válidos." | [ ] | |
 | 8 | Cambiar la nacionalidad | Por la API, el titular con `nationality` | `"nationality": "Perú"` | `400` con `NATIONALITY_NOT_EDITABLE` y "La nacionalidad no se puede modificar." | [ ] | |
-| 9 | Reservas que no se modifican | Abrir el detalle de una reserva "En curso", una "Completada", una "Cancelada" y una de Booking. Después, abrir `/reservas/<código>/modificar` y llamar a la API con cada una | Las de la sección 6 y una de TC-010-GenerateOtaReservation | El detalle no muestra "Modificar". La pantalla de modificación muestra "El estado actual de la reserva no admite modificaciones." o, en la de Booking, "Las reservas de OTA solo las modifica Booking. Si está en conflicto, solo se le puede asignar la habitación.". La API responde `400` con `STATUS_NOT_EDITABLE` u `OTA_RESERVATION_READ_ONLY` (escenario 5 y FR-001a) | [ ] | |
+| 9 | Una reserva cancelada no se modifica | Abrir el detalle de M2, abrir `/reservas/<M2>/modificar` y llamar a la API con M2 | M2, cancelada al final de la sección 3 | El detalle no muestra "Modificar". La pantalla de modificación muestra "El estado actual de la reserva no admite modificaciones.". La API responde `400` con `STATUS_NOT_EDITABLE` (escenario 5) | [ ] | Las reservas en curso y completadas, en la sección 6, pasos 3 y 10 |
+| 10 | Una reserva de Booking no se modifica | Abrir el detalle de una reserva de Booking, abrir `/reservas/<código>/modificar` y llamar a la API con ella | Una de TC-010-GenerateOtaReservation | El detalle no muestra "Modificar". La pantalla de modificación muestra "Las reservas de OTA solo las modifica Booking. Si está en conflicto, solo se le puede asignar la habitación.". La API responde `400` con `OTA_RESERVATION_READ_ONLY` (FR-001a) | [ ] | |
 
 --------------------------------------------------------------------------------
 
@@ -154,21 +158,23 @@ Se miran los logs de `hospitua-m2-simulators` en Render después de cada cambio.
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
 | 1 | Dos ediciones a la vez | Abrir "Modificar" de M1 en dos pestañas. Guardar un cambio en la primera y después otro en la segunda | Observaciones `Primera` y `Segunda` | La segunda muestra "Esta reserva ya fue actualizada o cancelada recientemente" y "Volver a cargar la reserva", que trae los datos guardados por la primera. No se pierde ningún cambio sin aviso (FR-008) | [ ] | |
 | 2 | Una tarifa que ya no vale | Por la API, M1 con otras fechas y un `expectedRates` con otro `lodgingAmount` | `"lodgingAmount": "1.00"` | `400` con `RATE_CHANGED` y "La tarifa cambió, vuelva a cotizar.", sin guardar nada | [ ] | |
-| 3 | El Módulo 3 no responde | En local, con el Módulo 3 apagado como en TC-001-CalculateDynamicRate, sección 4. Modificar las fechas de una reserva directa | Otra salida | "No se pudo calcular la nueva tarifa en este momento. Intente más tarde.", sin guardar nada | [ ] | Requiere el backend en local |
+| 3 | El Módulo 3 no responde | En local, crear una reserva directa y apagar el Módulo 3 como en TC-001-CalculateDynamicRate, sección 4, pasos 1 y 2. Después, "Modificar" en esa reserva → Fecha de salida | La reserva de ese paso 1 (`DOBLE`, de `hoy+30` a `hoy+32`); salida `hoy+33` | "No se pudo calcular la nueva tarifa en este momento. Intente más tarde.", sin guardar nada | [ ] | Requiere el backend en local. Al terminar, el paso 6 de esa sección de TC-001 devuelve el Módulo 3 |
 
 --------------------------------------------------------------------------------
 
-##### Section 6: Check-In y Check-Out por habitación (User Story 2, escenarios 1, 2, 4, 7, 8, 9 y 11)
+##### Section 6: Check-In y Check-Out por habitación (User Story 2, escenarios 1, 2, 4, 7, 8, 9 y 11, y User Story 1, escenario 5)
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
 | 1 | Crear E1 con dos habitaciones | Nueva reserva directa | `TRIPLE`; entrada `hoy`, salida `hoy+1`; 2 habitaciones con 2 personas cada una | E1 queda "Activa", con A y B en "Esperada" | [ ] | Anotar el código y las habitaciones A y B |
 | 2 | Check-In de la primera | `POST /simulate/check-in` | E1, A, C1 | E1 queda "En curso", A "Con Check-In" y B "Esperada" (escenario 1) | [ ] | |
-| 3 | Check-Out de una que no ingresó | `POST /simulate/check-out` | E1, B, C1b | Nada cambia. En los logs del backend, "Check-Out rechazado (reserva <E1>, habitación <B>): La habitación notificada aún no registra un ingreso. Está en EXPECTED." (escenario 9) | [ ] | |
-| 4 | Check-In repetido | `POST /simulate/check-in` | E1, A, C1 | Nada cambia. En los logs, "Check-In repetido (…): la habitación ya está en CHECKED_IN y se confirma sin cambios." (escenario 4) | [ ] | |
-| 5 | Check-In de la segunda | `POST /simulate/check-in` | E1, B, C1b | B "Con Check-In", y E1 sigue "En curso" (escenario 2) | [ ] | |
-| 6 | Check-Out parcial | `POST /simulate/check-out` | E1, A, C1 | A "Con Check-Out", y E1 sigue "En curso" (escenario 8) | [ ] | |
-| 7 | Check-Out de la última | `POST /simulate/check-out` | E1, B, C1b | B "Con Check-Out" y E1 "Completada" (escenarios 7 y 8) | [ ] | |
-| 8 | Check-Out repetido | `POST /simulate/check-out` | E1, B, C1b | Nada cambia. En los logs, "Check-Out repetido (…): la habitación ya está en CHECKED_OUT y se confirma sin cambios." (escenario 11) | [ ] | |
+| 3 | Una reserva en curso no se modifica | Abrir el detalle de E1, abrir `/reservas/<E1>/modificar` y llamar a la API con E1 | E1 | El detalle no muestra "Modificar". La pantalla de modificación muestra "El estado actual de la reserva no admite modificaciones.". La API responde `400` con `STATUS_NOT_EDITABLE` (User Story 1, escenario 5) | [ ] | |
+| 4 | Check-Out de una que no ingresó | `POST /simulate/check-out` | E1, B, C1b | Nada cambia. En los logs del backend, "Check-Out rechazado (reserva <E1>, habitación <B>): La habitación notificada aún no registra un ingreso. Está en EXPECTED." (escenario 9) | [ ] | |
+| 5 | Check-In repetido | `POST /simulate/check-in` | E1, A, C1 | Nada cambia. En los logs, "Check-In repetido (…): la habitación ya está en CHECKED_IN y se confirma sin cambios." (escenario 4) | [ ] | |
+| 6 | Check-In de la segunda | `POST /simulate/check-in` | E1, B, C1b | B "Con Check-In", y E1 sigue "En curso" (escenario 2) | [ ] | |
+| 7 | Check-Out parcial | `POST /simulate/check-out` | E1, A, C1 | A "Con Check-Out", y E1 sigue "En curso" (escenario 8) | [ ] | |
+| 8 | Check-Out de la última | `POST /simulate/check-out` | E1, B, C1b | B "Con Check-Out" y E1 "Completada" (escenarios 7 y 8) | [ ] | |
+| 9 | Check-Out repetido | `POST /simulate/check-out` | E1, B, C1b | Nada cambia. En los logs, "Check-Out repetido (…): la habitación ya está en CHECKED_OUT y se confirma sin cambios." (escenario 11) | [ ] | |
+| 10 | Una reserva completada no se modifica | Abrir el detalle de E1, abrir `/reservas/<E1>/modificar` y llamar a la API con E1 | E1 | El detalle no muestra "Modificar". La pantalla de modificación muestra "El estado actual de la reserva no admite modificaciones.". La API responde `400` con `STATUS_NOT_EDITABLE` (User Story 1, escenario 5) | [ ] | |
 
 --------------------------------------------------------------------------------
 
@@ -182,7 +188,8 @@ reserva, la habitación y el motivo, sin datos de los huéspedes.
 | 2 | Check-In con una habitación ajena | `POST /simulate/check-in` | M1 con el `roomId` de otra habitación | M1 sigue "Activa". Motivo: "La habitación notificada no pertenece a la reserva." (escenario 6) | [ ] | |
 | 3 | Check-In de una reserva que no existe | `POST /simulate/check-in` | `RSV-00000000` con cualquier `roomId` | Motivo: "La reserva notificada no existe en el sistema de reservas." | [ ] | |
 | 4 | Check-In de una reserva cancelada o completada | `POST /simulate/check-in` | M2 (cancelada en la sección 3); E1, A | Nada cambia. Motivo: "La reserva no admite un Check-In en su estado actual. Está en CANCELLED." y "… Está en COMPLETED." (escenario 5) | [ ] | |
-| 5 | Check-In antes de la fecha de entrada | `POST /simulate/check-in` | M1 (llega el `hoy+50`), su habitación, C1 | Se aplica: M1 queda "En curso", porque el Check-In físico ya ocurrió en el Módulo 1 | [ ] | Publicar su Check-Out al terminar: M1 queda "Completada" |
+| 5 | Check-Out de una reserva cancelada | `POST /simulate/check-out` | M2 (cancelada en la sección 3), su habitación, C1 | M2 sigue "Cancelada". Motivo: "La reserva aún no registra un ingreso. Está en CANCELLED." | [ ] | |
+| 6 | Check-In antes de la fecha de entrada | `POST /simulate/check-in` | M1 (llega el `hoy+50`), su habitación, C1 | Se aplica: M1 queda "En curso", porque el Check-In físico ya ocurrió en el Módulo 1 | [ ] | Publicar su Check-Out al terminar: M1 queda "Completada" |
 
 --------------------------------------------------------------------------------
 
@@ -201,32 +208,71 @@ Los pasos 1 a 4 se ejecutan un día (D) y los demás, al día siguiente (D+1).
 | 8 | El grupo cuya parte ya salió | Detalle de N3 | N/A | "Completada", con A "Con Check-Out" y B "No llegó" | [ ] | |
 | 9 | La reserva completa se ignora | Detalle de N4 | N/A | Sigue "En curso", con su habitación "Con Check-In" (escenario 4) | [ ] | |
 | 10 | El huésped que llega tarde | `POST /simulate/check-in` | N2, B, C1b | Nada cambia. En los logs del backend, "Check-In rechazado (…): La habitación notificada no admite un Check-In: está en NOT_ARRIVED." | [ ] | |
-| 11 | El cierre no se repite | Render → `hospitua-m2-backend` → reiniciar el servicio ("Restart service") | N/A | N1 a N4 siguen igual, y el simulador no recibe otro "REMOVED (NO_SHOW)" de N1 | [ ] | |
-| 12 | Dejar limpia la demo | Publicar el Check-Out de A en N2 y el de N4 | N/A | N2 queda "Completada", porque su otra habitación no llegó; N4 queda "Completada" | [ ] | |
+| 11 | Check-In de la reserva que no se presentó | `POST /simulate/check-in` | N1, su habitación, C1 | N1 sigue "No se presentó". En los logs del backend, "Check-In rechazado (…): La reserva no admite un Check-In en su estado actual. Está en NO_SHOW." | [ ] | |
+| 12 | Check-Out de la reserva que no se presentó | `POST /simulate/check-out` | N1, su habitación, C1 | N1 sigue "No se presentó". En los logs, "Check-Out rechazado (…): La reserva aún no registra un ingreso. Está en NO_SHOW." | [ ] | |
+| 13 | El cierre no se repite | Render → `hospitua-m2-backend` → reiniciar el servicio ("Restart service") | N/A | N1 a N4 siguen igual, y el simulador no recibe otro "REMOVED (NO_SHOW)" de N1 | [ ] | |
+| 14 | Dejar limpia la demo | Publicar el Check-Out de A en N2 y el de N4 | N/A | N2 queda "Completada", porque su otra habitación no llegó; N4 queda "Completada" | [ ] | |
 
 --------------------------------------------------------------------------------
 
 ##### Edge Cases & Boundary Conditions
 * **EC-001** : ¿Qué pasa si el Módulo 3 no responde al recotizar? `400` y no se guarda nada (sección 5, paso 3).
-* **EC-002** : ¿Qué pasa con fechas inválidas o una entrada antes de hoy? `400` sin consultar (sección 4, pasos
-  2 y 3).
-* **EC-003** : ¿Qué pasa con caracteres no válidos u observaciones de más de 500 caracteres? `400` (sección 4,
-  paso 7).
-* **EC-004** : ¿Qué pasa con una habitación repetida o más de 10? `400` (sección 4, paso 6).
-* **EC-005** : ¿Qué pasa con dos ediciones simultáneas? La segunda recibe `400` y puede volver a cargar la
+  Si falla en una sola de varias habitaciones, tampoco se aplica nada; está en las limitaciones.
+* **EC-002** : ¿Qué pasa con fechas inválidas (la salida antes de la entrada, o vacías)? `400` "La fecha de
+  salida debe ser posterior a la de entrada.", sin consultar al Módulo 3 (sección 4, paso 3).
+* **EC-003** : ¿Qué pasa con una entrada antes de hoy? `400` "La fecha de entrada no puede ser anterior a hoy."
+  (sección 4, paso 2). "Hoy" es la fecha del hotel el día en que se ejecuta, no una fecha fija.
+* **EC-004** : ¿Qué pasa con caracteres extraños en los datos del titular o en las observaciones? `400` "El
+  formato de los datos contiene caracteres no válidos." (sección 4, paso 7).
+* **EC-005** : ¿Qué pasa con observaciones de más de 500 caracteres? `400` "Las observaciones no pueden superar
+  500 caracteres.", y la pantalla no deja escribir más (sección 4, paso 7).
+* **EC-006** : ¿Qué pasa si se agrega una habitación que ya está en la reserva? `400` "La habitación ya forma
+  parte de la reserva." (sección 4, paso 6).
+* **EC-007** : ¿Qué pasa si la reserva pasa de 10 habitaciones? `400` "Una reserva debe tener entre 1 y 10
+  habitaciones." (sección 4, paso 6).
+* **EC-008** : ¿Qué pasa si al cambiar las fechas una sola habitación no está disponible? Se rechaza el cambio
+  completo, con el número de la habitación (sección 4, paso 1). Con varias habitaciones, está en las
+  limitaciones.
+* **EC-009** : ¿Qué pasa si las personas de una habitación superan su capacidad? `400` con el mensaje de
+  capacidad y sin guardar nada (sección 4, paso 4).
+* **EC-010** : ¿Qué pasa con dos ediciones simultáneas? La segunda recibe `400` y puede volver a cargar la
   reserva (sección 5, paso 1).
-* **EC-006** : ¿Qué recibe el Módulo 1 cuando cambian las fechas? `ADDED` si la llegada pasa a ser hoy y
-  `REMOVED (DATE_CHANGED)` si deja de serlo; nada si no cruza el día actual (sección 3, pasos 2 y 6).
-* **EC-007** : ¿Qué pasa con una notificación de una reserva que no existe? Queda en el log sin cambios (sección
-  7, paso 3).
-* **EC-008** : ¿Qué pasa con el Check-In de una habitación que no llegó? Queda en el log sin cambios (sección 8,
+* **EC-011** : ¿Qué recibe el Módulo 1 cuando solo cambian las fechas? Nada, salvo que crucen el día actual:
+  `ADDED` si la llegada pasa a ser hoy y `REMOVED (DATE_CHANGED)` si deja de serlo (sección 3, pasos 2 y 6). Un
+  cambio de habitación con llegada futura tampoco se avisa (sección 2, paso 2).
+* **EC-012** : ¿Qué pasa con un cambio, una adición o una eliminación de habitación en una reserva con llegada
+  hoy? Se aplica y se avisa con un `UPDATED`; el Módulo 2 no le ordena nada al Módulo 1 (sección 3, pasos 3 y 5).
+* **EC-013** : ¿Qué significan "responde 200" y "responde 400" si las notificaciones llegan por cola? "200" es
+  confirmar el mensaje y aplicarlo (sección 6, paso 2), o confirmarlo sin efectos si es un duplicado (sección 6,
+  pasos 5 y 9). "400" es confirmarlo sin aplicarlo y dejarlo en el log (sección 7). Un mensaje ilegible va a la
+  dead-letter (TC-011-ProcessGuestData, sección 8, pasos 2 y 3).
+* **EC-014** : ¿Qué pasa con el Check-In de una reserva de Booking con una habitación sin asignar? Esa reserva no
+  viaja en la lista del día, así que el Módulo 1 no la conoce. Un Check-In con una habitación que no es de la
+  reserva se rechaza como cualquier otro (sección 7, paso 2). La reserva de Booking en conflicto está en las
+  limitaciones.
+* **EC-015** : ¿Qué pasa con una notificación vacía, o sin la referencia de la reserva o el `roomId`? Va a la
+  dead-letter sin un `500` y sin cambiar nada; está en las limitaciones.
+* **EC-016** : ¿Qué pasa en una reserva con varias habitaciones? Cada notificación trae solo los huéspedes de su
+  habitación (sección 6, pasos 2 y 6). Los movimientos de cada huésped los verifica TC-011-ProcessGuestData.
+* **EC-017** : ¿Qué pasa con una notificación de una reserva que no existe? Queda en el log con "La reserva
+  notificada no existe en el sistema de reservas.", sin cambios (sección 7, paso 3).
+* **EC-018** : ¿Qué pasa con el Check-In de una reserva cancelada, en No-Show, `PENDING` o completada? `400` sin
+  cambiar el estado, y queda en el log (sección 7, paso 4, y sección 8, paso 11). La `PENDING` está en las
+  limitaciones.
+* **EC-019** : ¿Qué pasa con el Check-In de una habitación que no llegó? Queda en el log sin cambios (sección 8,
   paso 10).
-* **EC-009** : ¿Qué pasa con un Check-In antes de la fecha de entrada? Se aplica (sección 7, paso 5).
-* **EC-010** : ¿Qué pasa si todas las habitaciones que ingresaron ya salieron pero queda una esperada? La
+* **EC-020** : ¿Qué pasa con un Check-In antes de la fecha de entrada? Se aplica (sección 7, paso 6).
+* **EC-021** : ¿Qué pasa con un Check-Out que llega con horas de retraso? Se aplica mientras la habitación siga
+  "Con Check-In" (sección 8, paso 14, que lo publica al día siguiente del Check-In).
+* **EC-022** : ¿Qué pasa con el Check-Out de una reserva cancelada o en No-Show? `400` sin cambios, y queda en el
+  log (sección 7, paso 5, y sección 8, paso 12).
+* **EC-023** : ¿Qué pasa si todas las habitaciones que ingresaron ya salieron pero queda una esperada? La
   reserva sigue en curso hasta el cierre, que la completa (sección 8, pasos 3 y 8).
-* **EC-011** : ¿Qué pasa si el cierre se ejecuta otra vez? No vuelve a marcar nada (sección 8, paso 11).
-* **EC-012** : ¿Qué pasa con una notificación sin identificadores, o con la zona horaria del servidor distinta?
-  Están en las limitaciones.
+* **EC-024** : ¿Qué pasa si el cierre se ejecuta otra vez? No vuelve a marcar nada (sección 8, paso 13).
+* **EC-025** : ¿Qué pasa si la zona horaria del servidor es distinta a la de Colombia? El cierre usa siempre la
+  de Colombia; está en las limitaciones.
+* **EC-026** : ¿Qué pasa si la base de datos se cae durante el cierre? Se detiene sin dejar reservas marcadas a
+  medias; está en las limitaciones.
 
 --------------------------------------------------------------------------------
 

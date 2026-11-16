@@ -188,8 +188,8 @@ Check-In y el Check-Out, y que la Recepcionista los consulta:
 --------------------------------------------------------------------------------
 
 ##### Edge Cases & Boundary Conditions
-* **EC-001** : ¿Qué pasa con una salida sin entrada registrada? Se registra, con una alerta en el log, y la vista
-  la muestra con la entrada vacía (sección 6).
+* **EC-001** : ¿Qué pasa con una salida sin entrada registrada? Se registra, con una alerta en el log (sección 6,
+  paso 1).
 * **EC-002** : ¿Qué pasa si llegan más huéspedes que las personas de la habitación? Se registran todos (sección
   4, paso 3).
 * **EC-003** : ¿Qué pasa con el mismo huésped repetido en una notificación? Se procesa una sola vez (sección 4,
@@ -200,13 +200,17 @@ Check-In y el Check-Out, y que la Recepcionista los consulta:
   8, paso 2).
 * **EC-006** : ¿Qué pasa con una notificación vacía o sin identificador de reserva? Va a la dead-letter, sin un
   `500`; está en las limitaciones.
-* **EC-007** : ¿Qué pasa con un huésped de varias estadías? Cada estadía tiene sus movimientos y su fila en la
-  vista (sección 4, paso 5).
+* **EC-007** : ¿Qué pasa con un huésped de varias estadías? Cada estadía tiene sus movimientos: la notificación de
+  una no cambia los de la otra (sección 4, paso 5).
 * **EC-008** : ¿Qué pasa con un cambio de habitación dentro de la estadía? Una sola entrada y una sola salida por
   reserva; está en las limitaciones.
 * **EC-009** : ¿Qué pasa con una nacionalidad vacía? El huésped no se trata como extranjero ni entra al archivo
   SIRE; está en las limitaciones.
-* **EC-010** : ¿Qué pasa con una reserva cancelada o en `NO_SHOW`? Sus huéspedes no aparecen en la vista
+* **EC-010** : ¿Cómo aparece en la vista un huésped que se alojó varias veces? Con una fila por cada estadía
+  (sección 4, paso 5).
+* **EC-011** : ¿Cómo aparece en la vista un huésped con salida pero sin entrada registrada? Con su fecha de
+  salida y la entrada vacía (sección 6, paso 2).
+* **EC-012** : ¿Qué pasa con una reserva cancelada o en `NO_SHOW`? Sus huéspedes no aparecen en la vista
   (sección 8, paso 4).
 
 --------------------------------------------------------------------------------
