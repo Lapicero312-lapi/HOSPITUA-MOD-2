@@ -86,7 +86,8 @@ la lista del día al día:
     `Actualización <tipo> (<motivo>) de <reservationRef> recibida (secuencia N del AAAA-MM-DD).`. El Check-In
     y el Check-Out se publican a pedido, con `POST /simulate/check-in` y `/simulate/check-out`: el cuerpo C1 de
     TC-002-CancelReservation (huésped colombiano) y el cuerpo C2, que es C1 con `documentType` `PAS`,
-    `documentNumber` `X0000001` y `nationality` `Venezuela`.
+    `documentNumber` `X0000001`, `nationality` `Venezuela`, `originPlace` `Caracas, Venezuela` y
+    `destinationPlace` `Cartagena, Colombia` (huésped extranjero, que entra al archivo SIRE).
 * **Test Accounts** :
   * Recepcionista: el inicio de sesión es simulado y solo pide el nombre, por ejemplo `Laura Méndez`;
   * Render: la cuenta de quien desplegó la demo, para ver los logs y reiniciar el backend;

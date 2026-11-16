@@ -116,7 +116,8 @@ similar) y el cuerpo C1. El `roomId` de cada habitación está en `/api/rooms` d
 | 4 | Intentar cancelar una reserva que no se presentó | El día anterior, crear una reserva de una habitación con llegada ese día y sin Check-In. Hoy, después del cierre del día, cancelarla por la API | Una reserva de `ayer` | La reserva está en "No se presentó" y la cancelación responde `400` `STATUS_NOT_CANCELLABLE` (escenario 4) | [ ] | Se ejecuta al día siguiente |
 | 5 | Intentar cancelar una reserva de Booking | Reservas → filtrar por canal OTA y abrir una reserva activa. Después, cancelarla por la API | Una reserva de Booking `ACTIVE` | El detalle no ofrece "Cancelar reserva". La API responde `400` con el código `OTA_RESERVATION_CANCEL_VIA_API` y "La cancelación de una reserva de OTA debe llegar desde Booking.". La reserva sigue activa y sin panel "Cancelación" (escenario 6) | [ ] | Solo si la demo tiene una reserva de Booking |
 
-Cuerpo C1, con datos ficticios:
+Cuerpo C1, con datos ficticios. Sin `birthDate`, el Módulo 2 aplica el Check-In pero omite al huésped: no
+registra sus datos ni su movimiento migratorio.
 
 ```json
 {
@@ -128,7 +129,8 @@ Cuerpo C1, con datos ficticios:
       "lastName": "Staging",
       "documentType": "CC",
       "documentNumber": "1000000000",
-      "nationality": "Colombia"
+      "nationality": "Colombia",
+      "birthDate": "1990-05-20"
     }
   ]
 }
