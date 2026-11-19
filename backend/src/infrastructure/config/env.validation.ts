@@ -11,6 +11,7 @@ import {
   Max,
   Min,
   validateSync,
+  ValidateIf,
 } from 'class-validator';
 import { IsRateReference } from './rate-reference.config.js';
 import {
@@ -114,6 +115,19 @@ export class EnvironmentVariables extends SireEnvironmentVariables {
   @Min(100)
   @Max(60000)
   MODULE3_TIMEOUT_MS!: number;
+
+  // Módulo 3: clave compartida que se envía en `X-Internal-Key` (plan de calculate-dynamic-rate, A1).
+  // Opcional: sin ella (o vacía) no se envía la cabecera. Es un secreto: el mensaje de error no la repite.
+  @ValidateIf(
+    (config: EnvironmentVariables) =>
+      config.MODULE3_INTERNAL_KEY !== undefined &&
+      config.MODULE3_INTERNAL_KEY !== '',
+  )
+  @Matches(/^[\x21-\x7E]{1,200}$/, {
+    message:
+      'MODULE3_INTERNAL_KEY debe tener de 1 a 200 caracteres ASCII visibles, sin espacios',
+  })
+  MODULE3_INTERNAL_KEY?: string;
 
   // Verificar disponibilidad: cuántas consultas de mantenimiento al Módulo 1 van en paralelo
   @Type(() => Number)

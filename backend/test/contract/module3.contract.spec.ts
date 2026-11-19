@@ -12,6 +12,7 @@ import { Module3HttpAdapter } from '../../src/infrastructure/out/module3/module3
 const BASE_URL = 'http://module3.test';
 const URL_QUOTES = `${BASE_URL}/pricing/quotes`;
 const TIMEOUT_MS = 200;
+const ROOM_ID = '3f6c1e2a-8b4d-4c7e-9a1f-2b3c4d5e6f70';
 
 /** Respuesta de ejemplo del contrato (calculate-dynamic-rate, A1), escrita como texto para no tocar los decimales. */
 const QUOTE_ID = 'a1f2c3d4-e5b6-4789-8a9b-0c1d2e3f4a5b';
@@ -40,13 +41,14 @@ describe('Module3HttpAdapter contra respuestas simuladas del Módulo 3', () => {
   const adapter = new Module3HttpAdapter(
     new HttpService(axios.create({ baseURL: BASE_URL, timeout: TIMEOUT_MS })),
   );
-  const quote = () => adapter.createQuote('DOBLE', '2026-10-10', '2026-10-12');
+  const quote = () =>
+    adapter.createQuote('DOBLE', ROOM_ID, '2026-10-10', '2026-10-12');
 
   beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
   afterEach(() => server.resetHandlers());
   afterAll(() => server.close());
 
-  it('envía roomType, checkInDate y checkOutDate, y devuelve la cotización', async () => {
+  it('envía roomType, roomId, checkInDate y checkOutDate, y devuelve la cotización', async () => {
     let sent: unknown = null;
     server.use(
       http.post(URL_QUOTES, async ({ request }) => {
@@ -59,6 +61,7 @@ describe('Module3HttpAdapter contra respuestas simuladas del Módulo 3', () => {
 
     expect(sent).toEqual({
       roomType: 'DOBLE',
+      roomId: ROOM_ID,
       checkInDate: '2026-10-10',
       checkOutDate: '2026-10-12',
     });

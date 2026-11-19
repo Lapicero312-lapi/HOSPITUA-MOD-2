@@ -424,6 +424,7 @@ describe('ConfirmModificationService (plan de update-reservation, B2, D2 y regla
       expect(requests).toEqual([
         {
           key: r305.id,
+          roomId: r305.id,
           categoryRoom: 'SUITE',
           startDate: START,
           endDate: END,

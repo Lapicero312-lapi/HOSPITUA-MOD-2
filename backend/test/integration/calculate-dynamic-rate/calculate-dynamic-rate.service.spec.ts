@@ -36,6 +36,7 @@ import { Module3ClientModule } from '../../../src/infrastructure/out/module3/mod
 /** Las dos habitaciones `DOBLE` del ejemplo de A1 del plan: dos noches, del 10 al 12 de octubre. */
 const ROOM_1: RoomQuoteRequest = {
   key: '1',
+  roomId: '3f6c1e2a-8b4d-4c7e-9a1f-2b3c4d5e6f70',
   categoryRoom: 'DOBLE',
   startDate: '2026-10-10',
   endDate: '2026-10-12',

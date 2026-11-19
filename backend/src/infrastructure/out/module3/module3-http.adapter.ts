@@ -35,6 +35,7 @@ export class Module3HttpAdapter implements Module3Port {
 
   async createQuote(
     roomType: string,
+    roomId: string,
     checkInDate: string,
     checkOutDate: string,
   ): Promise<RateQuote> {
@@ -42,7 +43,7 @@ export class Module3HttpAdapter implements Module3Port {
       method: 'POST',
       url: '/pricing/quotes',
       headers: { 'Content-Type': 'application/json' },
-      data: JSON.stringify({ roomType, checkInDate, checkOutDate }),
+      data: JSON.stringify({ roomType, roomId, checkInDate, checkOutDate }),
     });
     if (outcome.kind === 'no-response') {
       throw new Module3UnavailableError(outcome.reason);
