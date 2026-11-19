@@ -49,6 +49,10 @@ services:
       # Los Módulos 1 y 3 son los simuladores, los dos en la misma URL.
       - key: MODULE1_BASE_URL
         value: https://hospitua-m2-simulators.onrender.com
+      # Espera máxima al Módulo 1: 2 s en Render (en local sigue en 1 s, el valor del plan). Desde Render, con
+      # el Módulo 1 real en otro servidor y un TLS nuevo en cada llamada, 1 s queda justo.
+      - key: MODULE1_TIMEOUT_MS
+        value: '2000'
       - key: MODULE3_BASE_URL
         value: https://hospitua-m2-simulators.onrender.com
       # El hotel todavía no tiene sus códigos de SIRE: valores de demo.
