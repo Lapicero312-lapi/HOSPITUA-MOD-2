@@ -159,7 +159,39 @@ describe('GET /api/ota-commissions (e2e, A1)', () => {
     expect(res.body).toMatchObject({ items: [], page: 1, totalItems: 0 });
   });
 
+  it('con reservationRef y sin fechas: solo esa reserva (T022)', async () => {
+    const res = await list({ reservationRef: completed.reservationRef }).expect(
+      200,
+    );
+
+    expect(res.body).toMatchObject({
+      items: [
+        {
+          reservationRef: completed.reservationRef,
+          grossAmount: { amount: '400.00', currency: 'USD' },
+          commissionAmount: { amount: '60.00', currency: 'USD' },
+        },
+      ],
+      page: 1,
+      totalItems: 1,
+    });
+  });
+
+  it('con reservationRef que no existe: 200 con items vacío (T022)', async () => {
+    const res = await list({ reservationRef: 'RSV-00000000' }).expect(200);
+
+    expect(res.body).toMatchObject({ items: [], totalItems: 0 });
+  });
+
   it.each([
+    [
+      'INVALID_RESERVATION_CODE',
+      { dateFrom: FROM, dateTo: TO, reservationRef: 'RSV-1' },
+    ],
+    [
+      'INCOMPLETE_DATE_RANGE',
+      { reservationRef: 'RSV-8D02E5A4', dateFrom: FROM },
+    ],
     ['INCOMPLETE_DATE_RANGE', { dateFrom: FROM }],
     ['INVALID_DATE', { dateFrom: '2037-02-30', dateTo: TO }],
     ['INVALID_DATE_RANGE', { dateFrom: TO, dateTo: FROM }],

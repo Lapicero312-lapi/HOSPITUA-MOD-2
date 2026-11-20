@@ -24,6 +24,7 @@ describe('readOtaCommissionQuery (A1 de register-ota-information-commission, pun
   it('solo con las fechas: los demás filtros en null y la página 1', () => {
     expect(readOtaCommissionQuery(RANGE)).toEqual({
       filters: {
+        reservationRef: null,
         dateFrom: '2026-10-01',
         dateTo: '2026-10-31',
         commissionStatus: null,
@@ -45,6 +46,7 @@ describe('readOtaCommissionQuery (A1 de register-ota-information-commission, pun
       }),
     ).toEqual({
       filters: {
+        reservationRef: null,
         dateFrom: '2026-10-01',
         dateTo: '2026-10-31',
         commissionStatus: 'RECONCILED',
@@ -52,6 +54,73 @@ describe('readOtaCommissionQuery (A1 de register-ota-information-commission, pun
         otaId: OTA_ID,
       },
       page: 3,
+    });
+  });
+
+  describe('reservationRef (T022)', () => {
+    const REF = 'RSV-8D02E5A4';
+
+    it('sin fechas: solo esa reserva, con las fechas en null', () => {
+      expect(readOtaCommissionQuery({ reservationRef: REF })).toEqual({
+        filters: {
+          reservationRef: REF,
+          dateFrom: null,
+          dateTo: null,
+          commissionStatus: null,
+          reservationStatus: null,
+          otaId: null,
+        },
+        page: 1,
+      });
+    });
+
+    it('con fechas: se revisan y se aplican las dos', () => {
+      expect(
+        readOtaCommissionQuery({ reservationRef: REF, ...RANGE }).filters,
+      ).toMatchObject({ reservationRef: REF, ...RANGE });
+      expect(
+        codeOf({
+          reservationRef: REF,
+          dateFrom: '2026-10-31',
+          dateTo: '2026-10-01',
+        }),
+      ).toBe('INVALID_DATE_RANGE');
+    });
+
+    it.each([
+      ['solo dateFrom', { dateFrom: '2026-10-01' }],
+      ['solo dateTo', { dateTo: '2026-10-31' }],
+    ])('con %s: INCOMPLETE_DATE_RANGE', (_, dates) => {
+      expect(codeOf({ reservationRef: REF, ...dates })).toBe(
+        'INCOMPLETE_DATE_RANGE',
+      );
+    });
+
+    it.each([
+      ['en minúsculas', 'rsv-8d02e5a4'],
+      ['sin el prefijo', '8D02E5A4'],
+      ['con 7 hexadecimales', 'RSV-8D02E5A'],
+      ['vacía', ''],
+      ['repetida', [REF, REF]],
+    ])('%s: INVALID_RESERVATION_CODE', (_, reservationRef) => {
+      expect(codeOf({ ...RANGE, reservationRef })).toBe(
+        'INVALID_RESERVATION_CODE',
+      );
+    });
+
+    it('se revisa antes que las fechas', () => {
+      expect(codeOf({ reservationRef: 'x', dateFrom: '2026-10-01' })).toBe(
+        'INVALID_RESERVATION_CODE',
+      );
+    });
+
+    it('los demás filtros se aplican también', () => {
+      expect(
+        readOtaCommissionQuery({
+          reservationRef: REF,
+          commissionStatus: 'CALCULATED',
+        }).filters,
+      ).toMatchObject({ reservationRef: REF, commissionStatus: 'CALCULATED' });
     });
   });
 
