@@ -4,6 +4,19 @@ import { RESERVATION_NOT_FOUND } from '../../../domain/shared/error-codes.js';
 import { RESERVATION_SOURCES } from '../../../domain/shared/enums.js';
 import { errorExample } from './openapi-examples.js';
 
+/** Una habitación con su cotización (C4, `rooms`; T040). */
+export class BillingRoomDto {
+  @ApiProperty({
+    format: 'uuid',
+    description: 'La habitación actual (`Room.id` del Módulo 1).',
+    example: '3f6c1e2a-8b4d-4c7e-9a1f-2b3c4d5e6f70',
+  })
+  roomId: string;
+
+  @ApiProperty({ example: '8b1f6c0e-7d1a-4c0b-9d5e-2f4f3b6a1c11' })
+  quoteId: string;
+}
+
 /**
  * La respuesta de `GET /api/reservations/{reservationRef}` con `X-Client: MODULE3` (C4). Es una clase, y no
  * un tipo, para que OpenAPI la describa (plan, "OpenAPI (T037) y pruebas de contrato (T034)").
@@ -22,6 +35,13 @@ export class ReservationBillingDto {
     example: ['8b1f6c0e-7d1a-4c0b-9d5e-2f4f3b6a1c11'],
   })
   quoteIds: string[];
+
+  @ApiProperty({
+    type: [BillingRoomDto],
+    description:
+      'La misma lista que `quoteIds`, con la habitación actual de cada cotización: si una habitación se cambió por otra de la misma categoría, la nueva conserva la cotización de la anterior. Vacía en reservas `OTA`.',
+  })
+  rooms: BillingRoomDto[];
 
   @ApiPropertyOptional({
     format: 'uuid',
@@ -58,9 +78,15 @@ export function toReservationBillingBody({
   reservationRef,
   channel,
   quoteIds,
+  rooms,
   ota,
 }: ReservationForBilling): ReservationBillingBody {
-  const body: ReservationBillingBody = { reservationRef, channel, quoteIds };
+  const body: ReservationBillingBody = {
+    reservationRef,
+    channel,
+    quoteIds,
+    rooms,
+  };
   if (channel === 'OTA' && ota !== null) {
     body.otaId = ota.otaId;
     body.otaConfirmationCode = ota.confirmationCode;
@@ -74,12 +100,19 @@ export const BILLING_DIRECT_EXAMPLE: ReservationBillingBody = {
   reservationRef: 'RSV-3F9A1C7B',
   channel: 'DIRECT',
   quoteIds: ['8b1f6c0e-7d1a-4c0b-9d5e-2f4f3b6a1c11'],
+  rooms: [
+    {
+      roomId: '3f6c1e2a-8b4d-4c7e-9a1f-2b3c4d5e6f70',
+      quoteId: '8b1f6c0e-7d1a-4c0b-9d5e-2f4f3b6a1c11',
+    },
+  ],
 };
 
 export const BILLING_OTA_EXAMPLE: ReservationBillingBody = {
   reservationRef: 'RSV-8D02E5A4',
   channel: 'OTA',
   quoteIds: [],
+  rooms: [],
   otaId: '5b0e7c1a-2f4d-4e8b-9c3a-1d6f8e2b7a90',
   otaConfirmationCode: '4417829013',
   otaCommissionPercentage: 15,

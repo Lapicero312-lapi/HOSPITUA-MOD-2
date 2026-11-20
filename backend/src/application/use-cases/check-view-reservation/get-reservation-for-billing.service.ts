@@ -43,13 +43,18 @@ export class GetReservationForBillingService implements GetReservationForBilling
       );
     }
     const { ota } = reservation;
+    // Una reserva de OTA no tiene cotización: las listas van vacías (C4). Una habitación con cotización
+    // siempre tiene `roomId`: solo las de Booking pueden quedar sin asignar, y esas no tienen tarifa.
+    const quoted = reservation.rooms.flatMap((room) =>
+      room.rate === null || room.roomId === null
+        ? []
+        : [{ roomId: room.roomId, quoteId: room.rate.quoteId }],
+    );
     return {
       reservationRef: reservation.reservationRef,
       channel: reservation.source,
-      // Una reserva de OTA no tiene cotización: la lista va vacía (C4).
-      quoteIds: reservation.rooms.flatMap((room) =>
-        room.rate === null ? [] : [room.rate.quoteId],
-      ),
+      quoteIds: quoted.map(({ quoteId }) => quoteId),
+      rooms: quoted,
       ota:
         ota === null
           ? null
