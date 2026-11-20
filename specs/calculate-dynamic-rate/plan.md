@@ -57,7 +57,8 @@ Lo propio de este caso de uso:
 - **Almacenamiento**: ninguno propio. Las cotizaciones **no se guardan** mientras el solicitante no
   confirma; una cotización no confirmada se descarta.
 - **Configuración**: `MODULE3_BASE_URL`, `MODULE3_TIMEOUT_MS` (por defecto `3000`),
-  `QUOTE_CONCURRENCY` (por defecto `5`) y la configuración de la pantalla "Tarifas" (ver C1).
+  `MODULE3_INTERNAL_KEY` (opcional: la clave que se envía en `X-Internal-Key`; sin ella no se envía la
+  cabecera), `QUOTE_CONCURRENCY` (por defecto `5`) y la configuración de la pantalla "Tarifas" (ver C1).
 - **Performance** (NFR-001): desde que se emite la solicitud hasta que se guarda la tarifa, menos de 1,5 s
   en condiciones normales.
 
@@ -69,18 +70,27 @@ Lo propio de este caso de uso:
 Los nombres son los de la API del Módulo 3 y equivalen a los del Módulo 2: `roomType` = `categoryRoom`,
 `checkInDate` = `startDate`, `checkOutDate` = `endDate`. Se pide **una cotización por habitación**.
 
-**Cabeceras**: `Content-Type: application/json`. Sin autenticación: la seguridad es una capa aparte (regla
-transversal 10 del plan base).
+**Cabeceras**: `Content-Type: application/json` y, si `MODULE3_INTERNAL_KEY` tiene valor, `X-Internal-Key`
+con esa clave. La clave la acuerdan los equipos por privado y nunca se escribe en el repositorio, en la
+base de datos ni en los logs. No se envía `Authorization`: el Módulo 3 responde 403 si la recibe. La
+seguridad entre módulos sigue siendo una capa aparte (regla transversal 10 del plan base).
 
 **Solicitud**
 
 ```json
 {
   "roomType": "DOBLE",
+  "roomId": "3f6c1e2a-8b4d-4c7e-9a1f-2b3c4d5e6f70",
   "checkInDate": "2026-10-10",
   "checkOutDate": "2026-10-12"
 }
 ```
+
+`roomId` es el `Room.id` del Módulo 1 de la habitación que se cotiza (las tarifas del Módulo 3 son por
+habitación). Se envía siempre, junto a `roomType`. Para el Módulo 2 es informativo: no cambia cuándo se
+cotiza. Cambiar una habitación por otra de la misma categoría no recotiza, y la reserva conserva la
+cotización con la que se creó; lo mismo pasa si el reintento de asignación de `generate-direct-reservation`
+cambia la habitación elegida.
 
 La cantidad de personas (`guestCount`) **no se envía**: el precio depende de la categoría y de las
 fechas.
@@ -113,7 +123,7 @@ Los demás casos de uso usan estos servicios. Manejan dinero con `Money` (`decim
 con `number`.
 
 ```typescript
-interface RoomQuoteRequest { key: string; categoryRoom: string; startDate: string; endDate: string }
+interface RoomQuoteRequest { key: string; roomId: string; categoryRoom: string; startDate: string; endDate: string }
 
 interface NightlyRate { date: string; rate: Money }
 
@@ -251,7 +261,7 @@ sequenceDiagram
         C-->>G: BusinessError INVALID_CATEGORY o INVALID_STAY_DATES (400), sin llamar al Módulo 3
     end
     par una cotización por habitación (tope QUOTE_CONCURRENCY)
-        C->>P: createQuote(roomType, checkInDate, checkOutDate)
+        C->>P: createQuote(roomType, roomId, checkInDate, checkOutDate)
         P->>M3: POST /pricing/quotes (timeout MODULE3_TIMEOUT_MS)
         M3-->>P: RateQuote
         P-->>C: RoomQuote validada
@@ -409,7 +419,7 @@ Todo error sale con `{ "errorCode", "message", "timestamp", "path" }` y **siempr
 |---|---|
 | `domain/` | `Money` (plan base), `roomsNeedingQuote`, `reservationTotal`, `ReferenceRate` |
 | `application/integration/` | `RoomQuote`, `NightlyRate`, `RoomQuoteRequest` |
-| `application/ports/out/` | `Module3Port.createQuote(roomType, checkInDate, checkOutDate)` |
+| `application/ports/out/` | `Module3Port.createQuote(roomType, roomId, checkInDate, checkOutDate)` |
 | `application/use-cases/calculate-dynamic-rate/` | **Entrada**: `CalculateDynamicRate` (`quoteRooms`, `verifyQuotes`) y `GetReferenceRates` |
 | `infrastructure/in/rest/` | `RatesController` (C1) |
 | `infrastructure/out/module3/` | `Module3HttpAdapter`: cliente HTTP con timeout, lectura de importes sin `number`, validación de la forma de la respuesta y mapeo de errores |
@@ -441,7 +451,7 @@ frontend/src/pages/rates/                        # pantalla "Tarifas"
 
 ## Phase 1: Setup
 
-- [ ] T001 Variables `MODULE3_BASE_URL`, `MODULE3_TIMEOUT_MS` y `QUOTE_CONCURRENCY` en la configuración validada, y la dependencia `lossless-json` (`lossless-json` lo instala la base: T012)
+- [ ] T001 Variables `MODULE3_BASE_URL`, `MODULE3_TIMEOUT_MS`, `MODULE3_INTERNAL_KEY` (opcional) y `QUOTE_CONCURRENCY` en la configuración validada, y la dependencia `lossless-json` (`lossless-json` lo instala la base: T012)
 
 ## Phase 2: Foundational
 
@@ -483,12 +493,13 @@ seguro ante un Módulo 3 caído.
 - [ ] T021 Prueba de tiempo: cotización de 10 habitaciones con el Módulo 3 simulado a 300 ms en menos de 1,5 s (NFR-001)
 - [ ] T022 Verificar que ningún log escribe datos personales y que los importes se registran sin alterar
 - [ ] T023 Documentar `GET /api/rates/reference` en OpenAPI (`@nestjs/swagger`)
+- [ ] T024 Enviar `roomId` en `POST /pricing/quotes` (`RoomQuoteRequest`, `Module3Port.createQuote`, las solicitudes de `generate-direct-reservation` y `update-reservation` y el simulador) y `X-Internal-Key` cuando `MODULE3_INTERNAL_KEY` tiene valor, con una prueba de contrato de que la clave no sale en los logs
 
 ## Pruebas por escenario
 
 | Historia | Escenario | Qué se verifica |
 |---|---|---|
-| US1 | 1 cotización exitosa | Una llamada al Módulo 3 por habitación con `roomType`, `checkInDate` y `checkOutDate`; `roomGrossAmount` igual al `lodgingAmount` y `quoteId` igual al recibido |
+| US1 | 1 cotización exitosa | Una llamada al Módulo 3 por habitación con `roomType`, `roomId`, `checkInDate` y `checkOutDate`; `roomGrossAmount` igual al `lodgingAmount` y `quoteId` igual al recibido |
 | US1 | 2 Módulo 3 no responde | Tiempo agotado: `400` `PRICING_UNAVAILABLE` con el mensaje literal; no se asume ninguna tarifa ni a cero y no se crea la reserva |
 | US1 | 3 sin disponibilidad | El flujo invocador se detiene antes; con el Módulo 3 simulado se verifica que **no recibe ninguna llamada** |
 | US2 | 1 cambio de fechas | Una cotización por habitación (todas); se muestran y solo tras confirmar se guardan `roomGrossAmount` y `quoteId` nuevos |

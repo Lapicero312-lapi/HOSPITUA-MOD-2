@@ -60,6 +60,10 @@ describe lo propio.
   `CHANNEX_SYNC_INTERVAL_SECONDS` (`30`) y `CHANNEX_ARI_DAYS` (`90`). El id del hotel de Booking se indica en
   Channex al conectar el canal Booking.com, y el porcentaje de comisión de la agencia lo calcula el sistema
   con su primera reserva (`register-ota-information-commission`): ninguno de los dos se configura.
+- **Configuración del Módulo 3** (variables de entorno): `MODULE3_BASE_URL`, `MODULE3_TIMEOUT_MS` (`3000`) y
+  `MODULE3_INTERNAL_KEY`, opcional. Si tiene valor, `POST /pricing/quotes` lleva la cabecera
+  `X-Internal-Key` con esa clave, que el Módulo 3 usa para proteger sus rutas cuando se publican en internet.
+  La clave es un secreto: nunca va en el repositorio, en la base de datos ni en los logs.
 
 ### Decisiones de stack
 
@@ -1235,6 +1239,9 @@ Se inserta en la misma transacción que la reserva.
       válido."
     - Booking no llama al Módulo 2: el Módulo 2 lee el feed de Channex con la clave `user-api-key` de
       la configuración, que nunca se guarda en la base de datos ni se escribe en los logs.
+    - Hacia el Módulo 3, si hay una clave configurada (`MODULE3_INTERNAL_KEY`), el Módulo 2 envía
+      `X-Internal-Key` en `POST /pricing/quotes`. El Módulo 2 no valida nada: el Módulo 3 protege sus propias
+      rutas. Nunca se envía `Authorization` al Módulo 3, que responde 403 si la recibe.
 
 ### Decisiones de diseño tomadas al escribir los planes de caso de uso
 

@@ -175,8 +175,9 @@ export class CreateDirectReservationService implements CreateDirectReservation {
 
     // Paso 3: se vuelve a cotizar y se compara con lo que vio el solicitante (decisión D1).
     const quoteRequests = assignedRooms.map(
-      ({ position }): RoomQuoteRequest => ({
+      ({ position, room }): RoomQuoteRequest => ({
         key: String(position),
+        roomId: room.id,
         categoryRoom,
         startDate,
         endDate,
@@ -196,7 +197,9 @@ export class CreateDirectReservationService implements CreateDirectReservation {
 
     // Paso 5, con el reintento de asignación (punto 14, T009): si otra solicitud tomó una de las
     // habitaciones entre la verificación y el COMMIT, la base la rechaza (D3) y esa transacción ya se
-    // revirtió; se vuelve a verificar y a asignar, con las mismas cotizaciones (son por posición y categoría).
+    // revirtió; se vuelve a verificar y a asignar, con las mismas cotizaciones: son por posición y categoría.
+    // El `roomId` que recibió el Módulo 3 es informativo y no se recotiza si la habitación cambia (plan de
+    // `calculate-dynamic-rate`, A1).
     for (let retry = 0; ; retry += 1) {
       try {
         return await this.save(

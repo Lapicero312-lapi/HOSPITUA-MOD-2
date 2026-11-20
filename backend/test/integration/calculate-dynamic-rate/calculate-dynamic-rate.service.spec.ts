@@ -36,6 +36,7 @@ import { Module3ClientModule } from '../../../src/infrastructure/out/module3/mod
 /** Las dos habitaciones `DOBLE` del ejemplo de A1 del plan: dos noches, del 10 al 12 de octubre. */
 const ROOM_1: RoomQuoteRequest = {
   key: '1',
+  roomId: '3f6c1e2a-8b4d-4c7e-9a1f-2b3c4d5e6f70',
   categoryRoom: 'DOBLE',
   startDate: '2026-10-10',
   endDate: '2026-10-12',
@@ -114,7 +115,7 @@ describe('CalculateDynamicRate contra el Módulo 3 simulado', () => {
   }
 
   describe('escenario 1: cotización exitosa de una reserva directa nueva', () => {
-    it('una cotización por habitación con roomType, checkInDate y checkOutDate, sin guestCount', async () => {
+    it('una cotización por habitación con roomType, roomId, checkInDate y checkOutDate, sin guestCount', async () => {
       module3Responds((call) => HttpResponse.json(rateQuote(QUOTE_IDS[call])));
 
       await rates.quoteRooms([ROOM_1, ROOM_2], 'NEW_RESERVATION');
@@ -122,11 +123,13 @@ describe('CalculateDynamicRate contra el Módulo 3 simulado', () => {
       expect(received).toEqual([
         {
           roomType: 'DOBLE',
+          roomId: '3f6c1e2a-8b4d-4c7e-9a1f-2b3c4d5e6f70',
           checkInDate: '2026-10-10',
           checkOutDate: '2026-10-12',
         },
         {
           roomType: 'DOBLE',
+          roomId: '3f6c1e2a-8b4d-4c7e-9a1f-2b3c4d5e6f70',
           checkInDate: '2026-10-10',
           checkOutDate: '2026-10-12',
         },
@@ -242,6 +245,7 @@ describe('CalculateDynamicRate contra el Módulo 3 simulado', () => {
       expect(received).toEqual([
         {
           roomType: 'PENTHOUSE',
+          roomId: '3f6c1e2a-8b4d-4c7e-9a1f-2b3c4d5e6f70',
           checkInDate: '2026-10-10',
           checkOutDate: '2026-10-12',
         },

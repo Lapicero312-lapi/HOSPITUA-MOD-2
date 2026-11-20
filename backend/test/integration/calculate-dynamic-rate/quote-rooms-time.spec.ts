@@ -32,6 +32,7 @@ const REQUESTS: RoomQuoteRequest[] = Array.from(
   { length: ROOM_COUNT },
   (_, index) => ({
     key: String(index + 1),
+    roomId: '3f6c1e2a-8b4d-4c7e-9a1f-2b3c4d5e6f70',
     categoryRoom: 'DOBLE',
     startDate: '2026-10-10',
     endDate: '2026-10-12',

@@ -82,12 +82,14 @@ describe('PreviewDirectReservation (plan de generate-direct-reservation, A, D1 y
       quoteRequests: [
         {
           key: '1',
+          roomId: ROOM_201.id,
           categoryRoom: 'DOBLE',
           startDate: '2026-10-12',
           endDate: '2026-10-15',
         },
         {
           key: '2',
+          roomId: ROOM_202.id,
           categoryRoom: 'DOBLE',
           startDate: '2026-10-12',
           endDate: '2026-10-15',
