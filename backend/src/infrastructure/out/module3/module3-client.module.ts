@@ -17,10 +17,20 @@ import { Module3HttpAdapter } from './module3-http.adapter.js';
   imports: [
     HttpModule.registerAsync({
       inject: [ConfigService],
-      useFactory: (config: ConfigService<EnvironmentVariables, true>) => ({
-        baseURL: config.get('MODULE3_BASE_URL', { infer: true }),
-        timeout: config.get('MODULE3_TIMEOUT_MS', { infer: true }),
-      }),
+      useFactory: (config: ConfigService<EnvironmentVariables, true>) => {
+        const internalKey = config.get('MODULE3_INTERNAL_KEY', {
+          infer: true,
+        });
+        return {
+          baseURL: config.get('MODULE3_BASE_URL', { infer: true }),
+          timeout: config.get('MODULE3_TIMEOUT_MS', { infer: true }),
+          // Sin clave configurada no se envía la cabecera. Nunca se envía `Authorization`: el Módulo 3 responde
+          // 403 si la recibe.
+          ...(internalKey
+            ? { headers: { 'X-Internal-Key': internalKey } }
+            : {}),
+        };
+      },
     }),
   ],
   providers: [

@@ -29,6 +29,7 @@ const aRequest = (
   changes: Partial<RoomQuoteRequest> = {},
 ): RoomQuoteRequest => ({
   key: '1',
+  roomId: '3f6c1e2a-8b4d-4c7e-9a1f-2b3c4d5e6f70',
   categoryRoom: 'DOBLE',
   startDate: '2026-10-10',
   endDate: '2026-10-12',
@@ -81,8 +82,18 @@ describe('CalculateDynamicRate.quoteRooms (T008)', () => {
       { ...aQuote('Q-SUITE_JUNIOR'), key: '2' },
     ]);
     expect(createQuote.mock.calls).toEqual([
-      ['DOBLE', '2026-10-10', '2026-10-12'],
-      ['SUITE_JUNIOR', '2026-10-10', '2026-10-12'],
+      [
+        'DOBLE',
+        '3f6c1e2a-8b4d-4c7e-9a1f-2b3c4d5e6f70',
+        '2026-10-10',
+        '2026-10-12',
+      ],
+      [
+        'SUITE_JUNIOR',
+        '3f6c1e2a-8b4d-4c7e-9a1f-2b3c4d5e6f70',
+        '2026-10-10',
+        '2026-10-12',
+      ],
     ]);
   });
 

@@ -325,12 +325,14 @@ describe('CreateDirectReservation (plan de generate-direct-reservation, B, D2 y 
     expect(requests).toEqual([
       {
         key: '1',
+        roomId: ROOM_201.id,
         categoryRoom: 'DOBLE',
         startDate: '2026-10-12',
         endDate: '2026-10-15',
       },
       {
         key: '2',
+        roomId: ROOM_202.id,
         categoryRoom: 'DOBLE',
         startDate: '2026-10-12',
         endDate: '2026-10-15',

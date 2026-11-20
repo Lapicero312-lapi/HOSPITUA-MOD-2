@@ -26,6 +26,18 @@ describe('Simulador del Módulo 3 (calculate-dynamic-rate, A1)', () => {
     await simulator.stop();
   });
 
+  it('acepta el roomId que envía el Módulo 2 y da la misma tarifa a toda la categoría', async () => {
+    const { status, body } = await quote({
+      roomType: 'DOBLE',
+      roomId: '3f6c1e2a-8b4d-4c7e-9a1f-2b3c4d5e6f70',
+      checkInDate: '2026-10-10',
+      checkOutDate: '2026-10-12',
+    });
+
+    assert.equal(status, 200);
+    assert.equal(body.lodgingAmount, '440000.00');
+  });
+
   it('cotiza la estadía del ejemplo del plan con la tarifa fija de DOBLE', async () => {
     const { status, body } = await quote({
       roomType: 'DOBLE',
@@ -109,6 +121,15 @@ describe('Simulador del Módulo 3 (calculate-dynamic-rate, A1)', () => {
     [
       'con una fecha sin el día',
       { roomType: 'DOBLE', checkInDate: '2026-10', checkOutDate: '2026-10-11' },
+    ],
+    [
+      'con un roomId que no es un UUID',
+      {
+        roomType: 'DOBLE',
+        roomId: '201',
+        checkInDate: '2026-10-10',
+        checkOutDate: '2026-10-11',
+      },
     ],
     ['con un cuerpo que no es JSON', 'no es JSON'],
     ['con una lista en lugar de un objeto', []],

@@ -10,11 +10,13 @@ export const MODULE3_PORT = Symbol('MODULE3_PORT');
  */
 export interface Module3Port {
   /**
-   * Una cotización para una habitación.
+   * Una cotización para una habitación. El `roomId` es el de la habitación del Módulo 1: para el Módulo 2
+   * es informativo, no cambia cuándo se cotiza (plan de `calculate-dynamic-rate`, A1).
    * @throws Module3RejectedError o Module3UnavailableError.
    */
   createQuote(
     roomType: string,
+    roomId: string,
     checkInDate: string,
     checkOutDate: string,
   ): Promise<RateQuote>;
