@@ -9,6 +9,11 @@ export type ReservationForBilling = {
   channel: 'DIRECT' | 'OTA';
   /** El `quoteId` de cada habitación que lo tiene, en el orden de las habitaciones; vacía en `OTA`. */
   quoteIds: string[];
+  /**
+   * La misma lista que `quoteIds`, con la habitación actual de cada cotización (T040): si una habitación se
+   * cambió por otra de la misma categoría, la nueva conserva la cotización de la anterior. Vacía en `OTA`.
+   */
+  rooms: { roomId: string; quoteId: string }[];
   /** Solo en `OTA`: la agencia, su código y el porcentaje congelado en la reserva (de 0 a 100). */
   ota: {
     otaId: string;

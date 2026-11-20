@@ -176,6 +176,10 @@ describe('GET /api/reservations/{reservationRef} (e2e, C3)', () => {
         reservationRef: direct.reservationRef,
         channel: 'DIRECT',
         quoteIds: direct.rooms.map((room) => room.rate?.quoteId),
+        rooms: direct.rooms.map((room) => ({
+          roomId: room.roomId,
+          quoteId: room.rate?.quoteId,
+        })),
       });
       expect(res.body.quoteIds).not.toContain(undefined);
     });
@@ -187,6 +191,7 @@ describe('GET /api/reservations/{reservationRef} (e2e, C3)', () => {
         reservationRef: ota.reservationRef,
         channel: 'OTA',
         quoteIds: [],
+        rooms: [],
         otaId: ota.ota?.otaId,
         otaConfirmationCode: ota.ota?.externalConfirmationCode,
         otaCommissionPercentage: 15,
