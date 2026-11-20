@@ -56,7 +56,9 @@ services:
         value: DEMO-HOTEL
       - key: SIRE_CITY_CODE
         value: DEMO-CIUDAD
-      # Secretos: la URL de CloudAMQP (todavía no se usa, pero producción la exige) y Channex.
+      # Secretos: el RabbitMQ del Módulo 1 y Channex. RABBITMQ_URL es la del broker del Módulo 1
+      # (amqps://<usuario>:<clave>@broker.gestionophospitua.tech:5671/%2F, vhost /, solo TLS); el usuario y la
+      # clave los entrega el Módulo 1 por privado. Solo la demo se conecta a ese broker.
       - key: RABBITMQ_URL
         sync: false
       - key: CHANNEX_API_KEY
@@ -64,8 +66,9 @@ services:
       - key: CHANNEX_PROPERTY_ID
         sync: false
 
-  # Los simuladores del Módulo 1 y del Módulo 3, los dos en el PORT que da Render. Su única dependencia es
-  # amqplib, para el Módulo 1 por RabbitMQ (con RABBITMQ_URL, la misma de CloudAMQP que usa el backend).
+  # Los simuladores del Módulo 1 y del Módulo 3, los dos en el PORT que da Render, solo por REST. Sin
+  # RABBITMQ_URL a propósito: el backend usa el RabbitMQ del Módulo 1 real, y el simulador consumiría su cola
+  # de la lista del día (m1.reservas.diarias.queue) y le quitaría los mensajes.
   - type: web
     name: hospitua-m2-simulators
     runtime: node
@@ -77,8 +80,6 @@ services:
     envVars:
       - key: NODE_VERSION
         value: '22'
-      - key: RABBITMQ_URL
-        sync: false
 
   # El frontend: un sitio estático. /api/* va al backend, como el proxy de Vite en desarrollo (sin CORS).
   - type: web

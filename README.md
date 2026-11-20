@@ -107,11 +107,12 @@ La demo del avance corre en Render, con los simuladores en lugar de los Módulos
 **Para crearlo (una sola vez):**
 
 1. Crea una cuenta en [Render](https://render.com) con GitHub y dale acceso a este repositorio.
-2. Crea una cuenta gratuita en [CloudAMQP](https://www.cloudamqp.com) y una instancia gratuita de RabbitMQ.
-   Copia su URL (`amqps://...`): el backend todavía no la usa, pero en producción la exige.
+2. Pide al Módulo 1, por un canal privado, el usuario y la clave de su RabbitMQ. El broker común es el suyo:
+   `broker.gestionophospitua.tech`, puerto `5671`, vhost `/`, solo con TLS.
 3. En Render: **New → Blueprint**, elige este repositorio y la rama que quieres desplegar. Render lee
    `render.yaml` y te pide los tres secretos:
-   - `RABBITMQ_URL`: la de CloudAMQP.
+   - `RABBITMQ_URL`: `amqps://<usuario>:<clave>@broker.gestionophospitua.tech:5671/%2F` (el `%2F` es el
+     vhost `/`).
    - `CHANNEX_API_KEY` y `CHANNEX_PROPERTY_ID`: los de tu `backend/.env`. Escríbelos solo ahí, nunca en
      el repositorio, en un chat ni en un documento.
 4. Espera a que los tres servicios queden en *Live* y abre el frontend.
@@ -126,6 +127,12 @@ la del backend en la regla `/api/*` del frontend, y la de los simuladores en `MO
 - La base gratuita dura un tiempo limitado: alcanza para la demo, no para guardar datos.
 - **La demo es la única copia conectada a Channex** mientras esté encendida. Nadie del equipo debe arrancar
   su backend con la misma clave al mismo tiempo; en tu `backend/.env` local, deja `CHANNEX_API_KEY` vacía.
+- **La demo es también la única copia conectada al RabbitMQ del Módulo 1.** Un backend local con la misma
+  `RABBITMQ_URL` consumiría los avisos de Check-In y Check-Out de la demo. En tu `backend/.env` local deja la
+  de `docker compose`. Los simuladores tampoco se conectan a ese broker: en Render van sin `RABBITMQ_URL`
+  (si ya la tenían, bórrala en su panel).
+- El Módulo 2 no declara la cola de la lista del día (`m1.reservas.diarias.queue`): es del Módulo 1. Si esa
+  cola todavía no existe, la lista queda pendiente y se reintenta hasta que exista.
 
 **Para probar la imagen del backend en local** (desde la raíz): `docker build -f backend/Dockerfile .`
 
