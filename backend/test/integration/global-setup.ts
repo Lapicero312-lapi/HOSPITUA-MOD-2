@@ -3,7 +3,13 @@ import { RabbitMQContainer } from '@testcontainers/rabbitmq';
 import { DataSource } from 'typeorm';
 import type { TestProject } from 'vitest/node';
 import { validateEnv } from '../../src/infrastructure/config/env.validation.js';
+import {
+  DAILY_LIST_QUEUE,
+  DAILY_LIST_ROUTING_KEYS,
+  EVENTS_EXCHANGE,
+} from '../../src/infrastructure/config/rabbitmq.topology.js';
 import { typeOrmOptions } from '../../src/infrastructure/config/typeorm.options.js';
+import { MODULE1_DAILY_LIST_DLQ } from './support/module1-queue.js';
 
 /** Las mismas imágenes y credenciales que `docker-compose.yml`. */
 const POSTGRES_IMAGE = 'postgres:17-alpine';
@@ -36,6 +42,49 @@ declare module 'vitest' {
   export interface ProvidedContext {
     integrationEnv: IntegrationEnv;
     rabbitmqManagementUrl: string;
+  }
+}
+
+/**
+ * Declara `m1.reservas.diarias.queue` como lo hace el Módulo 1 (durable, con su dead-letter y unida a las dos
+ * routing keys de la lista del día), por la API del panel de RabbitMQ. El Módulo 2 ya no la declara (plan
+ * base, "Convenciones de colas"): así las pruebas corren como si el Módulo 1 ya estuviera conectado. Las que
+ * prueban su ausencia la borran y la vuelven a crear (`support/module1-queue.ts`).
+ */
+async function declareModule1Queue(managementUrl: string): Promise<void> {
+  const headers = {
+    Authorization: `Basic ${Buffer.from(`${USER}:${PASSWORD}`).toString('base64')}`,
+    'Content-Type': 'application/json',
+  };
+  const call = async (method: string, path: string, body: object) => {
+    const response = await fetch(`${managementUrl}/api${path}`, {
+      method,
+      headers,
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) {
+      throw new Error(
+        `RabbitMQ respondió ${response.status} a ${method} ${path}`,
+      );
+    }
+  };
+  const queue = encodeURIComponent(DAILY_LIST_QUEUE);
+  await call('PUT', `/exchanges/%2F/${EVENTS_EXCHANGE}`, {
+    type: 'topic',
+    durable: true,
+  });
+  await call('PUT', `/queues/%2F/${MODULE1_DAILY_LIST_DLQ}`, { durable: true });
+  await call('PUT', `/queues/%2F/${queue}`, {
+    durable: true,
+    arguments: {
+      'x-dead-letter-exchange': '',
+      'x-dead-letter-routing-key': MODULE1_DAILY_LIST_DLQ,
+    },
+  });
+  for (const routingKey of Object.values(DAILY_LIST_ROUTING_KEYS)) {
+    await call('POST', `/bindings/%2F/e/${EVENTS_EXCHANGE}/q/${queue}`, {
+      routing_key: routingKey,
+    });
   }
 }
 
@@ -79,11 +128,11 @@ export default async function setup(project: TestProject) {
   await dataSource.runMigrations();
   await dataSource.destroy();
 
+  const managementUrl = `http://${rabbitmq.getHost()}:${rabbitmq.getMappedPort(MANAGEMENT_PORT)}`;
+  await declareModule1Queue(managementUrl);
+
   project.provide('integrationEnv', env);
-  project.provide(
-    'rabbitmqManagementUrl',
-    `http://${rabbitmq.getHost()}:${rabbitmq.getMappedPort(MANAGEMENT_PORT)}`,
-  );
+  project.provide('rabbitmqManagementUrl', managementUrl);
 
   return async () => {
     await Promise.all([postgres.stop(), rabbitmq.stop()]);
