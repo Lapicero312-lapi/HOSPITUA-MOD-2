@@ -173,7 +173,19 @@ describe('POST /api/reservations/direct/preview (e2e)', () => {
     });
     // Se cotiza una vez por habitación, aunque sean de la misma categoría.
     expect(createQuote).toHaveBeenCalledTimes(2);
-    expect(createQuote).toHaveBeenCalledWith('DOBLE', START_DATE, END_DATE);
+    // Con el `roomId` de cada una: el Módulo 3 tiene tarifas por habitación.
+    expect(createQuote).toHaveBeenCalledWith(
+      'DOBLE',
+      ROOM_201.id,
+      START_DATE,
+      END_DATE,
+    );
+    expect(createQuote).toHaveBeenCalledWith(
+      'DOBLE',
+      ROOM_202.id,
+      START_DATE,
+      END_DATE,
+    );
   });
 
   it('no guarda nada: después de la vista previa las dos habitaciones siguen disponibles', async () => {

@@ -47,8 +47,9 @@ export class PreviewDirectReservationService implements PreviewDirectReservation
 
     // Paso 7: una cotización por habitación, aunque sean de la misma categoría; todo o nada.
     const quoteRequests = assignedRooms.map(
-      ({ position }): RoomQuoteRequest => ({
+      ({ position, room }): RoomQuoteRequest => ({
         key: String(position),
+        roomId: room.id,
         categoryRoom,
         startDate,
         endDate,

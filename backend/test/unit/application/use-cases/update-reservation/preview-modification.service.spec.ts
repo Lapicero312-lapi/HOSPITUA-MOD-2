@@ -746,12 +746,14 @@ describe('PreviewModificationService (plan de update-reservation, B1, D1 y regla
         [
           {
             key: r201.id,
+            roomId: r201.id,
             categoryRoom: 'DOBLE',
             startDate: '2031-03-21',
             endDate: '2031-03-24',
           },
           {
             key: r202.id,
+            roomId: r202.id,
             categoryRoom: 'DOBLE',
             startDate: '2031-03-21',
             endDate: '2031-03-24',
@@ -795,6 +797,7 @@ describe('PreviewModificationService (plan de update-reservation, B1, D1 y regla
         [
           {
             key: r305.id,
+            roomId: r305.id,
             categoryRoom: 'SUITE',
             startDate: START,
             endDate: END,
