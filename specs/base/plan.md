@@ -587,7 +587,8 @@ planes:
 
 - **El backend no cambia:** apunta a los simuladores con `MODULE1_BASE_URL` y `MODULE3_BASE_URL`. Los
   puertos son los de los valores por defecto de desarrollo (`localhost:4001` y `localhost:4003`). Cuando
-  los módulos reales estén listos, solo cambian esas dos variables.
+  los módulos reales estén listos, solo cambian esas dos variables. En la demo de Render ya apunta a los
+  módulos reales.
 - **Datos:** las habitaciones de los ejemplos de los planes (201 y 202 `DOBLE`, 101 `SUITE_JUNIOR`, 1001
   `DOBLE`, con sus mismos `id`) y, para que la demo se parezca a un hotel real, más habitaciones vendibles:
   20 en total, en cinco categorías (`INDIVIDUAL`, `DOBLE`, `TRIPLE`, `SUITE_JUNIOR` y `SUITE`), con
@@ -630,12 +631,16 @@ los simuladores. Lo describe `render.yaml` en la raíz del repositorio (un *Blue
 - **Variables del backend:**
   - `NODE_ENV=production`;
   - las `DB_*` de la base de Render;
-  - `MODULE1_BASE_URL` y `MODULE3_BASE_URL` con la URL de los simuladores;
-  - `RABBITMQ_URL` de una cuenta gratuita de CloudAMQP: todavía no se usa, pero producción la exige;
+  - `MODULE1_BASE_URL` y `MODULE3_BASE_URL` con las URL de los Módulos 1 y 3 reales
+    (`https://gestionophospitua.tech` y `https://hospitua-module-3.onrender.com`). Los simuladores quedan de
+    respaldo;
+  - `RABBITMQ_URL` del broker del Módulo 1 (`amqps://…@broker.gestionophospitua.tech:5671/%2F`), con el
+    usuario que entrega el Módulo 1;
+  - `MODULE3_INTERNAL_KEY`, cuando el Módulo 3 la entregue;
   - `SIRE_HOTEL_CODE` y `SIRE_CITY_CODE` con valores de demo (`DEMO-HOTEL` y `DEMO-CIUDAD`), porque el
     hotel todavía no tiene sus códigos de SIRE.
-- **Los secretos** (`CHANNEX_API_KEY`, `CHANNEX_PROPERTY_ID` y `RABBITMQ_URL`) se escriben solo en el panel
-  de Render, nunca en `render.yaml` ni en el repositorio.
+- **Los secretos** (`CHANNEX_API_KEY`, `CHANNEX_PROPERTY_ID`, `RABBITMQ_URL` y `MODULE3_INTERNAL_KEY`) se
+  escriben solo en el panel de Render, nunca en `render.yaml` ni en el repositorio.
 - **Channex:** mientras la demo esté encendida, es la única copia conectada a la propiedad compartida de
   staging. Nadie arranca otra con la misma clave.
 - **Plan gratuito:** los Web Services se duermen tras un rato sin uso y despiertan en cerca de un minuto;
