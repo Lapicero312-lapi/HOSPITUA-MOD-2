@@ -788,7 +788,8 @@ símbolo `PUBLISH_PENDING_DAILY_MESSAGES`. `CheckViewReservationModule` lo regis
 ```typescript
 interface DailyListPublisher {        // application/ports/out/
   // Publica un mensaje y espera la confirmación de RabbitMQ.
-  // Lanza un error si no hay conexión, si RabbitMQ lo rechaza o si no confirma en 5 s.
+  // Lanza un error si no hay conexión, si RabbitMQ lo rechaza, si lo devuelve por no llegar a ninguna
+  // cola (`mandatory`) o si no confirma en 5 s.
   publish(message: { messageId: string; kind: 'LIST' | 'UPDATE'; payload: object }): Promise<void>;
 }
 
@@ -820,6 +821,9 @@ interface DailyMessageRepository {    // se agregan tres métodos
   `messageId` del cuerpo.
 - Espera la confirmación de publicación. Si RabbitMQ no confirma en 5 s, cuenta como fallo (plan base,
   "Conexión").
+- Publica con `mandatory` y escucha el evento `return` del canal. Un mensaje devuelto (identificado por su
+  `messageId`) porque `m1.reservas.diarias.queue` no existe todavía cuenta como fallo de publicación: queda
+  `PENDING` y se reintenta en orden. El Módulo 2 no declara esa cola (plan base, "Convenciones de colas").
 - Publica de a un mensaje y por el mismo canal, así que nunca hay dos en vuelo. El orden lo decide
   `PublishPendingDailyMessages`.
 

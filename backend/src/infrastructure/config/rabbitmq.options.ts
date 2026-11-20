@@ -6,8 +6,6 @@ import {
 } from '@golevelup/nestjs-rabbitmq';
 import { Logger } from '@nestjs/common';
 import {
-  DAILY_LIST_QUEUE,
-  DAILY_LIST_ROUTING_KEYS,
   deadLetterQueue,
   EVENTS_EXCHANGE,
   INBOUND_QUEUES,
@@ -61,14 +59,10 @@ function queues(): RabbitMQQueueConfig[] {
       deadLetterExchange: DEFAULT_EXCHANGE,
     },
   }));
-  // La declara también el Módulo 2 para que la lista del día no se pierda si el Módulo 1 aún no la creó.
-  const dailyList = {
-    name: DAILY_LIST_QUEUE,
-    exchange: EVENTS_EXCHANGE,
-    routingKey: [DAILY_LIST_ROUTING_KEYS.LIST, DAILY_LIST_ROUTING_KEYS.UPDATE],
-    options: { durable: true },
-  };
-  return [...inbound, ...retries, dailyList];
+  // `m1.reservas.diarias.queue` no se declara: es del Módulo 1, que la declara con su propia dead-letter. La
+  // lista del día sale con `mandatory` y, si esa cola aún no existe, vuelve y queda `PENDING`
+  // (`RabbitDailyListPublisher`).
+  return [...inbound, ...retries];
 }
 
 /** Opciones de publicación de `amqp-connection-manager`: `timeout` no está en el tipo de amqplib. */
