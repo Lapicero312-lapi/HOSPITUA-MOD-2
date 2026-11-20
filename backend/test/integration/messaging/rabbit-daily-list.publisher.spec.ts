@@ -157,7 +157,9 @@ describe('RabbitDailyListPublisher con RabbitMQ', () => {
   it('sin la cola del Módulo 1, RabbitMQ devuelve el mensaje y la publicación falla; con la cola, sale', async () => {
     await connection.channel.deleteQueue(DAILY_LIST_QUEUE);
     try {
-      expect(await managementStatus(`/queues/%2F/`)).toBe(404);
+      expect(await managementStatus(`/queues/%2F/${DAILY_LIST_QUEUE}`)).toBe(
+        404,
+      );
 
       await expect(
         publisher.publish({
