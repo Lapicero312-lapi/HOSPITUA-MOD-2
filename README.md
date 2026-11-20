@@ -53,8 +53,8 @@ pnpm --filter simulators start     # Módulo 1 en http://localhost:4001 y Módul
 - **No simulan** RabbitMQ (los avisos de Check-In y Check-Out) ni Channex. Las pruebas del backend no los
   usan: siguen con `msw`.
 - **Si cambia un contrato con el Módulo 1 o el Módulo 3,** hay que actualizar también el simulador.
-- **Cuando los módulos reales estén listos,** se cambian `MODULE1_BASE_URL` y `MODULE3_BASE_URL` y los
-  simuladores dejan de usarse.
+- **La demo en Render ya usa los módulos reales** (`MODULE1_BASE_URL` y `MODULE3_BASE_URL` en
+  [`render.yaml`](render.yaml)). Los simuladores quedan para probar en local y como respaldo.
 
 ## Comandos
 
@@ -94,14 +94,15 @@ Usan la conexión de `backend/.env` (PostgreSQL de `docker compose`). La primera
 
 ## Despliegue de la demo (Render)
 
-La demo del avance corre en Render, con los simuladores en lugar de los Módulos 1 y 3 (plan base,
-"Despliegue de la demo (Render)"). Todo lo describe [`render.yaml`](render.yaml):
+La demo del avance corre en Render (plan base, "Despliegue de la demo (Render)") y se conecta a los Módulos 1
+y 3 reales: `https://gestionophospitua.tech` y `https://hospitua-module-3.onrender.com`. Todo lo describe
+[`render.yaml`](render.yaml):
 
 | Servicio | Qué es | URL |
 |---|---|---|
 | `hospitua-m2-frontend` | La pantalla de la Recepcionista (sitio estático); `/api/*` va al backend | `https://hospitua-m2-frontend.onrender.com` |
 | `hospitua-m2-backend` | El backend ([`backend/Dockerfile`](backend/Dockerfile)): aplica las migraciones y arranca | `https://hospitua-m2-backend.onrender.com/api/docs` |
-| `hospitua-m2-simulators` | Los simuladores de los Módulos 1 y 3, en un solo puerto | `https://hospitua-m2-simulators.onrender.com/api/rooms` |
+| `hospitua-m2-simulators` | Los simuladores de los Módulos 1 y 3, en un solo puerto. Solo de respaldo: el backend no los usa | `https://hospitua-m2-simulators.onrender.com/api/rooms` |
 | `hospitua-m2-db` | PostgreSQL | Solo la usa el backend |
 
 **Para crearlo (una sola vez):**
@@ -116,14 +117,20 @@ La demo del avance corre en Render, con los simuladores en lugar de los Módulos
    - `CHANNEX_API_KEY` y `CHANNEX_PROPERTY_ID`: los de tu `backend/.env`. Escríbelos solo ahí, nunca en
      el repositorio, en un chat ni en un documento.
 4. Espera a que los tres servicios queden en *Live* y abre el frontend.
+5. Cuando el Módulo 3 entregue su clave, agrégala en el panel del backend como `MODULE3_INTERNAL_KEY`.
+   Avísales antes, para que la activen de su lado al mismo tiempo. Sin ella, el backend llama sin
+   `X-Internal-Key`.
 
-**Si Render le da otra URL a un servicio** porque el nombre ya estaba ocupado, cámbiala en `render.yaml`:
-la del backend en la regla `/api/*` del frontend, y la de los simuladores en `MODULE1_BASE_URL` y
-`MODULE3_BASE_URL`.
+**Si Render le da otra URL al backend** porque el nombre ya estaba ocupado, cámbiala en `render.yaml`, en la
+regla `/api/*` del frontend. Para volver a los simuladores, cambia `MODULE1_BASE_URL` y `MODULE3_BASE_URL`
+por `https://hospitua-m2-simulators.onrender.com`.
 
 **Antes de presentar:**
-- En el plan gratuito el backend y los simuladores **se duermen tras un rato sin uso** y despiertan en cerca
-  de un minuto. Abre sus URL un par de minutos antes. Mientras duermen, las tareas de Channex no corren.
+- En el plan gratuito el backend **se duerme tras un rato sin uso** y despierta en cerca de un minuto. Abre
+  su URL un par de minutos antes. Mientras duerme, las tareas de Channex no corren.
+- **El Módulo 3 también está en el plan gratuito.** El backend le espera 3 s: si está dormido, la primera
+  cotización responde "servicio no disponible". Pídeles que lo despierten antes, o abre
+  `https://hospitua-module-3.onrender.com/docs`.
 - La base gratuita dura un tiempo limitado: alcanza para la demo, no para guardar datos.
 - **La demo es la única copia conectada a Channex** mientras esté encendida. Nadie del equipo debe arrancar
   su backend con la misma clave al mismo tiempo; en tu `backend/.env` local, deja `CHANNEX_API_KEY` vacía.
