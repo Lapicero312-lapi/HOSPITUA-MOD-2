@@ -12,9 +12,14 @@ export const OTA_COMMISSION_PAGE_SIZE = 100;
 
 /** Los filtros de A1 de `register-ota-information-commission`, ya validados (punto C1 de su plan). */
 export type OtaCommissionFilters = {
-  /** Rango inclusivo sobre la `end_date` de la reserva, en `AAAA-MM-DD`. */
-  dateFrom: string;
-  dateTo: string;
+  /** Solo esa reserva (T022); `null`: todas. */
+  reservationRef: string | null;
+  /**
+   * Rango inclusivo sobre la `end_date` de la reserva, en `AAAA-MM-DD`. Los dos son `null` solo si viene
+   * `reservationRef`: entonces no se filtra por fechas.
+   */
+  dateFrom: string | null;
+  dateTo: string | null;
   /** `null`: todos. */
   commissionStatus: CommissionStatus | null;
   reservationStatus: ReservationStatus | null;

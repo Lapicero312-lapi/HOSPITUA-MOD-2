@@ -20,11 +20,15 @@ import {
   INVALID_DATE,
   INVALID_DATE_RANGE,
   INVALID_PAGE,
+  INVALID_RESERVATION_CODE,
   INVALID_STATUS,
 } from '../../../domain/shared/error-codes.js';
 import { isRealDate, UUID_FORMAT } from './reservation-list-query.dto.js';
 
 type ErrorCode = { readonly code: string; readonly message: string };
+
+/** El formato de `reservationRef`, como en la conciliación (A2). */
+const RESERVATION_REF_FORMAT = /^RSV-[0-9A-F]{8}$/;
 
 /** El rango más largo de A1, en días, contando los dos extremos. */
 const MAX_RANGE_DAYS = 366;
@@ -40,19 +44,26 @@ export type OtaCommissionQuery = {
  * Revisa los parámetros de `GET /api/ota-commissions` (plan de `register-ota-information-commission`, A1 y
  * punto C1) en este orden; el primero que falla responde. Un parámetro repetido llega como lista y no es
  * válido. Los parámetros ajenos se ignoran.
- * 1. Las fechas: falta una o las dos, `INCOMPLETE_DATE_RANGE`; una que no es una `AAAA-MM-DD` real,
- *    `INVALID_DATE`; `dateFrom` posterior a `dateTo`, `INVALID_DATE_RANGE`; más de 366 días,
- *    `DATE_RANGE_TOO_LARGE`.
- * 2. `commissionStatus`: `INVALID_COMMISSION_STATUS`.
- * 3. `reservationStatus`: `INVALID_STATUS`.
- * 4. `otaId` que no es un UUID: `OTA_NOT_FOUND`.
- * 5. `page` que no es un entero de 1 en adelante: `INVALID_PAGE`.
+ * 1. `reservationRef` que no es `RSV-` y 8 hexadecimales: `INVALID_RESERVATION_CODE` (T022).
+ * 2. Las fechas: sin `reservationRef`, falta una o las dos; con `reservationRef`, viene solo una:
+ *    `INCOMPLETE_DATE_RANGE`. Una que no es una `AAAA-MM-DD` real, `INVALID_DATE`; `dateFrom` posterior a
+ *    `dateTo`, `INVALID_DATE_RANGE`; más de 366 días, `DATE_RANGE_TOO_LARGE`.
+ * 3. `commissionStatus`: `INVALID_COMMISSION_STATUS`.
+ * 4. `reservationStatus`: `INVALID_STATUS`.
+ * 5. `otaId` que no es un UUID: `OTA_NOT_FOUND`.
+ * 6. `page` que no es un entero de 1 en adelante: `INVALID_PAGE`.
  * @throws BusinessError con el código del primero que falla.
  */
 export function readOtaCommissionQuery(
   query: Record<string, unknown>,
 ): OtaCommissionQuery {
-  const { dateFrom, dateTo } = readDates(query.dateFrom, query.dateTo);
+  const reservationRef = readReservationRef(query.reservationRef);
+  const { dateFrom, dateTo } =
+    reservationRef !== null &&
+    query.dateFrom === undefined &&
+    query.dateTo === undefined
+      ? { dateFrom: null, dateTo: null }
+      : readDates(query.dateFrom, query.dateTo);
   const commissionStatus = readOneOf<CommissionStatus>(
     query.commissionStatus,
     COMMISSION_STATUSES,
@@ -66,9 +77,27 @@ export function readOtaCommissionQuery(
   const otaId = readOtaId(query.otaId);
   const page = readPage(query.page);
   return {
-    filters: { dateFrom, dateTo, commissionStatus, reservationStatus, otaId },
+    filters: {
+      reservationRef,
+      dateFrom,
+      dateTo,
+      commissionStatus,
+      reservationStatus,
+      otaId,
+    },
     page,
   };
+}
+
+/** Una sola reserva (T022); sin valor, `null` (todas). */
+function readReservationRef(value: unknown): string | null {
+  if (value === undefined) {
+    return null;
+  }
+  if (typeof value !== 'string' || !RESERVATION_REF_FORMAT.test(value)) {
+    throw errorOf(INVALID_RESERVATION_CODE);
+  }
+  return value;
 }
 
 function readDates(

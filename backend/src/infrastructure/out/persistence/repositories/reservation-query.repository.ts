@@ -265,12 +265,8 @@ export class TypeOrmReservationQuery implements ReservationQueryPort {
     if (!Number.isInteger(page) || page < 1) {
       throw new Error(`La página ${page} no es un entero de 1 en adelante.`);
     }
-    const conditions = [
-      "r.source = 'OTA'",
-      'r.end_date >= $1::date',
-      'r.end_date <= $2::date',
-    ];
-    const params: unknown[] = [filters.dateFrom, filters.dateTo];
+    const conditions = ["r.source = 'OTA'"];
+    const params: unknown[] = [];
     const add = (
       condition: (placeholder: string) => string,
       value: unknown,
@@ -278,6 +274,18 @@ export class TypeOrmReservationQuery implements ReservationQueryPort {
       params.push(value);
       conditions.push(condition(`$${params.length}`));
     };
+    if (filters.dateFrom !== null && filters.dateTo !== null) {
+      add((p) => `r.end_date >= ${p}::date`, filters.dateFrom);
+      add((p) => `r.end_date <= ${p}::date`, filters.dateTo);
+    } else if (filters.reservationRef === null) {
+      // Solo la referencia deja la consulta sin fechas (A1): sin ninguna, se leería toda la tabla.
+      throw new Error(
+        'La consulta de comisiones necesita fechas o una referencia.',
+      );
+    }
+    if (filters.reservationRef !== null) {
+      add((p) => `r.reservation_ref = ${p}`, filters.reservationRef);
+    }
     if (filters.commissionStatus !== null) {
       add((p) => `r.commission_status = ${p}`, filters.commissionStatus);
     }
