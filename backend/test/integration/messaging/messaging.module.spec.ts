@@ -28,6 +28,7 @@ import {
 } from '../../../src/infrastructure/in/messaging/inbound-consumer.js';
 import { InvalidMessageError } from '../../../src/infrastructure/in/messaging/retry-or-dead-letter.js';
 import { integrationEnv } from '../support/database.js';
+import { declareModule1Queue } from '../support/module1-queue.js';
 
 const CHECK_IN = INBOUND_QUEUES.CHECK_IN;
 
@@ -58,19 +59,20 @@ async function startMessaging(url: string): Promise<TestingModule> {
   return moduleRef.init();
 }
 
-/** La API del panel de RabbitMQ, con las credenciales de `RABBITMQ_URL`. */
-async function management<T>(path: string): Promise<T> {
+/** Una consulta a la API del panel de RabbitMQ, con las credenciales de `RABBITMQ_URL`. */
+function managementRequest(path: string): Promise<Response> {
   const url = new URL(integrationEnv().RABBITMQ_URL);
   const credentials = Buffer.from(
     `${decodeURIComponent(url.username)}:${decodeURIComponent(url.password)}`,
   ).toString('base64');
-  const response = await fetch(
-    `${inject('rabbitmqManagementUrl')}/api${path}`,
-    {
-      headers: { Authorization: `Basic ${credentials}` },
-    },
-  );
-  return (await response.json()) as T;
+  return fetch(`${inject('rabbitmqManagementUrl')}/api${path}`, {
+    headers: { Authorization: `Basic ${credentials}` },
+  });
+}
+
+/** La respuesta de la API del panel de RabbitMQ. */
+async function management<T>(path: string): Promise<T> {
+  return (await (await managementRequest(path)).json()) as T;
 }
 
 const ALL_QUEUES = [
@@ -100,6 +102,8 @@ describe('MessagingModule', () => {
         ).toBe(1),
       { timeout: 15_000, interval: 100 },
     );
+    // La cola del Módulo 1 la declara el Módulo 1, no el Módulo 2: la prueba hace su parte.
+    await declareModule1Queue(connection.channel);
   });
 
   afterAll(async () => {
@@ -114,7 +118,7 @@ describe('MessagingModule', () => {
     }
   });
 
-  it('declara las colas de entrada con su dead-letter, las esperas y la cola del Módulo 1', async () => {
+  it('declara las colas de entrada con su dead-letter y las esperas', async () => {
     const checkIn = await management<{ arguments: Record<string, unknown> }>(
       `/queues/%2F/${CHECK_IN.name}`,
     );
@@ -131,16 +135,27 @@ describe('MessagingModule', () => {
       'x-dead-letter-exchange': '',
       'x-message-ttl': 120_000,
     });
+  });
 
-    const bindings = await management<
-      { source: string; routing_key: string }[]
-    >(`/queues/%2F/${DAILY_LIST_QUEUE}/bindings`);
-    expect(
-      bindings
-        .filter((b) => b.source === EVENTS_EXCHANGE)
-        .map((b) => b.routing_key)
-        .sort(),
-    ).toEqual(['reserva.lista-del-dia', 'reserva.lista-del-dia.actualizacion']);
+  it('no declara la cola del Módulo 1: es suya, con su propia dead-letter', async () => {
+    await connection.channel.deleteQueue(DAILY_LIST_QUEUE);
+    // Otro Módulo 2 arranca con la cola borrada: declara lo suyo y empieza a consumir, pero no la crea.
+    const another = await startMessaging(integrationEnv().RABBITMQ_URL);
+    try {
+      await vi.waitFor(
+        async () =>
+          expect(
+            (await connection.channel.checkQueue(CHECK_IN.name)).consumerCount,
+          ).toBe(2),
+        { timeout: 15_000, interval: 100 },
+      );
+      expect(
+        (await managementRequest(`/queues/%2F/${DAILY_LIST_QUEUE}`)).status,
+      ).toBe(404);
+    } finally {
+      await another.close();
+      await declareModule1Queue(connection.channel);
+    }
   });
 
   it('entrega un mensaje de su routing key al consumidor y lo confirma', async () => {

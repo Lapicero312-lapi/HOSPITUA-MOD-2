@@ -19,8 +19,12 @@ import {
 } from '../../../src/application/ports/out/daily-list-publisher.js';
 import { MessagingModule } from '../../../src/infrastructure/config/messaging.module.js';
 import { DAILY_LIST_QUEUE } from '../../../src/infrastructure/config/rabbitmq.topology.js';
-import { RabbitDailyListPublisher } from '../../../src/infrastructure/out/messaging/rabbit-daily-list.publisher.js';
+import {
+  RabbitDailyListPublisher,
+  UnroutableDailyMessageError,
+} from '../../../src/infrastructure/out/messaging/rabbit-daily-list.publisher.js';
 import { integrationEnv } from '../support/database.js';
+import { declareModule1Queue } from '../support/module1-queue.js';
 
 const LIST_ID = '0b6f8a52-1c3d-4e5f-9a7b-1c2d3e4f5a6b';
 const UPDATE_ID = '7c8d9e0f-1a2b-4c3d-8e4f-5a6b7c8d9e0f';
@@ -83,18 +87,13 @@ describe('RabbitDailyListPublisher con RabbitMQ', () => {
     moduleRef = await startMessaging(integrationEnv().RABBITMQ_URL);
     connection = moduleRef.get(AmqpConnection);
     publisher = moduleRef.get(DAILY_LIST_PUBLISHER);
-    // El arranque no espera a RabbitMQ (`wait: false`): la prueba vacía la cola cuando este módulo ya
-    // tiene su canal y la cola ya está declarada (otra prueba pudo declararla antes). La cola se consulta
-    // por el panel porque revisar por el canal una cola que no existe cierra el canal.
-    await vi.waitFor(
-      async () => {
-        expect(() => connection.channel).not.toThrow();
-        expect(await managementStatus(`/queues/%2F/${DAILY_LIST_QUEUE}`)).toBe(
-          200,
-        );
-      },
-      { timeout: 15_000, interval: 100 },
-    );
+    // El arranque no espera a RabbitMQ (`wait: false`): la prueba espera el canal. La cola del Módulo 1 la
+    // declara el Módulo 1, no el Módulo 2: la prueba hace su parte.
+    await vi.waitFor(() => expect(() => connection.channel).not.toThrow(), {
+      timeout: 15_000,
+      interval: 100,
+    });
+    await declareModule1Queue(connection.channel);
   });
 
   afterAll(async () => {
@@ -153,6 +152,33 @@ describe('RabbitDailyListPublisher con RabbitMQ', () => {
       // El payload tal como está guardado, sin envoltura.
       expect(JSON.parse(received.content.toString('utf8'))).toEqual(payload);
     }
+  });
+
+  it('sin la cola del Módulo 1, RabbitMQ devuelve el mensaje y la publicación falla; con la cola, sale', async () => {
+    await connection.channel.deleteQueue(DAILY_LIST_QUEUE);
+    try {
+      expect(await managementStatus(`/queues/%2F/`)).toBe(404);
+
+      await expect(
+        publisher.publish({
+          messageId: LIST_ID,
+          kind: 'LIST',
+          payload: { messageId: LIST_ID },
+        }),
+      ).rejects.toBeInstanceOf(UnroutableDailyMessageError);
+    } finally {
+      // Como el Módulo 1 cuando arranca: la cola vuelve a existir.
+      await declareModule1Queue(connection.channel);
+    }
+
+    // El reintento de la misma publicación ya llega.
+    await publisher.publish({
+      messageId: LIST_ID,
+      kind: 'LIST',
+      payload: { messageId: LIST_ID },
+    });
+    const received = await next();
+    expect(received && received.properties.messageId).toBe(LIST_ID);
   });
 });
 

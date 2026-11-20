@@ -74,16 +74,10 @@ describe('rabbitMqOptions', () => {
     expect(retryQueue(RETRY_STEPS[0])).toBe('m2.reintento.5s.queue');
   });
 
-  it('declara la cola del Módulo 1 con las dos routing keys de la lista del día y sin argumentos extra', () => {
-    expect(queue('m1.reservas.diarias.queue')).toEqual({
-      name: 'm1.reservas.diarias.queue',
-      exchange: 'hospitua.events',
-      routingKey: [
-        'reserva.lista-del-dia',
-        'reserva.lista-del-dia.actualizacion',
-      ],
-      options: { durable: true },
-    });
+  it('no declara la cola del Módulo 1: es suya, con su propia dead-letter (la lista sale con mandatory)', () => {
+    expect((options.queues ?? []).map(({ name }) => name)).not.toContain(
+      'm1.reservas.diarias.queue',
+    );
   });
 
   it('no espera a RabbitMQ para arrancar, un mensaje a la vez y nunca reencola sin fin', () => {
