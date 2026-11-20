@@ -180,7 +180,7 @@ describe('POST /api/reservations/{reservationRef}/modification-preview (e2e)', (
     });
     createQuote
       .mockReset()
-      .mockImplementation((_roomType, checkIn) =>
+      .mockImplementation((_roomType, _roomId, checkIn) =>
         Promise.resolve(
           aRateQuote(checkIn, ['2033-05-10', '2033-05-11', '2033-05-12']),
         ),

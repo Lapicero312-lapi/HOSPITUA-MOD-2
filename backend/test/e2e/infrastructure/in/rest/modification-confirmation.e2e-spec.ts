@@ -235,7 +235,7 @@ describe('PATCH /api/reservations/{reservationRef} (e2e)', () => {
     });
     createQuote
       .mockReset()
-      .mockImplementation((_roomType, checkIn, checkOut) =>
+      .mockImplementation((_roomType, _roomId, checkIn, checkOut) =>
         Promise.resolve(aRateQuote(checkIn, checkOut)),
       );
   });
