@@ -32,8 +32,9 @@ y que una cancelación inválida se rechaza:
 | Cancelación de Reservación | Specification Document | [specs/cancel-reservation/spec.md](spec.md) |
 | Cancelación de Reservación | Plan Document | [specs/cancel-reservation/plan.md](plan.md) |
 | Plan base | Plan Document | [specs/base/plan.md](../base/plan.md) |
-| Despliegue de la demo (Render) | README | [README.md](../../README.md) |
-| Habitaciones del Módulo 1 simulado | Datos de prueba | [simulators/src/data.js](../../simulators/src/data.js) |
+| Despliegue de la demo (Render) y primeros pasos en local | README | [README.md](../../README.md) |
+| Los Módulos 1 y 3 | README | [README.md](../../README.md#los-módulos-1-y-3) |
+| Mensajes de Check-In y Check-Out | Plan Document | [specs/update-reservation/plan.md](../update-reservation/plan.md) |
 
 --------------------------------------------------------------------------------
 
@@ -42,6 +43,11 @@ y que una cancelación inválida se rechaza:
 ##### Test Case Limitations
 * La demo corre en el plan gratuito de Render y se duerme tras un rato sin uso. Al despertar, el backend arma
   y envía la lista del día si todavía no lo hizo, y cierra el día anterior si estaba pendiente.
+* En la demo, la lista del día y sus actualizaciones las recibe el Módulo 1 real, y el Check-In y el Check-Out
+  solo los publica él. Por eso las secciones 1 y 2, y los pasos 1 a 3 de la sección 3, se ejecutan en local,
+  donde los avisos se leen en una cola propia y los Check-In y Check-Out se publican a mano. El aviso `REMOVED`
+  de una cancelación que llega de Booking (sección 4) no se ve en la demo: lo cubre
+  `backend/test/integration/cancel-reservation/cancel-reservation-scenarios.spec.ts`.
 * El estado `NO_SHOW` solo aparece con el cierre del día: el paso que lo usa se ejecuta al día siguiente
   (sección 3, paso 4).
 * La sección 4 necesita acceso al hotel de prueba de Booking `10485037` para crear y cancelar una reserva. Sin
@@ -50,9 +56,11 @@ y que una cancelación inválida se rechaza:
 * NFR-001 (menos de 200 ms de procesamiento local) no se puede medir solo a mano: el tiempo que muestra el
   navegador también incluye la red. Lo cubre `backend/test/integration/cancel-reservation/cancel-reservation-time.spec.ts`.
 * Que el aviso `REMOVED` quede pendiente y se reintente cuando falla la publicación al Módulo 1 no se puede
-  provocar a mano en la demo. Lo cubre `backend/test/integration/cancel-reservation/cancel-reservation-edge-cases.spec.ts`.
+  provocar a mano. Lo cubre `backend/test/integration/cancel-reservation/cancel-reservation-edge-cases.spec.ts`.
 * Que Booking repita la cancelación de una reserva ya cancelada no se puede provocar a mano desde el hotel de
   prueba. Lo cubre `backend/test/integration/use-cases/generate-ota-reservation/booking-changes.spec.ts`.
+* Que cancelar no llama al Módulo 3 no se ve a mano: el Módulo 2 no escribe en el log sus llamadas. Lo cubre
+  `backend/test/integration/use-cases/cancel-reservation/cancel-reservation-no-financial-effects.spec.ts`.
 
 ##### Dependencies & Assumptions
 * TC-004-CheckViewReservation debe pasar primero: la reserva se localiza en "Consultar reservas" y la lista del
@@ -64,67 +72,56 @@ y que una cancelación inválida se rechaza:
 * La disponibilidad que la cancelación devuelve a Channex la verifica TC-005-ConfigureOta.
 
 ##### Preconditions & Default Setup
-* **Initial State** : la demo desplegada, con sus servicios en *Live*. Fechas relativas: `hoy` es la fecha del
-  hotel (`America/Bogota`) el día en que se ejecuta, y `hoy+N`, N días después. Las categorías de los pasos son
-  sugerencias: si una no tiene cupo ese día, se usa otra con las mismas habitaciones libres.
-* **Environment** : Staging, la demo de Render:
-  * frontend: `https://hospitua-m2-frontend.onrender.com`;
-  * backend: `https://hospitua-m2-backend.onrender.com/api/docs`;
-  * simuladores: `https://hospitua-m2-simulators.onrender.com`. Sus logs, en Render, muestran lo que recibe el
-    Módulo 1 por la lista del día: `[Módulo 1] Lista del día recibida (…)` y
-    `[Módulo 1] Actualización <tipo> (<motivo>) de <reservationRef> recibida (…)`.
+* **Initial State** : la demo desplegada, con sus servicios en *Live*, y el entorno local listo. Fechas
+  relativas: `hoy` es la fecha del hotel (`America/Bogota`) el día en que se ejecuta, y `hoy+N`, N días después.
+  Las categorías del Módulo 1 real son `SENCILLA`, `DOBLE` y `SUITE`; las de los pasos son sugerencias: si una
+  no tiene cupo ese día, se usa otra con las mismas habitaciones libres.
+* **Environment** :
+  * Staging, la demo de Render (secciones 3, pasos 4 y 5, 4 y 5):
+    * frontend: `https://hospitua-m2-frontend.onrender.com`;
+    * backend: `https://hospitua-m2-backend.onrender.com/api/docs`.
+  * Local (secciones 1, 2 y 3, pasos 1 a 3), con los "Primeros pasos" del README: frontend en
+    `http://localhost:5173`, documentación de la API en `http://localhost:3000/api/docs` y el panel de RabbitMQ
+    en `http://localhost:15672`, con el usuario y la clave del README. `backend/.env.example` ya apunta a los
+    Módulos 1 y 3 reales; si el Módulo 1 tarda más de lo que espera el backend local, subir
+    `MODULE1_TIMEOUT_MS` a `2000`, como en la demo.
+* **Lista del día en local** : el Módulo 2 publica la lista y sus actualizaciones en `hospitua.events`, hacia
+  `m1.reservas.diarias.queue`, que en la demo es del Módulo 1. En local se crea a mano, con el backend ya
+  arrancado una vez (así existe `hospitua.events`):
+  * panel → *Queues and Streams* → *Add a new queue*: `m1.reservas.diarias.queue`, durable;
+  * en la cola → *Bindings*: unirla a `hospitua.events` con la routing key `reserva.lista-del-dia` y, otra
+    vez, con `reserva.lista-del-dia.actualizacion`;
+  * los mensajes se leen en la cola → *Get messages*, con *Ack mode* `Automatic ack`: cada lectura los saca, y
+    la siguiente muestra solo los nuevos.
+
+  Si la lista se publicó antes de crear la cola, llega en un reintento (hasta 5 minutos después). Tras 10
+  intentos sin cola (unos 30 minutos), el mensaje queda `FAILED` y bloquea los siguientes: en ese caso, empezar
+  con la base local vacía (`docker compose down -v`, `docker compose up -d` y `migration:run`) y volver a crear
+  la cola.
+* **Check-In y Check-Out en local** : se publican a mano, como dice el README: panel → *Exchanges* →
+  `hospitua.events` → *Publish message*, con la routing key `habitacion.checkin` o `habitacion.checkout` y el
+  cuerpo C1 en *Payload*. El `roomId` de cada habitación está en el Módulo 1:
+  `GET https://gestionophospitua.tech/api/rooms?categoryRoom=…`, por su número.
 * **Test Accounts** :
   * Recepcionista: el inicio de sesión es simulado y solo pide el nombre, por ejemplo `Laura Méndez`;
-  * Render: la cuenta de quien desplegó la demo, para ver los logs;
+  * claves `X-Internal-Key` de los Módulos 1 y 3 para `backend/.env`, si las exigen: las tiene quien administra
+    la demo;
   * Booking: el acceso al hotel de prueba `10485037` (sección 4). Las credenciales no se escriben en este
     documento.
 
---------------------------------------------------------------------------------
-
-#### Test Execution Flow  *(mandatory)*
-
-##### Section 1: Cancelación por la Recepcionista con llegada hoy (escenarios 1 y 5)
-| Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
-| :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Despertar la demo y entrar | Abrir el backend y los simuladores, esperar a que respondan, abrir el frontend y entrar | `Laura Méndez` | Se abre la pantalla de inicio. En los logs del simulador, "Lista del día recibida" con la fecha de `hoy` (si la demo estaba dormida, aparece al despertar) | [ ] | |
-| 2 | Crear una reserva de dos habitaciones con llegada hoy | Reservas → Nueva reserva directa, con un titular ficticio | Categoría `TRIPLE`; entrada `hoy`, salida `hoy+1`; 2 habitaciones, 1 persona en cada una | La reserva queda creada y activa. Antes de 10 s, en los logs del simulador, "Actualización ADDED de RSV-… recibida": entra a la lista del día ya enviada | [ ] | Anotar el código |
-| 3 | Abrir la cancelación | Reservas → abrir la reserva → Cancelar reserva | Código del paso 2 | La pantalla "Cancelar reserva" muestra la reserva a cancelar con sus dos habitaciones. El botón que confirma está deshabilitado (FR-002b) | [ ] | |
-| 4 | Marcar la casilla y confirmar | Marcar "Entiendo que la cancelación no se puede deshacer.", escribir un motivo y confirmar | Motivo `Cambio de planes del huésped` | El botón se habilita al marcar la casilla. La reserva queda "Cancelada" | [ ] | |
-| 5 | Ver la cancelación registrada | Detalle de la reserva | N/A | Un solo panel "Cancelación", con la fecha y la hora, el canal "Recepción", procesada por `Laura Méndez` y el motivo del paso 4. Ya no se ofrece "Cancelar reserva" ni modificar (escenario 1, escenario 5 y FR-005) | [ ] | |
-| 6 | Ver el aviso al Módulo 1 | Render → `hospitua-m2-simulators` → Logs | Código del paso 2 | Antes de 10 s, una sola línea "Actualización REMOVED (CANCELLED) de RSV-… recibida" para esa reserva, aunque tenga dos habitaciones. Ninguna llamada al Módulo 3 (FR-004 y FR-006) | [ ] | |
-| 7 | Intentar cancelarla otra vez | Documentación de la API → `GET /api/reservations/{reservationRef}` con `X-Client` `RECEPTIONIST` para leer su `updatedAt`, y después `POST /api/reservations/{reservationRef}/cancellation` con `X-User` | `{"updatedAt": "<el leído>", "acknowledged": true}` | `400` con el código `STATUS_NOT_CANCELLABLE` y el mensaje "El estado actual de la reserva no admite cancelación.". No sale otro aviso al Módulo 1 (escenario 4, `CANCELLED`) | [ ] | |
-
---------------------------------------------------------------------------------
-
-##### Section 2: Cancelación con llegada futura (escenario 3)
-| Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
-| :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Crear una reserva con llegada futura | Reservas → Nueva reserva directa | Categoría `DOBLE`; entrada `hoy+40`, salida `hoy+41`; 1 habitación | La reserva queda creada. En los logs del simulador no aparece ninguna actualización con su código | [ ] | Anotar el código |
-| 2 | Cancelarla | Abrir la reserva → Cancelar reserva → marcar la casilla → confirmar | Sin motivo | La reserva queda "Cancelada", con su panel "Cancelación" (canal "Recepción" y motivo "—") | [ ] | |
-| 3 | Revisar que no se avisa al Módulo 1 | Render → `hospitua-m2-simulators` → Logs | Código del paso 1 | Ninguna actualización con ese código | [ ] | |
-
---------------------------------------------------------------------------------
-
-##### Section 3: Cancelaciones bloqueadas (escenarios 4 y 6, y casos borde)
-Los Check-In y los Check-Out los publica el simulador del Módulo 1 a pedido, con `POST` a
-`https://hospitua-m2-simulators.onrender.com/simulate/check-in` o `/simulate/check-out` (con curl, Postman o
-similar) y el cuerpo C1. El `roomId` de cada habitación está en `/api/rooms` del simulador, por su número.
-
-| Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
-| :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Poner en curso una reserva de dos habitaciones | Crear una reserva de dos habitaciones con llegada hoy y publicar el Check-In de una sola | Categoría `SUITE_JUNIOR`; entrada `hoy`, salida `hoy+1`; 2 habitaciones. Cuerpo C1 con la primera habitación | El simulador responde `202`. La reserva queda "En curso" y ya no ofrece "Cancelar reserva" | [ ] | Anotar el código |
-| 2 | Intentar cancelarla | Por la API, como en la sección 1, paso 7 | El `updatedAt` actual | `400` `STATUS_NOT_CANCELLABLE`: "El estado actual de la reserva no admite cancelación.". Ninguna actualización `REMOVED` en los logs del simulador (escenario 4 y caso borde de varias habitaciones) | [ ] | |
-| 3 | Completar una reserva e intentar cancelarla | Crear una reserva de una habitación con llegada hoy, publicar su Check-In y su Check-Out, y cancelar por la API | Categoría `INDIVIDUAL`; entrada `hoy`, salida `hoy+1`; 1 habitación. Cuerpo C1 | La reserva queda "Completada" y la cancelación responde `400` `STATUS_NOT_CANCELLABLE` (escenario 4) | [ ] | |
-| 4 | Intentar cancelar una reserva que no se presentó | El día anterior, crear una reserva de una habitación con llegada ese día y sin Check-In. Hoy, después del cierre del día, cancelarla por la API | Una reserva de `ayer` | La reserva está en "No se presentó" y la cancelación responde `400` `STATUS_NOT_CANCELLABLE` (escenario 4) | [ ] | Se ejecuta al día siguiente |
-| 5 | Intentar cancelar una reserva de Booking | Reservas → filtrar por canal OTA y abrir una reserva activa. Después, cancelarla por la API | Una reserva de Booking `ACTIVE` | El detalle no ofrece "Cancelar reserva". La API responde `400` con el código `OTA_RESERVATION_CANCEL_VIA_API` y "La cancelación de una reserva de OTA debe llegar desde Booking.". La reserva sigue activa y sin panel "Cancelación" (escenario 6) | [ ] | Solo si la demo tiene una reserva de Booking |
-
-Cuerpo C1, con datos ficticios. Sin `birthDate`, el Módulo 2 aplica el Check-In pero omite al huésped: no
-registra sus datos ni su movimiento migratorio.
+Cuerpo C1, con datos ficticios. Cada mensaje lleva un `messageId` nuevo (un UUID v4, por ejemplo con
+`[guid]::NewGuid()` en PowerShell) y un `sequenceNumber` mayor que el del mensaje anterior de la misma cola.
+Para el Check-Out, `movementType` es `DEPARTURE` y `movementDate`, la fecha de salida. Sin `birthDate`, el
+Módulo 2 aplica el Check-In pero omite al huésped: no registra sus datos ni su movimiento migratorio.
 
 ```json
 {
+  "messageId": "<UUID v4 nuevo>",
+  "sequenceNumber": 1,
   "reservationRef": "<código de la reserva>",
   "roomId": "<id de la habitación>",
+  "movementType": "ENTRY",
+  "movementDate": "<fecha de hoy, AAAA-MM-DD>",
   "guests": [
     {
       "firstName": "Prueba",
@@ -140,16 +137,62 @@ registra sus datos ni su movimiento migratorio.
 
 --------------------------------------------------------------------------------
 
-##### Section 4: Cancelación desde Booking (escenario 2)
+#### Test Execution Flow  *(mandatory)*
+
+##### Section 1: Cancelación por la Recepcionista con llegada hoy (escenarios 1 y 5)
+Se ejecuta en local.
+
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Crear una reserva en Booking con llegada hoy | En el hotel de prueba de Booking `10485037`, reservar una habitación con datos ficticios | Llegada `hoy`, salida `hoy+1` | Antes de un minuto, la reserva aparece en Reservas, con canal OTA y activa. En los logs del simulador, "Actualización ADDED de RSV-… recibida" | [ ] | Anotar el código y la comisión del detalle |
+| 1 | Arrancar en local y entrar | Con el backend y el frontend arriba y la cola de la lista del día creada, abrir el frontend y entrar. Después, leer la cola | `Laura Méndez` | Se abre la pantalla de inicio. En la cola, la lista del día (`reserva.lista-del-dia`) con la `operationalDate` de `hoy` | [ ] | |
+| 2 | Crear una reserva de dos habitaciones con llegada hoy | Reservas → Nueva reserva directa, con un titular ficticio | Categoría `DOBLE`; entrada `hoy`, salida `hoy+1`; 2 habitaciones, 1 persona en cada una | La reserva queda creada y activa. Antes de 10 s, en la cola, una actualización con `updateType` `ADDED` y su `reservationRef`: entra a la lista del día ya enviada | [ ] | Anotar el código |
+| 3 | Abrir la cancelación | Reservas → abrir la reserva → Cancelar reserva | Código del paso 2 | La pantalla "Cancelar reserva" muestra la reserva a cancelar con sus dos habitaciones. El botón que confirma está deshabilitado (FR-002b) | [ ] | |
+| 4 | Marcar la casilla y confirmar | Marcar "Entiendo que la cancelación no se puede deshacer.", escribir un motivo y confirmar | Motivo `Cambio de planes del huésped` | El botón se habilita al marcar la casilla. La reserva queda "Cancelada" | [ ] | |
+| 5 | Ver la cancelación registrada | Detalle de la reserva | N/A | Un solo panel "Cancelación", con la fecha y la hora, el canal "Recepción", procesada por `Laura Méndez` y el motivo del paso 4. Ya no se ofrece "Cancelar reserva" ni modificar (escenario 1, escenario 5 y FR-005) | [ ] | |
+| 6 | Ver el aviso al Módulo 1 | Leer la cola de la lista del día | Código del paso 2 | Antes de 10 s, una sola actualización `REMOVED` con `removalReason` `CANCELLED` para esa reserva, aunque tenga dos habitaciones (FR-004) | [ ] | |
+| 7 | Intentar cancelarla otra vez | Documentación de la API → `GET /api/reservations/{reservationRef}` con `X-Client` `RECEPTIONIST` para leer su `updatedAt`, y después `POST /api/reservations/{reservationRef}/cancellation` con `X-User` | `{"updatedAt": "<el leído>", "acknowledged": true}` | `400` con el código `STATUS_NOT_CANCELLABLE` y el mensaje "El estado actual de la reserva no admite cancelación.". La cola no recibe otro aviso (escenario 4, `CANCELLED`) | [ ] | |
+
+--------------------------------------------------------------------------------
+
+##### Section 2: Cancelación con llegada futura (escenario 3)
+Se ejecuta en local.
+
+| Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
+| :---: | ------ | ------ | ------ | ------ | :---: | ------ |
+| 1 | Crear una reserva con llegada futura | Reservas → Nueva reserva directa | Categoría `DOBLE`; entrada `hoy+40`, salida `hoy+41`; 1 habitación | La reserva queda creada. La cola de la lista del día no recibe ninguna actualización con su código | [ ] | Anotar el código |
+| 2 | Cancelarla | Abrir la reserva → Cancelar reserva → marcar la casilla → confirmar | Sin motivo | La reserva queda "Cancelada", con su panel "Cancelación" (canal "Recepción" y motivo "—") | [ ] | |
+| 3 | Revisar que no se avisa al Módulo 1 | Leer la cola de la lista del día | Código del paso 1 | Ninguna actualización con ese código | [ ] | |
+
+--------------------------------------------------------------------------------
+
+##### Section 3: Cancelaciones bloqueadas (escenarios 4 y 6, y casos borde)
+Los pasos 1 a 3 se ejecutan en local, con el Check-In y el Check-Out publicados a mano y el cuerpo C1. Los
+pasos 4 y 5, en la demo.
+
+| Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
+| :---: | ------ | ------ | ------ | ------ | :---: | ------ |
+| 1 | Poner en curso una reserva de dos habitaciones | Crear una reserva de dos habitaciones con llegada hoy y publicar el Check-In de una sola | Categoría `SUITE`; entrada `hoy`, salida `hoy+1`; 2 habitaciones. Cuerpo C1 con la primera habitación | El panel confirma la publicación. La reserva queda "En curso" y ya no ofrece "Cancelar reserva" | [ ] | Anotar el código |
+| 2 | Intentar cancelarla | Por la API, como en la sección 1, paso 7 | El `updatedAt` actual | `400` `STATUS_NOT_CANCELLABLE`: "El estado actual de la reserva no admite cancelación.". Ninguna actualización `REMOVED` en la cola de la lista del día (escenario 4 y caso borde de varias habitaciones) | [ ] | |
+| 3 | Completar una reserva e intentar cancelarla | Crear una reserva de una habitación con llegada hoy, publicar su Check-In y su Check-Out, y cancelar por la API | Categoría `SENCILLA`; entrada `hoy`, salida `hoy+1`; 1 habitación. Cuerpo C1, con `ENTRY` y después `DEPARTURE` | La reserva queda "Completada" y la cancelación responde `400` `STATUS_NOT_CANCELLABLE` (escenario 4) | [ ] | |
+| 4 | Intentar cancelar una reserva que no se presentó | En la demo, el día anterior, crear una reserva de una habitación con llegada ese día y sin Check-In. Hoy, después del cierre del día, cancelarla por la API | Una reserva de `ayer` | La reserva está en "No se presentó" y la cancelación responde `400` `STATUS_NOT_CANCELLABLE` (escenario 4) | [ ] | Se ejecuta al día siguiente |
+| 5 | Intentar cancelar una reserva de Booking | En la demo, Reservas → filtrar por canal OTA y abrir una reserva activa. Después, cancelarla por la API | Una reserva de Booking `ACTIVE` | El detalle no ofrece "Cancelar reserva". La API responde `400` con el código `OTA_RESERVATION_CANCEL_VIA_API` y "La cancelación de una reserva de OTA debe llegar desde Booking.". La reserva sigue activa y sin panel "Cancelación" (escenario 6) | [ ] | Solo si la demo tiene una reserva de Booking |
+
+--------------------------------------------------------------------------------
+
+##### Section 4: Cancelación desde Booking (escenario 2)
+Se ejecuta en la demo.
+
+| Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
+| :---: | ------ | ------ | ------ | ------ | :---: | ------ |
+| 1 | Crear una reserva en Booking con llegada hoy | En el hotel de prueba de Booking `10485037`, reservar una habitación con datos ficticios | Llegada `hoy`, salida `hoy+1` | Antes de un minuto, la reserva aparece en Reservas, con canal OTA y activa | [ ] | Anotar el código y la comisión del detalle |
 | 2 | Cancelarla desde Booking | En Booking, cancelar esa reserva | N/A | Antes de un minuto, la reserva queda "Cancelada", con su panel "Cancelación": canal "Booking" y procesada por Booking.com | [ ] | |
-| 3 | Revisar el aviso y la comisión | Logs del simulador y detalle de la reserva | Código del paso 1 | Una línea "Actualización REMOVED (CANCELLED) de RSV-… recibida". La comisión de la reserva no cambia (FR-006) | [ ] | |
+| 3 | Revisar la comisión | Detalle de la reserva | Código del paso 1 | La comisión de la reserva no cambia (FR-006) | [ ] | |
 
 --------------------------------------------------------------------------------
 
 ##### Section 5: Solicitudes inválidas (casos borde y FR-007)
+Se ejecuta en la demo.
+
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
 | 1 | Cancelar sin referencia | Documentación de la API → `POST /api/reservations/{reservationRef}/cancellation` con la referencia solo con espacios | Referencia `%20%20` | `400` con el código `RESERVATION_REF_REQUIRED` y "La referencia de la reserva es obligatoria." | [ ] | |
