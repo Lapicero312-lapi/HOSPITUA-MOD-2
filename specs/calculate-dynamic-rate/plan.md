@@ -216,6 +216,10 @@ enviado por el cliente**: lo que se persiste es el de la cotización nueva, con 
 
 ### C. REST del Módulo 2: pantalla "Tarifas" (FR-009)
 
+> **Retirada (decisión D19 del plan base).** La pantalla "Tarifas", C1 (`GET /api/rates/reference`),
+> `GetReferenceRates` y `RATE_REFERENCE` ya no existen: las tarifas son del Módulo 3. El texto se conserva
+> como historia.
+
 **C1. `GET /api/rates/reference`** (pantalla de la Recepcionista; sin parámetros)
 
 ```json
@@ -326,6 +330,10 @@ sequenceDiagram
 ```
 
 ### D4. Pantalla "Tarifas"
+
+> **Retirada (decisión D19 del plan base).** La pantalla "Tarifas", C1 (`GET /api/rates/reference`),
+> `GetReferenceRates` y `RATE_REFERENCE` ya no existen: las tarifas son del Módulo 3. El texto se conserva
+> como historia.
 
 ```mermaid
 sequenceDiagram
@@ -483,6 +491,10 @@ seguro ante un Módulo 3 caído.
 
 ## Phase 5: Pantalla "Tarifas" (FR-009)
 
+> **Retirada (decisión D19 del plan base).** La pantalla "Tarifas", C1 (`GET /api/rates/reference`),
+> `GetReferenceRates` y `RATE_REFERENCE` ya no existen: las tarifas son del Módulo 3. El texto se conserva
+> como historia.
+
 - [ ] T017 `GetReferenceRates` y `rate-reference.config.ts` (tarifa base por categoría y un porcentaje único)
 - [ ] T018 `GET /api/rates/reference` (C1)
 - [ ] T019 [P] Prueba de que la referencia no llama al Módulo 3, no escribe nada y no es convertible a `RoomQuote`
@@ -536,7 +548,7 @@ seguro ante un Módulo 3 caído.
 | FR-006 | Sin llamadas al Módulo 1 | T008 |
 | FR-007 | `verifyQuotes` y vista previa sin tarifa anterior | T010, T013 |
 | FR-008 | Validadores y mapeo a 400 | T005, T007 |
-| FR-009 | `GetReferenceRates`, C1 y la pantalla | T017–T020 |
+| FR-009 | Retirado (D19) | — |
 | FR-010 | `check-view-reservation` (C4) | Plan de ese caso de uso |
 | NFR-001 | Llamadas en paralelo y prueba de tiempo | T001, T021 |
 | NFR-002 | Lectura sin `number` y máximo dos decimales | T006, T011 |
