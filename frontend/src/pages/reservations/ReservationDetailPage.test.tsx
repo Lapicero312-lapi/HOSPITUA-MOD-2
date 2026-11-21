@@ -14,6 +14,7 @@ const DIRECT: ReservationDetail = {
   source: 'DIRECT',
   externalConfirmationCode: null,
   otaName: null,
+  grossAmount: null,
   startDate: '2026-10-23',
   endDate: '2026-10-25',
   nights: 2,
@@ -50,6 +51,7 @@ const BOOKING: ReservationDetail = {
   source: 'OTA',
   externalConfirmationCode: 'BK-99812',
   otaName: 'Booking.com',
+  grossAmount: { amount: '1210.00', currency: 'USD' },
   rooms: [{ ...DIRECT.rooms[0], roomGrossAmount: null }],
   guest: {
     firstName: 'Ana',
@@ -216,6 +218,15 @@ describe('Pantalla "Detalle de la reserva"', () => {
       expect(fieldOf('Estadía y tarifa', 'Código de la OTA')).toBe('BK-99812');
     });
 
+    it('muestra el valor total que reportó Booking, en su moneda', async () => {
+      renderDetail(BOOKING);
+
+      await screen.findByRole('table');
+      expect(fieldOf('Estadía y tarifa', 'Valor total (Booking)')).toBe(
+        '1.210,00 USD',
+      );
+    });
+
     it('el titular sin documento, nacionalidad ni teléfono muestra una raya en cada uno', async () => {
       renderDetail(BOOKING);
 
@@ -232,6 +243,9 @@ describe('Pantalla "Detalle de la reserva"', () => {
 
       await screen.findByRole('table');
       expect(screen.queryByText('Código de la OTA')).not.toBeInTheDocument();
+      expect(
+        screen.queryByText('Valor total (Booking)'),
+      ).not.toBeInTheDocument();
     });
 
     it('en conflicto con una habitación sin asignar: muestra el motivo, desde cuándo, "Sin asignar" y la acción "Asignar habitación"', async () => {

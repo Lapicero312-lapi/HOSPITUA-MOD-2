@@ -149,6 +149,20 @@ export class ReservationDetailDto {
   @ApiProperty({ type: String, nullable: true, example: null })
   otaName: string | null;
 
+  /**
+   * El valor total de una reserva de Booking, el que reportó Booking (`grossAmount`), en su moneda. Es una
+   * excepción a FR-006, que no lo muestra (decisión D18 del plan base): una reserva `OTA` no tiene tarifa por
+   * habitación. `null` en las directas, cuyo valor está en la tarifa de cada habitación.
+   */
+  @ApiProperty({
+    type: MoneySchema,
+    nullable: true,
+    description:
+      'Solo en reservas de Booking: el valor total que reportó Booking, en su moneda (USD). `null` en las directas.',
+    example: null,
+  })
+  grossAmount: MoneyBody | null;
+
   @ApiProperty({ format: 'date', example: '2026-10-12' })
   startDate: string;
 
@@ -224,6 +238,8 @@ export function toReservationDetailBody({
     source: reservation.source,
     externalConfirmationCode: reservation.ota?.externalConfirmationCode ?? null,
     otaName,
+    grossAmount:
+      reservation.ota === null ? null : moneyBody(reservation.ota.grossAmount),
     startDate: reservation.startDate,
     endDate: reservation.endDate,
     nights,
@@ -283,6 +299,7 @@ export const RESERVATION_DETAIL_EXAMPLE: ReservationDetailBody = {
   source: 'DIRECT',
   externalConfirmationCode: null,
   otaName: null,
+  grossAmount: null,
   startDate: '2026-10-23',
   endDate: '2026-10-25',
   nights: 2,

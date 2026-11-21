@@ -1264,6 +1264,7 @@ Se inserta en la misma transacción que la reserva.
 | D15 | **No-show de Booking.** Al cierre del día, una reserva de Booking que pasa a `NO_SHOW` deja pendiente su reporte a Channex (`POST /api/v1/bookings/{booking_id}/no_show` con `waived_fees: true`), en la misma transacción; `ChannexSyncJob` lo envía. Booking no cobra comisión y el Módulo 2 no la concilia. | `generate-ota-reservation`, `update-reservation` |
 | D16 | **Idempotencia de la reserva directa.** La creación exige `Idempotency-Key`; la misma clave con el mismo cuerpo devuelve la misma reserva durante 24 horas. | `generate-direct-reservation` |
 | D17 | **`X-Internal-Key` hacia el Módulo 2.** Los tres módulos se identifican con la misma cabecera. El Módulo 2 la exige solo en las rutas de los Módulos 1 y 3, y solo si `MODULE2_INTERNAL_KEY` tiene valor (regla 10). Es una excepción a "El Módulo 2 no implementa seguridad" de los specs, decidida por Brian. | Plan base |
+| D18 | **La Recepcionista ve el valor total de una reserva de Booking.** El detalle (C3 de `check-view-reservation`) trae `grossAmount`, el total que reportó Booking, en su moneda; `null` en las directas. Es una excepción a FR-006 de `check-view-reservation`, que deja sin valor las reservas OTA, decidida por Brian. No muestra la comisión. | `check-view-reservation` |
 
 ## Estrategia de testing base
 

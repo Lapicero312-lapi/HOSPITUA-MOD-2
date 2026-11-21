@@ -158,6 +158,13 @@ function Detail({ reservation }: { reservation: ReservationDetail }) {
                 {reservation.externalConfirmationCode ?? EMPTY}
               </Field>
             )}
+            {reservation.source === 'OTA' && (
+              <Field label="Valor total (Booking)">
+                {reservation.grossAmount === null
+                  ? EMPTY
+                  : formatMoney(reservation.grossAmount)}
+              </Field>
+            )}
             <Field label="Fecha de entrada">
               {formatDate(reservation.startDate)}
             </Field>
