@@ -60,6 +60,11 @@ describe lo propio.
   `CHANNEX_SYNC_INTERVAL_SECONDS` (`30`) y `CHANNEX_ARI_DAYS` (`90`). El id del hotel de Booking se indica en
   Channex al conectar el canal Booking.com, y el porcentaje de comisión de la agencia lo calcula el sistema
   con su primera reserva (`register-ota-information-commission`): ninguno de los dos se configura.
+- **Configuración del Módulo 1** (variables de entorno): `MODULE1_BASE_URL`, `MODULE1_TIMEOUT_MS` (`1000`) y
+  `MODULE1_INTERNAL_KEY`, opcional. Si tiene valor, todas las consultas a `/api/rooms…` (A1, A2 y A3 de
+  `consult-room-inventory` y A1 de `consult-maintenance-calendar`) llevan la cabecera `X-Internal-Key` con esa
+  clave, que el Módulo 1 usa para proteger sus rutas cuando se publican en internet. La clave es un secreto:
+  nunca va en el repositorio, en la base de datos ni en los logs.
 - **Configuración del Módulo 3** (variables de entorno): `MODULE3_BASE_URL`, `MODULE3_TIMEOUT_MS` (`3000`) y
   `MODULE3_INTERNAL_KEY`, opcional. Si tiene valor, `POST /pricing/quotes` lleva la cabecera
   `X-Internal-Key` con esa clave, que el Módulo 3 usa para proteger sus rutas cuando se publican en internet.
@@ -326,7 +331,7 @@ interacciones M1 ↔ M3 (liquidación, tarifa base, registrar check-out) no invo
 
 ### Convenciones de colas
 
-- Exchange compartido: `hospitua.events` (tipo topic). Convención de nombres de cola:
+- Exchange compartido: `hospitua.events` (tipo topic), del Módulo 1. Convención de nombres de cola:
   `m<módulo destino>.<recurso>.<evento>.queue`.
 - Colas que **recibe** el Módulo 2 (las publica el Módulo 1):
 
@@ -353,9 +358,12 @@ interacciones M1 ↔ M3 (liquidación, tarifa base, registrar check-out) no invo
 - Consumidores idempotentes (se ignoran los `messageId` repetidos), con reintentos y dead-letter queue.
 - La publicación de la lista del día y de sus actualizaciones respeta el orden: las actualizaciones
   esperan detrás de la lista (ver `check-view-reservation`).
-- **Lo que declara el Módulo 2 al arrancar** (todo durable; declararlo otra vez no cambia nada): el
-  exchange `hospitua.events`, sus cuatro colas de entrada unidas a su routing key, sus dead-letter y las
-  colas de reintento. El Módulo 2 **no declara `m1.reservas.diarias.queue`**: es del Módulo 1, que la declara
+- **Lo que declara el Módulo 2 al arrancar** (todo durable; declararlo otra vez no cambia nada): sus cuatro
+  colas de entrada unidas a su routing key, sus dead-letter y las colas de reintento. **No declara el
+  exchange `hospitua.events`**: es del Módulo 1, que lo crea al arrancar (topic, durable), y el Módulo 2 no
+  tiene permiso para configurarlo. Solo comprueba que existe (`checkExchange`); si no existiera, RabbitMQ
+  rechaza la conexión y queda en el log. El Módulo 2 tampoco declara `m1.reservas.diarias.queue`: es del
+  Módulo 1, que la declara
   con su propia dead-letter (`m1.reservas.diarias.dlq`); si el Módulo 2 la declarara sin esos argumentos,
   RabbitMQ rechazaría la declaración. El Módulo 2 solo publica al exchange `hospitua.events`, con
   `reserva.lista-del-dia` y `reserva.lista-del-dia.actualizacion`. Para que la lista no se pierda si esa cola
@@ -1246,6 +1254,9 @@ Se inserta en la misma transacción que la reserva.
     - Hacia el Módulo 3, si hay una clave configurada (`MODULE3_INTERNAL_KEY`), el Módulo 2 envía
       `X-Internal-Key` en `POST /pricing/quotes`. El Módulo 2 no valida nada: el Módulo 3 protege sus propias
       rutas. Nunca se envía `Authorization` al Módulo 3, que responde 403 si la recibe.
+    - Hacia el Módulo 1, si hay una clave configurada (`MODULE1_INTERNAL_KEY`), el Módulo 2 envía
+      `X-Internal-Key` en sus consultas a `/api/rooms…` (inventario y mantenimientos). Tampoco valida nada:
+      el Módulo 1 protege sus propias rutas.
 
 ### Decisiones de diseño tomadas al escribir los planes de caso de uso
 
@@ -1318,6 +1329,7 @@ Se inserta en la misma transacción que la reserva.
 - [ ] T019 Configurar el bloqueo asesor de PostgreSQL y el planificador (`@nestjs/schedule`, `America/Bogota`) para las tareas programadas
 - [ ] T020 Configurar OpenAPI (`@nestjs/swagger`) y la verificación de dependencias entre capas en CI
 - [ ] T021 [P] Implementar `ChannexPort` con su adaptador HTTP (`user-api-key`, propiedades, feed, `ack`, reporte de no-show, tipos de habitación y disponibilidad) y el manejo de `429` (pausa de un minuto por propiedad y después espera creciente)
+- [ ] T022 No declarar `hospitua.events`: comprobar que existe (`createExchangeIfNotExists: false`), con su prueba
 
 **Checkpoint**: Base lista; los planes de caso de uso pueden implementarse.
 

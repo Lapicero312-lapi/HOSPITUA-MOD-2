@@ -88,7 +88,8 @@ no necesita conocer de antemano la lista de categorías.
 - Errores del Módulo 1 (los mismos de la consulta de mantenimientos): **404** si la habitación no existe;
   **400** si el `roomId` o la `categoryRoom` tienen formato inválido. Nunca 500.
 - Sin autenticación de servicio a servicio: la seguridad es una capa aparte (regla transversal 10 del plan
-  base).
+  base). Si hay `MODULE1_INTERNAL_KEY`, cada consulta lleva `X-Internal-Key` (plan base, "Configuración
+  del Módulo 1").
 - Los valores de los ejemplos son ilustrativos.
 
 ### B. Puerto de entrada interno (lo usa "Verificar disponibilidades")
@@ -369,6 +370,7 @@ fallos del Módulo 1.
 
 - [ ] T015 Verificar que ningún log escribe datos personales y que la consulta puntual responde en menos de 1 s con el Módulo 1 simulado
 - [ ] T016 Documentar `GET /api/rooms` en OpenAPI (`@nestjs/swagger`)
+- [ ] T017 `X-Internal-Key` opcional hacia el Módulo 1 (`MODULE1_INTERNAL_KEY`) en A1, A2, A3 y en la consulta de mantenimientos: se envía solo si tiene valor, nunca `Authorization`, y la clave no sale en los logs ni en los errores. Con pruebas de contrato
 
 ## Pruebas por escenario
 
