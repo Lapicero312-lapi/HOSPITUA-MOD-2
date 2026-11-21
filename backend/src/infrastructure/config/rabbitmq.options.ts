@@ -75,12 +75,26 @@ const defaultPublishOptions = {
  * La conexión del Módulo 2 con RabbitMQ. No espera a RabbitMQ para arrancar: las rutas REST funcionan
  * aunque no responda y la conexión se recupera sola. Los consumidores no los registra la librería
  * (esperaría la conexión para terminar de arrancar), sino `InboundConsumersRegistrar`.
+ *
+ * `hospitua.events` es del Módulo 1, que lo crea al arrancar, y en su broker el Módulo 2 no tiene permiso
+ * para configurarlo: en producción solo se comprueba que existe (`checkExchange`), sin declararlo (plan
+ * base, T022). Si no existiera, RabbitMQ cierra el canal y la conexión no se arma hasta reiniciar el backend.
+ * En desarrollo y en las pruebas el broker es el propio, sin Módulo 1: ahí sí se declara.
  */
-export function rabbitMqOptions(uri: string): RabbitMQConfig {
+export function rabbitMqOptions(
+  uri: string,
+  { declareEventsExchange }: { declareEventsExchange: boolean },
+): RabbitMQConfig {
   return {
     uri,
     exchanges: [
-      { name: EVENTS_EXCHANGE, type: 'topic', options: { durable: true } },
+      declareEventsExchange
+        ? { name: EVENTS_EXCHANGE, type: 'topic', options: { durable: true } }
+        : {
+            name: EVENTS_EXCHANGE,
+            type: 'topic',
+            createExchangeIfNotExists: false,
+          },
       ...RETRY_STEPS.map((step) => ({
         name: retryExchange(step),
         type: 'fanout',
