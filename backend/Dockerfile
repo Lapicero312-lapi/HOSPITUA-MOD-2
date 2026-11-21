@@ -12,7 +12,6 @@ RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .nvmrc ./
 COPY backend/package.json backend/
 COPY frontend/package.json frontend/
-COPY simulators/package.json simulators/
 RUN pnpm install --frozen-lockfile --filter backend
 
 COPY backend/ backend/

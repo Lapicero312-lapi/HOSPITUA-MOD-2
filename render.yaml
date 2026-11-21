@@ -45,8 +45,8 @@ services:
         fromDatabase:
           name: hospitua-m2-db
           property: password
-      # Los Módulos 1 y 3 reales. Van aquí y no en el panel: Render vuelve a aplicar estos valores cada vez que
-      # sincroniza el Blueprint. Para volver a los simuladores: https://hospitua-m2-simulators.onrender.com.
+      # Los Módulos 1 y 3. Van aquí y no en el panel: Render vuelve a aplicar estos valores cada vez que
+      # sincroniza el Blueprint.
       - key: MODULE1_BASE_URL
         value: https://gestionophospitua.tech
       # Espera máxima al Módulo 1: 2 s en Render (en local sigue en 1 s, el valor del plan). Desde Render, con
@@ -58,8 +58,7 @@ services:
         value: https://hospitua-module-3.onrender.com
       # MODULE1_INTERNAL_KEY y MODULE3_INTERNAL_KEY van en el panel de Render (no aquí), con la clave que cada
       # módulo entrega por privado: se envían en X-Internal-Key. El Módulo 1 todavía no la exige y avisa antes de
-      # hacerlo; al Módulo 3 avísale antes de agregarla, para que la active al mismo tiempo. Con los simuladores
-      # no hacen falta.
+      # hacerlo; al Módulo 3 avísale antes de agregarla, para que la active al mismo tiempo.
       # El hotel todavía no tiene sus códigos de SIRE: valores de demo.
       - key: SIRE_HOTEL_CODE
         value: DEMO-HOTEL
@@ -74,21 +73,6 @@ services:
         sync: false
       - key: CHANNEX_PROPERTY_ID
         sync: false
-
-  # Los simuladores del Módulo 1 y del Módulo 3, los dos en el PORT que da Render, solo por REST. Sin
-  # RABBITMQ_URL a propósito: el backend usa el RabbitMQ del Módulo 1 real, y el simulador consumiría su cola
-  # de la lista del día (m1.reservas.diarias.queue) y le quitaría los mensajes.
-  - type: web
-    name: hospitua-m2-simulators
-    runtime: node
-    plan: free
-    region: oregon
-    buildCommand: npx --yes pnpm@12.14.0 install --frozen-lockfile --filter simulators
-    startCommand: node simulators/src/main.js
-    healthCheckPath: /api/rooms
-    envVars:
-      - key: NODE_VERSION
-        value: '22'
 
   # El frontend: un sitio estático. /api/* va al backend, como el proxy de Vite en desarrollo (sin CORS).
   - type: web

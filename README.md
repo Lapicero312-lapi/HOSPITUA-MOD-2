@@ -1,7 +1,6 @@
 # HOSPITUA · Módulo 2: Operación de Reservas y Cumplimiento Legal
 
-Monorepo del Módulo 2: `backend/` (NestJS), `frontend/` (React + Vite) y `simulators/` (los Módulos 1 y 3
-simulados, para la demo y el desarrollo). La especificación completa está
+Monorepo del Módulo 2: `backend/` (NestJS) y `frontend/` (React + Vite). La especificación completa está
 en [`specs/`](specs/): empieza por el [diccionario](specs/diccionario.md) y el
 [plan base](specs/base/plan.md).
 
@@ -23,38 +22,27 @@ docker compose up -d                         # PostgreSQL y RabbitMQ
 pnpm --filter backend migration:run          # crea las tablas en PostgreSQL
 pnpm --filter backend start:dev              # backend en http://localhost:3000
 pnpm --filter frontend dev                   # frontend en http://localhost:5173
-pnpm --filter simulators start               # opcional: simuladores del Módulo 1 y del Módulo 3
 ```
 
 El panel de RabbitMQ queda en <http://localhost:15672> (usuario y clave: `hospitua`).
 
-## Simuladores del Módulo 1 y del Módulo 3
+## Los Módulos 1 y 3
 
-Mientras los otros módulos no estén desplegados, `simulators/` responde en su lugar los contratos REST ya
-acordados, con los datos de ejemplo de los planes. Sirven para la demo y para probar a mano en local.
-**No cambian nada del backend:** solo se apunta a ellos con dos variables (plan base, "Simuladores del
-Módulo 1 y del Módulo 3").
+El backend usa siempre los módulos reales, en local y en la demo. `backend/.env.example` ya apunta a ellos:
 
-```bash
-pnpm --filter simulators start     # Módulo 1 en http://localhost:4001 y Módulo 3 en http://localhost:4003
-```
-
-| Simula | Rutas | Puerto | Variable del backend |
+| Módulo | URL | Rutas que usa el Módulo 2 | Variables |
 |---|---|---|---|
-| Módulo 1 (inventario y mantenimientos) | `GET /api/rooms`, `GET /api/rooms?categoryRoom=…`, `GET /api/rooms/{roomId}` y `GET /api/rooms/{roomId}/maintenances?startDate=…&endDate=…` | `4001` | `MODULE1_BASE_URL` |
-| Módulo 3 (cotizaciones) | `POST /pricing/quotes` | `4003` | `MODULE3_BASE_URL` |
+| Módulo 1 (inventario y mantenimientos) | `https://gestionophospitua.tech` | `GET /api/rooms`, `GET /api/rooms?categoryRoom=…`, `GET /api/rooms/{roomId}` y `GET /api/rooms/{roomId}/maintenances?startDate=…&endDate=…` | `MODULE1_BASE_URL`, `MODULE1_INTERNAL_KEY` |
+| Módulo 3 (cotizaciones) | `https://hospitua-module-3.onrender.com` | `POST /pricing/quotes` (sin `/api`) | `MODULE3_BASE_URL`, `MODULE3_INTERNAL_KEY` |
 
-- **En local no hay que configurar nada:** `backend/.env.example` ya apunta a esos dos puertos.
-- **Datos:** las habitaciones 101 (`SUITE_JUNIOR`) y 201, 202 y 1001 (`DOBLE`). Los mantenimientos usan
-  fechas relativas a hoy, así que siempre caen en los próximos 30 días. Las cotizaciones dan una tarifa
-  fija por categoría y por noche.
-- **Responden los errores de los contratos:** 404 si la habitación no existe y 400 si el `roomId` o las
-  fechas son inválidos.
-- **No simulan** RabbitMQ (los avisos de Check-In y Check-Out) ni Channex. Las pruebas del backend no los
-  usan: siguen con `msw`.
-- **Si cambia un contrato con el Módulo 1 o el Módulo 3,** hay que actualizar también el simulador.
-- **La demo en Render ya usa los módulos reales** (`MODULE1_BASE_URL` y `MODULE3_BASE_URL` en
-  [`render.yaml`](render.yaml)). Los simuladores quedan para probar en local y como respaldo.
+- **Las claves `X-Internal-Key`** las entrega cada módulo por privado. Van solo en tu `backend/.env` y en el
+  panel de Render. Vacías, el backend llama sin la cabecera.
+- **El Módulo 3 está en el plan gratuito de Render:** si está dormido, la primera cotización responde "servicio
+  no disponible". Abre `https://hospitua-module-3.onrender.com/docs` antes de probar.
+- **RabbitMQ en local es el de `docker compose`,** no el del Módulo 1: ahí no llegan sus avisos de Check-In y
+  Check-Out. Para probarlos, publícalos a mano desde el panel (`http://localhost:15672`) en `hospitua.events`,
+  con la routing key `habitacion.checkin` o `habitacion.checkout` y el JSON del plan de `update-reservation`.
+- Las pruebas del backend no llaman a los módulos: los simulan con `msw`.
 
 ## Comandos
 
@@ -102,7 +90,6 @@ y 3 reales: `https://gestionophospitua.tech` y `https://hospitua-module-3.onrend
 |---|---|---|
 | `hospitua-m2-frontend` | La pantalla de la Recepcionista (sitio estático); `/api/*` va al backend | `https://hospitua-m2-frontend.onrender.com` |
 | `hospitua-m2-backend` | El backend ([`backend/Dockerfile`](backend/Dockerfile)): aplica las migraciones y arranca | `https://hospitua-m2-backend.onrender.com/api/docs` |
-| `hospitua-m2-simulators` | Los simuladores de los Módulos 1 y 3, en un solo puerto. Solo de respaldo: el backend no los usa | `https://hospitua-m2-simulators.onrender.com/api/rooms` |
 | `hospitua-m2-db` | PostgreSQL | Solo la usa el backend |
 
 **Para crearlo (una sola vez):**
@@ -116,15 +103,14 @@ y 3 reales: `https://gestionophospitua.tech` y `https://hospitua-module-3.onrend
      vhost `/`).
    - `CHANNEX_API_KEY` y `CHANNEX_PROPERTY_ID`: los de tu `backend/.env`. Escríbelos solo ahí, nunca en
      el repositorio, en un chat ni en un documento.
-4. Espera a que los tres servicios queden en *Live* y abre el frontend.
+4. Espera a que el backend y el frontend queden en *Live* y abre el frontend.
 5. Agrega en el panel del backend las claves que entregan los otros módulos por privado:
    `MODULE1_INTERNAL_KEY` (el Módulo 1 todavía no la exige y avisa antes de hacerlo) y `MODULE3_INTERNAL_KEY`
    (avísale antes al Módulo 3, para que la active de su lado al mismo tiempo). Sin ellas, el backend llama
    sin `X-Internal-Key`.
 
 **Si Render le da otra URL al backend** porque el nombre ya estaba ocupado, cámbiala en `render.yaml`, en la
-regla `/api/*` del frontend. Para volver a los simuladores, cambia `MODULE1_BASE_URL` y `MODULE3_BASE_URL`
-por `https://hospitua-m2-simulators.onrender.com`.
+regla `/api/*` del frontend.
 
 **Antes de presentar:**
 - En el plan gratuito el backend **se duerme tras un rato sin uso** y despierta en cerca de un minuto. Abre
@@ -137,8 +123,7 @@ por `https://hospitua-m2-simulators.onrender.com`.
   su backend con la misma clave al mismo tiempo; en tu `backend/.env` local, deja `CHANNEX_API_KEY` vacía.
 - **La demo es también la única copia conectada al RabbitMQ del Módulo 1.** Un backend local con la misma
   `RABBITMQ_URL` consumiría los avisos de Check-In y Check-Out de la demo. En tu `backend/.env` local deja la
-  de `docker compose`. Los simuladores tampoco se conectan a ese broker: en Render van sin `RABBITMQ_URL`
-  (si ya la tenían, bórrala en su panel).
+  de `docker compose`.
 - El Módulo 2 no declara la cola de la lista del día (`m1.reservas.diarias.queue`): es del Módulo 1. Si esa
   cola todavía no existe, la lista queda pendiente y se reintenta hasta que exista.
 
@@ -196,7 +181,7 @@ cambies sin preguntar.
 |---|---|
 | `package.json` (raíz, `backend/`, `frontend/`) | Las librerías del proyecto y los comandos (`pnpm test`, `pnpm build`, ...) |
 | `pnpm-lock.yaml` | Las versiones exactas de todo. Lo genera pnpm: **nunca se edita a mano**, pero sí se sube |
-| `pnpm-workspace.yaml` | Dice que `backend`, `frontend` y `simulators` son un solo proyecto |
+| `pnpm-workspace.yaml` | Dice que `backend` y `frontend` son un solo proyecto |
 | `tsconfig*.json` | Las reglas con las que TypeScript revisa y compila el código |
 | `.oxlintrc.json`, `.prettierrc` | Las reglas del lint y el formato único del código |
 | `backend/.dependency-cruiser.cjs` | Las reglas de las capas (qué carpeta puede importar de cuál) |
