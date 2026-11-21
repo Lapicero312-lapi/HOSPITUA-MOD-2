@@ -118,13 +118,13 @@ describe('MessagingModule', () => {
     }
   });
 
-  it('declara las colas de entrada con su dead-letter y las esperas', async () => {
+  it('declara las colas de entrada con su dead-letter por m2.direct y las esperas', async () => {
     const checkIn = await management<{ arguments: Record<string, unknown> }>(
       `/queues/%2F/${CHECK_IN.name}`,
     );
     // RabbitMQ 4 agrega el tipo de cola (classic) por su cuenta.
     expect(checkIn.arguments).toMatchObject({
-      'x-dead-letter-exchange': '',
+      'x-dead-letter-exchange': 'm2.direct',
       'x-dead-letter-routing-key': 'm2.habitacion.checkin.dlq',
     });
 
@@ -132,9 +132,24 @@ describe('MessagingModule', () => {
       '/queues/%2F/m2.reintento.2m.queue',
     );
     expect(wait.arguments).toMatchObject({
-      'x-dead-letter-exchange': '',
+      'x-dead-letter-exchange': 'm2.direct',
       'x-message-ttl': 120_000,
     });
+  });
+
+  it('une cada cola de entrada y su dead-letter a m2.direct con su propio nombre', async () => {
+    const bindings = await management<
+      { destination: string; routing_key: string }[]
+    >('/exchanges/%2F/m2.direct/bindings/source');
+
+    expect(
+      bindings.map((b) => `${b.destination}=${b.routing_key}`).sort(),
+    ).toEqual(
+      Object.values(INBOUND_QUEUES)
+        .flatMap((q) => [q.name, deadLetterQueue(q.name)])
+        .map((name) => `${name}=${name}`)
+        .sort(),
+    );
   });
 
   it('no declara la cola del Módulo 1: es suya, con su propia dead-letter', async () => {

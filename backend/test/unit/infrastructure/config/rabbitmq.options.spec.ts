@@ -13,8 +13,12 @@ const URI = 'amqp://hospitua:hospitua@localhost:5672';
 
 describe('rabbitMqOptions', () => {
   const options = rabbitMqOptions(URI, { declareEventsExchange: true });
-  const queue = (name: string) => options.queues?.find((q) => q.name === name);
+  /** Las declaraciones de una cola: una por cada exchange al que se une. */
+  const declarations = (name: string) =>
+    (options.queues ?? []).filter((q) => q.name === name);
+  const queue = (name: string) => declarations(name)[0];
   const RETRY_EXCHANGES = [
+    { name: 'm2.direct', type: 'direct', options: { durable: true } },
     { name: 'm2.reintento.5s', type: 'fanout', options: { durable: true } },
     { name: 'm2.reintento.15s', type: 'fanout', options: { durable: true } },
     { name: 'm2.reintento.45s', type: 'fanout', options: { durable: true } },
@@ -22,7 +26,7 @@ describe('rabbitMqOptions', () => {
     { name: 'm2.reintento.5m', type: 'fanout', options: { durable: true } },
   ];
 
-  it('en desarrollo y pruebas declara el exchange topic hospitua.events y un fanout por cada espera de reintento', () => {
+  it('en desarrollo y pruebas declara el exchange topic hospitua.events, el direct m2.direct y un fanout por cada espera de reintento', () => {
     expect(options.uri).toBe(URI);
     expect(options.exchanges).toEqual([
       { name: 'hospitua.events', type: 'topic', options: { durable: true } },
@@ -45,22 +49,42 @@ describe('rabbitMqOptions', () => {
     expect(production.queues).toEqual(options.queues);
   });
 
-  it('cada cola de entrada se une a su routing key y manda lo rechazado a su .dlq', () => {
+  it('cada cola de entrada se une a su routing key en hospitua.events y a su nombre en m2.direct, y manda lo rechazado a su .dlq por m2.direct', () => {
     expect(Object.values(INBOUND_QUEUES)).toHaveLength(4);
     for (const inbound of Object.values(INBOUND_QUEUES)) {
-      expect(queue(inbound.name)).toEqual({
-        name: inbound.name,
-        exchange: 'hospitua.events',
-        routingKey: inbound.routingKey,
-        options: {
-          durable: true,
-          deadLetterExchange: '',
-          deadLetterRoutingKey: deadLetterQueue(inbound.name),
-        },
-      });
-      expect(queue(deadLetterQueue(inbound.name))?.options).toEqual({
+      const options = {
         durable: true,
-      });
+        deadLetterExchange: 'm2.direct',
+        deadLetterRoutingKey: deadLetterQueue(inbound.name),
+      };
+      expect(declarations(inbound.name)).toEqual([
+        {
+          name: inbound.name,
+          exchange: 'hospitua.events',
+          routingKey: inbound.routingKey,
+          options,
+        },
+        {
+          name: inbound.name,
+          exchange: 'm2.direct',
+          routingKey: inbound.name,
+          options,
+        },
+      ]);
+      expect(declarations(deadLetterQueue(inbound.name))).toEqual([
+        {
+          name: deadLetterQueue(inbound.name),
+          exchange: 'm2.direct',
+          routingKey: deadLetterQueue(inbound.name),
+          options: { durable: true },
+        },
+      ]);
+    }
+  });
+
+  it('ninguna cola usa el exchange por defecto como dead-letter: en el broker del Módulo 1 no hay permiso sobre amq.default', () => {
+    for (const declared of options.queues ?? []) {
+      expect(declared.options?.deadLetterExchange).not.toBe('');
     }
   });
 
@@ -73,7 +97,7 @@ describe('rabbitMqOptions', () => {
     );
   });
 
-  it('esperas de 5 s, 15 s, 45 s, 2 min y 5 min, que devuelven el mensaje por el exchange por defecto', () => {
+  it('esperas de 5 s, 15 s, 45 s, 2 min y 5 min, que devuelven el mensaje a su cola por m2.direct', () => {
     expect(RETRY_STEPS.map((step) => step.delayMs)).toEqual([
       5_000, 15_000, 45_000, 120_000, 300_000,
     ]);
@@ -85,7 +109,7 @@ describe('rabbitMqOptions', () => {
         options: {
           durable: true,
           messageTtl: step.delayMs,
-          deadLetterExchange: '',
+          deadLetterExchange: 'm2.direct',
         },
       });
     }

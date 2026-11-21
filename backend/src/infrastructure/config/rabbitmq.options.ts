@@ -7,6 +7,7 @@ import {
 import { Logger } from '@nestjs/common';
 import {
   deadLetterQueue,
+  DIRECT_EXCHANGE,
   EVENTS_EXCHANGE,
   INBOUND_QUEUES,
   type InboundQueueName,
@@ -18,9 +19,6 @@ import {
 /** Una publicación que RabbitMQ no confirma en este tiempo cuenta como fallo (queda `PENDING`). */
 export const PUBLISH_CONFIRM_TIMEOUT_MS = 5_000;
 
-/** El exchange por defecto de RabbitMQ: entrega a la cola cuyo nombre es la routing key. */
-const DEFAULT_EXCHANGE = '';
-
 /**
  * Los argumentos de una cola de entrada: un mensaje rechazado sin reencolar va a su dead-letter. Los
  * usan la declaración al conectarse y su consumidor, que la declara igual porque la librería prepara
@@ -29,7 +27,7 @@ const DEFAULT_EXCHANGE = '';
 export function inboundQueueOptions(queue: InboundQueueName): QueueOptions {
   return {
     durable: true,
-    deadLetterExchange: DEFAULT_EXCHANGE,
+    deadLetterExchange: DIRECT_EXCHANGE,
     deadLetterRoutingKey: deadLetterQueue(queue),
   };
 }
@@ -39,24 +37,36 @@ export function inboundQueueOptions(queue: InboundQueueName): QueueOptions {
  * declararlo otra vez no cambia nada.
  */
 function queues(): RabbitMQQueueConfig[] {
+  // La misma cola, unida a `m2.direct` con su nombre: se declara otra vez con los mismos argumentos, que no
+  // cambia nada, porque la librería une cada cola a un solo exchange.
+  const byOwnName = (
+    name: string,
+    options: QueueOptions,
+  ): RabbitMQQueueConfig => ({
+    name,
+    exchange: DIRECT_EXCHANGE,
+    routingKey: name,
+    options,
+  });
   const inbound = Object.values(INBOUND_QUEUES).flatMap((queue) => [
-    { name: deadLetterQueue(queue.name), options: { durable: true } },
+    byOwnName(deadLetterQueue(queue.name), { durable: true }),
     {
       name: queue.name,
       exchange: EVENTS_EXCHANGE,
       routingKey: queue.routingKey,
       options: inboundQueueOptions(queue.name),
     },
+    byOwnName(queue.name, inboundQueueOptions(queue.name)),
   ]);
   const retries = RETRY_STEPS.map((step) => ({
     name: retryQueue(step),
     exchange: retryExchange(step),
     routingKey: '',
-    // Al vencer la espera, el mensaje vuelve por el exchange por defecto con su routing key: su cola.
+    // Al vencer la espera, el mensaje vuelve por `m2.direct` con su routing key, el nombre de su cola.
     options: {
       durable: true,
       messageTtl: step.delayMs,
-      deadLetterExchange: DEFAULT_EXCHANGE,
+      deadLetterExchange: DIRECT_EXCHANGE,
     },
   }));
   // `m1.reservas.diarias.queue` no se declara: es del Módulo 1, que la declara con su propia dead-letter. La
@@ -95,6 +105,7 @@ export function rabbitMqOptions(
             type: 'topic',
             createExchangeIfNotExists: false,
           },
+      { name: DIRECT_EXCHANGE, type: 'direct', options: { durable: true } },
       ...RETRY_STEPS.map((step) => ({
         name: retryExchange(step),
         type: 'fanout',

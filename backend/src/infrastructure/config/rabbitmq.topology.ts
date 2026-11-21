@@ -7,6 +7,14 @@
 /** Exchange compartido por los módulos (tipo topic). */
 export const EVENTS_EXCHANGE = 'hospitua.events';
 
+/**
+ * Exchange propio del Módulo 2 (direct): hace lo del exchange por defecto, pero solo para sus colas. Cada
+ * cola de entrada y cada dead-letter se une con su propio nombre como routing key, y es el dead-letter
+ * exchange de las colas de entrada y de las de reintento. En el broker del Módulo 1 no hay permiso de
+ * escritura sobre `amq.default`, que RabbitMQ exige para usar `""` como dead-letter exchange.
+ */
+export const DIRECT_EXCHANGE = 'm2.direct';
+
 /** Colas que recibe el Módulo 2 (las publica el Módulo 1), con su routing key. */
 export const INBOUND_QUEUES = {
   CHECK_IN: {
