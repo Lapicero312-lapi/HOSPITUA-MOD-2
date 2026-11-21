@@ -48,8 +48,9 @@ describe lo propio.
   huéspedes, cierre del día < 1 min para 1000 reservas, página del listado < 1 s con hasta 50 000
   reservas. Una reserva de Booking queda registrada en menos de 2 minutos y un cambio de
   disponibilidad llega a Channex en menos de 1 minuto.
-- **Constraints**: tiempo máximo de espera de 1 s al Módulo 1 y de 3 s al Módulo 3 (si no responden,
-  nunca se asume disponibilidad ni tarifa); ningún error sale como 500; no se escriben datos
+- **Constraints**: tiempo máximo de espera de 1 s al Módulo 1 (2 s en la demo de Render,
+  `MODULE1_TIMEOUT_MS`, por la distancia hasta el servidor del Módulo 1) y de 3 s al Módulo 3 (si no
+  responden, nunca se asume disponibilidad ni tarifa); ningún error sale como 500; no se escriben datos
   personales en los logs; el día operativo es el de Colombia (`America/Bogota`); disponible 24/7,
   porque Booking reserva a cualquier hora; límite de Channex de 10 solicitudes por minuto por propiedad
   para disponibilidad.
@@ -1213,7 +1214,7 @@ Se inserta en la misma transacción que la reserva.
    Cada `errorCode` tiene un solo mensaje en todo el Módulo 2 (puede llevar datos, como `{roomNumber}`): si
    los specs piden dos textos distintos, son dos códigos.
 6. **Clientes de otros módulos** detrás de puertos (`Module1Port`, `Module3Port`, `ChannexPort`) con
-   timeout (1 s al Módulo 1 y 3 s al Módulo 3).
+   timeout (1 s al Módulo 1, 2 s en la demo de Render, y 3 s al Módulo 3).
    Ante fallo, cada caso de uso decide, pero nunca se asume disponibilidad ni tarifa por defecto o a cero.
    Las llamadas a otros módulos se hacen **antes de abrir la transacción**; dentro solo hay operaciones de
    base de datos. Lo que impide la sobreventa o guardar sobre datos viejos es la restricción anti-solape
