@@ -57,7 +57,8 @@ services:
       - key: MODULE3_BASE_URL
         value: https://hospitua-module-3.onrender.com
       # MODULE1_INTERNAL_KEY y MODULE3_INTERNAL_KEY van en el panel de Render (no aquí), con la clave que cada
-      # módulo entrega por privado: se envían en X-Internal-Key. El Módulo 1 todavía no la exige y avisa antes de
+      # módulo entrega por privado: se envían en X-Internal-Key. MODULE2_INTERNAL_KEY también va en el panel: es
+      # la que el Módulo 2 les exige a ellos; se les entrega por privado y se activa avisándoles antes. El Módulo 1 todavía no la exige y avisa antes de
       # hacerlo; al Módulo 3 avísale antes de agregarla, para que la active al mismo tiempo.
       # El hotel todavía no tiene sus códigos de SIRE: valores de demo.
       - key: SIRE_HOTEL_CODE

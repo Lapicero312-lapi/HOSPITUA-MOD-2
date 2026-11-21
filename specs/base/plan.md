@@ -66,6 +66,9 @@ describe lo propio.
   `consult-room-inventory` y A1 de `consult-maintenance-calendar`) llevan la cabecera `X-Internal-Key` con esa
   clave, que el Módulo 1 usa para proteger sus rutas cuando se publican en internet. La clave es un secreto:
   nunca va en el repositorio, en la base de datos ni en los logs.
+- **Configuración del Módulo 2** (variable de entorno): `MODULE2_INTERNAL_KEY`, opcional. Es la clave que el
+  Módulo 2 exige a los Módulos 1 y 3 en `X-Internal-Key` (regla 10). Vacía, no se exige. La clave es un
+  secreto: nunca va en el repositorio, en la base de datos ni en los logs.
 - **Configuración del Módulo 3** (variables de entorno): `MODULE3_BASE_URL`, `MODULE3_TIMEOUT_MS` (`3000`) y
   `MODULE3_INTERNAL_KEY`, opcional. Si tiene valor, `POST /pricing/quotes` lleva la cabecera
   `X-Internal-Key` con esa clave, que el Módulo 3 usa para proteger sus rutas cuando se publican en internet.
@@ -489,7 +492,8 @@ interface ChannexPort {
 **Errores**: cuerpo `{ "errorCode", "message", "timestamp", "path" }` con HTTP 400 (por defecto, también
 para recursos inexistentes, como piden los specs, y para la falta de disponibilidad) o 429 (exportación
 SIRE). La única excepción es la consulta de una reserva por referencia para el Módulo 3, que
-responde 404 si no existe, como lo espera ese módulo. El diccionario prohíbe 500 y cualquier 2xx o 3xx
+responde 404 si no existe, como lo espera ese módulo. Las rutas que exigen `X-Internal-Key` responden 401
+`INVALID_INTERNAL_KEY` sin ella (regla 10). El diccionario prohíbe 500 y cualquier 2xx o 3xx
 para un error.
 
 ## Project Structure
@@ -1226,6 +1230,14 @@ Se inserta en la misma transacción que la reserva.
     - Hacia el Módulo 1, si hay una clave configurada (`MODULE1_INTERNAL_KEY`), el Módulo 2 envía
       `X-Internal-Key` en sus consultas a `/api/rooms…` (inventario y mantenimientos). Tampoco valida nada:
       el Módulo 1 protege sus propias rutas.
+    - **Excepción (decisión de Brian, 2026-11-20): los Módulos 1 y 3 también envían `X-Internal-Key` al
+      Módulo 2**, como lo hace el Módulo 2 con ellos. Si `MODULE2_INTERNAL_KEY` tiene valor, la exigen
+      `GET /api/reservations` con `X-Client: MODULE1`, `GET /api/reservations/{reservationRef}` con
+      `X-Client: MODULE3`, `GET /api/ota-commissions` y `POST /api/ota-commissions/reconciliations`. Si falta
+      o no coincide, responde 401 `INVALID_INTERNAL_KEY`, "Falta la clave interna o no es válida." Lo revisa un
+      guard (`InternalKeyGuard`) antes que el controlador, comparando en tiempo constante. Las rutas de la
+      Recepcionista no la piden, porque el navegador no puede guardar un secreto, ni `GET /api/otas`, que
+      comparte con ella sin `X-Client`. Por eso no protege los datos: solo identifica a los otros módulos.
 
 ### Decisiones de diseño tomadas al escribir los planes de caso de uso
 
@@ -1246,6 +1258,7 @@ Se inserta en la misma transacción que la reserva.
 | D14 | **Tipos de habitación y disponibilidad hacia Channex.** El Módulo 2 crea un tipo de habitación por categoría a partir de las habitaciones vendibles del Módulo 1 (cantidad y capacidad máxima) y lo sincroniza al iniciar y a las 03:00, sin borrar. La disponibilidad (vendibles menos las que ocupan las reservas) se envía al cambiar, agrupada cada 30 s, y completa (90 días) a las 03:00. Las habitaciones en mantenimiento se descuentan solo en sus fechas; el Módulo 1 avisa por cola los mantenimientos y los cambios de inventario. **Los planes de tarifa y los precios los envía el Módulo 3** directamente a Channex. | `configure-ota` |
 | D15 | **No-show de Booking.** Al cierre del día, una reserva de Booking que pasa a `NO_SHOW` deja pendiente su reporte a Channex (`POST /api/v1/bookings/{booking_id}/no_show` con `waived_fees: true`), en la misma transacción; `ChannexSyncJob` lo envía. Booking no cobra comisión y el Módulo 2 no la concilia. | `generate-ota-reservation`, `update-reservation` |
 | D16 | **Idempotencia de la reserva directa.** La creación exige `Idempotency-Key`; la misma clave con el mismo cuerpo devuelve la misma reserva durante 24 horas. | `generate-direct-reservation` |
+| D17 | **`X-Internal-Key` hacia el Módulo 2.** Los tres módulos se identifican con la misma cabecera. El Módulo 2 la exige solo en las rutas de los Módulos 1 y 3, y solo si `MODULE2_INTERNAL_KEY` tiene valor (regla 10). Es una excepción a "El Módulo 2 no implementa seguridad" de los specs, decidida por Brian. | Plan base |
 
 ## Estrategia de testing base
 
@@ -1299,6 +1312,7 @@ Se inserta en la misma transacción que la reserva.
 - [ ] T020 Configurar OpenAPI (`@nestjs/swagger`) y la verificación de dependencias entre capas en CI
 - [ ] T021 [P] Implementar `ChannexPort` con su adaptador HTTP (`user-api-key`, propiedades, feed, `ack`, reporte de no-show, tipos de habitación y disponibilidad) y el manejo de `429` (pausa de un minuto por propiedad y después espera creciente)
 - [ ] T022 En producción, no declarar `hospitua.events`: comprobar que existe (`createExchangeIfNotExists: false`), con su prueba
+- [ ] T023 `InternalKeyGuard` y `MODULE2_INTERNAL_KEY`: 401 `INVALID_INTERNAL_KEY` en las rutas de los Módulos 1 y 3, OpenAPI y pruebas
 
 **Checkpoint**: Base lista; los planes de caso de uso pueden implementarse.
 

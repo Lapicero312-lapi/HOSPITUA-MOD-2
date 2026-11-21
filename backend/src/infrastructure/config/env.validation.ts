@@ -142,6 +142,19 @@ export class EnvironmentVariables extends SireEnvironmentVariables {
   })
   MODULE3_INTERNAL_KEY?: string;
 
+  // Opcional: la clave que el Módulo 2 exige a los Módulos 1 y 3 en X-Internal-Key. Sin ella (o vacía) no se
+  // exige. Es un secreto: el mensaje de error no la repite.
+  @ValidateIf(
+    (config: EnvironmentVariables) =>
+      config.MODULE2_INTERNAL_KEY !== undefined &&
+      config.MODULE2_INTERNAL_KEY !== '',
+  )
+  @Matches(/^[\x21-\x7E]{1,200}$/, {
+    message:
+      'MODULE2_INTERNAL_KEY debe tener de 1 a 200 caracteres ASCII visibles, sin espacios',
+  })
+  MODULE2_INTERNAL_KEY?: string;
+
   // Verificar disponibilidad: cuántas consultas de mantenimiento al Módulo 1 van en paralelo
   @Type(() => Number)
   @IsInt()

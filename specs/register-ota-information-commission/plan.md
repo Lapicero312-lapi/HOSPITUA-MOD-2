@@ -58,9 +58,10 @@ Lo propio de este caso de uso:
 
 ### A. REST del Módulo 2
 
-Las usan la Recepcionista y el Módulo 3. **Cabeceras**: `Content-Type: application/json`. Sin seguridad
-(regla transversal 10 del plan base): cada ruta la usa un llamador distinto, así que no necesita
-`X-Client`. La OTA no llama al Módulo 2.
+Las usan la Recepcionista y el Módulo 3. **Cabeceras**: `Content-Type: application/json`. Cada ruta la usa
+un llamador distinto, así que no necesita `X-Client`. A1 y A2 son del Módulo 3: si `MODULE2_INTERNAL_KEY`
+tiene valor, exigen `X-Internal-Key` y sin ella responden 401 `INVALID_INTERNAL_KEY` (regla 10 del plan
+base). A3 la comparte con la Recepcionista y no la exige. La OTA no llama al Módulo 2.
 
 **A1. `GET /api/ota-commissions`** (la usa el Módulo 3): comisiones de las reservas OTA de un periodo, o de
 una sola reserva por su referencia.
