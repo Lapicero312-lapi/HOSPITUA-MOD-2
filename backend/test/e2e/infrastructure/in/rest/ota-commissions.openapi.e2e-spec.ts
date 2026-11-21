@@ -80,15 +80,16 @@ describe('OpenAPI de "Registrar confirmación y comisión de OTA" (T021)', () =>
   });
 
   describe('A1, GET /api/ota-commissions', () => {
-    it('los parámetros de la tabla de A1, en su orden, con las fechas obligatorias', () => {
+    it('los parámetros de la tabla de A1, en su orden, con las fechas opcionales por reservationRef', () => {
       expect(
         operation(A1, 'get').parameters?.map(({ name, required }) => [
           name,
           required,
         ]),
       ).toEqual([
-        ['dateFrom', true],
-        ['dateTo', true],
+        ['reservationRef', false],
+        ['dateFrom', false],
+        ['dateTo', false],
         ['commissionStatus', false],
         ['reservationStatus', false],
         ['otaId', false],
@@ -131,6 +132,7 @@ describe('OpenAPI de "Registrar confirmación y comisión de OTA" (T021)', () =>
 
     it('la 400: un ejemplo por código, en el orden de readOtaCommissionQuery, y REQUEST_NOT_PROCESSED', () => {
       expect(errorCodes(A1, 'get')).toEqual([
+        'INVALID_RESERVATION_CODE',
         'INCOMPLETE_DATE_RANGE',
         'INVALID_DATE',
         'INVALID_DATE_RANGE',
@@ -226,6 +228,7 @@ describe('OpenAPI de "Registrar confirmación y comisión de OTA" (T021)', () =>
     const DATES = { dateFrom: '2036-03-01', dateTo: '2036-03-31' };
 
     it.each([
+      ['INVALID_RESERVATION_CODE', { ...DATES, reservationRef: 'RSV-1' }],
       ['INCOMPLETE_DATE_RANGE', { dateFrom: '2036-03-01' }],
       ['INVALID_DATE', { dateFrom: '2036-02-30', dateTo: '2036-03-31' }],
       ['INVALID_DATE_RANGE', { dateFrom: '2036-03-31', dateTo: '2036-03-01' }],

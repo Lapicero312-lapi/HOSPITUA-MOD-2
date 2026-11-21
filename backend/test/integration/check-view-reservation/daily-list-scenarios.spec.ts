@@ -32,6 +32,7 @@ import {
 import { configureApp } from '../../../src/configure-app.js';
 import type { ReservationProps } from '../../../src/domain/reservation/reservation.js';
 import { DAILY_LIST_QUEUE } from '../../../src/infrastructure/config/rabbitmq.topology.js';
+import { declareModule1Queue } from '../support/module1-queue.js';
 import { DailyListJob } from '../../../src/infrastructure/in/jobs/daily-list.job.js';
 import {
   aDirectReservation,
@@ -150,6 +151,8 @@ describe('check-view-reservation: escenarios 1 a 4 de la historia 4, la lista de
       timeout: 15_000,
       interval: 100,
     });
+    // La cola del Módulo 1 la declara el Módulo 1, no el Módulo 2: la prueba hace su parte.
+    await declareModule1Queue(rabbit.channel);
   });
 
   let day = 0;

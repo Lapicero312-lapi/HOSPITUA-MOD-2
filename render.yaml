@@ -51,6 +51,9 @@ services:
         value: https://hospitua-m2-simulators.onrender.com
       - key: MODULE3_BASE_URL
         value: https://hospitua-m2-simulators.onrender.com
+      # Con el Módulo 3 real, además de cambiar MODULE3_BASE_URL, agrega en el panel de Render (no aquí)
+      # MODULE3_INTERNAL_KEY con la clave que acuerden por privado: se envía en X-Internal-Key. Con los
+      # simuladores no hace falta.
       # El hotel todavía no tiene sus códigos de SIRE: valores de demo.
       - key: SIRE_HOTEL_CODE
         value: DEMO-HOTEL

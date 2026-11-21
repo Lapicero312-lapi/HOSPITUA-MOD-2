@@ -180,7 +180,7 @@ describe('POST /api/reservations/{reservationRef}/modification-preview (e2e)', (
     });
     createQuote
       .mockReset()
-      .mockImplementation((_roomType, checkIn) =>
+      .mockImplementation((_roomType, _roomId, checkIn) =>
         Promise.resolve(
           aRateQuote(checkIn, ['2033-05-10', '2033-05-11', '2033-05-12']),
         ),
@@ -252,10 +252,10 @@ describe('POST /api/reservations/{reservationRef}/modification-preview (e2e)', (
       },
       reservation: { startDate: START, endDate: '2033-05-13', guestCount: 3 },
     });
-    // El Módulo 3 recibe la categoría y las fechas nuevas de cada habitación.
+    // El Módulo 3 recibe la categoría, la habitación y las fechas nuevas de cada una.
     expect(createQuote.mock.calls).toEqual([
-      ['DOBLE', START, '2033-05-13'],
-      ['DOBLE', START, '2033-05-13'],
+      ['DOBLE', ROOM_201.id, START, '2033-05-13'],
+      ['DOBLE', ROOM_202.id, START, '2033-05-13'],
     ]);
     // La vista previa no guarda nada (B1).
     expect(await rowOf(reservation)).toEqual(before);

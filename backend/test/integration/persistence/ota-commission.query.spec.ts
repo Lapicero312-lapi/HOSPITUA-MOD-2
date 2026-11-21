@@ -29,6 +29,7 @@ describe('TypeOrmReservationQuery.listOtaCommissions contra PostgreSQL real (reg
   const filters = (
     changes: Partial<OtaCommissionFilters> = {},
   ): OtaCommissionFilters => ({
+    reservationRef: null,
     dateFrom: FROM,
     dateTo: TO,
     commissionStatus: null,
@@ -204,6 +205,47 @@ describe('TypeOrmReservationQuery.listOtaCommissions contra PostgreSQL real (reg
     expect(
       await refsOf({ otaId: '00000000-0000-4000-8000-000000000000' }),
     ).toEqual([]);
+  });
+
+  it('con reservationRef y sin fechas, solo esa reserva, aunque salga fuera de cualquier periodo (T022)', async () => {
+    await anOtaLeaving(booking, '2026-10-21');
+    const later = await anOtaLeaving(booking, '2027-06-30');
+
+    expect(
+      await refsOf({
+        reservationRef: later.reservationRef,
+        dateFrom: null,
+        dateTo: null,
+      }),
+    ).toEqual([later.reservationRef]);
+  });
+
+  it('con reservationRef y fechas, se aplican las dos: fuera del periodo no sale (T022)', async () => {
+    const outside = await anOtaLeaving(booking, '2026-10-30');
+
+    expect(await refsOf({ reservationRef: outside.reservationRef })).toEqual(
+      [],
+    );
+  });
+
+  it('con reservationRef de una directa o que no existe, items vacío (T022)', async () => {
+    const direct = await reservations.insert(
+      aDirectReservation({ startDate: '2026-10-20', endDate: '2026-10-22' }),
+    );
+    const noDates = { dateFrom: null, dateTo: null };
+
+    expect(
+      await refsOf({ reservationRef: direct.reservationRef, ...noDates }),
+    ).toEqual([]);
+    expect(
+      await refsOf({ reservationRef: 'RSV-00000000', ...noDates }),
+    ).toEqual([]);
+  });
+
+  it('sin fechas ni reservationRef no consulta: leería toda la tabla (T022)', async () => {
+    await expect(
+      query.listOtaCommissions(filters({ dateFrom: null, dateTo: null }), 1),
+    ).rejects.toThrow('fechas o una referencia');
   });
 
   it('ordena por end_date y después por reservation_ref, ascendentes', async () => {

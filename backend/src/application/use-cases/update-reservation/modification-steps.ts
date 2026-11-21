@@ -266,6 +266,7 @@ export function quoteRequests(
 ): RoomQuoteRequest[] {
   return toQuote.map(({ roomId, categoryRoom }): RoomQuoteRequest => ({
     key: roomId,
+    roomId,
     categoryRoom,
     startDate,
     endDate,

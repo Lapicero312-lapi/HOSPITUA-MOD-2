@@ -42,8 +42,8 @@ const PREVIEW: DirectReservationPreview = {
     { position: 2, room: ROOM_202, guestCount: 2 },
   ],
   quoteRequests: [
-    { key: '1', categoryRoom: 'DOBLE', ...DATES },
-    { key: '2', categoryRoom: 'DOBLE', ...DATES },
+    { key: '1', roomId: ROOM_201.id, categoryRoom: 'DOBLE', ...DATES },
+    { key: '2', roomId: ROOM_202.id, categoryRoom: 'DOBLE', ...DATES },
   ],
   quotes: [aQuote('1'), aQuote('2')],
   guestCount: 4,

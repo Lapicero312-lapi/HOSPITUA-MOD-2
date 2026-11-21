@@ -21,6 +21,7 @@ export function module3Handler() {
     if (
       request === null ||
       typeof request.roomType !== 'string' ||
+      !isValidRoomId(request.roomId) ||
       !isRealDate(request.checkInDate) ||
       !isRealDate(request.checkOutDate)
     ) {
@@ -54,6 +55,22 @@ export function module3Handler() {
       lodgingAmount: toAmount(rate * nights.length),
     });
   };
+}
+
+/** UUID en su forma estándar `8-4-4-4-12` (hexadecimal), como lo valida el Módulo 2. */
+const UUID_FORMAT =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * El `roomId` que envía el Módulo 2 (el `id` de la habitación en el Módulo 1). Es opcional para el
+ * simulador, que da la misma tarifa a todas las habitaciones de una categoría; si viene, debe ser un UUID.
+ * @param {unknown} roomId
+ */
+function isValidRoomId(roomId) {
+  return (
+    roomId === undefined ||
+    (typeof roomId === 'string' && UUID_FORMAT.test(roomId))
+  );
 }
 
 /**

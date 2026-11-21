@@ -60,6 +60,10 @@ describe lo propio.
   `CHANNEX_SYNC_INTERVAL_SECONDS` (`30`) y `CHANNEX_ARI_DAYS` (`90`). El id del hotel de Booking se indica en
   Channex al conectar el canal Booking.com, y el porcentaje de comisión de la agencia lo calcula el sistema
   con su primera reserva (`register-ota-information-commission`): ninguno de los dos se configura.
+- **Configuración del Módulo 3** (variables de entorno): `MODULE3_BASE_URL`, `MODULE3_TIMEOUT_MS` (`3000`) y
+  `MODULE3_INTERNAL_KEY`, opcional. Si tiene valor, `POST /pricing/quotes` lleva la cabecera
+  `X-Internal-Key` con esa clave, que el Módulo 3 usa para proteger sus rutas cuando se publican en internet.
+  La clave es un secreto: nunca va en el repositorio, en la base de datos ni en los logs.
 
 ### Decisiones de stack
 
@@ -350,10 +354,13 @@ interacciones M1 ↔ M3 (liquidación, tarifa base, registrar check-out) no invo
 - La publicación de la lista del día y de sus actualizaciones respeta el orden: las actualizaciones
   esperan detrás de la lista (ver `check-view-reservation`).
 - **Lo que declara el Módulo 2 al arrancar** (todo durable; declararlo otra vez no cambia nada): el
-  exchange `hospitua.events`, sus cuatro colas de entrada unidas a su routing key y la cola
-  `m1.reservas.diarias.queue` unida a `reserva.lista-del-dia` y `reserva.lista-del-dia.actualizacion`.
-  Así la lista del día no se pierde si el Módulo 1 todavía no creó su cola. El Módulo 1 la declara
-  igual, sin argumentos extra.
+  exchange `hospitua.events`, sus cuatro colas de entrada unidas a su routing key, sus dead-letter y las
+  colas de reintento. El Módulo 2 **no declara `m1.reservas.diarias.queue`**: es del Módulo 1, que la declara
+  con su propia dead-letter (`m1.reservas.diarias.dlq`); si el Módulo 2 la declarara sin esos argumentos,
+  RabbitMQ rechazaría la declaración. El Módulo 2 solo publica al exchange `hospitua.events`, con
+  `reserva.lista-del-dia` y `reserva.lista-del-dia.actualizacion`. Para que la lista no se pierda si esa cola
+  aún no existe, publica con `mandatory`: RabbitMQ devuelve el mensaje que no llegó a ninguna cola, y eso
+  cuenta como fallo de publicación (queda `PENDING` y se reintenta en orden).
 - **Dead-letter:** cada cola de entrada tiene la suya, con el mismo nombre terminado en `.dlq` (por
   ejemplo `m2.habitacion.checkin.dlq`). Nadie la consume: se revisa a mano.
 - **Reintentos de los consumidores:** ante un fallo temporal, 5 reintentos con espera de 5 s, 15 s,
@@ -365,7 +372,8 @@ interacciones M1 ↔ M3 (liquidación, tarifa base, registrar check-out) no invo
   sin reintentos.
 - **Conexión:** el backend arranca aunque RabbitMQ no responda (las rutas REST siguen funcionando) y
   se reconecta solo. Los mensajes son persistentes y la publicación espera la confirmación de
-  RabbitMQ; si no se confirma en 5 s, cuenta como fallo y el mensaje queda `PENDING`. Cada consumidor
+  RabbitMQ; si no se confirma en 5 s, o si RabbitMQ lo devuelve por no llegar a ninguna cola, cuenta
+  como fallo y el mensaje queda `PENDING`. Cada consumidor
   toma un mensaje a la vez (`prefetch` 1), para procesarlos en el orden de la cola.
 
 ### Traducción de respuestas HTTP a cola (decisión C1)
@@ -1240,6 +1248,9 @@ Se inserta en la misma transacción que la reserva.
       válido."
     - Booking no llama al Módulo 2: el Módulo 2 lee el feed de Channex con la clave `user-api-key` de
       la configuración, que nunca se guarda en la base de datos ni se escribe en los logs.
+    - Hacia el Módulo 3, si hay una clave configurada (`MODULE3_INTERNAL_KEY`), el Módulo 2 envía
+      `X-Internal-Key` en `POST /pricing/quotes`. El Módulo 2 no valida nada: el Módulo 3 protege sus propias
+      rutas. Nunca se envía `Authorization` al Módulo 3, que responde 403 si la recibe.
 
 ### Decisiones de diseño tomadas al escribir los planes de caso de uso
 
