@@ -3,7 +3,6 @@
 # "auto" deja que Git reconozca los archivos binarios (imágenes, íconos) y no los modifique.
 /backend/** text=auto eol=lf
 /frontend/** text=auto eol=lf
-/simulators/** text=auto eol=lf
 /.github/** text=auto eol=lf
 /package.json text eol=lf
 /pnpm-workspace.yaml text eol=lf

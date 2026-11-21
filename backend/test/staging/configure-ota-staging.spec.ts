@@ -1,8 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { createWriteStream, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { join } from 'node:path';
 import { parseEnv } from 'node:util';
 import { HttpService } from '@nestjs/axios';
 import type { INestApplication } from '@nestjs/common';
@@ -52,12 +51,13 @@ const BOOKING_TEST_HOTEL = '10485037';
 /** El Módulo 1 y el Módulo 3 están simulados: solo Channex es el real. */
 const MODULE1_BASE_URL = 'http://module1.test';
 const MODULE3_BASE_URL = 'http://module3.test';
-/** Las habitaciones de la demo: las que informa su simulador del Módulo 1. */
-const DEMO_ROOMS_FILE = resolve(
-  import.meta.dirname,
-  '../../../simulators/src/data.js',
-);
-/** La categoría de la reserva de prueba: SUITE tiene 3 habitaciones, como el ejemplo del spec. */
+/**
+ * Las habitaciones de la demo son las del Módulo 1 real: la prueba las lee de su `GET /api/rooms` para
+ * enviar a Channex los mismos tipos y cantidades que la demo. Solo esa lectura sale al Módulo 1.
+ */
+const REAL_MODULE1_URL =
+  process.env.STAGING_MODULE1_URL ?? 'https://gestionophospitua.tech';
+/** La categoría de la reserva de prueba (en el Módulo 1 real, SUITE tiene 4 habitaciones). */
 const CATEGORY = process.env.STAGING_ARI_CATEGORY ?? 'SUITE';
 /** Cuánto espera, con la reserva hecha, a que quien corre la prueba la vea en Booking. */
 const CHECK_MINUTES = Number(process.env.STAGING_CHECK_MINUTES ?? '5');
@@ -184,12 +184,13 @@ async function availabilityInChannex(
   return nights;
 }
 
-/** Las habitaciones que informa el simulador del Módulo 1 de la demo. */
+/** Las habitaciones que informa el Módulo 1 real, las mismas que ve la demo. */
 async function demoRooms(): Promise<Room[]> {
-  const loaded = (await import(pathToFileURL(DEMO_ROOMS_FILE).href)) as {
-    ROOMS?: unknown;
-  };
-  const rooms = loaded.ROOMS;
+  const internalKey = channexSetting('MODULE1_INTERNAL_KEY');
+  const response = await fetch(`${REAL_MODULE1_URL}/api/rooms`, {
+    headers: internalKey === '' ? {} : { 'X-Internal-Key': internalKey },
+  });
+  const rooms: unknown = response.ok ? await response.json() : undefined;
   if (
     !Array.isArray(rooms) ||
     rooms.length === 0 ||
@@ -203,7 +204,7 @@ async function demoRooms(): Promise<Room[]> {
     )
   ) {
     throw new Error(
-      `No se pudieron leer las habitaciones de la demo de ${DEMO_ROOMS_FILE}.`,
+      `No se pudieron leer las habitaciones del Módulo 1 (${REAL_MODULE1_URL}/api/rooms respondió ${response.status}).`,
     );
   }
   return rooms as Room[];
@@ -294,8 +295,8 @@ const server = setupServer(
  * feed vacío: cada envío lee primero el feed. Si al empezar el feed tiene revisiones pendientes, son de la
  * demo: la prueba se detiene sin procesarlas ni confirmarlas.
  *
- * Para no cambiarle nada a la demo, el Módulo 1 simulado informa las mismas habitaciones que el simulador
- * de la demo (`simulators/src/data.js`): los tipos se crean o se adoptan con sus mismos valores. La reserva
+ * Para no cambiarle nada a la demo, el Módulo 1 simulado informa las mismas habitaciones que el Módulo 1
+ * real (`GET /api/rooms`): los tipos se crean o se adoptan con sus mismos valores. La reserva
  * usa dos noches desde 60 días adelante en las que Channex no muestra reservas de la demo para la categoría,
  * y solo se envían esas dos noches: al terminar quedan con todas las habitaciones libres. La parte de Booking
  * la revisa quien corre la prueba: la prueba no puede leer Booking.
@@ -348,13 +349,17 @@ describe.skipIf(!configured)(
         MODULE1_BASE_URL,
         MODULE3_BASE_URL,
       });
-      // Solo sale a la red lo que va a Channex staging, además de las llamadas de la prueba a la aplicación
-      // (en esta máquina). Cualquier otra sin simular se corta: el error hace que msw la responda con un 500
+      // Solo sale a la red lo que va a Channex staging y la lectura de las habitaciones del Módulo 1 real,
+      // además de las llamadas de la prueba a la aplicación (en esta máquina). Cualquier otra sin simular se corta: el error hace que msw la responda con un 500
       // sin enviarla (avisar con `print.error()` no la corta).
       server.listen({
         onUnhandledRequest: (asked) => {
           const { hostname } = new URL(asked.url);
-          if (hostname !== STAGING_HOST && !LOCAL_HOSTS.includes(hostname)) {
+          if (
+            hostname !== STAGING_HOST &&
+            hostname !== new URL(REAL_MODULE1_URL).hostname &&
+            !LOCAL_HOSTS.includes(hostname)
+          ) {
             throw new Error(
               `Llamada sin simular cortada: ${asked.method} ${hostname}`,
             );
