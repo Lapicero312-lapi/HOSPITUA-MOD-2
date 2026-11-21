@@ -21,7 +21,11 @@ import { rabbitMqOptions } from './rabbitmq.options.js';
     RabbitMQModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService<EnvironmentVariables, true>) =>
-        rabbitMqOptions(config.get('RABBITMQ_URL', { infer: true })),
+        rabbitMqOptions(config.get('RABBITMQ_URL', { infer: true }), {
+          // En producción el broker es el del Módulo 1, dueño de `hospitua.events` (plan base, T022).
+          declareEventsExchange:
+            config.get('NODE_ENV', { infer: true }) !== 'production',
+        }),
     }),
   ],
   providers: [

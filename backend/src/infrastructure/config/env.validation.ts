@@ -106,6 +106,19 @@ export class EnvironmentVariables extends SireEnvironmentVariables {
   @Max(60000)
   MODULE1_TIMEOUT_MS!: number;
 
+  // Opcional: sin ella (o vacía) no se envía la cabecera X-Internal-Key al Módulo 1. Es un secreto: el mensaje
+  // de error no la repite.
+  @ValidateIf(
+    (config: EnvironmentVariables) =>
+      config.MODULE1_INTERNAL_KEY !== undefined &&
+      config.MODULE1_INTERNAL_KEY !== '',
+  )
+  @Matches(/^[\x21-\x7E]{1,200}$/, {
+    message:
+      'MODULE1_INTERNAL_KEY debe tener de 1 a 200 caracteres ASCII visibles, sin espacios',
+  })
+  MODULE1_INTERNAL_KEY?: string;
+
   // Módulo 3: tiempo máximo de espera de 3 s (si no responde, nunca se asume una tarifa)
   @IsUrl(HTTP_URL_OPTIONS)
   MODULE3_BASE_URL!: string;

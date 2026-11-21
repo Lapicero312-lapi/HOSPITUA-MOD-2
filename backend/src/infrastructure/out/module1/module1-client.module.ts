@@ -7,8 +7,10 @@ import type { EnvironmentVariables } from '../../config/env.validation.js';
 import { Module1HttpAdapter } from './module1-http.adapter.js';
 
 /**
- * Une `Module1Port` con su cliente HTTP (plan base, regla 4), con la dirección `MODULE1_BASE_URL` y el
- * tiempo máximo de espera de 1 s (`MODULE1_TIMEOUT_MS`). También entrega `MAINTENANCE_CONCURRENCY`, el
+ * Une `Module1Port` con su cliente HTTP (plan base, regla 4), con la dirección `MODULE1_BASE_URL`, el
+ * tiempo máximo de espera de 1 s (`MODULE1_TIMEOUT_MS`) y, si está configurada, la cabecera `X-Internal-Key`
+ * (`MODULE1_INTERNAL_KEY`, plan base, "Configuración del Módulo 1"; T017 de `consult-room-inventory`) en
+ * todas las consultas a `/api/rooms…`. También entrega `MAINTENANCE_CONCURRENCY`, el
  * tope de consultas de mantenimiento en paralelo al Módulo 1 de la pantalla "Habitaciones", desde la
  * configuración validada. Es global: los casos de uso inyectan `@Inject(MODULE1_PORT)` y
  * `@Inject(MAINTENANCE_CONCURRENCY)` sin importarlo.
@@ -18,10 +20,19 @@ import { Module1HttpAdapter } from './module1-http.adapter.js';
   imports: [
     HttpModule.registerAsync({
       inject: [ConfigService],
-      useFactory: (config: ConfigService<EnvironmentVariables, true>) => ({
-        baseURL: config.get('MODULE1_BASE_URL', { infer: true }),
-        timeout: config.get('MODULE1_TIMEOUT_MS', { infer: true }),
-      }),
+      useFactory: (config: ConfigService<EnvironmentVariables, true>) => {
+        const internalKey = config.get('MODULE1_INTERNAL_KEY', {
+          infer: true,
+        });
+        return {
+          baseURL: config.get('MODULE1_BASE_URL', { infer: true }),
+          timeout: config.get('MODULE1_TIMEOUT_MS', { infer: true }),
+          // Sin clave configurada no se envía la cabecera. Nunca se envía `Authorization`.
+          ...(internalKey
+            ? { headers: { 'X-Internal-Key': internalKey } }
+            : {}),
+        };
+      },
     }),
   ],
   providers: [
