@@ -20,6 +20,7 @@ import {
   OtaCommissionPageDto,
 } from './ota-commissions.openapi.js';
 import { ApiErrorBody } from '../../shared/api-error.js';
+import { RequiresInternalKey } from './internal-key.guard.js';
 
 /**
  * Las comisiones de las reservas OTA, para el Módulo 3 (plan de `register-ota-information-commission`, A1 y
@@ -38,6 +39,7 @@ export class OtaCommissionsController {
    * global como `400`.
    */
   @Get()
+  @RequiresInternalKey()
   @ApiOperation({
     summary:
       'Las comisiones de las reservas OTA cuya `endDate` cae en el periodo, o de una sola por su `reservationRef`, de a 100, para el Módulo 3. Solo reservas de canal OTA; sin resultados no es un error.',

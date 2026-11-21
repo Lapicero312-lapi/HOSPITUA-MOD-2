@@ -142,10 +142,11 @@ describe('OpenAPI de las rutas de check-view-reservation (T037)', () => {
   });
 
   describe('las respuestas de cada ruta', () => {
-    it('el listado y el resumen del día declaran 200 y 400; el detalle, también la 404', () => {
+    it('el listado declara 200, 400 y la 401 de X-Internal-Key; el resumen del día, 200 y 400; el detalle, también la 404', () => {
       expect(Object.keys(operation(LIST).responses).sort()).toEqual([
         '200',
         '400',
+        '401',
       ]);
       expect(Object.keys(operation(DAY_SUMMARY).responses).sort()).toEqual([
         '200',
@@ -154,6 +155,7 @@ describe('OpenAPI de las rutas de check-view-reservation (T037)', () => {
       expect(Object.keys(operation(DETAIL).responses).sort()).toEqual([
         '200',
         '400',
+        '401',
         '404',
       ]);
     });

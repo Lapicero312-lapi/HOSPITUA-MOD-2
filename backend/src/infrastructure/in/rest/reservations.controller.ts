@@ -75,6 +75,7 @@ import {
   DAY_SUMMARY_EXAMPLE,
   DaySummaryDto,
 } from './day-summary.dto.js';
+import { RequiresInternalKey } from './internal-key.guard.js';
 import { ClientHeader, UserHeader } from './request-headers.js';
 import {
   CANCELLATION_ERROR_EXAMPLES,
@@ -283,6 +284,7 @@ export class ReservationsController {
       'Con `MODULE1` solo se admiten `dateFrom`, `dateTo` (obligatorias) y `roomId`; cualquier otro parámetro responde `400` `UNSUPPORTED_PARAMETER`. La respuesta de cada uno no trae datos financieros.',
   })
   @ApiHeader(clientHeader(['RECEPTIONIST', 'MODULE1']))
+  @RequiresInternalKey(['MODULE1'])
   @ApiListQueryParameters()
   @ApiExtraModels(ReservationListDto, StayRangeDto)
   @ApiOkResponse({
@@ -345,6 +347,7 @@ export class ReservationsController {
     example: 'RSV-3F9A1C7B',
   })
   @ApiHeader(clientHeader(['RECEPTIONIST', 'MODULE3']))
+  @RequiresInternalKey(['MODULE3'])
   @ApiExtraModels(ReservationDetailDto, ReservationBillingDto)
   @ApiOkResponse({
     description:

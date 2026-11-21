@@ -323,6 +323,8 @@ de uso `GetReservationForBilling` y entrega solo esto:
 - Si la reserva no existe: **`404`** `RESERVATION_NOT_FOUND`. Es la única respuesta 404 del Módulo 2:
   el Módulo 3 la espera así (ver el plan base, sección "Errores").
 - Con otro valor de `X-Client`, o sin él: `400` `INVALID_CLIENT`.
+- Con `X-Client: MODULE3`, si `MODULE2_INTERNAL_KEY` tiene valor, exige `X-Internal-Key`: sin ella o con otra,
+  `401` `INVALID_INTERNAL_KEY` (regla 10 del plan base). Con C5 pasa lo mismo con `X-Client: MODULE1`.
 
 ### C5. `GET /api/reservations` (Módulo 1): reservas por fechas (FR-023)
 

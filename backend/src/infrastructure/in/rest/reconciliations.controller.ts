@@ -20,6 +20,7 @@ import {
 } from '../../../application/use-cases/register-ota-information-commission/ports/in/reconcile-commissions.port.js';
 import { readReconciliationRequest } from '../../../application/use-cases/register-ota-information-commission/reconciliation-request.validator.js';
 import { ApiErrorBody } from '../../shared/api-error.js';
+import { RequiresInternalKey } from './internal-key.guard.js';
 import {
   RECONCILIATION_ERROR_EXAMPLES,
   RECONCILIATION_OUTCOME_EXAMPLE,
@@ -45,6 +46,7 @@ export class ReconciliationsController {
 
   /** A2, `POST /api/ota-commissions/reconciliations`. */
   @Post()
+  @RequiresInternalKey()
   @ApiOperation({
     summary:
       'El Módulo 3 marca comisiones como `RECONCILED` o `PAID`. Cada ítem se procesa por separado y en su transacción: el Módulo 2 confirma que los montos coinciden con los guardados antes de cambiar el estado.',

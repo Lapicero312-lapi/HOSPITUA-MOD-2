@@ -108,6 +108,11 @@ y 3 reales: `https://gestionophospitua.tech` y `https://hospitua-module-3.onrend
    `MODULE1_INTERNAL_KEY` (el Módulo 1 todavía no la exige y avisa antes de hacerlo) y `MODULE3_INTERNAL_KEY`
    (avísale antes al Módulo 3, para que la active de su lado al mismo tiempo). Sin ellas, el backend llama
    sin `X-Internal-Key`.
+6. La nuestra, `MODULE2_INTERNAL_KEY`: genera una clave larga (por ejemplo `openssl rand -hex 32`), pásala
+   por privado a los Módulos 1 y 3 y agrégala en el panel **cuando ellos ya la envíen**. Desde ese momento
+   `GET /api/reservations` (con `X-Client: MODULE1`), `GET /api/reservations/{ref}` (con `X-Client: MODULE3`)
+   y `/api/ota-commissions…` responden `401 INVALID_INTERNAL_KEY` sin ella. Las rutas de la Recepcionista no
+   la piden: el navegador no puede guardar un secreto.
 
 **Si Render le da otra URL al backend** porque el nombre ya estaba ocupado, cámbiala en `render.yaml`, en la
 regla `/api/*` del frontend.
