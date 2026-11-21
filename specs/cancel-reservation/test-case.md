@@ -74,10 +74,10 @@ y que una cancelación inválida se rechaza:
 ##### Preconditions & Default Setup
 * **Initial State** : la demo desplegada, con sus servicios en *Live*, y el entorno local listo. Fechas
   relativas: `hoy` es la fecha del hotel (`America/Bogota`) el día en que se ejecuta, y `hoy+N`, N días después.
-  Las categorías del Módulo 1 real son `SENCILLA`, `DOBLE` y `SUITE`; las de los pasos son sugerencias: si una
-  no tiene cupo ese día, se usa otra con las mismas habitaciones libres.
+  Las categorías del Módulo 1 real son `BOUTIQUE`, `DOBLE`, `SENCILLA` y `SUITE`; las de los pasos son
+  sugerencias: si una no tiene cupo ese día, se usa otra con las mismas habitaciones libres.
 * **Environment** :
-  * Staging, la demo de Render (secciones 3, pasos 4 y 5, 4 y 5):
+  * Staging, la demo de Render (sección 3, pasos 4 y 5, y secciones 4 y 5):
     * frontend: `https://hospitua-m2-frontend.onrender.com`;
     * backend: `https://hospitua-m2-backend.onrender.com/api/docs`.
   * Local (secciones 1, 2 y 3, pasos 1 a 3), con los "Primeros pasos" del README: frontend en

@@ -37,13 +37,6 @@ que Booking necesita para vender el hotel sin sobreventa:
 #### Prerequisites & Environment
 
 ##### Test Case Limitations
-* Hoy el Módulo 1 responde `400` a `GET /api/rooms` sin categoría (pendiente del Módulo 1). Con esa consulta
-  el Módulo 2 lee todas las habitaciones vendibles, y el `400` lo trata como un Módulo 1 que no responde
-  (`INVENTORY_UNAVAILABLE`). Mientras no cambie, no sincroniza los tipos de habitación: en el log del backend
-  sale "No se sincronizan los tipos de habitación: el Módulo 1 no respondió (INVENTORY_UNAVAILABLE)…" en cada
-  sincronización. Las secciones 2 y 5 y la sección 4, paso 5, no pueden pasar, y la sección 4, paso 4, da el
-  mismo mensaje con el Módulo 1 arriba o caído. La sección 3 sí puede pasar si `SUITE` ya tiene su tipo en
-  Channex: la disponibilidad lee las habitaciones por categoría.
 * La demo corre en el plan gratuito de Render: el backend se duerme tras un rato sin uso y despierta en cerca
   de un minuto. Mientras duerme no corren las tareas de Channex, tampoco el envío completo de las 03:00.
 * La demo es la única copia del Módulo 2 conectada a Channex. La sección 4, pasos 2 a 6, necesita pausarla
@@ -87,9 +80,9 @@ que Booking necesita para vender el hotel sin sobreventa:
 * **Initial State** : la demo desplegada, con sus servicios en *Live* y las claves `X-Internal-Key` que exijan
   los Módulos 1 y 3 en el panel de Render. Fechas relativas: `hoy` es la fecha del hotel (`America/Bogota`) el
   día en que se ejecuta, y `hoy+N`, N días después.
-* **Habitaciones del Módulo 1** (al 2026-11-20): 14 en tres categorías. `DOBLE`: 103, 109, 202 y 302, de 2
-  personas, y 203, de 3. `SENCILLA`: 102, 201 y 301, de 2, y 101 y 410, de 1. `SUITE`: 105, 204 y 303, de 4, y
-  604, de 5. Antes de ejecutar, compararlas con `GET https://gestionophospitua.tech/api/rooms?categoryRoom=…`;
+* **Habitaciones del Módulo 1** (al 2026-11-21): 19 en cuatro categorías. `BOUTIQUE`: 205, 407, 408 y 409, de
+  2 personas, y 304, de 3. `DOBLE`: 103, 109, 202 y 302, de 2, y 203, de 3. `SENCILLA`: 102, 201 y 301, de 2, y
+  101 y 410, de 1. `SUITE`: 105, 204 y 303, de 4, y 604, de 5. Antes de ejecutar, compararlas con `GET https://gestionophospitua.tech/api/rooms?categoryRoom=…`;
   si cambiaron, ajustar las cantidades y capacidades de las secciones 2 y 3.
 * **Mantenimiento que se le pide al Módulo 1** (sección 3, paso 7): la 303 (`SUITE`, `roomId`
   `a0000000-0000-0000-0000-000000000303`), del `hoy+15` al `hoy+18`. Es el mismo que usa
@@ -128,10 +121,10 @@ que Booking necesita para vender el hotel sin sobreventa:
 ##### Section 2: Tipos de habitación desde las habitaciones vendibles (historia 2, escenario 1)
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Ver las habitaciones del Módulo 1 | Menú → Habitaciones | N/A | 14 habitaciones en tres categorías: `DOBLE` (5), `SENCILLA` (5) y `SUITE` (4) | [ ] | |
+| 1 | Ver las habitaciones del Módulo 1 | Menú → Habitaciones | N/A | 19 habitaciones en cuatro categorías: `BOUTIQUE` (5), `DOBLE` (5), `SENCILLA` (5) y `SUITE` (4) | [ ] | |
 | 2 | Ver los tipos de habitación en Channex | Panel de Channex staging → la propiedad del hotel → tipos de habitación | N/A | Un tipo por cada categoría del paso 1, con su mismo nombre, sin repetidos | [ ] | Si la propiedad se usó con los simuladores, también están `INDIVIDUAL`, `SUITE_JUNIOR` y `TRIPLE`: ver la sección 5, paso 3 |
-| 3 | Revisar la cantidad y la capacidad de cada tipo | Abrir cada tipo en Channex | N/A | `DOBLE`: 5 habitaciones, 3 adultos. `SENCILLA`: 5 y 2. `SUITE`: 4 y 5 (escenario 1). La capacidad es la mayor de la categoría | [ ] | |
-| 4 | Revisar la relación guardada (opcional) | Render → `hospitua-m2-db` → conectarse y consultar la tabla `ota_room_type_mapping` | `SELECT category_room, count_of_rooms, occupancy, channex_room_type_id FROM ota_room_type_mapping ORDER BY category_room;` | Una fila por cada tipo del paso 2. Las de `DOBLE`, `SENCILLA` y `SUITE`, con las cantidades y las capacidades del paso 3 y con el mismo id de cada tipo en Channex | [ ] | Requiere acceso a la base de la demo |
+| 3 | Revisar la cantidad y la capacidad de cada tipo | Abrir cada tipo en Channex | N/A | `BOUTIQUE`: 5 habitaciones, 3 adultos. `DOBLE`: 5 y 3. `SENCILLA`: 5 y 2. `SUITE`: 4 y 5 (escenario 1). La capacidad es la mayor de la categoría | [ ] | |
+| 4 | Revisar la relación guardada (opcional) | Render → `hospitua-m2-db` → conectarse y consultar la tabla `ota_room_type_mapping` | `SELECT category_room, count_of_rooms, occupancy, channex_room_type_id FROM ota_room_type_mapping ORDER BY category_room;` | Una fila por cada tipo del paso 2. Las de `BOUTIQUE`, `DOBLE`, `SENCILLA` y `SUITE`, con las cantidades y las capacidades del paso 3 y con el mismo id de cada tipo en Channex | [ ] | Requiere acceso a la base de la demo |
 
 --------------------------------------------------------------------------------
 

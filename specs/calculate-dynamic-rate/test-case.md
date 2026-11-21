@@ -76,8 +76,8 @@ cual la recibe:
 * **Initial State** : la demo desplegada, con sus servicios en *Live* y las claves `X-Internal-Key` que exijan
   los Módulos 1 y 3 en el panel de Render. Fechas relativas: `hoy` es la fecha del hotel (`America/Bogota`) el
   día en que se ejecuta, y `hoy+N`, N días después. Las secciones 1 y 2 usan la misma reserva, y la sección 2 la
-  cancela al final. Las categorías del Módulo 1 real son `SENCILLA` (5 habitaciones), `DOBLE` (5) y `SUITE` (4):
-  antes de ejecutar, comprobarlo con `GET https://gestionophospitua.tech/api/rooms?categoryRoom=…`. Si cambió
+  cancela al final. Las categorías del Módulo 1 real son `BOUTIQUE` (5 habitaciones), `DOBLE` (5),
+  `SENCILLA` (5) y `SUITE` (4): antes de ejecutar, comprobarlo con `GET https://gestionophospitua.tech/api/rooms?categoryRoom=…`. Si cambió
   la cantidad, ajustar la sección 3, paso 1, y la sección 4, paso 6.
 * **Environment** : Staging. Las secciones 1 a 3 se ejecutan en la demo de Render:
   * frontend: `https://hospitua-m2-frontend.onrender.com`;

@@ -70,8 +70,8 @@ dice con certeza si una habitación se puede ocupar en unas fechas:
   los Módulos 1 y 3 en el panel de Render, y el entorno local listo. Fechas relativas: `hoy` es la fecha del
   hotel (`America/Bogota`) el día en que se ejecuta, y `hoy+N`, N días después. Si una categoría no tiene cupo
   en las fechas de un paso por otras reservas, se usa otra con habitaciones libres.
-* **Habitaciones del Módulo 1** (al 2026-11-20): `SENCILLA` 101, 102, 201, 301 y 410; `DOBLE` 103, 109, 202,
-  203 y 302; `SUITE` 105, 204, 303 y 604. Antes de ejecutar, compararlas con
+* **Habitaciones del Módulo 1** (al 2026-11-21): `BOUTIQUE` 205, 304, 407, 408 y 409; `DOBLE` 103, 109, 202,
+  203 y 302; `SENCILLA` 101, 102, 201, 301 y 410; `SUITE` 105, 204, 303 y 604. Antes de ejecutar, compararlas con
   `GET https://gestionophospitua.tech/api/rooms?categoryRoom=…`; si cambiaron, usar una de la misma categoría y
   ajustar los conteos de la sección 3.
 * **Mantenimientos que se le piden al Módulo 1** antes de ejecutar, en su sistema y relativos al día de la

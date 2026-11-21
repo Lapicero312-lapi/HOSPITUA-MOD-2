@@ -78,8 +78,8 @@ la lista del día al día:
 ##### Preconditions & Default Setup
 * **Initial State** : la demo desplegada, con sus servicios en *Live*, y el entorno local listo. Fechas
   relativas: `hoy` es la fecha del hotel (`America/Bogota`) el día en que se ejecuta, y `hoy+N`, N días después.
-  En pantalla, las fechas se ven como `DD/MM/AAAA`. Las categorías del Módulo 1 real son `SENCILLA`, `DOBLE` y
-  `SUITE`; si una no tiene cupo en las fechas de un paso, se usa otra con habitaciones libres y la misma
+  En pantalla, las fechas se ven como `DD/MM/AAAA`. Las categorías del Módulo 1 real son `BOUTIQUE`, `DOBLE`,
+  `SENCILLA` y `SUITE`; si una no tiene cupo en las fechas de un paso, se usa otra con habitaciones libres y la misma
   capacidad.
 * **Titular de prueba (T)**, ficticio, el mismo en todas las reservas propias: nombre `María José`, apellido
   `Gómez`, `Cédula de ciudadanía` `1000000044`, nacionalidad `Colombia`, teléfono `3000000000` y correo

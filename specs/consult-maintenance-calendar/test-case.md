@@ -46,10 +46,6 @@ reserva una habitación que estará en reparación:
   `available`, `reason`, `message` y, con `MAINTENANCE`, `maintenance` con `overlapStart` y `overlapEnd`. En
   pantalla, el resultado se ve en "Habitaciones" y en la columna "Disponibilidad" de la modificación
   (TC-003-CheckRoomAvailability).
-* Hoy el Módulo 1 responde `400` a `GET /api/rooms` sin categoría (pendiente del Módulo 1). "Habitaciones"
-  parte de esa consulta, así que mientras no cambie muestra "No se pudo consultar el inventario de habitaciones
-  en este momento. Intente de nuevo." y la sección 2 no puede pasar. La vista previa consulta por categoría y
-  no se ve afectada.
 * El calendario es del Módulo 1 real, que es de otro equipo: los mantenimientos que usan los pasos se le piden
   antes de ejecutar (precondiciones). Un aviso de mantenimiento publicado a mano en RabbitMQ no cambia su
   calendario.
@@ -71,8 +67,9 @@ reserva una habitación que estará en reparación:
 * **Initial State** : la demo desplegada, con sus servicios en *Live* y las claves `X-Internal-Key` que exijan
   los Módulos 1 y 3 en el panel de Render. Fechas relativas: `hoy` es la fecha del hotel (`America/Bogota`) el
   día en que se ejecuta, y `hoy+N`, N días después. En pantalla, las fechas se ven como `DD/MM/AAAA`.
-* **Habitaciones del Módulo 1** (al 2026-11-20): 14 en tres categorías. `SENCILLA` 101, 102, 201, 301 y 410;
-  `DOBLE` 103, 109, 202, 203 y 302; `SUITE` 105, 204, 303 y 604. Antes de ejecutar, compararlas con
+* **Habitaciones del Módulo 1** (al 2026-11-21): 19 en cuatro categorías. `BOUTIQUE` 205, 304, 407, 408 y
+  409; `DOBLE` 103, 109, 202, 203 y 302; `SENCILLA` 101, 102, 201, 301 y 410; `SUITE` 105, 204, 303 y 604. Al
+  2026-11-21 ninguna tenía mantenimientos. Antes de ejecutar, compararlas con
   `GET https://gestionophospitua.tech/api/rooms?categoryRoom=…`; si cambiaron, usar una de la misma categoría.
 * **Mantenimientos que se le piden al Módulo 1**, en su sistema y relativos al día de la ejecución. Sus dos
   fechas están incluidas:
@@ -144,7 +141,7 @@ miran la habitación indicada dentro de `availability.rooms`.
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
 | 1 | Ver el mantenimiento próximo de cada habitación | Entrar al frontend → Habitaciones | `Laura Méndez` | La columna "Mantenimiento próximo" muestra `DD/MM/AAAA → DD/MM/AAAA` con las fechas de las precondiciones en la 109, 102, 301, 202 y 303, y en las que tengan un mantenimiento propio del Módulo 1. Las demás muestran "Sin mantenimiento próximo" | [ ] | La pantalla mira de `hoy` a `hoy+29` |
-| 2 | Medir la pantalla completa | Herramientas del navegador → Red, recargar Habitaciones y mirar `GET /api/rooms` | N/A | Responde en menos de 1 s con la demo despierta: incluye una consulta al calendario por cada una de las 14 habitaciones (NFR-001, cota superior) | [ ] | Opcional |
+| 2 | Medir la pantalla completa | Herramientas del navegador → Red, recargar Habitaciones y mirar `GET /api/rooms` | N/A | Responde en menos de 1 s con la demo despierta: incluye una consulta al calendario por cada una de las 19 habitaciones (NFR-001, cota superior) | [ ] | Opcional |
 | 3 | La consulta no cambia el calendario | Repetir la sección 1 y volver a Habitaciones | N/A | Los mismos mantenimientos que en el paso 1 (FR-004) | [ ] | |
 
 --------------------------------------------------------------------------------
