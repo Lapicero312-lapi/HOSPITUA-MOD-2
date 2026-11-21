@@ -363,7 +363,12 @@ interacciones M1 ↔ M3 (liquidación, tarifa base, registrar check-out) no invo
 - La publicación de la lista del día y de sus actualizaciones respeta el orden: las actualizaciones
   esperan detrás de la lista (ver `check-view-reservation`).
 - **Lo que declara el Módulo 2 al arrancar** (todo durable; declararlo otra vez no cambia nada): sus cuatro
-  colas de entrada unidas a su routing key, sus dead-letter y las colas de reintento. **En producción no
+  colas de entrada unidas a su routing key, sus dead-letter, las colas de reintento y su exchange `m2.direct`
+  (tipo direct). Cada cola de entrada y cada dead-letter se une a `m2.direct` con su propio nombre como
+  routing key, y `m2.direct` es el dead-letter exchange de las colas de entrada (hacia su `.dlq`) y de las de
+  reintento (de vuelta a su cola). Hace lo del exchange por defecto, pero solo para sus colas: el exchange por
+  defecto (`""`) no se usa porque RabbitMQ exige escribir en `amq.default` para usarlo como dead-letter, y el
+  Módulo 1 no da ese permiso. **En producción no
   declara el exchange `hospitua.events`**: es del Módulo 1, que lo crea al arrancar (topic, durable), y el
   Módulo 2 no tiene permiso para configurarlo en su broker. Solo comprueba que existe (`checkExchange`); si no
   existiera, RabbitMQ cierra el canal, queda en el log y la conexión no se arma hasta reiniciar el backend. En
@@ -1313,6 +1318,7 @@ Se inserta en la misma transacción que la reserva.
 - [ ] T021 [P] Implementar `ChannexPort` con su adaptador HTTP (`user-api-key`, propiedades, feed, `ack`, reporte de no-show, tipos de habitación y disponibilidad) y el manejo de `429` (pausa de un minuto por propiedad y después espera creciente)
 - [ ] T022 En producción, no declarar `hospitua.events`: comprobar que existe (`createExchangeIfNotExists: false`), con su prueba
 - [ ] T023 `InternalKeyGuard` y `MODULE2_INTERNAL_KEY`: 401 `INVALID_INTERNAL_KEY` en las rutas de los Módulos 1 y 3, OpenAPI y pruebas
+- [ ] T024 Exchange `m2.direct` como dead-letter exchange de las colas de entrada y de reintento, en vez del exchange por defecto, con sus pruebas
 
 **Checkpoint**: Base lista; los planes de caso de uso pueden implementarse.
 
