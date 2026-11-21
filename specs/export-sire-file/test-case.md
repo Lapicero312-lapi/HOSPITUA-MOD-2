@@ -34,7 +34,8 @@ Colombia:
 | Exportar Archivo SIRE | Specification Document | [specs/export-sire-file/spec.md](spec.md) |
 | Exportar Archivo SIRE | Plan Document | [specs/export-sire-file/plan.md](plan.md) |
 | Plan base | Plan Document | [specs/base/plan.md](../base/plan.md) |
-| Despliegue de la demo (Render) | README | [README.md](../../README.md) |
+| Despliegue de la demo (Render) y primeros pasos en local | README | [README.md](../../README.md) |
+| Los Módulos 1 y 3 | README | [README.md](../../README.md#los-módulos-1-y-3) |
 
 --------------------------------------------------------------------------------
 
@@ -43,12 +44,15 @@ Colombia:
 ##### Test Case Limitations
 * El archivo tiene datos personales (NFR-002). Todos los huéspedes de este caso son ficticios, y los archivos
   descargados se borran al terminar.
-* La demo es compartida: el periodo de hoy puede traer movimientos de otras pruebas o de las reservas de
-  ejemplo. Por eso los pasos buscan las líneas propias por el documento, y los totales se comparan con lo que
-  muestra la pantalla.
+* En la demo, el Check-In y el Check-Out solo los publica el Módulo 1. Por eso las secciones 1 a 3 y la
+  sección 4, paso 8, se ejecutan en local, donde se publican a mano. La sección 4, pasos 1 a 7, no necesita
+  movimientos y se ejecuta en la demo.
+* La base local solo tiene lo que se cree en ella: si el mismo día se ejecutaron otros casos de prueba en local,
+  el periodo de hoy también trae sus movimientos. Por eso los pasos buscan las líneas propias por el documento,
+  y los totales se comparan con lo que muestra la pantalla.
 * La salida de un huésped que sigue alojado se reporta el día en que ocurre: el paso que la usa se ejecuta al
   día siguiente (sección 3).
-* No se pueden provocar a mano en la demo, y los cubre `backend/test/integration/export-sire-file/`:
+* No se pueden provocar a mano, y los cubre `backend/test/integration/export-sire-file/`:
   * un campo con un carácter que no se puede escribir en el archivo ("Caracteres no válidos en el registro del
     huésped."): el Módulo 2 ya rechaza al recibir el Check-In los caracteres de control, y el archivo se
     escribe en `utf-8` (`export-sire-file-edge-cases.spec.ts`);
@@ -57,7 +61,7 @@ Colombia:
 * Que las reservas canceladas o en No-Show no aparezcan en el periodo estos pasos no lo arman; lo cubre
   `backend/test/integration/export-sire-file/export-sire-file-edge-cases.spec.ts`.
 * Que una descarga quede registrada en `SireExport` se ve en el `Export-Id` y en el nombre del archivo. Revisar
-  la tabla es opcional y necesita acceso a la base de la demo.
+  la tabla es opcional y se hace en la base local.
 
 ##### Dependencies & Assumptions
 * TC-011-ProcessGuestData debe pasar primero: los movimientos migratorios que se exportan los registra al
@@ -66,12 +70,14 @@ Colombia:
   frontend.
 
 ##### Preconditions & Default Setup
-* **Initial State** : la demo desplegada, con sus servicios en *Live*. Fechas relativas: `hoy` es la fecha del
-  hotel (`America/Bogota`) el día en que se ejecuta, y `hoy+N`, N días después. En pantalla, las fechas se ven
-  como `DD/MM/AAAA`.
-* **Configuración del archivo en la demo** : código del hotel `DEMO-HOTEL`, código de la ciudad `DEMO-CIUDAD`,
-  separador tabulador (la vista previa lo muestra como `→`), fechas `DD/MM/AAAA`, fin de línea `CRLF` y
-  codificación `utf-8`.
+* **Initial State** : el entorno local listo y la demo desplegada, con sus servicios en *Live*. Fechas
+  relativas: `hoy` es la fecha del hotel (`America/Bogota`) el día en que se ejecuta, y `hoy+N`, N días
+  después. En pantalla, las fechas se ven como `DD/MM/AAAA`. Las categorías del Módulo 1 real son `BOUTIQUE`,
+  `DOBLE`, `SENCILLA` y `SUITE`; si una no tiene cupo en las fechas de un paso, se usa otra con la misma
+  capacidad.
+* **Configuración del archivo en local** (`backend/.env.example`): código del hotel `DEV-HOTEL`, código de la
+  ciudad `DEV-CIUDAD`, separador tabulador (la vista previa lo muestra como `→`), fechas `DD/MM/AAAA`, fin de
+  línea `CRLF`, codificación `utf-8` y hasta 10 exportaciones por minuto.
 * **Huéspedes ficticios** (cada uno con `firstName`, `lastName`, `documentType`, `documentNumber`,
   `nationality`, `birthDate` y, los extranjeros, `originPlace` y `destinationPlace`):
 
@@ -82,17 +88,22 @@ Colombia:
   | Carlos Prueba | `CC` `1000000013` | `Colombia` | `1980-11-30` | — | — |
   | Marie Prueba | `PAS` `X0000014` | `Francia` | `1979-02-14` | `París, Francia` | `Medellín, Colombia` |
 
-* **Check-In y Check-Out** : se publican con `POST` a
-  `https://hospitua-m2-simulators.onrender.com/simulate/check-in` o `/simulate/check-out`, con
-  `{"reservationRef", "roomId", "guests"}` como el cuerpo C1 de TC-002-CancelReservation. G1 son John, Ana y
-  Carlos; G2 es Marie. El `roomId` sale de `/api/rooms` del simulador, por el número de la habitación asignada.
-* **Environment** : Staging, la demo de Render:
-  * frontend: `https://hospitua-m2-frontend.onrender.com`;
-  * backend: `https://hospitua-m2-backend.onrender.com/api/docs`;
-  * simuladores: `https://hospitua-m2-simulators.onrender.com`.
+* **Check-In y Check-Out** : se publican a mano en el panel de RabbitMQ local, como dice
+  TC-002-CancelReservation ("Check-In y Check-Out en local"), con el cuerpo C1 y estos `guests`: G1 son John,
+  Ana y Carlos; G2 es Marie. El `movementDate` es el día en que se publica, también en un Check-Out antes de la
+  fecha de salida.
+* **Environment** :
+  * Local (secciones 1 a 3 y sección 4, paso 8), con los "Primeros pasos" del README: frontend en
+    `http://localhost:5173`, documentación de la API en `http://localhost:3000/api/docs` y el panel de RabbitMQ
+    en `http://localhost:15672`, con el usuario y la clave del README. `backend/.env.example` ya apunta a los
+    Módulos 1 y 3 reales.
+  * Staging, la demo de Render (sección 4, pasos 1 a 7):
+    * frontend: `https://hospitua-m2-frontend.onrender.com`;
+    * backend: `https://hospitua-m2-backend.onrender.com/api/docs`.
 * **Test Accounts** :
   * Recepcionista: el inicio de sesión es simulado y solo pide el nombre, por ejemplo `Laura Méndez`;
-  * Render: la cuenta de quien desplegó la demo, para ver los logs y, opcionalmente, consultar la base.
+  * claves `X-Internal-Key` de los Módulos 1 y 3 para `backend/.env`, si las exigen: las tiene quien administra
+    la demo.
 
 --------------------------------------------------------------------------------
 
@@ -101,10 +112,10 @@ Colombia:
 ##### Section 1: Periodo y movimientos de hoy (escenario 8 y FR-002a)
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Crear S1, un grupo mixto | Entrar al frontend → Reservas → Nueva reserva directa, con John Prueba como titular | `TRIPLE`; entrada `hoy`, salida `hoy+1`; 1 habitación, 3 personas | La reserva queda creada | [ ] | Anotar el código y la habitación |
-| 2 | Registrar la entrada del grupo | Publicar el Check-In de S1 con G1 | G1 | El simulador responde `202` y S1 queda "En curso" | [ ] | |
-| 3 | Crear S2 y registrar su entrada | Nueva reserva directa con Marie Prueba como titular, y publicar su Check-In con G2 | `INDIVIDUAL`; entrada `hoy`, salida `hoy+2`; 1 habitación | S2 queda "En curso" | [ ] | Anotar el código y la habitación |
-| 4 | Registrar la salida del grupo | Publicar el Check-Out de S1 con G1 | G1 | S1 queda "Completada" | [ ] | |
+| 1 | Crear S1, un grupo mixto | Entrar al frontend → Reservas → Nueva reserva directa, con John Prueba como titular | `SUITE`; entrada `hoy`, salida `hoy+1`; 1 habitación, 3 personas | La reserva queda creada | [ ] | Anotar el código y la habitación |
+| 2 | Registrar la entrada del grupo | Publicar el Check-In de S1 con G1 | G1 | El panel confirma que el mensaje se enrutó y S1 queda "En curso" | [ ] | |
+| 3 | Crear S2 y registrar su entrada | Nueva reserva directa con Marie Prueba como titular, y publicar su Check-In con G2 | `SENCILLA`; entrada `hoy`, salida `hoy+2`; 1 habitación | S2 queda "En curso" | [ ] | Anotar el código y la habitación |
+| 4 | Registrar la salida del grupo | Publicar el Check-Out de S1 con G1 | G1; `movementDate` `hoy` | S1 queda "Completada" | [ ] | |
 | 5 | Abrir la exportación | Exportar SIRE | N/A | "Exportar archivo SIRE" con "Fecha inicial" y "Fecha final" en `hoy`. "Movimientos en el periodo" muestra cinco filas propias: entrada y salida de John y de Ana, y entrada de Marie, cada una con su reserva, su huésped, su nacionalidad y el movimiento ("Entrada" o "Salida") con la fecha de `hoy`. Carlos no aparece (escenarios 3 y 8) | [ ] | Anotar el total de movimientos del periodo (N). Si hay varias páginas, las filas propias pueden estar en cualquiera |
 | 6 | Cambiar el periodo con los atajos | Elegir "Últimos 7 días" y después "Hoy" | N/A | Con "Últimos 7 días", el periodo va de `hoy-7` a `hoy` y puede traer movimientos de días anteriores. Con "Hoy", vuelve a `hoy` y `hoy`, con los mismos movimientos del paso 5 (escenario 8) | [ ] | |
 
@@ -113,14 +124,14 @@ Colombia:
 ##### Section 2: Archivo, vista previa y descargas (escenarios 1 a 4, 6 y 7)
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Previsualizar un movimiento | En la fila de la entrada de John, "Previsualizar" | N/A | La vista previa muestra los 12 campos con su valor y la línea: `DEMO-HOTEL → DEMO-CIUDAD → PAS → X0000011 → Estados Unidos → PRUEBA → JOHN → E → <hoy> → Miami, Estados Unidos → Cartagena, Colombia → 10/03/1985`. No se descarga nada (escenario 6 y FR-005) | [ ] | Los nombres y apellidos salen en mayúsculas |
+| 1 | Previsualizar un movimiento | En la fila de la entrada de John, "Previsualizar" | N/A | La vista previa muestra los 12 campos con su valor y la línea: `DEV-HOTEL → DEV-CIUDAD → PAS → X0000011 → Estados Unidos → PRUEBA → JOHN → E → <hoy> → Miami, Estados Unidos → Cartagena, Colombia → 10/03/1985`. No se descarga nada (escenario 6 y FR-005) | [ ] | Los nombres y apellidos salen en mayúsculas |
 | 2 | Previsualizar una salida | En la fila de la salida de Ana, "Previsualizar" | N/A | La misma forma, con `PAS → X0000012 → Venezuela → PRUEBA → ANA → S → <hoy> → Caracas, Venezuela → Bogotá, Colombia → 01/07/1992` | [ ] | |
 | 3 | Descargar todo el periodo | Cerrar la vista previa → "Descargar todo el periodo (.TXT)" | N/A | Se descarga `SIRE_<id>.txt` y aparece "Archivo SIRE_<id>.txt descargado: N movimientos." El archivo tiene N líneas, separadas con tabulador y terminadas en `CRLF`, entre ellas las cinco propias, con los mismos valores de la vista previa. No hay ninguna línea de Carlos (escenarios 1, 2 y 3, FR-005 y FR-007) | [ ] | Anotar el `<id>` |
 | 4 | Descargar otra vez el mismo periodo | "Descargar todo el periodo (.TXT)" de nuevo | N/A | Otro archivo, con otro `<id>` y las mismas N líneas: no hay restricción por haberlo descargado antes (escenario 4 y FR-006) | [ ] | |
 | 5 | Descargar un solo movimiento | En la fila de la entrada de Marie, "Descargar", dos veces | N/A | Cada vez se descarga un `SIRE_<id>.txt` con una sola línea, la de Marie, y aparece "Movimiento de Marie Prueba descargado (SIRE_<id>.txt).", con un `<id>` distinto cada vez (escenario 7 y FR-010) | [ ] | |
-| 6 | Exportar por la API | Documentación de la API → `POST /api/sire/exports` con `X-User` | `{"exportKind": "PERIOD", "startDate": "<hoy>", "endDate": "<hoy>"}`; `X-User` `Laura Méndez` | `200` con el cuerpo de texto del archivo y nada más, la cabecera `Export-Id` y `Content-Disposition` `attachment; filename="SIRE_<Export-Id>.txt"` (FR-008) | [ ] | |
-| 7 | Revisar el histórico | Opcional, con acceso a la base de la demo: `SELECT export_kind, records_count, date_range_start, date_range_end, processed_by FROM sire_export ORDER BY export_date DESC LIMIT 5;` | N/A | Una fila por cada descarga de los pasos 3 a 6 (dos `PERIOD` de N, dos `SINGLE_MOVEMENT` de 1 y una `PERIOD` por la API), con `Laura Méndez` en `processed_by`. Ninguna por las vistas previas (FR-007 y SC-003) | [ ] | Opcional |
-| 8 | Revisar que los logs no tienen datos del archivo | Render → `hospitua-m2-backend` → Logs, buscar los documentos y los apellidos | `X0000011`, `X0000014` y `PRUEBA` | Ninguna coincidencia (plan base: los logs no llevan datos personales) | [ ] | Borrar los archivos descargados al terminar |
+| 6 | Exportar por la API | Documentación de la API local → `POST /api/sire/exports` con `X-User` | `{"exportKind": "PERIOD", "startDate": "<hoy>", "endDate": "<hoy>"}`; `X-User` `Laura Méndez` | `200` con el cuerpo de texto del archivo y nada más, la cabecera `Export-Id` y `Content-Disposition` `attachment; filename="SIRE_<Export-Id>.txt"` (FR-008) | [ ] | |
+| 7 | Revisar el histórico | Opcional, con un cliente de PostgreSQL contra la base local (los datos de conexión están en `backend/.env`): `SELECT export_kind, records_count, date_range_start, date_range_end, processed_by FROM sire_export ORDER BY export_date DESC LIMIT 5;` | N/A | Una fila por cada descarga de los pasos 3 a 6 (dos `PERIOD` de N, dos `SINGLE_MOVEMENT` de 1 y una `PERIOD` por la API), con `Laura Méndez` en `processed_by`. Ninguna por las vistas previas (FR-007 y SC-003) | [ ] | Opcional |
+| 8 | Revisar que los logs no tienen datos del archivo | En la terminal del backend local, buscar los documentos y los apellidos en todo lo que escribió desde el arranque | `X0000011`, `X0000014` y `PRUEBA` | Ninguna coincidencia (plan base: los logs no llevan datos personales) | [ ] | Borrar los archivos descargados al terminar |
 
 --------------------------------------------------------------------------------
 
@@ -128,22 +139,25 @@ Colombia:
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
 | 1 | Hoy solo se reporta su entrada | Exportar SIRE con el periodo `hoy` | N/A | Marie tiene solo la fila de entrada: S2 sigue "En curso" (escenario 2) | [ ] | |
-| 2 | Registrar su salida al día siguiente | Al día siguiente, publicar el Check-Out de S2 con G2 | G2 | S2 queda "Completada" | [ ] | Se ejecuta al día siguiente |
+| 2 | Registrar su salida al día siguiente | Al día siguiente, arrancar el backend local y publicar el Check-Out de S2 con G2 | G2; `movementDate` con la fecha de ese día | S2 queda "Completada" | [ ] | Se ejecuta al día siguiente |
 | 3 | La salida va en el periodo en que ocurre | Exportar SIRE con "Hoy" y después con el periodo del día anterior | N/A | La salida de Marie aparece en el periodo de hoy, con la fecha de hoy, y no en el del día anterior, que conserva solo su entrada | [ ] | |
 
 --------------------------------------------------------------------------------
 
 ##### Section 4: Periodos inválidos y límite de solicitudes (escenario 5, casos borde, FR-009 y SC-002)
+Los pasos 1 a 7 se ejecutan en la demo; el paso 8, en local. Por la API, con `POST /api/sire/exports` y
+`X-User` `Laura Méndez`.
+
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
 | 1 | Un periodo sin movimientos | Exportar SIRE con un periodo futuro. Después, la misma exportación por la API | Fecha inicial `hoy+200`, final `hoy+201` | La pantalla muestra "No hay movimientos migratorios que reportar en ese periodo." y "Descargar todo el periodo (.TXT)" queda deshabilitado. La API responde `400` con el código `NO_MIGRATORY_MOVEMENTS` y el mismo mensaje, sin archivo (escenario 5) | [ ] | |
 | 2 | Un periodo al revés | Fecha inicial después de la final, en pantalla y por la API | Inicial `hoy`, final `hoy-1` | "La fecha inicial no puede ser posterior a la fecha final." La API responde `400` `INVALID_DATE_RANGE` | [ ] | |
 | 3 | Un periodo de más de un año | Por la API | Inicial `hoy-400`, final `hoy` | `400` con el código `PERIOD_TOO_LARGE` y "El periodo solicitado excede el límite permitido. Por favor exporte periodos más cortos." | [ ] | |
 | 4 | Una fecha mal formada | Por la API | `startDate` con la fecha de hoy escrita como `DD/MM/AAAA` | `400` con el código `INVALID_DATE` | [ ] | |
-| 5 | Sin la Recepcionista | `POST /api/sire/exports` sin `X-User` | El cuerpo de la sección 2, paso 6 | `400` con el código `USER_REQUIRED`, sin archivo | [ ] | |
+| 5 | Sin la Recepcionista | `POST /api/sire/exports` sin `X-User` | `{"exportKind": "PERIOD", "startDate": "<hoy>", "endDate": "<hoy>"}` | `400` con el código `USER_REQUIRED`, sin archivo | [ ] | |
 | 6 | Un tipo de exportación que no existe | Por la API | `"exportKind": "ALL"` | `400` con el código `INVALID_EXPORT_KIND` y "El tipo de exportación no es válido." | [ ] | |
 | 7 | Un movimiento que no existe | Por la API | `{"exportKind": "SINGLE_MOVEMENT", "movementId": "00000000-0000-4000-8000-000000000000"}` | `400` con el código `MOVEMENT_NOT_FOUND` y "El movimiento no existe." | [ ] | |
-| 8 | Demasiadas descargas seguidas | Con el mismo `X-User`, repetir la exportación de la sección 2, paso 6, once veces dentro del mismo minuto | `X-User` `Laura Méndez` | Las primeras diez responden `200`. La undécima responde `429` con el código `TOO_MANY_REQUESTS`, "Se superó el límite de solicitudes de exportación. Intente de nuevo en unos segundos." y la cabecera `Retry-After`, nunca un `500` | [ ] | Las descargas de ese mismo minuto en la pantalla también cuentan |
+| 8 | Demasiadas descargas seguidas | En local, con el mismo `X-User`, repetir la exportación de la sección 2, paso 6, once veces dentro del mismo minuto | `X-User` `Laura Méndez` | Las primeras diez responden `200`. La undécima responde `429` con el código `TOO_MANY_REQUESTS`, "Se superó el límite de solicitudes de exportación. Intente de nuevo en unos segundos." y la cabecera `Retry-After`, nunca un `500` | [ ] | Las descargas de ese mismo minuto en la pantalla también cuentan |
 
 --------------------------------------------------------------------------------
 
