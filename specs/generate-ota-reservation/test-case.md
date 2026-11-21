@@ -36,6 +36,7 @@ solos al Módulo 2 por el feed de Channex:
 | Generar Reservación por OTA | Plan Document | [specs/generate-ota-reservation/plan.md](plan.md) |
 | Plan base | Plan Document | [specs/base/plan.md](../base/plan.md) |
 | Despliegue de la demo (Render) | README | [README.md](../../README.md) |
+| Los Módulos 1 y 3 | README | [README.md](../../README.md#los-módulos-1-y-3) |
 
 --------------------------------------------------------------------------------
 
@@ -44,6 +45,15 @@ solos al Módulo 2 por el feed de Channex:
 ##### Test Case Limitations
 * La demo es la única copia conectada a Channex: este caso se ejecuta solo contra la demo, nunca con un backend
   local conectado a Channex.
+* En la demo, la lista del día y sus actualizaciones las recibe el Módulo 1 real, y el Check-In y el Check-Out
+  solo los publica él. Por eso:
+  * los avisos al Módulo 1 de las reservas de Booking no se ven a mano. Los cubre
+    `backend/test/integration/check-view-reservation/daily-list-updates-scenarios.spec.ts`: el `ADDED` de una
+    reserva con llegada hoy (escenario 2) y el `REMOVED` por no-show (escenario 6). Que una reserva futura no se
+    avise lo decide el mismo registro de cambios que usan las reservas directas; lo cubre
+    `backend/test/integration/generate-direct-reservation/direct-reservation-scenarios.spec.ts` (escenario 4);
+  * la sección 3 se coordina con el Módulo 1, que hace el Check-In y el Check-Out en su sistema. Si no puede, la
+    cubre `backend/test/integration/use-cases/generate-ota-reservation/booking-changes.spec.ts` (escenario 4).
 * Hace falta el acceso del equipo al hotel de prueba de Booking `10485037` para crear, cambiar y cancelar las
   reservas. Las credenciales no se escriben en este documento.
 * La demo lee el feed cada 30 segundos solo mientras está despierta: el plan gratuito de Render la duerme tras
@@ -80,9 +90,10 @@ solos al Módulo 2 por el feed de Channex:
   provoca desde Booking.
 
 ##### Preconditions & Default Setup
-* **Initial State** : la demo desplegada, con sus servicios en *Live*, y Agencias con Booking.com activa.
-  Fechas relativas: `hoy` es la fecha del hotel (`America/Bogota`) el día en que se ejecuta, y `hoy+N`, N días
-  después. En pantalla, las fechas se ven como `DD/MM/AAAA`.
+* **Initial State** : la demo desplegada, con sus servicios en *Live*, las claves `X-Internal-Key` que exijan
+  los Módulos 1 y 3 en el panel de Render, y Agencias con Booking.com activa. Fechas relativas: `hoy` es la
+  fecha del hotel (`America/Bogota`) el día en que se ejecuta, y `hoy+N`, N días después. En pantalla, las
+  fechas se ven como `DD/MM/AAAA`.
 * **Huésped ficticio de Booking** : nombre `Prueba`, apellido `Booking`, correo `prueba.booking@example.com`,
   teléfono `+1 305 000 0000` y país Estados Unidos. Las reservas se pagan con la tarjeta de prueba
   `4111 1111 1111 1111`.
@@ -91,29 +102,27 @@ solos al Módulo 2 por el feed de Channex:
 * **Environment** : Staging, la demo de Render y Booking:
   * frontend: `https://hospitua-m2-frontend.onrender.com`;
   * backend: `https://hospitua-m2-backend.onrender.com/api/docs`;
-  * simuladores: `https://hospitua-m2-simulators.onrender.com`, con sus logs en Render y el Check-In a pedido
-    (`POST /simulate/check-in` y `/simulate/check-out`, con el cuerpo C1 de TC-002-CancelReservation);
   * Booking: el hotel de prueba `10485037`, conectado a la propiedad de Channex staging.
 * **Test Accounts** :
   * Recepcionista: el inicio de sesión es simulado y solo pide el nombre, por ejemplo `Laura Méndez`;
   * Booking: el acceso del equipo al hotel de prueba;
-  * Render: la cuenta de quien desplegó la demo, para ver los logs.
+  * Render: la cuenta de quien desplegó la demo, para ver los logs;
+  * el contacto del Módulo 1, para el Check-In y el Check-Out de la sección 3.
 
 --------------------------------------------------------------------------------
 
 #### Test Execution Flow  *(mandatory)*
 
-##### Section 1: Reserva nueva con llegada hoy (User Story 1, escenario 1, FR-003, FR-004, FR-008, FR-009 y NFR-001)
+##### Section 1: Reserva nueva con llegada hoy (User Story 1, escenario 1, FR-003, FR-004, FR-008 y NFR-001)
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Preparar la demo | Abrir el backend y los simuladores, entrar al frontend y abrir Agencias | `Laura Méndez` | Booking.com aparece activa | [ ] | Anotar P |
+| 1 | Preparar la demo | Abrir el backend, entrar al frontend y abrir Agencias | `Laura Méndez` | Booking.com aparece activa | [ ] | Anotar P |
 | 2 | Reservar en Booking | En el hotel de prueba `10485037`, reservar una habitación del tipo relacionado con `DOBLE` con el huésped ficticio | Llegada `hoy`, salida `hoy+2`; 2 adultos | Booking confirma la reserva | [ ] | Anotar el código de Booking, el total y la hora |
 | 3 | Ver la reserva en el Módulo 2 | Reservas → buscar el código de Booking | El código de Booking | Antes de 2 minutos desde la confirmación, una sola reserva "Activa", con el canal "OTA" y Booking.com, y el código de Booking bajo su referencia (NFR-001) | [ ] | Anotar el código `RSV-` |
 | 4 | Revisar el detalle | Ver detalle | N/A | Canal "OTA · Booking.com", el "Código de la OTA", entrada `hoy`, salida `hoy+2`, 2 noches y 2 personas. Una habitación `DOBLE`, la libre de menor número, en "Esperada" y sin valor bruto por habitación. El titular `Prueba Booking`, con su correo y su teléfono, nacionalidad `Estados Unidos` (Booking envía `US`) y sin tipo ni número de documento (escenario 1 y FR-008) | [ ] | |
 | 5 | Revisar el valor y la comisión | Documentación de la API → `GET /api/ota-commissions` | `dateFrom` y `dateTo` `hoy+2` | Un elemento con la reserva, `otaName` Booking.com, el código de Booking, `grossAmount` igual al total de Booking, `commissionPercentage` P y `commissionAmount` igual a `grossAmount × P / 100` (FR-004 y SC-002) | [ ] | |
 | 6 | Revisar la consulta del Módulo 3 | `GET /api/reservations/{reservationRef}` con `X-Client` `MODULE3` | El código `RSV-` | `channel` `OTA`, `quoteIds` vacío y `ota` con el `otaId` de Booking.com, `confirmationCode` igual al código de Booking y `commissionPercentage` P | [ ] | |
-| 7 | Ver el aviso al Módulo 1 | Render → `hospitua-m2-simulators` → Logs | El código `RSV-` | "Actualización ADDED de <código> recibida": llega hoy y tiene su habitación asignada (FR-009) | [ ] | |
-| 8 | Revisar que los logs no tienen datos del titular | Render → `hospitua-m2-backend` → Logs, buscar el apellido, el correo y el teléfono | `Booking`, `prueba.booking@example.com` y `305 000 0000` | Ninguna coincidencia con los datos del titular (NFR-002) | [ ] | La palabra "Booking" puede salir como nombre de la agencia |
+| 7 | Revisar que los logs no tienen datos del titular | Render → `hospitua-m2-backend` → Logs, buscar el apellido, el correo y el teléfono | `Booking`, `prueba.booking@example.com` y `305 000 0000` | Ninguna coincidencia con los datos del titular (NFR-002) | [ ] | La palabra "Booking" puede salir como nombre de la agencia |
 
 --------------------------------------------------------------------------------
 
@@ -121,7 +130,7 @@ solos al Módulo 2 por el feed de Channex:
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
 | 1 | Reservar dos habitaciones en Booking | En el hotel de prueba, reservar dos habitaciones del tipo relacionado con `DOBLE` | Llegada `hoy+30`, salida `hoy+32`; 2 adultos en cada una | Booking confirma la reserva | [ ] | Anotar el código y el total |
-| 2 | Ver una sola reserva con dos habitaciones | Reservas → buscar el código de Booking → Ver detalle | El código de Booking | Una sola reserva "Activa" con 4 personas y dos habitaciones `DOBLE`, las dos libres de menor número. En los logs del simulador no aparece nada: llega en el futuro (escenario 3 y SC-004) | [ ] | Anotar el código `RSV-` |
+| 2 | Ver una sola reserva con dos habitaciones | Reservas → buscar el código de Booking → Ver detalle | El código de Booking | Una sola reserva "Activa" con 4 personas y dos habitaciones `DOBLE`, las dos libres de menor número (escenario 3) | [ ] | Anotar el código `RSV-` |
 | 3 | Cambiar la salida en Booking | En Booking, cambiar la fecha de salida de esa reserva | Salida `hoy+33` | Antes de 2 minutos, el detalle muestra salida `hoy+33` y 3 noches, con las mismas habitaciones si siguen libres (escenario 1 de la User Story 2) | [ ] | Anotar el total nuevo |
 | 4 | Revisar la comisión recalculada | `GET /api/ota-commissions` | `dateFrom` y `dateTo` `hoy+33` | `grossAmount` igual al total nuevo y `commissionAmount` igual a `grossAmount × P / 100`, con el mismo porcentaje congelado (FR-005) | [ ] | |
 | 5 | Cancelar en Booking | En Booking, cancelar esa reserva | N/A | Antes de 2 minutos, la reserva queda "Cancelada", con el panel "Cancelación": canal "Booking" y procesada por `Booking.com` (escenario 3 de la User Story 2) | [ ] | |
@@ -132,17 +141,17 @@ solos al Módulo 2 por el feed de Channex:
 ##### Section 3: Un cambio de Booking que no se puede aplicar (User Story 2, escenario 4, y FR-007)
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Poner en curso la reserva de la sección 1 | Publicar el Check-In de su habitación con el cuerpo C1 | El código `RSV-` de la sección 1 | El simulador responde `202` y la reserva queda "En curso" | [ ] | El `roomId` sale de `/api/rooms` del simulador |
+| 1 | Poner en curso la reserva de la sección 1 | Pedirle al Módulo 1 que haga en su sistema el Check-In de esa reserva, que le llegó en la lista del día o en su actualización | El código `RSV-` de la sección 1 | La reserva queda "En curso" | [ ] | |
 | 2 | Cancelarla en Booking | En Booking, cancelar esa reserva | N/A | Antes de 2 minutos, la reserva sigue "En curso", y el detalle muestra "En conflicto: El cambio de Booking no se pudo aplicar, desde el …". En el listado tiene la marca "En conflicto" y sale con "Solo en conflicto" (escenario 4) | [ ] | |
-| 3 | Dejar terminada la estadía | Publicar el Check-Out con el cuerpo C1 | N/A | La reserva queda "Completada" | [ ] | Queda en conflicto para que la Recepcionista lo revise |
+| 3 | Dejar terminada la estadía | Pedirle al Módulo 1 que haga el Check-Out en su sistema | N/A | La reserva queda "Completada" | [ ] | Queda en conflicto para que la Recepcionista lo revise |
 
 --------------------------------------------------------------------------------
 
 ##### Section 4: No-show reportado a Booking (User Story 2, escenario 6, y FR-011)
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Reservar en Booking con llegada hoy | En el hotel de prueba, reservar una habitación con el huésped ficticio y no publicar ningún Check-In | Llegada `hoy`, salida `hoy+1` | La reserva aparece en el Módulo 2 "Activa" y en los logs del simulador sale su ADDED | [ ] | Anotar los códigos |
-| 2 | Ver el no-show al día siguiente | Al día siguiente, abrir la demo después del cierre del día y abrir la reserva | El código `RSV-` | "No se presentó". En los logs del simulador, "Actualización REMOVED (NO_SHOW) de <código>", con la fecha de ayer | [ ] | Se ejecuta al día siguiente |
+| 1 | Reservar en Booking con llegada hoy | En el hotel de prueba, reservar una habitación con el huésped ficticio, sin pedirle al Módulo 1 ningún Check-In | Llegada `hoy`, salida `hoy+1` | La reserva aparece en el Módulo 2 "Activa" | [ ] | Anotar los códigos |
+| 2 | Ver el no-show al día siguiente | Al día siguiente, abrir la demo después del cierre del día y abrir la reserva | El código `RSV-` | "No se presentó". Su aviso al Módulo 1 está en las limitaciones | [ ] | Se ejecuta al día siguiente |
 | 3 | Ver el reporte a Channex | Render → `hospitua-m2-backend` → Logs | N/A | "No-shows a Channex: 1 reportados, 0 rechazados y 0 pendientes." (o con más reportados, si hubo otros) | [ ] | |
 | 4 | Ver el no-show en Booking | En el hotel de prueba de Booking, abrir la reserva | El código de Booking | Booking la muestra como no-show, sin cargo al huésped | [ ] | Channex lo acepta hasta 48 horas después de la llegada |
 

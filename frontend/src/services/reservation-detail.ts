@@ -52,6 +52,11 @@ export type ReservationDetail = {
   /** Solo en reservas `OTA`. */
   externalConfirmationCode: string | null;
   otaName: string | null;
+  /**
+   * Solo en reservas `OTA`: el valor total que reportó Booking, en su moneda (USD). `null` en las directas, cuyo
+   * valor está en la tarifa de cada habitación.
+   */
+  grossAmount: Money | null;
   startDate: string;
   endDate: string;
   nights: number;

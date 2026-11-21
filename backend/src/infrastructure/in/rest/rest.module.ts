@@ -19,7 +19,6 @@ import {
 } from './internal-key.guard.js';
 import { OtaCommissionsController } from './ota-commissions.controller.js';
 import { OtasController } from './otas.controller.js';
-import { RatesController } from './rates.controller.js';
 import { ReconciliationsController } from './reconciliations.controller.js';
 import { ReservationsController } from './reservations.controller.js';
 import { RoomsController } from './rooms.controller.js';
@@ -44,7 +43,6 @@ import type { EnvironmentVariables } from '../../config/env.validation.js';
     RoomsController,
     GuestsController,
     DirectReservationsController,
-    RatesController,
     GuestStaysController,
     ReservationsController,
     SireController,

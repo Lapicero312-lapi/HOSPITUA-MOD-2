@@ -33,8 +33,8 @@ habitaciones, sin sobreventa y sin cobro:
 | Generar Reservación Directa | Specification Document | [specs/generate-direct-reservation/spec.md](spec.md) |
 | Generar Reservación Directa | Plan Document | [specs/generate-direct-reservation/plan.md](plan.md) |
 | Plan base | Plan Document | [specs/base/plan.md](../base/plan.md) |
-| Despliegue de la demo (Render) | README | [README.md](../../README.md) |
-| Habitaciones, mantenimientos y tarifas de los simuladores | Datos de prueba | [simulators/src/data.js](../../simulators/src/data.js) |
+| Despliegue de la demo (Render) y primeros pasos en local | README | [README.md](../../README.md) |
+| Los Módulos 1 y 3 | README | [README.md](../../README.md#los-módulos-1-y-3) |
 
 --------------------------------------------------------------------------------
 
@@ -43,16 +43,19 @@ habitaciones, sin sobreventa y sin cobro:
 ##### Test Case Limitations
 * La pantalla no deja elegir una habitación concreta: asigna sola la disponible de menor número. La habitación
   pedida por su `roomId` se prueba por la API (sección 5, paso 2).
-* En la demo, el Módulo 1 y el Módulo 3 son el mismo simulador: si se suspende, primero falla el inventario. El
-  Módulo 3 sin responder se prueba en local, como en TC-001-CalculateDynamicRate, sección 4 (aquí, sección 7,
-  paso 1).
+* Las tarifas las calcula el Módulo 3 real con sus reglas de temporada: no hay valores fijos. Cada paso anota
+  la tarifa que muestra la vista previa y la compara con la de la reserva creada.
+* En la demo, la lista del día y sus actualizaciones las recibe el Módulo 1 real. Por eso las secciones 1 a 3
+  se ejecutan en local, donde se leen en una cola propia; la sección 3 también, porque precarga al titular de
+  la sección 1. El Módulo 3 sin responder también se prueba en local (sección 7, paso 1), como en
+  TC-001-CalculateDynamicRate, sección 4.
 * No se pueden provocar a mano, y los cubre `backend/test/integration/generate-direct-reservation/`:
   * dos creaciones exactamente a la vez sobre la última habitación (`AVAILABILITY_TAKEN`):
     `direct-reservation-concurrency.spec.ts`;
   * un Módulo 3 que cotiza unas habitaciones y falla en otra: `direct-reservation-edge-cases.spec.ts`;
   * NFR-001, el cruce local de reservas en menos de 200 ms: `crossing-time.spec.ts`.
-* La comisión en `0` y el `quoteId` de cada habitación no se muestran en pantalla. Se ven, en parte, en la
-  consulta del Módulo 3 y, completos, en la base de la demo (opcional).
+* La comisión en `0` y el `quoteId` de cada habitación no se muestran en pantalla. Se ven en la consulta del
+  Módulo 3 y, opcionalmente, en la base local.
 
 ##### Dependencies & Assumptions
 * TC-007-ConsultRoomInventory, TC-006-ConsultMaintenanceCalendar, TC-003-CheckRoomAvailability y
@@ -61,22 +64,35 @@ habitaciones, sin sobreventa y sin cobro:
 * El aviso al Módulo 1 sale por la lista del día, que verifica TC-004-CheckViewReservation.
 
 ##### Preconditions & Default Setup
-* **Initial State** : la demo desplegada, con sus servicios en *Live*. Fechas relativas: `hoy` es la fecha del
+* **Initial State** : el entorno local listo y la demo desplegada, con sus servicios en *Live* y las claves
+  `X-Internal-Key` que exijan los Módulos 1 y 3 en el panel de Render. Fechas relativas: `hoy` es la fecha del
   hotel (`America/Bogota`) el día en que se ejecuta, y `hoy+N`, N días después. En pantalla, las fechas se ven
   como `DD/MM/AAAA` y los valores como `440.000,00 COP`.
-* **Tarifas por noche del Módulo 3 simulado** : `INDIVIDUAL` 150.000, `DOBLE` 220.000, `TRIPLE` 300.000,
-  `SUITE_JUNIOR` 480.000 y `SUITE` 650.000 COP.
+* **Habitaciones del Módulo 1** (al 2026-11-21): `BOUTIQUE` 205, 304, 407, 408 y 409; `DOBLE` 103, 109, 202,
+  203 (3 personas) y 302, de 2 personas; `SENCILLA` 101, 102, 201, 301 y 410; `SUITE` 105, 204, 303 y 604.
+  Antes de ejecutar, compararlas con `GET https://gestionophospitua.tech/api/rooms`; si cambiaron, ajustar las
+  habitaciones esperadas.
+* **Mantenimiento que se le pide al Módulo 1** (sección 5, paso 2, y sección 7, pasos 2 y 3): la 303 (`SUITE`,
+  `roomId` `a0000000-0000-0000-0000-000000000303`), del `hoy+15` al `hoy+18`, el mismo de
+  TC-003-CheckRoomAvailability. Comprobarlo con
+  `GET https://gestionophospitua.tech/api/rooms/a0000000-0000-0000-0000-000000000303/maintenances?startDate=…&endDate=…`.
 * **Titulares ficticios** : H1, `Andrés Prueba`, `Cédula de ciudadanía` `1000000091`, `Colombia`, teléfono
   `3000000091`, correo `andres.prueba@example.com`; H2, `Lucía Prueba`, `Cédula de ciudadanía` `1000000092`,
-  `Colombia`, sin teléfono ni correo. Si un documento ya se usó en una ejecución anterior, se precarga: se usa
-  otro número sin reservas.
+  `Colombia`, sin teléfono ni correo. Si un documento ya se usó en una ejecución anterior en el mismo entorno,
+  se precarga: se usa otro número sin reservas.
 * **Reservas de la demo** : si una categoría no tiene cupo en las fechas de un paso, se usa otra con las
   mismas habitaciones libres.
-* **Environment** : Staging, la demo de Render:
-  * frontend: `https://hospitua-m2-frontend.onrender.com`;
-  * backend: `https://hospitua-m2-backend.onrender.com/api/docs`;
-  * simuladores: `https://hospitua-m2-simulators.onrender.com`, con sus logs en Render (lo que recibe el
-    Módulo 1 por la lista del día) y el inventario en `/api/rooms`.
+* **Environment** :
+  * Local (secciones 1 a 3 y sección 7, paso 1), con los "Primeros pasos" del README: frontend en
+    `http://localhost:5173`, documentación de la API en `http://localhost:3000/api/docs` y el panel de RabbitMQ
+    en `http://localhost:15672`, con el usuario y la clave del README. `backend/.env.example` ya apunta a los
+    Módulos 1 y 3 reales. La lista del día y sus actualizaciones se leen en `m1.reservas.diarias.queue`, creada
+    como dice TC-002-CancelReservation ("Lista del día en local").
+  * Staging, la demo de Render (secciones 4 a 6 y sección 7, pasos 2 y 3):
+    * frontend: `https://hospitua-m2-frontend.onrender.com`;
+    * backend: `https://hospitua-m2-backend.onrender.com/api/docs`.
+  * Módulo 3: `https://hospitua-module-3.onrender.com`. Está en el plan gratuito de Render: abrir su `/docs`
+    antes de empezar, para que no esté dormido.
 * **Cuerpo V1** de la vista previa (`POST /api/reservations/direct/preview`): el de
   TC-006-ConsultMaintenanceCalendar. **Cuerpo R1** de la creación (`POST /api/reservations/direct`, con las
   cabeceras `X-User` e `Idempotency-Key`, un UUID):
@@ -102,64 +118,77 @@ habitaciones, sin sobreventa y sin cobro:
   ```
 * **Test Accounts** :
   * Recepcionista: el inicio de sesión es simulado y solo pide el nombre, por ejemplo `Laura Méndez`;
-  * Render: la cuenta de quien desplegó la demo, para ver los logs y, opcionalmente, consultar la base.
+  * claves `X-Internal-Key` de los Módulos 1 y 3 para `backend/.env`, si las exigen: las tiene quien administra
+    la demo;
+  * el contacto del Módulo 1, para el mantenimiento.
 
 --------------------------------------------------------------------------------
 
 #### Test Execution Flow  *(mandatory)*
 
 ##### Section 1: Reserva con llegada hoy (escenario 1, FR-005, FR-006, FR-009 y SC-001)
+Se ejecuta en local, con la cola de la lista del día creada y el backend arrancado: la lista del día ya salió.
+
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
 | 1 | Abrir el formulario | Entrar al frontend → Reservas → "+ Nueva reserva directa" | `Laura Méndez` | "Nueva reserva directa", con "Estadía", "Habitaciones", "Disponibilidad y tarifa" y "Titular". "Crear reserva" está deshabilitado | [ ] | Tomar el tiempo desde aquí (SC-001) |
-| 2 | Pedir la estadía | Llenar las fechas, la categoría y las personas | Entrada `hoy`, salida `hoy+2`; `DOBLE`; 1 habitación, 2 personas | Sin otro clic, "Consultando disponibilidad…" y después "N habitaciones DOBLE disponibles." y una fila con la habitación asignada, 2 personas, 2 noches y la tarifa `440.000,00 COP`. La habitación es la `DOBLE` disponible de menor número (la 201 va antes que la 1001) | [ ] | Comparar con la columna "Disponible" de la vista previa por la API, si hace falta |
+| 2 | Pedir la estadía | Llenar las fechas, la categoría y las personas | Entrada `hoy`, salida `hoy+2`; `DOBLE`; 1 habitación, 2 personas | Sin otro clic, "Consultando disponibilidad…" y después "N habitaciones DOBLE disponibles." y una fila con la habitación asignada, 2 personas, 2 noches y la tarifa del Módulo 3. La habitación es la `DOBLE` disponible de menor número (la 103 va antes que la 109) | [ ] | Anotar la tarifa (TA) |
 | 3 | Escribir un documento sin reservas | Titular → Tipo de documento y No. documento | H1: `Cédula de ciudadanía` `1000000091` | "No hay reservas con ese documento: escriba los datos del titular." (escenario 11) | [ ] | |
 | 4 | Completar y crear | Nombres, Apellidos, País de origen, Teléfono, Email y Observaciones → "Crear reserva" | H1; observaciones `Llega tarde` | El botón muestra "Creando…" y se abre el detalle de la reserva nueva. Desde el paso 1, menos de 1 minuto (SC-001) | [ ] | Anotar el código |
-| 5 | Revisar la reserva | El detalle de la reserva | N/A | "Activa", canal "Directo", sin "Código de la OTA"; entrada `hoy`, salida `hoy+2`, 2 noches, 2 personas, observaciones `Llega tarde`. Una habitación `DOBLE` con 2 personas, valor bruto `440.000,00 COP` y estado "Esperada". Los datos del huésped de H1 (escenario 1, FR-005 y FR-006) | [ ] | |
-| 6 | Ver el aviso al Módulo 1 | Render → `hospitua-m2-simulators` → Logs | Código del paso 4 | "Actualización ADDED de <código> recibida": la llegada es hoy y la lista del día ya se envió (FR-009) | [ ] | |
-| 7 | Ver la cotización guardada | Documentación de la API → `GET /api/reservations/{reservationRef}` con `X-Client` `MODULE3` | Código del paso 4 | `channel` `DIRECT`, `quoteIds` con un elemento y `ota` en `null` (FR-006) | [ ] | |
-| 8 | Revisar la base | Opcional, con acceso a la base de la demo: `SELECT r.source, r.status, r.commission_percentage, r.commission_amount, r.external_confirmation_code, rr.room_gross_amount, rr.quote_id, rr.stay_status FROM reservation r JOIN reservation_room rr ON rr.reservation_id = r.id WHERE r.reservation_ref = '<código>';` | Código del paso 4 | `DIRECT`, `ACTIVE`, comisión `0` y `0`, código externo vacío; la habitación con `440000.00`, un `quote_id` y `EXPECTED` (SC-002) | [ ] | Opcional |
+| 5 | Revisar la reserva | El detalle de la reserva | N/A | "Activa", canal "Directo", sin "Código de la OTA"; entrada `hoy`, salida `hoy+2`, 2 noches, 2 personas, observaciones `Llega tarde`. Una habitación `DOBLE` con 2 personas, valor bruto TA y estado "Esperada". Los datos del huésped de H1 (escenario 1, FR-005 y FR-006) | [ ] | |
+| 6 | Ver el aviso al Módulo 1 | Panel de RabbitMQ → `m1.reservas.diarias.queue` → Get messages | Código del paso 4 | Una actualización `ADDED` con ese `reservationRef` y la `operationalDate` de `hoy`: la llegada es hoy y la lista del día ya se envió (FR-009) | [ ] | |
+| 7 | Ver la cotización guardada | Documentación de la API → `GET /api/reservations/{reservationRef}` con `X-Client` `MODULE3` | Código del paso 4 | `channel` `DIRECT`, `quoteIds` con un elemento, `rooms` con el `roomId` y el `quoteId` de la habitación, y `ota` en `null` (FR-006) | [ ] | |
+| 8 | Revisar la base | Opcional, con un cliente de PostgreSQL contra la base local (los datos de conexión están en `backend/.env`): `SELECT r.source, r.status, r.commission_percentage, r.commission_amount, r.external_confirmation_code, rr.room_gross_amount, rr.quote_id, rr.stay_status FROM reservation r JOIN reservation_room rr ON rr.reservation_id = r.id WHERE r.reservation_ref = '<código>';` | Código del paso 4 | `DIRECT`, `ACTIVE`, comisión `0` y `0`, código externo vacío; la habitación con TA, el `quote_id` del paso 7 y `EXPECTED` (SC-002) | [ ] | Opcional |
 
 --------------------------------------------------------------------------------
 
 ##### Section 2: Llegada futura con varias habitaciones (escenarios 4 y 5)
+Se ejecuta en local.
+
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Pedir dos habitaciones | Nueva reserva directa → "+ Agregar habitación" | Entrada `hoy+45`, salida `hoy+47`; `SUITE_JUNIOR`; 2 habitaciones, 2 personas en cada una | Dos filas, con las dos `SUITE_JUNIOR` disponibles de menor número (101 y 401, si están libres), 2 noches y `960.000,00 COP` cada una | [ ] | |
-| 2 | Crear la reserva | Titular H2 → "Crear reserva" | H2 | Se abre el detalle: una sola reserva "Activa" con 4 personas y dos habitaciones "Esperada", cada una con su valor bruto (escenario 5) | [ ] | Anotar el código |
-| 3 | Revisar que no se avisa al Módulo 1 | Render → `hospitua-m2-simulators` → Logs | Código del paso 2 | Ninguna actualización con ese código: viajará en la lista del día de su llegada (escenario 4 y SC-004) | [ ] | |
+| 1 | Pedir dos habitaciones | Nueva reserva directa → "+ Agregar habitación" | Entrada `hoy+45`, salida `hoy+47`; `SUITE`; 2 habitaciones, 2 personas en cada una | Dos filas, con las dos `SUITE` disponibles de menor número (105 y 204, si están libres), 2 noches y cada una con su tarifa del Módulo 3 | [ ] | Anotar las dos tarifas |
+| 2 | Crear la reserva | Titular H2 → "Crear reserva" | H2 | Se abre el detalle: una sola reserva "Activa" con 4 personas y dos habitaciones "Esperada", cada una con el valor bruto anotado en el paso 1 (escenario 5) | [ ] | Anotar el código |
+| 3 | Revisar que no se avisa al Módulo 1 | Leer la cola de la lista del día | Código del paso 2 | Ninguna actualización con ese `reservationRef`: viajará en la lista del día de su llegada (escenario 4 y SC-004) | [ ] | |
 
 --------------------------------------------------------------------------------
 
 ##### Section 3: Precarga del titular (escenarios 10 y 11, FR-011)
+Se ejecuta en local.
+
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
 | 1 | Precargar un titular conocido | Nueva reserva directa con una estadía libre. Titular → el documento de H1 | Entrada `hoy+60`, salida `hoy+61`; `DOBLE`; 1 habitación, 1 persona; `Cédula de ciudadanía` `1000000091` | "Se precargaron los datos de la última reserva con ese documento." y el formulario con el nombre, el apellido, el país, el teléfono y el correo de H1 (escenario 10) | [ ] | |
 | 2 | Corregir un dato y crear | Cambiar el teléfono → "Crear reserva" | Teléfono `3000000099` | La reserva nueva muestra el teléfono `3000000099` | [ ] | Anotar el código |
 | 3 | La reserva anterior no cambia | Abrir la reserva de la sección 1 | Código de la sección 1 | Su teléfono sigue en `3000000091`: los datos se copiaron, no se ligaron | [ ] | |
 | 4 | La precarga toma la reserva más reciente | Nueva reserva directa → el documento de H1 otra vez | `1000000091` | Se precarga el teléfono `3000000099`, el de la reserva del paso 2 | [ ] | Salir sin crear |
+| 5 | Dejar limpio el entorno local | Cancelar las reservas de las secciones 1, 2 y 3 | N/A | Quedan "Cancelada". En la cola, un `REMOVED` con `removalReason` `CANCELLED` solo por la de la sección 1, que llega hoy | [ ] | |
 
 --------------------------------------------------------------------------------
 
 ##### Section 4: Doble envío y tarifas (escenario 8 y FR-008)
+Se ejecuta en la demo.
+
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
 | 1 | Doble clic en "Crear reserva" | Nueva reserva directa, y doble clic rápido en "Crear reserva" | Entrada `hoy+70`, salida `hoy+71`; `DOBLE`; 1 habitación; H2 | Se crea una sola reserva: buscando el documento de H2 con Desde y Hasta `hoy+70` aparece una sola | [ ] | Anotar el código |
-| 2 | Pedir la tarifa por la API | `POST /api/reservations/direct/preview` con V1 | Entrada `hoy+80`, salida `hoy+81`; `DOBLE`; 1 habitación | `200`, con el `lodgingAmount` de la habitación (`220000.00` `COP`) | [ ] | |
-| 3 | Crear por la API | `POST /api/reservations/direct` con R1 y un `Idempotency-Key` nuevo | R1; `X-User` `Laura Méndez` | `201` con la reserva en `ACTIVE` | [ ] | Anotar el código y la clave |
+| 2 | Pedir la tarifa por la API | `POST /api/reservations/direct/preview` con V1 | Entrada `hoy+80`, salida `hoy+81`; `DOBLE`; 1 habitación | `200`, con el `lodgingAmount` de la habitación en `COP` | [ ] | Anotar el `lodgingAmount` |
+| 3 | Crear por la API | `POST /api/reservations/direct` con R1 y un `Idempotency-Key` nuevo | R1, con el `lodgingAmount` del paso 2; `X-User` `Laura Méndez` | `201` con la reserva en `ACTIVE` | [ ] | Anotar el código y la clave |
 | 4 | Reenviar la misma solicitud | La misma llamada, con la misma clave y el mismo cuerpo | La misma | `201` con la misma reserva del paso 3: no se crea otra (escenario 8) | [ ] | |
 | 5 | Reusar la clave con otros datos | La misma clave, con otras observaciones | `"notes": "Otra cosa"` | `400` con el código `IDEMPOTENCY_KEY_REUSED` y "La solicitud ya se usó con otros datos." | [ ] | |
 | 6 | Crear sin clave | R1 sin `Idempotency-Key` | R1 | `400` con el código `IDEMPOTENCY_KEY_REQUIRED` y "Falta el identificador de la solicitud." | [ ] | |
-| 7 | Crear con una tarifa que ya no vale | R1 con otra clave y otro `lodgingAmount` | `"lodgingAmount": "200000.00"` | `400` con el código `RATE_CHANGED` y "La tarifa cambió, vuelva a cotizar.", sin reserva | [ ] | |
-| 8 | Dejar limpia la demo | Cancelar las reservas de las secciones 2, 3 y 4 | N/A | Quedan "Cancelada" | [ ] | La de la sección 1 se puede dejar o cancelar |
+| 7 | Crear con una tarifa que ya no vale | R1 con otra clave y otro `lodgingAmount` | Un `lodgingAmount` distinto del del paso 2 | `400` con el código `RATE_CHANGED` y "La tarifa cambió, vuelva a cotizar.", sin reserva | [ ] | |
+| 8 | Dejar limpia la demo | Cancelar las reservas de los pasos 1 y 3 | N/A | Quedan "Cancelada" | [ ] | |
 
 --------------------------------------------------------------------------------
 
 ##### Section 5: Habitaciones no disponibles y personas (escenarios 2, 6 y 7)
+Se ejecuta en la demo.
+
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Más habitaciones de las disponibles | Nueva reserva directa | Entrada `hoy+5`, salida `hoy+6`; `TRIPLE`; 4 habitaciones (la 301 y la 302 están en mantenimiento) | "Error 400: La habitación no está disponible para el rango de fechas solicitado", sin tarifa, y "Crear reserva" deshabilitado (escenario 2) | [ ] | |
-| 2 | Una habitación del grupo no disponible | `POST /api/reservations/direct/preview` con la 303 y la 301 por su `roomId` | `TRIPLE`; entrada `hoy+5`, salida `hoy+6`; `rooms` `[{"guestCount": 1, "roomId": "<id de la 303>"}, {"guestCount": 1, "roomId": "<id de la 301>"}]` | `400` con el código `ROOM_NOT_AVAILABLE` y "La habitación 301 no está disponible para el rango de fechas solicitado." (escenario 6) | [ ] | Los `roomId` están en `/api/rooms` del simulador |
+| 1 | Más habitaciones de las disponibles | Nueva reserva directa | Entrada `hoy+30`, salida `hoy+31`; `SUITE`; 5 habitaciones (la categoría tiene 4) | "Error 400: La habitación no está disponible para el rango de fechas solicitado", sin tarifa, y "Crear reserva" deshabilitado (escenario 2) | [ ] | |
+| 2 | Una habitación del grupo no disponible | `POST /api/reservations/direct/preview` con la 105 y la 303 por su `roomId` | `SUITE`; entrada `hoy+16`, salida `hoy+17`; `rooms` `[{"guestCount": 1, "roomId": "a0000000-0000-0000-0000-000000000105"}, {"guestCount": 1, "roomId": "a0000000-0000-0000-0000-000000000303"}]` | `400` con el código `ROOM_NOT_AVAILABLE` y "La habitación 303 no está disponible para el rango de fechas solicitado.": está en mantenimiento (escenario 6) | [ ] | |
 | 3 | Más personas de las que caben | Nueva reserva directa | `DOBLE`; entrada `hoy+30`, salida `hoy+31`; 1 habitación, 4 personas | "La cantidad de personas supera la capacidad de la habitación." y "Crear reserva" deshabilitado (escenario 7) | [ ] | |
 | 4 | Una habitación sin personas | V1 por la API | `rooms` `[{"guestCount": 0}]` | `400` con el código `GUEST_COUNT_TOO_LOW` y "Cada habitación debe tener al menos una persona." (escenario 7) | [ ] | La pantalla no consulta con 0 personas |
 | 5 | Personas que no son un entero | V1 por la API | `rooms` `[{"guestCount": 1.5}]` | `400` con el código `INVALID_GUEST_COUNT` y "La cantidad de personas debe ser un número entero mayor que cero." | [ ] | |
@@ -169,6 +198,8 @@ habitaciones, sin sobreventa y sin cobro:
 --------------------------------------------------------------------------------
 
 ##### Section 6: Fechas y datos inválidos (escenario 9, FR-001a, casos borde y FR-010)
+Se ejecuta en la demo.
+
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
 | 1 | Entrada antes de hoy | V1 por la API | Entrada `hoy-1`, salida `hoy+1` | `400` con el código `START_DATE_IN_PAST` y "La fecha de entrada no puede ser anterior a hoy.". La entrada `hoy` sí se acepta (sección 1) (escenario 9) | [ ] | |
@@ -183,8 +214,8 @@ habitaciones, sin sobreventa y sin cobro:
 ##### Section 7: Módulo 3 sin responder y la última habitación (escenario 3 y casos borde)
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | El Módulo 3 no responde | En local, con el Módulo 3 apagado como en TC-001-CalculateDynamicRate, sección 4. Nueva reserva directa | `DOBLE`; entrada `hoy+30`, salida `hoy+31`; 1 habitación | "Error 400: El servicio de cotización de tarifas no se encuentra disponible. Por favor intente más tarde", sin tarifa y sin poder crear la reserva (escenario 3 y FR-004) | [ ] | Requiere el backend en local |
-| 2 | Dos pestañas por las mismas habitaciones | En la demo, abrir Nueva reserva directa en dos pestañas con la misma estadía hasta ver la tarifa en las dos | `SUITE`; entrada `hoy+16`, salida `hoy+17`; 2 habitaciones (la 501 está en mantenimiento) | Las dos pestañas muestran la tarifa: la consulta no aparta habitaciones | [ ] | |
+| 1 | El Módulo 3 no responde | En local, con el Módulo 3 sin responder como en TC-001-CalculateDynamicRate, sección 4. Nueva reserva directa. Al terminar, devolver la dirección real del Módulo 3 | `DOBLE`; entrada `hoy+30`, salida `hoy+31`; 1 habitación | "Error 400: El servicio de cotización de tarifas no se encuentra disponible. Por favor intente más tarde", sin tarifa y sin poder crear la reserva (escenario 3 y FR-004) | [ ] | |
+| 2 | Dos pestañas por las mismas habitaciones | En la demo, abrir Nueva reserva directa en dos pestañas con la misma estadía hasta ver la tarifa en las dos | `SUITE`; entrada `hoy+16`, salida `hoy+17`; 2 habitaciones (la 303 está en mantenimiento: quedan 3 libres) | Las dos pestañas muestran la tarifa: la consulta no aparta habitaciones | [ ] | |
 | 3 | Crear en las dos | Crear en la primera con H1 y después en la segunda con H2 | N/A | La primera se crea. La segunda responde "Error 400: La habitación no está disponible para el rango de fechas solicitado" y vuelve a consultar: no hay sobreventa (SC-003) | [ ] | Cancelar la reserva creada al terminar |
 
 --------------------------------------------------------------------------------

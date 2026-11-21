@@ -22,7 +22,6 @@ import { BusinessError } from '../../../src/domain/shared/business-error.js';
 import { PRICING_UNAVAILABLE } from '../../../src/domain/shared/error-codes.js';
 import { AppConfigModule } from '../../../src/infrastructure/config/app-config.module.js';
 import type { EnvironmentVariables } from '../../../src/infrastructure/config/env.validation.js';
-import { RateReferenceConfigModule } from '../../../src/infrastructure/config/rate-reference.config.js';
 import { Module3ClientModule } from '../../../src/infrastructure/out/module3/module3-client.module.js';
 import { captureLogs } from '../support/capture-logs.js';
 
@@ -90,8 +89,6 @@ describe('CalculateDynamicRate: lo que escribe en el log (T022)', () => {
     moduleRef = await Test.createTestingModule({
       imports: [
         AppConfigModule,
-        // Lo pone AppModule: CalculateDynamicRateModule también arma GetReferenceRates (#486).
-        RateReferenceConfigModule,
         Module3ClientModule,
         CalculateDynamicRateModule,
       ],

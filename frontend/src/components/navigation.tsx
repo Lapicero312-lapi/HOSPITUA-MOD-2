@@ -6,7 +6,6 @@ import {
   FileTextIcon,
   GlobeIcon,
   HomeIcon,
-  TagIcon,
 } from './icons.tsx';
 
 /** Las pantallas de la Recepcionista: las usan el rail, la paleta de comandos y la cabecera. */
@@ -44,11 +43,6 @@ export const NAV_ITEMS: NavItem[] = [
     to: '/habitaciones',
     label: 'Habitaciones',
     icon: BedIcon,
-  },
-  {
-    to: '/tarifas',
-    label: 'Tarifas',
-    icon: TagIcon,
   },
   {
     to: '/agencias',

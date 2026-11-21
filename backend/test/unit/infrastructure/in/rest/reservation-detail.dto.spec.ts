@@ -60,6 +60,8 @@ describe('toReservationDetailBody (plan de check-view-reservation, C3; T016)', (
       reservationRef: 'RSV-3F9A1C7B',
       status: 'ACTIVE',
       source: 'DIRECT',
+      // Una directa no tiene valor total de Booking: su valor está en la tarifa de cada habitación.
+      grossAmount: null,
       externalConfirmationCode: null,
       otaName: null,
       startDate: '2026-10-23',
@@ -174,7 +176,22 @@ describe('toReservationDetailBody (plan de check-view-reservation, C3; T016)', (
     expect(body.updatedAt).toBeNull();
   });
 
-  it('no lleva comisión ni quoteId (solo lo de C3)', () => {
+  it('en una reserva de Booking lleva el valor total que reportó Booking, como texto y en su moneda (D18)', () => {
+    const body = toReservationDetailBody({
+      reservation: anOtaReservation(OTA_ID),
+      nights: 2,
+      otaName: 'Booking.com',
+      cancellation: null,
+    });
+
+    expect(body.grossAmount).toEqual({ amount: '400.00', currency: 'USD' });
+    // Sus habitaciones siguen sin tarifa: Booking no la reporta por habitación.
+    expect(body.rooms.every((room) => room.roomGrossAmount === null)).toBe(
+      true,
+    );
+  });
+
+  it('no lleva comisión ni quoteId (solo lo de C3 y el total de Booking)', () => {
     const body = toReservationDetailBody({
       reservation: anOtaReservation(OTA_ID),
       nights: 2,
@@ -185,6 +202,5 @@ describe('toReservationDetailBody (plan de check-view-reservation, C3; T016)', (
     const text = JSON.stringify(body);
     expect(text).not.toContain('commission');
     expect(text).not.toContain('quoteId');
-    expect(text).not.toContain('grossAmount"');
   });
 });
