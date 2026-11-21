@@ -95,7 +95,8 @@ Se consulta **una vez por cada habitación candidata** de la categoría pedida.
 - Si el Módulo 1 falla o no responde, el Módulo 2 no asume que la habitación está libre: responde un
   error controlado (HTTP 400) a quien consulta.
 - Sin autenticación de servicio a servicio: la seguridad es una capa aparte (regla transversal 10 del plan
-  base).
+  base). Si hay `MODULE1_INTERNAL_KEY`, cada consulta lleva `X-Internal-Key` (plan base, "Configuración
+  del Módulo 1").
 - Los valores de los ejemplos son ilustrativos.
 
 ### B. Puerto de entrada interno
