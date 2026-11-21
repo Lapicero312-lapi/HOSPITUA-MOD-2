@@ -512,10 +512,9 @@ specs/
 
 ```text
 package.json                      # scripts del monorepo
-pnpm-workspace.yaml               # backend, frontend y simulators
+pnpm-workspace.yaml               # backend y frontend
 .nvmrc                            # Node 22 LTS
 docker-compose.yml                # PostgreSQL y RabbitMQ para desarrollo
-simulators/                       # simuladores del Módulo 1 y del Módulo 3 (demo y desarrollo)
 
 backend/
 ├── package.json
@@ -592,66 +591,30 @@ reglas. Los casos de uso de las specs se reflejan en `application/use-cases/`. E
 Recepcionista; Booking no usa ninguna pantalla ni ruta del Módulo 2, y el Módulo 1 tiene su propia
 interfaz.
 
-### Simuladores del Módulo 1 y del Módulo 3 (demo y desarrollo)
+### Los Módulos 1 y 3
 
-Mientras los otros módulos no estén desplegados, un servicio aparte, `simulators/` en la raíz del
-monorepo y fuera de `backend/`, responde los contratos REST ya acordados con datos de ejemplo de los
-planes:
-
-| Simula | Contrato | Puerto |
-|---|---|---|
-| Módulo 1 | A1, A2 y A3 de `consult-room-inventory` (`GET /api/rooms/{roomId}`, `GET /api/rooms?categoryRoom=…`, `GET /api/rooms`) y A1 de `consult-maintenance-calendar` (`GET /api/rooms/{roomId}/maintenances?startDate=…&endDate=…`) | `4001` |
-| Módulo 3 | A1 de `calculate-dynamic-rate` (`POST /pricing/quotes`) | `4003` |
-
-- **El backend no cambia:** apunta a los simuladores con `MODULE1_BASE_URL` y `MODULE3_BASE_URL`. Los
-  puertos son los de los valores por defecto de desarrollo (`localhost:4001` y `localhost:4003`). Cuando
-  los módulos reales estén listos, solo cambian esas dos variables. En la demo de Render ya apunta a los
-  módulos reales.
-- **Datos:** las habitaciones de los ejemplos de los planes (201 y 202 `DOBLE`, 101 `SUITE_JUNIOR`, 1001
-  `DOBLE`, con sus mismos `id`) y, para que la demo se parezca a un hotel real, más habitaciones vendibles:
-  20 en total, en cinco categorías (`INDIVIDUAL`, `DOBLE`, `TRIPLE`, `SUITE_JUNIOR` y `SUITE`), con
-  capacidades de 1 a 5. Los mantenimientos usan fechas relativas a hoy, para que siempre caigan en los
-  próximos 30 días: uno en curso, varios futuros y dos habitaciones de la misma categoría a la vez. Las cotizaciones dan una tarifa fija por categoría y por noche, con un `quoteId` nuevo en cada
-  respuesta. Respetan los errores de los contratos: 404 si la habitación no existe y 400 si el `roomId` o
-  las fechas son inválidos.
-- **El Módulo 1 por RabbitMQ (demo):** si recibe `RABBITMQ_URL`, el simulador del Módulo 1 también publica
-  los avisos de Check-In y Check-Out (`habitacion.checkin` y `habitacion.checkout`, con la forma de los
-  contratos de `update-reservation`) cuando se le piden por HTTP: `POST /simulate/check-in` y
-  `POST /simulate/check-out`, con `reservationRef`, `roomId` y los huéspedes. Además consume
-  `m1.reservas.diarias.queue` y deja en su log la lista del día y sus actualizaciones. Para eso usa
-  `amqplib`, su única dependencia.
-- **Reservas de demo:** `pnpm --filter simulators seed` llena el Módulo 2 **por sus rutas REST**, nunca
-  escribiendo en su base, así que pasa por todas sus reglas. Con `BACKEND_URL` (por defecto
-  `http://localhost:3000`):
-  - crea reservas directas de hoy y de los próximos 60 días en todas las categorías
-    (`POST /api/reservations/direct`), con titulares colombianos y extranjeros;
-  - modifica algunas (`PATCH /api/reservations/{reservationRef}`) y cancela otras (`POST …/cancellation`);
-  - hace el Check-In de parte de las llegadas de hoy por `POST /simulate/check-in`.
-
-  Se corre sobre una base sin reservas: si ya hay alguna, avisa y no hace nada. Las reservas de Booking no
-  se crean así: llegan de Channex.
-- **Channex no se simula:** la demo usa Channex staging, con la clave de `backend/.env`.
-- **Es solo para la demo y el desarrollo:** no forma parte del Módulo 2 ni se usa en sus pruebas, que
-  siguen con `msw`. Está escrito en Node 22, con `amqplib` como única dependencia.
+El backend se conecta siempre a los módulos reales, en local y en la demo: el Módulo 1 en
+`https://gestionophospitua.tech` y el Módulo 3 en `https://hospitua-module-3.onrender.com`
+(`MODULE1_BASE_URL` y `MODULE3_BASE_URL`). Las pruebas del backend los simulan con `msw`. En local,
+RabbitMQ es el de `docker compose`: los avisos de Check-In y Check-Out del Módulo 1 se publican a mano desde
+su panel.
 
 ### Despliegue de la demo (Render)
 
-Para la presentación del avance, el Módulo 2 se despliega en Render conectado a los Módulos 1 y 3 reales; los
-simuladores quedan desplegados de respaldo. Lo describe `render.yaml` en la raíz del repositorio (un *Blueprint* de Render):
+Para la presentación del avance, el Módulo 2 se despliega en Render conectado a los Módulos 1 y 3 reales. Lo
+describe `render.yaml` en la raíz del repositorio (un *Blueprint* de Render):
 
 | Servicio | Tipo | Qué corre |
 |---|---|---|
 | `hospitua-m2-frontend` | Static Site | `pnpm --filter frontend build` y publica `frontend/dist`. Reescribe `/api/*` al backend, como el proxy de Vite en desarrollo (sin CORS), y todo lo demás a `index.html` |
 | `hospitua-m2-backend` | Web Service (Docker, `backend/Dockerfile`) | Aplica las migraciones pendientes y arranca `node dist/main` |
-| `hospitua-m2-simulators` | Web Service (Node) | Los dos simuladores en el único puerto que da Render (`PORT`). Sus rutas no se cruzan: `/api/rooms…` del Módulo 1 y `/pricing/quotes` del Módulo 3. De respaldo: el backend de la demo no los usa, y van sin `RABBITMQ_URL` |
 | `hospitua-m2-db` | Postgres | La base del backend |
 
 - **Variables del backend:**
   - `NODE_ENV=production`;
   - las `DB_*` de la base de Render;
   - `MODULE1_BASE_URL` y `MODULE3_BASE_URL` con las URL de los Módulos 1 y 3 reales
-    (`https://gestionophospitua.tech` y `https://hospitua-module-3.onrender.com`). Los simuladores quedan de
-    respaldo;
+    (`https://gestionophospitua.tech` y `https://hospitua-module-3.onrender.com`);
   - `RABBITMQ_URL` del broker del Módulo 1 (`amqps://…@broker.gestionophospitua.tech:5671/%2F`), con el
     usuario que entrega el Módulo 1;
   - `MODULE1_INTERNAL_KEY` y `MODULE3_INTERNAL_KEY`, cuando cada módulo entregue la suya;
@@ -663,8 +626,7 @@ simuladores quedan desplegados de respaldo. Lo describe `render.yaml` en la raí
   staging. Nadie arranca otra con la misma clave.
 - **Plan gratuito:** los Web Services se duermen tras un rato sin uso y despiertan en cerca de un minuto;
   mientras duermen, las tareas de Channex no corren. La base gratuita dura un tiempo limitado.
-- **No cambia el código del backend ni del frontend.** Los simuladores agregan el modo de un solo puerto:
-  con la variable `PORT`, responden los dos módulos en ese puerto. Sin ella, siguen en 4001 y 4003.
+- **No cambia el código del backend ni del frontend** entre local y la demo: solo cambian las variables.
 
 ## Diseño técnico base
 
