@@ -7,6 +7,12 @@ describe('toReservationBillingBody (C4 de check-view-reservation, T032)', () => 
       reservationRef: 'RSV-3F9A1C7B',
       channel: 'DIRECT',
       quoteIds: ['8b1f6c0e-7d1a-4c0b-9d5e-2f4f3b6a1c11'],
+      rooms: [
+        {
+          roomId: '3f6c1e2a-8b4d-4c7e-9a1f-2b3c4d5e6f70',
+          quoteId: '8b1f6c0e-7d1a-4c0b-9d5e-2f4f3b6a1c11',
+        },
+      ],
       ota: null,
     });
 
@@ -14,6 +20,12 @@ describe('toReservationBillingBody (C4 de check-view-reservation, T032)', () => 
       reservationRef: 'RSV-3F9A1C7B',
       channel: 'DIRECT',
       quoteIds: ['8b1f6c0e-7d1a-4c0b-9d5e-2f4f3b6a1c11'],
+      rooms: [
+        {
+          roomId: '3f6c1e2a-8b4d-4c7e-9a1f-2b3c4d5e6f70',
+          quoteId: '8b1f6c0e-7d1a-4c0b-9d5e-2f4f3b6a1c11',
+        },
+      ],
     });
     expect(Object.keys(body)).not.toContain('otaId');
   });
@@ -31,6 +43,7 @@ describe('toReservationBillingBody (C4 de check-view-reservation, T032)', () => 
           reservationRef: 'RSV-8D02E5A4',
           channel: 'OTA',
           quoteIds: [],
+          rooms: [],
           ota: {
             otaId: '5b0e7c1a-2f4d-4e8b-9c3a-1d6f8e2b7a90',
             confirmationCode: '4417829013',
@@ -41,6 +54,7 @@ describe('toReservationBillingBody (C4 de check-view-reservation, T032)', () => 
         reservationRef: 'RSV-8D02E5A4',
         channel: 'OTA',
         quoteIds: [],
+        rooms: [],
         otaId: '5b0e7c1a-2f4d-4e8b-9c3a-1d6f8e2b7a90',
         otaConfirmationCode: '4417829013',
         otaCommissionPercentage: expected,

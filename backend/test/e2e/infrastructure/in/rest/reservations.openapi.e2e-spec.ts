@@ -302,11 +302,13 @@ describe('OpenAPI de las rutas de check-view-reservation (T037)', () => {
         'otaId',
         'quoteIds',
         'reservationRef',
+        'rooms',
       ]);
       expect(required('ReservationBillingDto')).toEqual([
         'channel',
         'quoteIds',
         'reservationRef',
+        'rooms',
       ]);
       expect(
         schema('ReservationBillingDto').properties.otaCommissionPercentage,
@@ -380,11 +382,18 @@ describe('OpenAPI de las rutas de check-view-reservation (T037)', () => {
         reservationRef: 'RSV-3F9A1C7B',
         channel: 'DIRECT',
         quoteIds: ['8b1f6c0e-7d1a-4c0b-9d5e-2f4f3b6a1c11'],
+        rooms: [
+          {
+            roomId: '3f6c1e2a-8b4d-4c7e-9a1f-2b3c4d5e6f70',
+            quoteId: '8b1f6c0e-7d1a-4c0b-9d5e-2f4f3b6a1c11',
+          },
+        ],
       });
       expect(examples(DETAIL, '200').MODULE3_OTA.value).toEqual({
         reservationRef: 'RSV-8D02E5A4',
         channel: 'OTA',
         quoteIds: [],
+        rooms: [],
         otaId: '5b0e7c1a-2f4d-4e8b-9c3a-1d6f8e2b7a90',
         otaConfirmationCode: '4417829013',
         otaCommissionPercentage: 15,

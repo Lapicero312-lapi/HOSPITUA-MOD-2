@@ -3,6 +3,7 @@ import type { ReservationRepository } from '../../../../../src/application/ports
 import { GetReservationForBillingService } from '../../../../../src/application/use-cases/check-view-reservation/get-reservation-for-billing.service.js';
 import type { Reservation } from '../../../../../src/domain/reservation/reservation.js';
 import { BusinessError } from '../../../../../src/domain/shared/business-error.js';
+import { Money } from '../../../../../src/domain/shared/money.js';
 import {
   aDirectReservation,
   aDirectRoom,
@@ -48,9 +49,42 @@ describe('GetReservationForBilling (plan de check-view-reservation, C4 y "Consul
       reservationRef: 'RSV-3F9A1C7B',
       channel: 'DIRECT',
       quoteIds: reservation.rooms.map((room) => room.rate?.quoteId),
+      rooms: reservation.rooms.map((room) => ({
+        roomId: room.roomId,
+        quoteId: room.rate?.quoteId,
+      })),
       ota: null,
     });
     expect(result.quoteIds).toHaveLength(2);
+  });
+
+  it('rooms dice en qué habitación quedó cada cotización: la 205, que reemplazó a la 202, con la cotización de la 202 (T040)', async () => {
+    // Así queda una reserva después de cambiar la 202 por la 205 de la misma categoría: la habitación nueva
+    // conserva la tarifa y el quoteId de la anterior (update-reservation, rateOf).
+    const room201 = aDirectRoom({
+      roomId: '3f6c1e2a-8b4d-4c7e-9a1f-2b3c4d5e6f70',
+      roomNumber: '201',
+      rate: { roomGrossAmount: Money.of('530000', 'COP'), quoteId: 'Q-111' },
+    });
+    const room205 = aDirectRoom({
+      roomId: 'd0e10001-0000-4000-8000-000000000205',
+      roomNumber: '205',
+      rate: { roomGrossAmount: Money.of('530000', 'COP'), quoteId: 'Q-222' },
+    });
+    const { service } = serviceFinding(
+      aDirectReservation({
+        reservationRef: 'RSV-3F9A1C7B',
+        rooms: [room201, room205],
+      }),
+    );
+
+    const result = await service.execute('RSV-3F9A1C7B');
+
+    expect(result.quoteIds).toEqual(['Q-111', 'Q-222']);
+    expect(result.rooms).toEqual([
+      { roomId: '3f6c1e2a-8b4d-4c7e-9a1f-2b3c4d5e6f70', quoteId: 'Q-111' },
+      { roomId: 'd0e10001-0000-4000-8000-000000000205', quoteId: 'Q-222' },
+    ]);
   });
 
   it('una reserva de Booking: sin cotizaciones, con la agencia, su código y el porcentaje congelado', async () => {
@@ -68,6 +102,7 @@ describe('GetReservationForBilling (plan de check-view-reservation, C4 y "Consul
       reservationRef: 'RSV-8D02E5A4',
       channel: 'OTA',
       quoteIds: [],
+      rooms: [],
       ota: {
         otaId: OTA_ID,
         confirmationCode: '4417829013',

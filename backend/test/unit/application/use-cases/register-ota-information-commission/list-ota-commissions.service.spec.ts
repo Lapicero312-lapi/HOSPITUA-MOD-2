@@ -9,6 +9,7 @@ import { ListOtaCommissionsService } from '../../../../../src/application/use-ca
 import { Money } from '../../../../../src/domain/shared/money.js';
 
 const FILTERS: OtaCommissionFilters = {
+  reservationRef: null,
   dateFrom: '2026-10-01',
   dateTo: '2026-10-31',
   commissionStatus: null,
