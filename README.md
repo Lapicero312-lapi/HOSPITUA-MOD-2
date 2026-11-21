@@ -42,6 +42,10 @@ El backend usa siempre los módulos reales, en local y en la demo. `backend/.env
 - **RabbitMQ en local es el de `docker compose`,** no el del Módulo 1: ahí no llegan sus avisos de Check-In y
   Check-Out. Para probarlos, publícalos a mano desde el panel (`http://localhost:15672`) en `hospitua.events`,
   con la routing key `habitacion.checkin` o `habitacion.checkout` y el JSON del plan de `update-reservation`.
+- **Si tu RabbitMQ local tiene colas `m2.*` de antes de `m2.direct`,** bórralas una vez desde el panel
+  (*Queues and Streams*, filtra por `m2.` y borra cada una). Esas colas usan el exchange por defecto como
+  dead-letter, y RabbitMQ rechaza volver a declararlas con otros argumentos: el backend no consumiría nada. Al
+  arrancar, el backend las crea de nuevo.
 - Las pruebas del backend no llaman a los módulos: los simulan con `msw`.
 
 ## Comandos
