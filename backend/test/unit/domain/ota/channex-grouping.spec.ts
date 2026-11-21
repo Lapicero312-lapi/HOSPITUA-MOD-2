@@ -17,7 +17,7 @@ const room = (
 });
 
 describe('groupRoomsByCategory (C1, paso 1; T003 de configure-ota)', () => {
-  it('el ejemplo del simulador: la 201, la 202 y la 1001 de DOBLE y la 101 de SUITE_JUNIOR', () => {
+  it('el ejemplo del plan: la 201, la 202 y la 1001 de DOBLE y la 101 de SUITE_JUNIOR', () => {
     expect(
       groupRoomsByCategory([
         room('201', 'DOBLE', 2),

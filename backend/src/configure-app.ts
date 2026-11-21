@@ -1,5 +1,6 @@
 import type { INestApplication } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { INTERNAL_KEY_SECURITY } from './infrastructure/in/rest/internal-key.guard.js';
 
 /** Prefijo de todas las rutas del Módulo 2 (plan base, "Contratos REST"). */
 export const API_PREFIX = 'api';
@@ -16,6 +17,9 @@ export function configureApp(app: INestApplication): void {
     .setTitle('HOSPITUA · Módulo 2')
     .setDescription('API de Operación de Reservas y Cumplimiento Legal')
     .setVersion('0.0.1')
+    // La clave que el Módulo 2 exige a los Módulos 1 y 3 (`MODULE2_INTERNAL_KEY`), en las rutas que la piden.
+    // Sin opciones, Swagger la documenta en la cabecera con el mismo nombre del esquema: `X-Internal-Key`.
+    .addApiKey(undefined, INTERNAL_KEY_SECURITY)
     .build();
   SwaggerModule.setup(
     `${API_PREFIX}/docs`,

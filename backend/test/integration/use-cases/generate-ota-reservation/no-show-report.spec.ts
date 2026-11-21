@@ -198,7 +198,7 @@ describe('No-show reportado a Booking (generate-ota-reservation, historia 2, esc
         }),
       ),
       // El feed no trae revisiones: la prueba es del reporte del no-show.
-      http.get(`${CHANNEX_BASE_URL}/api/v1/booking_revisions/feed`, () =>
+      http.get(`${CHANNEX_BASE_URL}/api/v1/booking_revisions`, () =>
         HttpResponse.json({
           meta: { total: 0, page: 1, limit: 100 },
           data: [],
@@ -288,7 +288,7 @@ describe('No-show reportado a Booking (generate-ota-reservation, historia 2, esc
 
       server.resetHandlers();
       server.use(
-        http.get(`${CHANNEX_BASE_URL}/api/v1/booking_revisions/feed`, () =>
+        http.get(`${CHANNEX_BASE_URL}/api/v1/booking_revisions`, () =>
           HttpResponse.json({
             meta: { total: 0, page: 1, limit: 100 },
             data: [],

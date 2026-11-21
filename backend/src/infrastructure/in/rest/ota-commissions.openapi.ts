@@ -338,9 +338,14 @@ const example = (
 
 /** Las 400 de A1, en el orden del punto 1 de C (`readOtaCommissionQuery`). */
 export const OTA_COMMISSION_ERROR_EXAMPLES = {
+  [INVALID_RESERVATION_CODE.code]: example(
+    A1_PATH,
+    '`reservationRef` que no es `RSV-` y 8 hexadecimales',
+    INVALID_RESERVATION_CODE,
+  ),
   [INCOMPLETE_DATE_RANGE.code]: example(
     A1_PATH,
-    'Falta `dateFrom`, `dateTo` o las dos',
+    'Sin `reservationRef`, falta `dateFrom`, `dateTo` o las dos; con `reservationRef`, viene solo una',
     INCOMPLETE_DATE_RANGE,
   ),
   [INVALID_DATE.code]: example(

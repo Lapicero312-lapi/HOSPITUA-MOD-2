@@ -2,9 +2,8 @@
 # Se crea desde el panel de Render: New → Blueprint → este repositorio. Las variables con `sync: false`
 # son secretas: Render las pide al crear el Blueprint y solo quedan en su panel, nunca aquí.
 #
-# Las URL de los servicios (https://<nombre>.onrender.com) salen del nombre. Si Render le da a alguno otra
-# URL porque el nombre ya estaba ocupado, cámbiala abajo: en el frontend (/api/*) y en MODULE1_BASE_URL y
-# MODULE3_BASE_URL del backend.
+# Las URL de los servicios (https://<nombre>.onrender.com) salen del nombre. Si Render le da al backend otra
+# URL porque el nombre ya estaba ocupado, cámbiala abajo, en la regla /api/* del frontend.
 
 databases:
   - name: hospitua-m2-db
@@ -46,38 +45,34 @@ services:
         fromDatabase:
           name: hospitua-m2-db
           property: password
-      # Los Módulos 1 y 3 son los simuladores, los dos en la misma URL.
+      # Los Módulos 1 y 3. Van aquí y no en el panel: Render vuelve a aplicar estos valores cada vez que
+      # sincroniza el Blueprint.
       - key: MODULE1_BASE_URL
-        value: https://hospitua-m2-simulators.onrender.com
+        value: https://gestionophospitua.tech
+      # Espera máxima al Módulo 1: 2 s en Render (en local sigue en 1 s, el valor del plan). Desde Render, con
+      # el Módulo 1 real en otro servidor y un TLS nuevo en cada llamada, 1 s queda justo.
+      - key: MODULE1_TIMEOUT_MS
+        value: '2000'
+      # El Módulo 3 atiende POST /pricing/quotes sin /api.
       - key: MODULE3_BASE_URL
-        value: https://hospitua-m2-simulators.onrender.com
+        value: https://hospitua-module-3.onrender.com
+      # MODULE1_INTERNAL_KEY y MODULE3_INTERNAL_KEY van en el panel de Render (no aquí), con la clave que cada
+      # módulo entrega por privado: se envían en X-Internal-Key. MODULE2_INTERNAL_KEY también va en el panel: es
+      # la que el Módulo 2 les exige a ellos; se les entrega por privado y se activa avisándoles antes. El Módulo 1 todavía no la exige y avisa antes de
+      # hacerlo; al Módulo 3 avísale antes de agregarla, para que la active al mismo tiempo.
       # El hotel todavía no tiene sus códigos de SIRE: valores de demo.
       - key: SIRE_HOTEL_CODE
         value: DEMO-HOTEL
       - key: SIRE_CITY_CODE
         value: DEMO-CIUDAD
-      # Secretos: la URL de CloudAMQP (todavía no se usa, pero producción la exige) y Channex.
+      # Secretos: el RabbitMQ del Módulo 1 y Channex. RABBITMQ_URL es la del broker del Módulo 1
+      # (amqps://<usuario>:<clave>@broker.gestionophospitua.tech:5671/%2F, vhost /, solo TLS); el usuario y la
+      # clave los entrega el Módulo 1 por privado. Solo la demo se conecta a ese broker.
       - key: RABBITMQ_URL
         sync: false
       - key: CHANNEX_API_KEY
         sync: false
       - key: CHANNEX_PROPERTY_ID
-        sync: false
-
-  # Los simuladores del Módulo 1 y del Módulo 3, los dos en el PORT que da Render. Su única dependencia es
-  # amqplib, para el Módulo 1 por RabbitMQ (con RABBITMQ_URL, la misma de CloudAMQP que usa el backend).
-  - type: web
-    name: hospitua-m2-simulators
-    runtime: node
-    plan: free
-    region: oregon
-    buildCommand: npx --yes pnpm@12.14.0 install --frozen-lockfile --filter simulators
-    startCommand: node simulators/src/main.js
-    healthCheckPath: /api/rooms
-    envVars:
-      - key: NODE_VERSION
-        value: '22'
-      - key: RABBITMQ_URL
         sync: false
 
   # El frontend: un sitio estático. /api/* va al backend, como el proxy de Vite en desarrollo (sin CORS).

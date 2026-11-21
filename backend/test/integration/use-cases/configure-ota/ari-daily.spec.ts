@@ -97,7 +97,7 @@ describe('configure-ota: el envío de las 03:00 (T011)', () => {
     availabilityCalls = [];
     availabilityStatus = 200;
     server.use(
-      http.get(`${CHANNEX_BASE_URL}/api/v1/booking_revisions/feed`, () => {
+      http.get(`${CHANNEX_BASE_URL}/api/v1/booking_revisions`, () => {
         calls.push('feed');
         return channex.feedStatus === 200
           ? HttpResponse.json({

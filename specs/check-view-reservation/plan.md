@@ -290,7 +290,10 @@ de uso `GetReservationForBilling` y entrega solo esto:
 {
   "reservationRef": "RSV-3F9A1C7B",
   "channel": "DIRECT",
-  "quoteIds": ["8b1f6c0e-7d1a-4c0b-9d5e-2f4f3b6a1c11"]
+  "quoteIds": ["8b1f6c0e-7d1a-4c0b-9d5e-2f4f3b6a1c11"],
+  "rooms": [
+    { "roomId": "3f6c1e2a-8b4d-4c7e-9a1f-2b3c4d5e6f70", "quoteId": "8b1f6c0e-7d1a-4c0b-9d5e-2f4f3b6a1c11" }
+  ]
 }
 ```
 
@@ -299,6 +302,7 @@ de uso `GetReservationForBilling` y entrega solo esto:
   "reservationRef": "RSV-8D02E5A4",
   "channel": "OTA",
   "quoteIds": [],
+  "rooms": [],
   "otaId": "5b0e7c1a-2f4d-4e8b-9c3a-1d6f8e2b7a90",
   "otaConfirmationCode": "4417829013",
   "otaCommissionPercentage": 15.00
@@ -307,6 +311,11 @@ de uso `GetReservationForBilling` y entrega solo esto:
 
 - `quoteIds`: el `quoteId` de cada `ReservationRoom`, una cotización por habitación. Va **vacía** en
   reservas `OTA`, que no tienen cotización.
+- `rooms`: por cada habitación que tiene cotización, su `roomId` actual (el `Room.id` del Módulo 1) y su
+  `quoteId`, en el mismo orden que `quoteIds`. Si una habitación se cambió por otra de la misma categoría,
+  la nueva conserva la cotización de la anterior (no se recotiza), y `rooms` dice en qué habitación quedó
+  cada cotización. Así el Módulo 3 la encuentra con el `roomId` del Check-Out. Va vacía en `OTA`.
+  `quoteIds` se mantiene igual, para no romper a quien ya la usa.
 - `otaId`, `otaConfirmationCode` y `otaCommissionPercentage` **solo** si `channel` es `OTA`
   (`otaCommissionPercentage` es el `commissionPercentage` congelado en la reserva, como **número** JSON
   de 0 a 100 con hasta dos decimales).
@@ -314,6 +323,8 @@ de uso `GetReservationForBilling` y entrega solo esto:
 - Si la reserva no existe: **`404`** `RESERVATION_NOT_FOUND`. Es la única respuesta 404 del Módulo 2:
   el Módulo 3 la espera así (ver el plan base, sección "Errores").
 - Con otro valor de `X-Client`, o sin él: `400` `INVALID_CLIENT`.
+- Con `X-Client: MODULE3`, si `MODULE2_INTERNAL_KEY` tiene valor, exige `X-Internal-Key`: sin ella o con otra,
+  `401` `INVALID_INTERNAL_KEY` (regla 10 del plan base). Con C5 pasa lo mismo con `X-Client: MODULE1`.
 
 ### C5. `GET /api/reservations` (Módulo 1): reservas por fechas (FR-023)
 
@@ -788,7 +799,8 @@ símbolo `PUBLISH_PENDING_DAILY_MESSAGES`. `CheckViewReservationModule` lo regis
 ```typescript
 interface DailyListPublisher {        // application/ports/out/
   // Publica un mensaje y espera la confirmación de RabbitMQ.
-  // Lanza un error si no hay conexión, si RabbitMQ lo rechaza o si no confirma en 5 s.
+  // Lanza un error si no hay conexión, si RabbitMQ lo rechaza, si lo devuelve por no llegar a ninguna
+  // cola (`mandatory`) o si no confirma en 5 s.
   publish(message: { messageId: string; kind: 'LIST' | 'UPDATE'; payload: object }): Promise<void>;
 }
 
@@ -820,6 +832,9 @@ interface DailyMessageRepository {    // se agregan tres métodos
   `messageId` del cuerpo.
 - Espera la confirmación de publicación. Si RabbitMQ no confirma en 5 s, cuenta como fallo (plan base,
   "Conexión").
+- Publica con `mandatory` y escucha el evento `return` del canal. Un mensaje devuelto (identificado por su
+  `messageId`) porque `m1.reservas.diarias.queue` no existe todavía cuenta como fallo de publicación: queda
+  `PENDING` y se reintenta en orden. El Módulo 2 no declara esa cola (plan base, "Convenciones de colas").
 - Publica de a un mensaje y por el mismo canal, así que nunca hay dos en vuelo. El orden lo decide
   `PublishPendingDailyMessages`.
 
@@ -874,6 +889,7 @@ type ReservationForBilling = {
   reservationRef: string;
   channel: 'DIRECT' | 'OTA';
   quoteIds: string[];   // el quoteId de cada habitación que lo tiene, en el orden de las habitaciones; [] en OTA
+  rooms: { roomId: string; quoteId: string }[];  // la misma lista que quoteIds, con la habitación actual de cada una; [] en OTA
   ota: { otaId: string; confirmationCode: string; commissionPercentage: string } | null;  // solo en OTA
 };
 
@@ -1454,6 +1470,7 @@ devuelven exactamente lo esperado, con totales y páginas correctos.
 ## Phase 8: Consultas de otros módulos
 
 - [ ] T032 `GetReservationForBilling` para `MODULE3` en la misma ruta (C4), con `404`
+- [ ] T040 `rooms` (`roomId` y `quoteId` de cada habitación con cotización) en la respuesta de C4 para `MODULE3`, con su prueba de contrato y un caso de cambio de habitación de la misma categoría
 - [ ] T033 `FindReservationsByStayRange` para `MODULE1` en `GET /api/reservations` (C5)
 - [ ] T034 Pruebas de contrato de C4 y C5 contra la forma exacta de las respuestas
 
@@ -1549,7 +1566,7 @@ Cada uno se puede cambiar sin romper el resto; se anotan para que no pasen desap
 | FR-016, FR-017 | `DailyListMembership`, `DailyListChangeRecorder` | T003, T028 |
 | FR-018, FR-019, FR-020 | `daily_sequence`, publicador y reintentos (`next_attempt_at`) | T001, T025, T026, T029 |
 | FR-021 | El caso de uso no cambia ningún estado | T030 |
-| FR-022 | `GetReservationForBilling` (C4) | T032 |
+| FR-022 | `GetReservationForBilling` (C4) | T032, T040 |
 | FR-023 | `FindReservationsByStayRange` (C5) | T033 |
 | NFR-001, NFR-002 | Índices y prueba de carga | T001, T002, T036 |
 | NFR-003 | Logs sin datos personales | T035 |

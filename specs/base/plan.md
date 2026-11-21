@@ -48,8 +48,9 @@ describe lo propio.
   huéspedes, cierre del día < 1 min para 1000 reservas, página del listado < 1 s con hasta 50 000
   reservas. Una reserva de Booking queda registrada en menos de 2 minutos y un cambio de
   disponibilidad llega a Channex en menos de 1 minuto.
-- **Constraints**: tiempo máximo de espera de 1 s al Módulo 1 y de 3 s al Módulo 3 (si no responden,
-  nunca se asume disponibilidad ni tarifa); ningún error sale como 500; no se escriben datos
+- **Constraints**: tiempo máximo de espera de 1 s al Módulo 1 (2 s en la demo de Render,
+  `MODULE1_TIMEOUT_MS`, por la distancia hasta el servidor del Módulo 1) y de 3 s al Módulo 3 (si no
+  responden, nunca se asume disponibilidad ni tarifa); ningún error sale como 500; no se escriben datos
   personales en los logs; el día operativo es el de Colombia (`America/Bogota`); disponible 24/7,
   porque Booking reserva a cualquier hora; límite de Channex de 10 solicitudes por minuto por propiedad
   para disponibilidad.
@@ -60,6 +61,18 @@ describe lo propio.
   `CHANNEX_SYNC_INTERVAL_SECONDS` (`30`) y `CHANNEX_ARI_DAYS` (`90`). El id del hotel de Booking se indica en
   Channex al conectar el canal Booking.com, y el porcentaje de comisión de la agencia lo calcula el sistema
   con su primera reserva (`register-ota-information-commission`): ninguno de los dos se configura.
+- **Configuración del Módulo 1** (variables de entorno): `MODULE1_BASE_URL`, `MODULE1_TIMEOUT_MS` (`1000`) y
+  `MODULE1_INTERNAL_KEY`, opcional. Si tiene valor, todas las consultas a `/api/rooms…` (A1, A2 y A3 de
+  `consult-room-inventory` y A1 de `consult-maintenance-calendar`) llevan la cabecera `X-Internal-Key` con esa
+  clave, que el Módulo 1 usa para proteger sus rutas cuando se publican en internet. La clave es un secreto:
+  nunca va en el repositorio, en la base de datos ni en los logs.
+- **Configuración del Módulo 2** (variable de entorno): `MODULE2_INTERNAL_KEY`, opcional. Es la clave que el
+  Módulo 2 exige a los Módulos 1 y 3 en `X-Internal-Key` (regla 10). Vacía, no se exige. La clave es un
+  secreto: nunca va en el repositorio, en la base de datos ni en los logs.
+- **Configuración del Módulo 3** (variables de entorno): `MODULE3_BASE_URL`, `MODULE3_TIMEOUT_MS` (`3000`) y
+  `MODULE3_INTERNAL_KEY`, opcional. Si tiene valor, `POST /pricing/quotes` lleva la cabecera
+  `X-Internal-Key` con esa clave, que el Módulo 3 usa para proteger sus rutas cuando se publican en internet.
+  La clave es un secreto: nunca va en el repositorio, en la base de datos ni en los logs.
 
 ### Decisiones de stack
 
@@ -74,7 +87,7 @@ describe lo propio.
 | Dinero | `decimal.js`, columnas `numeric(14,2)`, redondeo `ROUND_HALF_UP`; **nunca `number`** | Comisión exacta |
 | Fechas | Fechas puras `AAAA-MM-DD` (texto `date` en la base) y `luxon` para el día operativo en `America/Bogota` | Evita corrimientos por zona horaria. Se guardan e intercambian como `AAAA-MM-DD`; las pantallas las muestran como `dd/mm/aaaa` |
 | Seguridad | **No se implementa en el Módulo 2**: es una capa aparte del sistema de microservicios. El frontend simula el login. Quién llama se indica con la cabecera `X-Client` (`RECEPTIONIST`, `MODULE1`, `MODULE3`) y quién hizo la acción con `X-User`; ninguna se valida | Ver la regla transversal 10 |
-| Integración con Booking.com | **Channex** (entorno de pruebas `staging.channex.io`), por REST con la cabecera `user-api-key`. Las reservas se leen del *feed* (`GET /api/v1/booking_revisions/feed`) y se confirman con `ack`; el Módulo 2 crea los tipos de habitación (`POST`/`PUT /api/v1/room_types`) y envía la disponibilidad (`POST /api/v1/availability`). Los planes de tarifa y los precios los envía el **Módulo 3** directamente a Channex. La propiedad es fija y la crea un administrador en Channex | Booking no llama al Módulo 2: el Módulo 2 consulta a Channex, así que no necesita una URL pública (D12) |
+| Integración con Booking.com | **Channex** (entorno de pruebas `staging.channex.io`), por REST con la cabecera `user-api-key`. Las reservas se leen del *feed* (`GET /api/v1/booking_revisions?filter[acknowledge_status]=pending`) y se confirman con `ack`; el Módulo 2 crea los tipos de habitación (`POST`/`PUT /api/v1/room_types`) y envía la disponibilidad (`POST /api/v1/availability`). Los planes de tarifa y los precios los envía el **Módulo 3** directamente a Channex. La propiedad es fija y la crea un administrador en Channex | Booking no llama al Módulo 2: el Módulo 2 consulta a Channex, así que no necesita una URL pública (D12) |
 | Tareas programadas | `@nestjs/schedule` con `timeZone: 'America/Bogota'` | Envío de la lista del día (00:00), cierre del día (al terminar las 23:59: se ejecuta a las 00:00:30), reintento de avisos pendientes (cada 10 s), lectura del feed de Channex y envío de la disponibilidad (cada 30 s) y sincronización con Channex (03:00) |
 | Exclusión mutua de tareas con varias instancias | Bloqueo asesor de PostgreSQL (C10) | Evitar que dos instancias ejecuten el mismo cierre del día |
 | Timeouts y reintentos REST | `@nestjs/axios` con timeout; `cockatiel` si se necesitan reintentos o corte de circuito | No asumir disponibilidad ante caídas |
@@ -322,7 +335,7 @@ interacciones M1 ↔ M3 (liquidación, tarifa base, registrar check-out) no invo
 
 ### Convenciones de colas
 
-- Exchange compartido: `hospitua.events` (tipo topic). Convención de nombres de cola:
+- Exchange compartido: `hospitua.events` (tipo topic), del Módulo 1. Convención de nombres de cola:
   `m<módulo destino>.<recurso>.<evento>.queue`.
 - Colas que **recibe** el Módulo 2 (las publica el Módulo 1):
 
@@ -349,11 +362,23 @@ interacciones M1 ↔ M3 (liquidación, tarifa base, registrar check-out) no invo
 - Consumidores idempotentes (se ignoran los `messageId` repetidos), con reintentos y dead-letter queue.
 - La publicación de la lista del día y de sus actualizaciones respeta el orden: las actualizaciones
   esperan detrás de la lista (ver `check-view-reservation`).
-- **Lo que declara el Módulo 2 al arrancar** (todo durable; declararlo otra vez no cambia nada): el
-  exchange `hospitua.events`, sus cuatro colas de entrada unidas a su routing key y la cola
-  `m1.reservas.diarias.queue` unida a `reserva.lista-del-dia` y `reserva.lista-del-dia.actualizacion`.
-  Así la lista del día no se pierde si el Módulo 1 todavía no creó su cola. El Módulo 1 la declara
-  igual, sin argumentos extra.
+- **Lo que declara el Módulo 2 al arrancar** (todo durable; declararlo otra vez no cambia nada): sus cuatro
+  colas de entrada unidas a su routing key, sus dead-letter, las colas de reintento y su exchange `m2.direct`
+  (tipo direct). Cada cola de entrada y cada dead-letter se une a `m2.direct` con su propio nombre como
+  routing key, y `m2.direct` es el dead-letter exchange de las colas de entrada (hacia su `.dlq`) y de las de
+  reintento (de vuelta a su cola). Hace lo del exchange por defecto, pero solo para sus colas: el exchange por
+  defecto (`""`) no se usa porque RabbitMQ exige escribir en `amq.default` para usarlo como dead-letter, y el
+  Módulo 1 no da ese permiso. **En producción no
+  declara el exchange `hospitua.events`**: es del Módulo 1, que lo crea al arrancar (topic, durable), y el
+  Módulo 2 no tiene permiso para configurarlo en su broker. Solo comprueba que existe (`checkExchange`); si no
+  existiera, RabbitMQ cierra el canal, queda en el log y la conexión no se arma hasta reiniciar el backend. En
+  desarrollo y en las pruebas, con un broker propio y sin Módulo 1, sí lo declara. El Módulo 2 tampoco declara `m1.reservas.diarias.queue`: es del
+  Módulo 1, que la declara
+  con su propia dead-letter (`m1.reservas.diarias.dlq`); si el Módulo 2 la declarara sin esos argumentos,
+  RabbitMQ rechazaría la declaración. El Módulo 2 solo publica al exchange `hospitua.events`, con
+  `reserva.lista-del-dia` y `reserva.lista-del-dia.actualizacion`. Para que la lista no se pierda si esa cola
+  aún no existe, publica con `mandatory`: RabbitMQ devuelve el mensaje que no llegó a ninguna cola, y eso
+  cuenta como fallo de publicación (queda `PENDING` y se reintenta en orden).
 - **Dead-letter:** cada cola de entrada tiene la suya, con el mismo nombre terminado en `.dlq` (por
   ejemplo `m2.habitacion.checkin.dlq`). Nadie la consume: se revisa a mano.
 - **Reintentos de los consumidores:** ante un fallo temporal, 5 reintentos con espera de 5 s, 15 s,
@@ -365,7 +390,8 @@ interacciones M1 ↔ M3 (liquidación, tarifa base, registrar check-out) no invo
   sin reintentos.
 - **Conexión:** el backend arranca aunque RabbitMQ no responda (las rutas REST siguen funcionando) y
   se reconecta solo. Los mensajes son persistentes y la publicación espera la confirmación de
-  RabbitMQ; si no se confirma en 5 s, cuenta como fallo y el mensaje queda `PENDING`. Cada consumidor
+  RabbitMQ; si no se confirma en 5 s, o si RabbitMQ lo devuelve por no llegar a ninguna cola, cuenta
+  como fallo y el mensaje queda `PENDING`. Cada consumidor
   toma un mensaje a la vez (`prefetch` 1), para procesarlos en el orden de la cola.
 
 ### Traducción de respuestas HTTP a cola (decisión C1)
@@ -424,7 +450,7 @@ quedan fuera).
 | Habitaciones vendibles por `categoryRoom`, por `roomId` o todas (contrato en [`consult-room-inventory/plan.md`](../consult-room-inventory/plan.md)) | M1 GET | `consult-room-inventory` |
 | Calendario de mantenimientos por `roomId` y rango de fechas (contrato en [`consult-maintenance-calendar/plan.md`](../consult-maintenance-calendar/plan.md)) | M1 GET | `consult-maintenance-calendar` |
 | Tarifa dinámica por habitación (contrato en [`calculate-dynamic-rate/plan.md`](../calculate-dynamic-rate/plan.md)) | M3 POST | `calculate-dynamic-rate` |
-| Feed de revisiones de reserva y `ack` (`/api/v1/booking_revisions/feed`, `/api/v1/booking_revisions/{id}/ack`) | Channex GET y POST | `generate-ota-reservation` |
+| Feed de revisiones de reserva y `ack` (`/api/v1/booking_revisions?filter[acknowledge_status]=pending`, `/api/v1/booking_revisions/{id}/ack`) | Channex GET y POST | `generate-ota-reservation` |
 | Propiedades (`/api/v1/properties/options`), tipos de habitación (`/api/v1/room_types`) y disponibilidad (`/api/v1/availability`) | Channex GET, POST y PUT | `configure-ota` |
 
 **`ChannexPort`** (T021). El adaptador pone la cabecera `user-api-key`, el `CHANNEX_PROPERTY_ID` y la
@@ -471,7 +497,8 @@ interface ChannexPort {
 **Errores**: cuerpo `{ "errorCode", "message", "timestamp", "path" }` con HTTP 400 (por defecto, también
 para recursos inexistentes, como piden los specs, y para la falta de disponibilidad) o 429 (exportación
 SIRE). La única excepción es la consulta de una reserva por referencia para el Módulo 3, que
-responde 404 si no existe, como lo espera ese módulo. El diccionario prohíbe 500 y cualquier 2xx o 3xx
+responde 404 si no existe, como lo espera ese módulo. Las rutas que exigen `X-Internal-Key` responden 401
+`INVALID_INTERNAL_KEY` sin ella (regla 10). El diccionario prohíbe 500 y cualquier 2xx o 3xx
 para un error.
 
 ## Project Structure
@@ -494,10 +521,9 @@ specs/
 
 ```text
 package.json                      # scripts del monorepo
-pnpm-workspace.yaml               # backend, frontend y simulators
+pnpm-workspace.yaml               # backend y frontend
 .nvmrc                            # Node 22 LTS
 docker-compose.yml                # PostgreSQL y RabbitMQ para desarrollo
-simulators/                       # simuladores del Módulo 1 y del Módulo 3 (demo y desarrollo)
 
 backend/
 ├── package.json
@@ -574,74 +600,42 @@ reglas. Los casos de uso de las specs se reflejan en `application/use-cases/`. E
 Recepcionista; Booking no usa ninguna pantalla ni ruta del Módulo 2, y el Módulo 1 tiene su propia
 interfaz.
 
-### Simuladores del Módulo 1 y del Módulo 3 (demo y desarrollo)
+### Los Módulos 1 y 3
 
-Mientras los otros módulos no estén desplegados, un servicio aparte, `simulators/` en la raíz del
-monorepo y fuera de `backend/`, responde los contratos REST ya acordados con datos de ejemplo de los
-planes:
-
-| Simula | Contrato | Puerto |
-|---|---|---|
-| Módulo 1 | A1, A2 y A3 de `consult-room-inventory` (`GET /api/rooms/{roomId}`, `GET /api/rooms?categoryRoom=…`, `GET /api/rooms`) y A1 de `consult-maintenance-calendar` (`GET /api/rooms/{roomId}/maintenances?startDate=…&endDate=…`) | `4001` |
-| Módulo 3 | A1 de `calculate-dynamic-rate` (`POST /pricing/quotes`) | `4003` |
-
-- **El backend no cambia:** apunta a los simuladores con `MODULE1_BASE_URL` y `MODULE3_BASE_URL`. Los
-  puertos son los de los valores por defecto de desarrollo (`localhost:4001` y `localhost:4003`). Cuando
-  los módulos reales estén listos, solo cambian esas dos variables.
-- **Datos:** las habitaciones de los ejemplos de los planes (201 y 202 `DOBLE`, 101 `SUITE_JUNIOR`, 1001
-  `DOBLE`, con sus mismos `id`) y, para que la demo se parezca a un hotel real, más habitaciones vendibles:
-  20 en total, en cinco categorías (`INDIVIDUAL`, `DOBLE`, `TRIPLE`, `SUITE_JUNIOR` y `SUITE`), con
-  capacidades de 1 a 5. Los mantenimientos usan fechas relativas a hoy, para que siempre caigan en los
-  próximos 30 días: uno en curso, varios futuros y dos habitaciones de la misma categoría a la vez. Las cotizaciones dan una tarifa fija por categoría y por noche, con un `quoteId` nuevo en cada
-  respuesta. Respetan los errores de los contratos: 404 si la habitación no existe y 400 si el `roomId` o
-  las fechas son inválidos.
-- **El Módulo 1 por RabbitMQ (demo):** si recibe `RABBITMQ_URL`, el simulador del Módulo 1 también publica
-  los avisos de Check-In y Check-Out (`habitacion.checkin` y `habitacion.checkout`, con la forma de los
-  contratos de `update-reservation`) cuando se le piden por HTTP: `POST /simulate/check-in` y
-  `POST /simulate/check-out`, con `reservationRef`, `roomId` y los huéspedes. Además consume
-  `m1.reservas.diarias.queue` y deja en su log la lista del día y sus actualizaciones. Para eso usa
-  `amqplib`, su única dependencia.
-- **Reservas de demo:** `pnpm --filter simulators seed` llena el Módulo 2 **por sus rutas REST**, nunca
-  escribiendo en su base, así que pasa por todas sus reglas. Con `BACKEND_URL` (por defecto
-  `http://localhost:3000`):
-  - crea reservas directas de hoy y de los próximos 60 días en todas las categorías
-    (`POST /api/reservations/direct`), con titulares colombianos y extranjeros;
-  - modifica algunas (`PATCH /api/reservations/{reservationRef}`) y cancela otras (`POST …/cancellation`);
-  - hace el Check-In de parte de las llegadas de hoy por `POST /simulate/check-in`.
-
-  Se corre sobre una base sin reservas: si ya hay alguna, avisa y no hace nada. Las reservas de Booking no
-  se crean así: llegan de Channex.
-- **Channex no se simula:** la demo usa Channex staging, con la clave de `backend/.env`.
-- **Es solo para la demo y el desarrollo:** no forma parte del Módulo 2 ni se usa en sus pruebas, que
-  siguen con `msw`. Está escrito en Node 22, con `amqplib` como única dependencia.
+El backend se conecta siempre a los módulos reales, en local y en la demo: el Módulo 1 en
+`https://gestionophospitua.tech` y el Módulo 3 en `https://hospitua-module-3.onrender.com`
+(`MODULE1_BASE_URL` y `MODULE3_BASE_URL`). Las pruebas del backend los simulan con `msw`. En local,
+RabbitMQ es el de `docker compose`: los avisos de Check-In y Check-Out del Módulo 1 se publican a mano desde
+su panel.
 
 ### Despliegue de la demo (Render)
 
-Para la presentación del avance, el Módulo 2 se despliega en Render con los Módulos 1 y 3 reemplazados por
-los simuladores. Lo describe `render.yaml` en la raíz del repositorio (un *Blueprint* de Render):
+Para la presentación del avance, el Módulo 2 se despliega en Render conectado a los Módulos 1 y 3 reales. Lo
+describe `render.yaml` en la raíz del repositorio (un *Blueprint* de Render):
 
 | Servicio | Tipo | Qué corre |
 |---|---|---|
 | `hospitua-m2-frontend` | Static Site | `pnpm --filter frontend build` y publica `frontend/dist`. Reescribe `/api/*` al backend, como el proxy de Vite en desarrollo (sin CORS), y todo lo demás a `index.html` |
 | `hospitua-m2-backend` | Web Service (Docker, `backend/Dockerfile`) | Aplica las migraciones pendientes y arranca `node dist/main` |
-| `hospitua-m2-simulators` | Web Service (Node) | Los dos simuladores en el único puerto que da Render (`PORT`). Sus rutas no se cruzan: `/api/rooms…` del Módulo 1 y `/pricing/quotes` del Módulo 3 |
 | `hospitua-m2-db` | Postgres | La base del backend |
 
 - **Variables del backend:**
   - `NODE_ENV=production`;
   - las `DB_*` de la base de Render;
-  - `MODULE1_BASE_URL` y `MODULE3_BASE_URL` con la URL de los simuladores;
-  - `RABBITMQ_URL` de una cuenta gratuita de CloudAMQP: todavía no se usa, pero producción la exige;
+  - `MODULE1_BASE_URL` y `MODULE3_BASE_URL` con las URL de los Módulos 1 y 3 reales
+    (`https://gestionophospitua.tech` y `https://hospitua-module-3.onrender.com`);
+  - `RABBITMQ_URL` del broker del Módulo 1 (`amqps://…@broker.gestionophospitua.tech:5671/%2F`), con el
+    usuario que entrega el Módulo 1;
+  - `MODULE1_INTERNAL_KEY` y `MODULE3_INTERNAL_KEY`, cuando cada módulo entregue la suya;
   - `SIRE_HOTEL_CODE` y `SIRE_CITY_CODE` con valores de demo (`DEMO-HOTEL` y `DEMO-CIUDAD`), porque el
     hotel todavía no tiene sus códigos de SIRE.
-- **Los secretos** (`CHANNEX_API_KEY`, `CHANNEX_PROPERTY_ID` y `RABBITMQ_URL`) se escriben solo en el panel
-  de Render, nunca en `render.yaml` ni en el repositorio.
+- **Los secretos** (`CHANNEX_API_KEY`, `CHANNEX_PROPERTY_ID`, `RABBITMQ_URL`, `MODULE1_INTERNAL_KEY` y
+  `MODULE3_INTERNAL_KEY`) se escriben solo en el panel de Render, nunca en `render.yaml` ni en el repositorio.
 - **Channex:** mientras la demo esté encendida, es la única copia conectada a la propiedad compartida de
   staging. Nadie arranca otra con la misma clave.
 - **Plan gratuito:** los Web Services se duermen tras un rato sin uso y despiertan en cerca de un minuto;
   mientras duermen, las tareas de Channex no corren. La base gratuita dura un tiempo limitado.
-- **No cambia el código del backend ni del frontend.** Los simuladores agregan el modo de un solo puerto:
-  con la variable `PORT`, responden los dos módulos en ese puerto. Sin ella, siguen en 4001 y 4003.
+- **No cambia el código del backend ni del frontend** entre local y la demo: solo cambian las variables.
 
 ## Diseño técnico base
 
@@ -1205,7 +1199,7 @@ Se inserta en la misma transacción que la reserva.
    Cada `errorCode` tiene un solo mensaje en todo el Módulo 2 (puede llevar datos, como `{roomNumber}`): si
    los specs piden dos textos distintos, son dos códigos.
 6. **Clientes de otros módulos** detrás de puertos (`Module1Port`, `Module3Port`, `ChannexPort`) con
-   timeout (1 s al Módulo 1 y 3 s al Módulo 3).
+   timeout (1 s al Módulo 1, 2 s en la demo de Render, y 3 s al Módulo 3).
    Ante fallo, cada caso de uso decide, pero nunca se asume disponibilidad ni tarifa por defecto o a cero.
    Las llamadas a otros módulos se hacen **antes de abrir la transacción**; dentro solo hay operaciones de
    base de datos. Lo que impide la sobreventa o guardar sobre datos viejos es la restricción anti-solape
@@ -1235,6 +1229,20 @@ Se inserta en la misma transacción que la reserva.
       válido."
     - Booking no llama al Módulo 2: el Módulo 2 lee el feed de Channex con la clave `user-api-key` de
       la configuración, que nunca se guarda en la base de datos ni se escribe en los logs.
+    - Hacia el Módulo 3, si hay una clave configurada (`MODULE3_INTERNAL_KEY`), el Módulo 2 envía
+      `X-Internal-Key` en `POST /pricing/quotes`. El Módulo 2 no valida nada: el Módulo 3 protege sus propias
+      rutas. Nunca se envía `Authorization` al Módulo 3, que responde 403 si la recibe.
+    - Hacia el Módulo 1, si hay una clave configurada (`MODULE1_INTERNAL_KEY`), el Módulo 2 envía
+      `X-Internal-Key` en sus consultas a `/api/rooms…` (inventario y mantenimientos). Tampoco valida nada:
+      el Módulo 1 protege sus propias rutas.
+    - **Excepción (decisión de Brian, 2026-11-20): los Módulos 1 y 3 también envían `X-Internal-Key` al
+      Módulo 2**, como lo hace el Módulo 2 con ellos. Si `MODULE2_INTERNAL_KEY` tiene valor, la exigen
+      `GET /api/reservations` con `X-Client: MODULE1`, `GET /api/reservations/{reservationRef}` con
+      `X-Client: MODULE3`, `GET /api/ota-commissions` y `POST /api/ota-commissions/reconciliations`. Si falta
+      o no coincide, responde 401 `INVALID_INTERNAL_KEY`, "Falta la clave interna o no es válida." Lo revisa un
+      guard (`InternalKeyGuard`) antes que el controlador, comparando en tiempo constante. Las rutas de la
+      Recepcionista no la piden, porque el navegador no puede guardar un secreto, ni `GET /api/otas`, que
+      comparte con ella sin `X-Client`. Por eso no protege los datos: solo identifica a los otros módulos.
 
 ### Decisiones de diseño tomadas al escribir los planes de caso de uso
 
@@ -1250,11 +1258,12 @@ Se inserta en la misma transacción que la reserva.
 | D9 | **La exportación SIRE es `POST`**, no `GET`, porque crea un registro `SireExport` (un `GET` no debe tener efectos). | `export-sire-file` |
 | D10 | **Arquitectura hexagonal** con un solo `domain/` general para todo el Módulo 2 y las capas `application` (un caso de uso por cada spec) e `infrastructure` (in/out). Verificada en CI. | Este plan |
 | D11 | **Migraciones escritas en SQL**, no generadas desde las clases de TypeORM, para controlar `EXCLUDE`, índices parciales y bloqueos. | Este plan |
-| D12 | **Booking.com por Channex, leyendo el feed.** Una tarea consulta `GET /api/v1/booking_revisions/feed` cada 30 s (todas las páginas, de hasta 100) y confirma cada revisión con `POST /api/v1/booking_revisions/{id}/ack` después del commit. No se usan webhooks: exigen una URL pública y el feed sirve igual en desarrollo. En el mismo ciclo, después del feed, se envía la disponibilidad, para no devolverle a Booking un cupo que Channex ya descontó. Cada revisión se procesa una sola vez (`ota_booking_revision`); las reservas de Booking nacen en `ACTIVE`. | `generate-ota-reservation` |
+| D12 | **Booking.com por Channex, leyendo el feed.** Una tarea consulta `GET /api/v1/booking_revisions?filter[acknowledge_status]=pending` cada 30 s (todas las páginas, de hasta 100) y confirma cada revisión con `POST /api/v1/booking_revisions/{id}/ack` después del commit. No se usan webhooks: exigen una URL pública y el feed sirve igual en desarrollo. En el mismo ciclo, después del feed, se envía la disponibilidad, para no devolverle a Booking un cupo que Channex ya descontó. Cada revisión se procesa una sola vez (`ota_booking_revision`); las reservas de Booking nacen en `ACTIVE`. | `generate-ota-reservation` |
 | D13 | **Conflictos de Booking.** Booking ya aceptó la reserva, así que nunca se rechaza: si no hay habitación libre de la categoría, la habitación queda sin asignar (`room_id` vacío, sin bloquear inventario); si se supera la capacidad o un cambio no se puede aplicar, la reserva queda marcada (`conflict_reason`). La Recepcionista asigna la habitación. Una reserva con alguna habitación sin asignar **no viaja en la lista del día** hasta que se asigne: si ya estaba, sale con `REMOVED` y motivo `ROOM_UNASSIGNED`; al asignar la última, entra con `ADDED`. | `generate-ota-reservation`, `update-reservation`, `check-view-reservation` |
 | D14 | **Tipos de habitación y disponibilidad hacia Channex.** El Módulo 2 crea un tipo de habitación por categoría a partir de las habitaciones vendibles del Módulo 1 (cantidad y capacidad máxima) y lo sincroniza al iniciar y a las 03:00, sin borrar. La disponibilidad (vendibles menos las que ocupan las reservas) se envía al cambiar, agrupada cada 30 s, y completa (90 días) a las 03:00. Las habitaciones en mantenimiento se descuentan solo en sus fechas; el Módulo 1 avisa por cola los mantenimientos y los cambios de inventario. **Los planes de tarifa y los precios los envía el Módulo 3** directamente a Channex. | `configure-ota` |
 | D15 | **No-show de Booking.** Al cierre del día, una reserva de Booking que pasa a `NO_SHOW` deja pendiente su reporte a Channex (`POST /api/v1/bookings/{booking_id}/no_show` con `waived_fees: true`), en la misma transacción; `ChannexSyncJob` lo envía. Booking no cobra comisión y el Módulo 2 no la concilia. | `generate-ota-reservation`, `update-reservation` |
 | D16 | **Idempotencia de la reserva directa.** La creación exige `Idempotency-Key`; la misma clave con el mismo cuerpo devuelve la misma reserva durante 24 horas. | `generate-direct-reservation` |
+| D17 | **`X-Internal-Key` hacia el Módulo 2.** Los tres módulos se identifican con la misma cabecera. El Módulo 2 la exige solo en las rutas de los Módulos 1 y 3, y solo si `MODULE2_INTERNAL_KEY` tiene valor (regla 10). Es una excepción a "El Módulo 2 no implementa seguridad" de los specs, decidida por Brian. | Plan base |
 
 ## Estrategia de testing base
 
@@ -1307,6 +1316,9 @@ Se inserta en la misma transacción que la reserva.
 - [ ] T019 Configurar el bloqueo asesor de PostgreSQL y el planificador (`@nestjs/schedule`, `America/Bogota`) para las tareas programadas
 - [ ] T020 Configurar OpenAPI (`@nestjs/swagger`) y la verificación de dependencias entre capas en CI
 - [ ] T021 [P] Implementar `ChannexPort` con su adaptador HTTP (`user-api-key`, propiedades, feed, `ack`, reporte de no-show, tipos de habitación y disponibilidad) y el manejo de `429` (pausa de un minuto por propiedad y después espera creciente)
+- [ ] T022 En producción, no declarar `hospitua.events`: comprobar que existe (`createExchangeIfNotExists: false`), con su prueba
+- [ ] T023 `InternalKeyGuard` y `MODULE2_INTERNAL_KEY`: 401 `INVALID_INTERNAL_KEY` en las rutas de los Módulos 1 y 3, OpenAPI y pruebas
+- [ ] T024 Exchange `m2.direct` como dead-letter exchange de las colas de entrada y de reintento, en vez del exchange por defecto, con sus pruebas
 
 **Checkpoint**: Base lista; los planes de caso de uso pueden implementarse.
 

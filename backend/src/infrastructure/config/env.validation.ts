@@ -11,6 +11,7 @@ import {
   Max,
   Min,
   validateSync,
+  ValidateIf,
 } from 'class-validator';
 import { IsRateReference } from './rate-reference.config.js';
 import {
@@ -105,6 +106,19 @@ export class EnvironmentVariables extends SireEnvironmentVariables {
   @Max(60000)
   MODULE1_TIMEOUT_MS!: number;
 
+  // Opcional: sin ella (o vacía) no se envía la cabecera X-Internal-Key al Módulo 1. Es un secreto: el mensaje
+  // de error no la repite.
+  @ValidateIf(
+    (config: EnvironmentVariables) =>
+      config.MODULE1_INTERNAL_KEY !== undefined &&
+      config.MODULE1_INTERNAL_KEY !== '',
+  )
+  @Matches(/^[\x21-\x7E]{1,200}$/, {
+    message:
+      'MODULE1_INTERNAL_KEY debe tener de 1 a 200 caracteres ASCII visibles, sin espacios',
+  })
+  MODULE1_INTERNAL_KEY?: string;
+
   // Módulo 3: tiempo máximo de espera de 3 s (si no responde, nunca se asume una tarifa)
   @IsUrl(HTTP_URL_OPTIONS)
   MODULE3_BASE_URL!: string;
@@ -114,6 +128,32 @@ export class EnvironmentVariables extends SireEnvironmentVariables {
   @Min(100)
   @Max(60000)
   MODULE3_TIMEOUT_MS!: number;
+
+  // Módulo 3: clave compartida que se envía en `X-Internal-Key` (plan de calculate-dynamic-rate, A1).
+  // Opcional: sin ella (o vacía) no se envía la cabecera. Es un secreto: el mensaje de error no la repite.
+  @ValidateIf(
+    (config: EnvironmentVariables) =>
+      config.MODULE3_INTERNAL_KEY !== undefined &&
+      config.MODULE3_INTERNAL_KEY !== '',
+  )
+  @Matches(/^[\x21-\x7E]{1,200}$/, {
+    message:
+      'MODULE3_INTERNAL_KEY debe tener de 1 a 200 caracteres ASCII visibles, sin espacios',
+  })
+  MODULE3_INTERNAL_KEY?: string;
+
+  // Opcional: la clave que el Módulo 2 exige a los Módulos 1 y 3 en X-Internal-Key. Sin ella (o vacía) no se
+  // exige. Es un secreto: el mensaje de error no la repite.
+  @ValidateIf(
+    (config: EnvironmentVariables) =>
+      config.MODULE2_INTERNAL_KEY !== undefined &&
+      config.MODULE2_INTERNAL_KEY !== '',
+  )
+  @Matches(/^[\x21-\x7E]{1,200}$/, {
+    message:
+      'MODULE2_INTERNAL_KEY debe tener de 1 a 200 caracteres ASCII visibles, sin espacios',
+  })
+  MODULE2_INTERNAL_KEY?: string;
 
   // Verificar disponibilidad: cuántas consultas de mantenimiento al Módulo 1 van en paralelo
   @Type(() => Number)

@@ -58,6 +58,7 @@ export class CalculateDynamicRateService implements CalculateDynamicRate {
       try {
         const quote = await this.module3.createQuote(
           request.categoryRoom,
+          request.roomId,
           request.startDate,
           request.endDate,
         );

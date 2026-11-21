@@ -58,15 +58,18 @@ Lo propio de este caso de uso:
 
 ### A. REST del Módulo 2
 
-Las usan la Recepcionista y el Módulo 3. **Cabeceras**: `Content-Type: application/json`. Sin seguridad
-(regla transversal 10 del plan base): cada ruta la usa un llamador distinto, así que no necesita
-`X-Client`. La OTA no llama al Módulo 2.
+Las usan la Recepcionista y el Módulo 3. **Cabeceras**: `Content-Type: application/json`. Cada ruta la usa
+un llamador distinto, así que no necesita `X-Client`. A1 y A2 son del Módulo 3: si `MODULE2_INTERNAL_KEY`
+tiene valor, exigen `X-Internal-Key` y sin ella responden 401 `INVALID_INTERNAL_KEY` (regla 10 del plan
+base). A3 la comparte con la Recepcionista y no la exige. La OTA no llama al Módulo 2.
 
-**A1. `GET /api/ota-commissions`** (la usa el Módulo 3): comisiones de las reservas OTA de un periodo.
+**A1. `GET /api/ota-commissions`** (la usa el Módulo 3): comisiones de las reservas OTA de un periodo, o de
+una sola reserva por su referencia.
 
 | Parámetro | Tipo | Obligatorio | Regla |
 |---|---|---|---|
-| `dateFrom`, `dateTo` | `AAAA-MM-DD` | Sí, ambos | Rango inclusivo sobre la **`endDate`** de la reserva; máximo 366 días |
+| `reservationRef` | `RSV-` y 8 hexadecimales | No | Solo esa reserva. Con ella, las fechas son opcionales |
+| `dateFrom`, `dateTo` | `AAAA-MM-DD` | Ambos, salvo que venga `reservationRef` (entonces, los dos o ninguno) | Rango inclusivo sobre la **`endDate`** de la reserva; máximo 366 días |
 | `commissionStatus` | `CALCULATED` \| `RECONCILED` \| `PAID` | No | Sin valor: todos |
 | `reservationStatus` | `ReservationStatus` | No | Por ejemplo `COMPLETED` |
 | `otaId` | id | No | Una agencia |
@@ -99,6 +102,10 @@ Las usan la Recepcionista y el Módulo 3. **Cabeceras**: `Content-Type: applicat
 ```
 
 - Solo reservas de canal `OTA`. Sin resultados: `200` con `items: []`.
+- Con `reservationRef`, `items` trae a lo sumo una reserva. Una referencia que no existe, o que es de una
+  reserva directa, da `200` con `items: []`. El Módulo 3 la usa en el check-out para facturar una reserva
+  de Booking sin conocer su `endDate`, que no cambia si el huésped sale antes o después de lo previsto.
+  Los demás filtros, si vienen, se aplican también.
 - Los importes van como **texto decimal**, en la moneda de la reserva (`USD` en las de Booking); los
   porcentajes, como **número** JSON de 0 a 100 con hasta dos decimales (igual que
   `otaCommissionPercentage` en la consulta para liquidar de `check-view-reservation`).
@@ -165,8 +172,9 @@ comisiones pasan a `RECONCILED` o `PAID`.
 **Errores de A1** (`400`): `INVALID_DATE` ("La fecha indicada no es válida."), `INCOMPLETE_DATE_RANGE`
 ("Debe completar ambas fechas del rango."), `INVALID_DATE_RANGE` ("La fecha inicial no puede ser posterior a
 la fecha final."), `DATE_RANGE_TOO_LARGE` ("El rango de fechas no puede superar 366 días."),
-`INVALID_COMMISSION_STATUS` ("El estado de la comisión no es válido.") e `INVALID_STATUS` ("El estado
-indicado no es válido.").
+`INVALID_COMMISSION_STATUS` ("El estado de la comisión no es válido."), `INVALID_STATUS` ("El estado
+indicado no es válido.") e `INVALID_RESERVATION_CODE` ("Debe proveer un código de reserva válido para la
+consulta.", el mismo de A2).
 
 **A3. Consulta de agencias** (solo lectura): `GET /api/otas` y `GET /api/otas/{otaId}`, para la Recepcionista
 y el Módulo 3, con la misma respuesta para los dos.
@@ -317,8 +325,9 @@ interface OtaConnectionTracker {
 
    ```typescript
    type OtaCommissionFilters = {
-     dateFrom: string;
-     dateTo: string;
+     reservationRef: string | null;
+     dateFrom: string | null;     // null solo si viene reservationRef
+     dateTo: string | null;
      commissionStatus: CommissionStatus | null;
      reservationStatus: ReservationStatus | null;
      otaId: string | null;
@@ -331,17 +340,20 @@ interface OtaConnectionTracker {
    ```
 
    - **Validación** en el controlador (`readOtaCommissionQuery`). El primero que falla responde:
-     1. las fechas:
-        - falta una o las dos: `INCOMPLETE_DATE_RANGE`;
+     1. `reservationRef` que no es `RSV-` y 8 hexadecimales: `INVALID_RESERVATION_CODE`;
+     2. las fechas:
+        - sin `reservationRef`, falta una o las dos; con `reservationRef`, viene solo una:
+          `INCOMPLETE_DATE_RANGE`;
         - no es una `AAAA-MM-DD` real: `INVALID_DATE`;
         - `dateFrom` posterior a `dateTo`: `INVALID_DATE_RANGE`;
         - más de 366 días: `DATE_RANGE_TOO_LARGE`;
-     2. `commissionStatus`: `INVALID_COMMISSION_STATUS`;
-     3. `reservationStatus`: `INVALID_STATUS`;
-     4. `otaId` que no es un UUID: `OTA_NOT_FOUND`; uno que no existe da `items: []`;
-     5. `page` que no es un entero ≥ 1: `INVALID_PAGE` ("El número de página debe ser 1 o mayor.").
+     3. `commissionStatus`: `INVALID_COMMISSION_STATUS`;
+     4. `reservationStatus`: `INVALID_STATUS`;
+     5. `otaId` que no es un UUID: `OTA_NOT_FOUND`; uno que no existe da `items: []`;
+     6. `page` que no es un entero ≥ 1: `INVALID_PAGE` ("El número de página debe ser 1 o mayor.").
    - **Consulta:** `ReservationQueryPort.listOtaCommissions(filters, page)`. Solo `source = OTA` con
      `end_date` dentro del rango inclusivo, ordenadas por `end_date` y `reservation_ref` ascendentes, de a 100.
+     Con `reservationRef`, además `reservation_ref = $ref`; sin fechas, no se filtra por `end_date`.
      Una página que pasa de la última devuelve la última válida, como C1 de `check-view-reservation`.
    - **DTO:** el porcentaje como número JSON (`Number`) y los importes con dos decimales.
 
@@ -669,6 +681,7 @@ y da 60 y `CALCULATED`; una segunda de 200 da 30; una primera reserva sin comisi
 - [ ] T012 [US2] `ReconcileCommissions` y `POST /api/ota-commissions/reconciliations` (A2): una transacción por ítem, comprobación de montos y resultados por ítem
 - [ ] T013 [US2] Rechazo de reservas `CANCELLED`, no `COMPLETED`, directas o inexistentes, e idempotencia (`ALREADY_APPLIED`)
 - [ ] T014 [US2] Pruebas de integración de los escenarios 1 y 2, incluida la conservación de la comisión de una reserva cancelada por Booking
+- [ ] T022 [US2] Filtro `reservationRef` en A1: fechas opcionales con referencia, `INVALID_RESERVATION_CODE`, `items: []` si no existe o es directa, y su OpenAPI y pruebas
 
 ## Phase 5: User Story 3 - Registro y estado de la OTA (P3)
 
@@ -712,7 +725,7 @@ y da 60 y `CALCULATED`; una segunda de 200 da 30; una primera reserva sin comisi
 - **Depende de**: el plan base (tablas `ota`, `reservation` y `commission_audit`, `decimal.js`).
 - **Necesitan de este caso de uso**: `generate-ota-reservation` (calcula la comisión al registrar la
   reserva) y `cancel-reservation` (no debe tocar la comisión de una reserva OTA).
-- **Orden**: T001–T005 → US1 (T006–T010) → US2 (T011–T014) → US3 (T015–T019) → Polish. Va **antes de
+- **Orden**: T001–T005 → US1 (T006–T010) → US2 (T011–T014 y T022) → US3 (T015–T019) → Polish. Va **antes de
   `generate-ota-reservation`**.
 
 ## Trazabilidad: requisito → componente → tarea

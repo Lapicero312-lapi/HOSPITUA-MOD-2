@@ -8,6 +8,8 @@ import type { NightlyRate } from './rate-quote.js';
 export type RoomQuoteRequest = {
   /** Identifica la habitación en la reserva; la `RoomQuote` lo devuelve igual. */
   key: string;
+  /** La habitación que se cotiza (`Room.id` del Módulo 1); el Módulo 3 tiene tarifas por habitación. */
+  roomId: string;
   categoryRoom: string;
   startDate: string;
   endDate: string;

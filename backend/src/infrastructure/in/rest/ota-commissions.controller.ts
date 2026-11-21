@@ -20,6 +20,7 @@ import {
   OtaCommissionPageDto,
 } from './ota-commissions.openapi.js';
 import { ApiErrorBody } from '../../shared/api-error.js';
+import { RequiresInternalKey } from './internal-key.guard.js';
 
 /**
  * Las comisiones de las reservas OTA, para el Módulo 3 (plan de `register-ota-information-commission`, A1 y
@@ -33,14 +34,15 @@ export class OtaCommissionsController {
   ) {}
 
   /**
-   * A1, `GET /api/ota-commissions`: las comisiones de las reservas OTA cuya `endDate` cae en el rango, de a
-   * 100 (punto C1, T011). Los parámetros se revisan antes de consultar; sus errores salen por el filtro
+   * A1, `GET /api/ota-commissions`: las comisiones de las reservas OTA cuya `endDate` cae en el rango, o la
+   * de una sola reserva por su `reservationRef` (T022), de a 100 (punto C1, T011). Los parámetros se revisan antes de consultar; sus errores salen por el filtro
    * global como `400`.
    */
   @Get()
+  @RequiresInternalKey()
   @ApiOperation({
     summary:
-      'Las comisiones de las reservas OTA cuya `endDate` cae en el periodo, de a 100, para el Módulo 3. Solo reservas de canal OTA; sin resultados no es un error.',
+      'Las comisiones de las reservas OTA cuya `endDate` cae en el periodo, o de una sola por su `reservationRef`, de a 100, para el Módulo 3. Solo reservas de canal OTA; sin resultados no es un error.',
   })
   // Nest aplica los decoradores de abajo hacia arriba: así OpenAPI los lista en el orden de la tabla de A1.
   @ApiQuery({
@@ -78,15 +80,22 @@ export class OtaCommissionsController {
   })
   @ApiQuery({
     name: 'dateTo',
-    required: true,
+    required: false,
     schema: { type: 'string', format: 'date' },
   })
   @ApiQuery({
     name: 'dateFrom',
-    required: true,
+    required: false,
     schema: { type: 'string', format: 'date' },
     description:
-      'Rango inclusivo sobre la `endDate` de la reserva, con `dateTo`; máximo 366 días.',
+      'Rango inclusivo sobre la `endDate` de la reserva, con `dateTo`; máximo 366 días. Obligatorias las dos, salvo que venga `reservationRef` (entonces, las dos o ninguna).',
+  })
+  @ApiQuery({
+    name: 'reservationRef',
+    required: false,
+    schema: { type: 'string', pattern: '^RSV-[0-9A-F]{8}$' },
+    description:
+      'Solo esa reserva; con ella, las fechas son opcionales. Una que no existe o es directa da `items: []`.',
   })
   @ApiOkResponse({
     type: OtaCommissionPageDto,

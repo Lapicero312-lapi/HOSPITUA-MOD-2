@@ -6,9 +6,8 @@ import {
 } from '@golevelup/nestjs-rabbitmq';
 import { Logger } from '@nestjs/common';
 import {
-  DAILY_LIST_QUEUE,
-  DAILY_LIST_ROUTING_KEYS,
   deadLetterQueue,
+  DIRECT_EXCHANGE,
   EVENTS_EXCHANGE,
   INBOUND_QUEUES,
   type InboundQueueName,
@@ -20,9 +19,6 @@ import {
 /** Una publicación que RabbitMQ no confirma en este tiempo cuenta como fallo (queda `PENDING`). */
 export const PUBLISH_CONFIRM_TIMEOUT_MS = 5_000;
 
-/** El exchange por defecto de RabbitMQ: entrega a la cola cuyo nombre es la routing key. */
-const DEFAULT_EXCHANGE = '';
-
 /**
  * Los argumentos de una cola de entrada: un mensaje rechazado sin reencolar va a su dead-letter. Los
  * usan la declaración al conectarse y su consumidor, que la declara igual porque la librería prepara
@@ -31,7 +27,7 @@ const DEFAULT_EXCHANGE = '';
 export function inboundQueueOptions(queue: InboundQueueName): QueueOptions {
   return {
     durable: true,
-    deadLetterExchange: DEFAULT_EXCHANGE,
+    deadLetterExchange: DIRECT_EXCHANGE,
     deadLetterRoutingKey: deadLetterQueue(queue),
   };
 }
@@ -41,34 +37,42 @@ export function inboundQueueOptions(queue: InboundQueueName): QueueOptions {
  * declararlo otra vez no cambia nada.
  */
 function queues(): RabbitMQQueueConfig[] {
+  // La misma cola, unida a `m2.direct` con su nombre: se declara otra vez con los mismos argumentos, que no
+  // cambia nada, porque la librería une cada cola a un solo exchange.
+  const byOwnName = (
+    name: string,
+    options: QueueOptions,
+  ): RabbitMQQueueConfig => ({
+    name,
+    exchange: DIRECT_EXCHANGE,
+    routingKey: name,
+    options,
+  });
   const inbound = Object.values(INBOUND_QUEUES).flatMap((queue) => [
-    { name: deadLetterQueue(queue.name), options: { durable: true } },
+    byOwnName(deadLetterQueue(queue.name), { durable: true }),
     {
       name: queue.name,
       exchange: EVENTS_EXCHANGE,
       routingKey: queue.routingKey,
       options: inboundQueueOptions(queue.name),
     },
+    byOwnName(queue.name, inboundQueueOptions(queue.name)),
   ]);
   const retries = RETRY_STEPS.map((step) => ({
     name: retryQueue(step),
     exchange: retryExchange(step),
     routingKey: '',
-    // Al vencer la espera, el mensaje vuelve por el exchange por defecto con su routing key: su cola.
+    // Al vencer la espera, el mensaje vuelve por `m2.direct` con su routing key, el nombre de su cola.
     options: {
       durable: true,
       messageTtl: step.delayMs,
-      deadLetterExchange: DEFAULT_EXCHANGE,
+      deadLetterExchange: DIRECT_EXCHANGE,
     },
   }));
-  // La declara también el Módulo 2 para que la lista del día no se pierda si el Módulo 1 aún no la creó.
-  const dailyList = {
-    name: DAILY_LIST_QUEUE,
-    exchange: EVENTS_EXCHANGE,
-    routingKey: [DAILY_LIST_ROUTING_KEYS.LIST, DAILY_LIST_ROUTING_KEYS.UPDATE],
-    options: { durable: true },
-  };
-  return [...inbound, ...retries, dailyList];
+  // `m1.reservas.diarias.queue` no se declara: es del Módulo 1, que la declara con su propia dead-letter. La
+  // lista del día sale con `mandatory` y, si esa cola aún no existe, vuelve y queda `PENDING`
+  // (`RabbitDailyListPublisher`).
+  return [...inbound, ...retries];
 }
 
 /** Opciones de publicación de `amqp-connection-manager`: `timeout` no está en el tipo de amqplib. */
@@ -81,12 +85,27 @@ const defaultPublishOptions = {
  * La conexión del Módulo 2 con RabbitMQ. No espera a RabbitMQ para arrancar: las rutas REST funcionan
  * aunque no responda y la conexión se recupera sola. Los consumidores no los registra la librería
  * (esperaría la conexión para terminar de arrancar), sino `InboundConsumersRegistrar`.
+ *
+ * `hospitua.events` es del Módulo 1, que lo crea al arrancar, y en su broker el Módulo 2 no tiene permiso
+ * para configurarlo: en producción solo se comprueba que existe (`checkExchange`), sin declararlo (plan
+ * base, T022). Si no existiera, RabbitMQ cierra el canal y la conexión no se arma hasta reiniciar el backend.
+ * En desarrollo y en las pruebas el broker es el propio, sin Módulo 1: ahí sí se declara.
  */
-export function rabbitMqOptions(uri: string): RabbitMQConfig {
+export function rabbitMqOptions(
+  uri: string,
+  { declareEventsExchange }: { declareEventsExchange: boolean },
+): RabbitMQConfig {
   return {
     uri,
     exchanges: [
-      { name: EVENTS_EXCHANGE, type: 'topic', options: { durable: true } },
+      declareEventsExchange
+        ? { name: EVENTS_EXCHANGE, type: 'topic', options: { durable: true } }
+        : {
+            name: EVENTS_EXCHANGE,
+            type: 'topic',
+            createExchangeIfNotExists: false,
+          },
+      { name: DIRECT_EXCHANGE, type: 'direct', options: { durable: true } },
       ...RETRY_STEPS.map((step) => ({
         name: retryExchange(step),
         type: 'fanout',
