@@ -644,11 +644,11 @@ simuladores quedan desplegados de respaldo. Lo describe `render.yaml` en la raí
     respaldo;
   - `RABBITMQ_URL` del broker del Módulo 1 (`amqps://…@broker.gestionophospitua.tech:5671/%2F`), con el
     usuario que entrega el Módulo 1;
-  - `MODULE3_INTERNAL_KEY`, cuando el Módulo 3 la entregue;
+  - `MODULE1_INTERNAL_KEY` y `MODULE3_INTERNAL_KEY`, cuando cada módulo entregue la suya;
   - `SIRE_HOTEL_CODE` y `SIRE_CITY_CODE` con valores de demo (`DEMO-HOTEL` y `DEMO-CIUDAD`), porque el
     hotel todavía no tiene sus códigos de SIRE.
-- **Los secretos** (`CHANNEX_API_KEY`, `CHANNEX_PROPERTY_ID`, `RABBITMQ_URL` y `MODULE3_INTERNAL_KEY`) se
-  escriben solo en el panel de Render, nunca en `render.yaml` ni en el repositorio.
+- **Los secretos** (`CHANNEX_API_KEY`, `CHANNEX_PROPERTY_ID`, `RABBITMQ_URL`, `MODULE1_INTERNAL_KEY` y
+  `MODULE3_INTERNAL_KEY`) se escriben solo en el panel de Render, nunca en `render.yaml` ni en el repositorio.
 - **Channex:** mientras la demo esté encendida, es la única copia conectada a la propiedad compartida de
   staging. Nadie arranca otra con la misma clave.
 - **Plan gratuito:** los Web Services se duermen tras un rato sin uso y despiertan en cerca de un minuto;

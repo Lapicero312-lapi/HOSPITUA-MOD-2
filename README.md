@@ -117,9 +117,10 @@ y 3 reales: `https://gestionophospitua.tech` y `https://hospitua-module-3.onrend
    - `CHANNEX_API_KEY` y `CHANNEX_PROPERTY_ID`: los de tu `backend/.env`. Escríbelos solo ahí, nunca en
      el repositorio, en un chat ni en un documento.
 4. Espera a que los tres servicios queden en *Live* y abre el frontend.
-5. Cuando el Módulo 3 entregue su clave, agrégala en el panel del backend como `MODULE3_INTERNAL_KEY`.
-   Avísales antes, para que la activen de su lado al mismo tiempo. Sin ella, el backend llama sin
-   `X-Internal-Key`.
+5. Agrega en el panel del backend las claves que entregan los otros módulos por privado:
+   `MODULE1_INTERNAL_KEY` (el Módulo 1 todavía no la exige y avisa antes de hacerlo) y `MODULE3_INTERNAL_KEY`
+   (avísale antes al Módulo 3, para que la active de su lado al mismo tiempo). Sin ellas, el backend llama
+   sin `X-Internal-Key`.
 
 **Si Render le da otra URL al backend** porque el nombre ya estaba ocupado, cámbiala en `render.yaml`, en la
 regla `/api/*` del frontend. Para volver a los simuladores, cambia `MODULE1_BASE_URL` y `MODULE3_BASE_URL`
