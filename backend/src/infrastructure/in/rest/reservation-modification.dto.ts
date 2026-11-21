@@ -442,6 +442,7 @@ export const ROOM_ASSIGNMENT_RESPONSE_EXAMPLE: ReservationDetailBody = {
   source: 'OTA',
   externalConfirmationCode: '9996013801',
   otaName: 'Booking.com',
+  grossAmount: { amount: '220.00', currency: 'USD' },
   startDate: '2026-11-20',
   endDate: '2026-11-22',
   nights: 2,

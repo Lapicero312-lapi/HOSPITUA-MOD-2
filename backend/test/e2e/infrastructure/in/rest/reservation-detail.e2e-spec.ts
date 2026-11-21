@@ -100,6 +100,7 @@ describe('GET /api/reservations/{reservationRef} (e2e, C3)', () => {
       status: 'ACTIVE',
       source: 'DIRECT',
       otaName: null,
+      grossAmount: null,
       startDate: '2031-05-10',
       endDate: '2031-05-13',
       nights: 3,
@@ -123,13 +124,14 @@ describe('GET /api/reservations/{reservationRef} (e2e, C3)', () => {
     );
   });
 
-  it('una de Booking trae su agencia y su código, sin importe, y la habitación sin asignar en null', async () => {
+  it('una de Booking trae su agencia, su código y el valor total de Booking (D18), sin tarifa por habitación, y la habitación sin asignar en null', async () => {
     const res = await detail(ota.reservationRef).expect(200);
 
     expect(res.body).toMatchObject({
       source: 'OTA',
       otaName: expect.stringMatching(/^Agencia detalle e2e /),
       externalConfirmationCode: '4417829013',
+      grossAmount: { amount: '400.00', currency: 'USD' },
       rooms: [{ roomId: null, roomNumber: null, roomGrossAmount: null }],
       guest: { documentType: null, documentNumber: null },
     });

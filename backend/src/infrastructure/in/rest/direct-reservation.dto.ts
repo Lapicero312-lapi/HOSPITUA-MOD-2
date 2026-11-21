@@ -325,6 +325,7 @@ export const CREATION_EXAMPLE: ReservationDetailBody = {
   source: 'DIRECT',
   externalConfirmationCode: null,
   otaName: null,
+  grossAmount: null,
   startDate: '2026-10-12',
   endDate: '2026-10-15',
   nights: 3,

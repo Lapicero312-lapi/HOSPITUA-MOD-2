@@ -195,6 +195,7 @@ filtros. Con texto en `search`, la pantalla no envía `arrivalDate`.
   "source": "DIRECT",
   "externalConfirmationCode": null,
   "otaName": null,
+  "grossAmount": null,
   "startDate": "2026-10-23",
   "endDate": "2026-10-25",
   "nights": 2,
@@ -224,6 +225,9 @@ filtros. Con texto en `search`, la pantalla no envía `arrivalDate`.
 
 - `roomGrossAmount` es `null` en reservas `OTA`. El dinero va como **texto decimal** (`decimal.js`),
   nunca como número.
+- `grossAmount`: solo en reservas `OTA`, el valor total que reportó Booking
+  (`{ "amount": "749.14", "currency": "USD" }`); `null` en las directas. Excepción a FR-006 (decisión D18 del
+  plan base).
 - `conflict` tiene la misma forma que en C1; una habitación sin asignar trae `roomId` y `roomNumber` en
   `null`. Cada habitación trae su `roomId` (historia 2, escenario 1).
 - `reservationRoomId` es el `id` de la `ReservationRoom`: con él, la Recepcionista elige a cuál habitación sin
