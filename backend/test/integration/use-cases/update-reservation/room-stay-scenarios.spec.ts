@@ -221,8 +221,6 @@ describe('Check-In y Check-Out por la cola: escenarios 1 a 11 de la historia 2 y
       await import('../../../../src/infrastructure/out/module1/module1-client.module.js');
     const { Module3ClientModule } =
       await import('../../../../src/infrastructure/out/module3/module3-client.module.js');
-    const { RateReferenceConfigModule } =
-      await import('../../../../src/infrastructure/config/rate-reference.config.js');
     moduleRef = await Test.createTestingModule({
       imports: [
         AppConfigModule,
@@ -233,7 +231,6 @@ describe('Check-In y Check-Out por la cola: escenarios 1 a 11 de la historia 2 y
         CloseDayConfigModule,
         Module1ClientModule,
         Module3ClientModule,
-        RateReferenceConfigModule,
         ConsumersModule,
       ],
     }).compile();

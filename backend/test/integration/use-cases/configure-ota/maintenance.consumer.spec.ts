@@ -99,8 +99,6 @@ describe('MaintenanceConsumer con RabbitMQ y PostgreSQL reales (T012b de configu
       await import('../../../../src/infrastructure/out/module1/module1-client.module.js');
     const { Module3ClientModule } =
       await import('../../../../src/infrastructure/out/module3/module3-client.module.js');
-    const { RateReferenceConfigModule } =
-      await import('../../../../src/infrastructure/config/rate-reference.config.js');
     moduleRef = await Test.createTestingModule({
       imports: [
         AppConfigModule,
@@ -111,7 +109,6 @@ describe('MaintenanceConsumer con RabbitMQ y PostgreSQL reales (T012b de configu
         CloseDayConfigModule,
         Module1ClientModule,
         Module3ClientModule,
-        RateReferenceConfigModule,
         ConsumersModule,
       ],
     })

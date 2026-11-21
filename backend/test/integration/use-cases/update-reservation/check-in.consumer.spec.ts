@@ -125,8 +125,6 @@ describe('CheckInConsumer con RabbitMQ y PostgreSQL reales (T015)', () => {
       await import('../../../../src/infrastructure/out/module1/module1-client.module.js');
     const { Module3ClientModule } =
       await import('../../../../src/infrastructure/out/module3/module3-client.module.js');
-    const { RateReferenceConfigModule } =
-      await import('../../../../src/infrastructure/config/rate-reference.config.js');
     moduleRef = await Test.createTestingModule({
       imports: [
         AppConfigModule,
@@ -137,7 +135,6 @@ describe('CheckInConsumer con RabbitMQ y PostgreSQL reales (T015)', () => {
         CloseDayConfigModule,
         Module1ClientModule,
         Module3ClientModule,
-        RateReferenceConfigModule,
         ConsumersModule,
       ],
     }).compile();

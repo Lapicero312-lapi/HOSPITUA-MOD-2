@@ -15,7 +15,6 @@ import { RegisterOtaInformationCommissionModule } from './application/use-cases/
 import { UpdateReservationModule } from './application/use-cases/update-reservation/update-reservation.module.js';
 import { AppConfigModule } from './infrastructure/config/app-config.module.js';
 import { MessagingModule } from './infrastructure/config/messaging.module.js';
-import { RateReferenceConfigModule } from './infrastructure/config/rate-reference.config.js';
 import { CloseDayConfigModule } from './infrastructure/config/close-day.config.js';
 import { DirectReservationConfigModule } from './infrastructure/config/direct-reservation.config.js';
 import { ReconciliationConfigModule } from './infrastructure/config/reconciliation.config.js';
@@ -42,7 +41,6 @@ import { LoggingModule } from './infrastructure/shared/logging.module.js';
     LoggingModule,
     PersistenceModule,
     ClockModule,
-    RateReferenceConfigModule,
     SireConfigModule,
     CloseDayConfigModule,
     DirectReservationConfigModule,

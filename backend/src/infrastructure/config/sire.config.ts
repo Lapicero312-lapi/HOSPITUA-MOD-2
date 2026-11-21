@@ -136,7 +136,7 @@ export function sireConfigFrom(variables: SireVariables): SireConfig {
 
 /**
  * Entrega `SIRE_CONFIG` desde la configuración validada. Es global: `ExportSireFile` y `SireController` lo
- * inyectan sin importarlo, como `RATE_REFERENCE` de `RateReferenceConfigModule`.
+ * inyectan sin importarlo.
  */
 @Global()
 @Module({
