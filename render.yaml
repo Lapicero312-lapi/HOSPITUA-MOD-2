@@ -56,9 +56,10 @@ services:
       # El Módulo 3 atiende POST /pricing/quotes sin /api.
       - key: MODULE3_BASE_URL
         value: https://hospitua-module-3.onrender.com
-      # MODULE3_INTERNAL_KEY va en el panel de Render (no aquí), con la clave que el Módulo 3 entrega por
-      # privado: se envía en X-Internal-Key. Antes de agregarla, avísales para que la activen al mismo tiempo.
-      # Con los simuladores no hace falta.
+      # MODULE1_INTERNAL_KEY y MODULE3_INTERNAL_KEY van en el panel de Render (no aquí), con la clave que cada
+      # módulo entrega por privado: se envían en X-Internal-Key. El Módulo 1 todavía no la exige y avisa antes de
+      # hacerlo; al Módulo 3 avísale antes de agregarla, para que la active al mismo tiempo. Con los simuladores
+      # no hacen falta.
       # El hotel todavía no tiene sus códigos de SIRE: valores de demo.
       - key: SIRE_HOTEL_CODE
         value: DEMO-HOTEL
