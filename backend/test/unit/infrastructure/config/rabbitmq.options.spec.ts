@@ -12,19 +12,37 @@ import {
 const URI = 'amqp://hospitua:hospitua@localhost:5672';
 
 describe('rabbitMqOptions', () => {
-  const options = rabbitMqOptions(URI);
+  const options = rabbitMqOptions(URI, { declareEventsExchange: true });
   const queue = (name: string) => options.queues?.find((q) => q.name === name);
+  const RETRY_EXCHANGES = [
+    { name: 'm2.reintento.5s', type: 'fanout', options: { durable: true } },
+    { name: 'm2.reintento.15s', type: 'fanout', options: { durable: true } },
+    { name: 'm2.reintento.45s', type: 'fanout', options: { durable: true } },
+    { name: 'm2.reintento.2m', type: 'fanout', options: { durable: true } },
+    { name: 'm2.reintento.5m', type: 'fanout', options: { durable: true } },
+  ];
 
-  it('declara el exchange topic hospitua.events y un fanout por cada espera de reintento', () => {
+  it('en desarrollo y pruebas declara el exchange topic hospitua.events y un fanout por cada espera de reintento', () => {
     expect(options.uri).toBe(URI);
     expect(options.exchanges).toEqual([
       { name: 'hospitua.events', type: 'topic', options: { durable: true } },
-      { name: 'm2.reintento.5s', type: 'fanout', options: { durable: true } },
-      { name: 'm2.reintento.15s', type: 'fanout', options: { durable: true } },
-      { name: 'm2.reintento.45s', type: 'fanout', options: { durable: true } },
-      { name: 'm2.reintento.2m', type: 'fanout', options: { durable: true } },
-      { name: 'm2.reintento.5m', type: 'fanout', options: { durable: true } },
+      ...RETRY_EXCHANGES,
     ]);
+  });
+
+  it('en producción no declara hospitua.events, que es del Módulo 1: solo comprueba que existe (T022)', () => {
+    const production = rabbitMqOptions(URI, { declareEventsExchange: false });
+
+    expect(production.exchanges).toEqual([
+      {
+        name: 'hospitua.events',
+        type: 'topic',
+        createExchangeIfNotExists: false,
+      },
+      ...RETRY_EXCHANGES,
+    ]);
+    // Lo demás no cambia: las colas siguen unidas a hospitua.events.
+    expect(production.queues).toEqual(options.queues);
   });
 
   it('cada cola de entrada se une a su routing key y manda lo rechazado a su .dlq', () => {
