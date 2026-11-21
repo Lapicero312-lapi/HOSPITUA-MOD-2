@@ -32,23 +32,23 @@ Check-In y el Check-Out, y que la Recepcionista los consulta:
 | Procesar Datos de Huéspedes | Specification Document | [specs/process-guest-data/spec.md](spec.md) |
 | Procesar Datos de Huéspedes | Plan Document | [specs/process-guest-data/plan.md](plan.md) |
 | Plan base | Plan Document | [specs/base/plan.md](../base/plan.md) |
-| Despliegue de la demo (Render) | README | [README.md](../../README.md) |
-| Simulador del Módulo 1 | Código de prueba | [simulators/src/module1.js](../../simulators/src/module1.js) |
+| Primeros pasos en local | README | [README.md](../../README.md) |
+| Los Módulos 1 y 3 | README | [README.md](../../README.md#los-módulos-1-y-3) |
 
 --------------------------------------------------------------------------------
 
 #### Prerequisites & Environment
 
 ##### Test Case Limitations
+* En la demo, el Check-In y el Check-Out solo los publica el Módulo 1 real. Por eso todo el caso se ejecuta en
+  local, donde se publican a mano en el panel de RabbitMQ.
 * Las notificaciones llegan por cola, sin respuesta HTTP: el resultado se ve en el estado de la reserva, en la
-  vista "Huéspedes alojados" y en los logs del backend en Render.
-* El simulador del Módulo 1 revisa el `reservationRef`, el `roomId` y que haya al menos un huésped antes de
-  publicar: un mensaje sin identificador de reserva o sin huéspedes no se puede enviar desde él. El rechazo de
-  esos mensajes a la dead-letter lo cubre `backend/test/integration/messaging/messaging.module.spec.ts`.
-* La demo es compartida: no se puede asegurar un periodo con solo huéspedes colombianos. La lista vacía de la
-  selección para el SIRE (User Story 2, escenario 2) la cubre
+  vista "Huéspedes alojados", en la terminal del backend local y, para los mensajes rechazados, en la
+  dead-letter del panel.
+* Este caso registra extranjeros el mismo día: no deja un periodo con solo huéspedes colombianos. La lista
+  vacía de la selección para el SIRE (User Story 2, escenario 2) la cubre
   `backend/test/integration/process-guest-data/select-foreign-movements.spec.ts`, y el mensaje de la pantalla,
-  TC-008-ExportSireFile.
+  TC-008-ExportSireFile (sección 4, paso 1).
 * No se pueden provocar a mano, y los cubre `backend/test/integration/process-guest-data/`:
   * el cambio de habitación dentro de la estadía, con una sola entrada y una sola salida, y el huésped con
     nacionalidad vacía (`register-guest-movements.spec.ts`);
@@ -63,9 +63,10 @@ Check-In y el Check-Out, y que la Recepcionista los consulta:
 * TC-008-ExportSireFile depende de este caso: exporta los movimientos que este caso registra.
 
 ##### Preconditions & Default Setup
-* **Initial State** : la demo desplegada, con sus servicios en *Live*. Fechas relativas: `hoy` es la fecha del
-  hotel (`America/Bogota`) el día en que se ejecuta, y `hoy+N`, N días después. En pantalla, las fechas se ven
-  como `DD/MM/AAAA`.
+* **Initial State** : el entorno local listo, con los "Primeros pasos" del README. Fechas relativas: `hoy` es
+  la fecha del hotel (`America/Bogota`) el día en que se ejecuta, y `hoy+N`, N días después. En pantalla, las
+  fechas se ven como `DD/MM/AAAA`. Las categorías del Módulo 1 real son `BOUTIQUE`, `DOBLE`, `SENCILLA` y
+  `SUITE`; si una no tiene cupo en las fechas de un paso, se usa otra con la misma capacidad.
 * **Huéspedes ficticios** (cada uno con `firstName`, `lastName`, `documentType`, `documentNumber`,
   `nationality`, `birthDate` y, los extranjeros, `originPlace` y `destinationPlace`):
 
@@ -82,17 +83,18 @@ Check-In y el Check-Out, y que la Recepcionista los consulta:
 * **Grupos** : G1 son Sofía, Pedro y Lucas; G1b es G1 con el `destinationPlace` de Pedro cambiado a
   `Santa Marta, Colombia`; G2 son Andrea, Sofía, Tomás y Andrea otra vez, en ese orden; G3 son Andrea, Sofía y
   Elena.
-* **Check-In y Check-Out** : se publican con `POST` a
-  `https://hospitua-m2-simulators.onrender.com/simulate/check-in` o `/simulate/check-out`, con
-  `{"reservationRef", "roomId", "guests"}` como el cuerpo C1 de TC-002-CancelReservation y, opcionalmente,
-  `movementDate`. El `roomId` sale de `/api/rooms` del simulador, por el número de la habitación asignada.
-* **Environment** : Staging, la demo de Render:
-  * frontend: `https://hospitua-m2-frontend.onrender.com`;
-  * backend: `https://hospitua-m2-backend.onrender.com/api/docs`, con sus logs en Render;
-  * simuladores: `https://hospitua-m2-simulators.onrender.com`.
+* **Check-In y Check-Out** : se publican a mano en el panel de RabbitMQ local, como dice
+  TC-002-CancelReservation ("Check-In y Check-Out en local"), con el cuerpo C1 y el grupo de cada paso en
+  `guests`. Cada mensaje lleva un `messageId` nuevo, salvo donde el paso dice que se repite. El `movementDate`
+  es `hoy`, salvo donde el paso dice otra fecha.
+* **Environment** : Local, con los "Primeros pasos" del README: frontend en `http://localhost:5173`,
+  documentación de la API en `http://localhost:3000/api/docs` y el panel de RabbitMQ en
+  `http://localhost:15672`, con el usuario y la clave del README. `backend/.env.example` ya apunta a los
+  Módulos 1 y 3 reales.
 * **Test Accounts** :
   * Recepcionista: el inicio de sesión es simulado y solo pide el nombre, por ejemplo `Laura Méndez`;
-  * Render: la cuenta de quien desplegó la demo, para ver los logs.
+  * claves `X-Internal-Key` de los Módulos 1 y 3 para `backend/.env`, si las exigen: las tiene quien administra
+    la demo.
 
 --------------------------------------------------------------------------------
 
@@ -101,33 +103,34 @@ Check-In y el Check-Out, y que la Recepcionista los consulta:
 ##### Section 1: Check-In de un grupo mixto (User Story 1, escenarios 1 y 2, y User Story 3, escenario 6)
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Crear R1 | Entrar al frontend → Reservas → Nueva reserva directa, con Sofía Prueba como titular | `Laura Méndez`; `TRIPLE`; entrada `hoy`, salida `hoy+1`; 1 habitación, 3 personas | La reserva queda creada | [ ] | Anotar el código y la habitación |
-| 2 | Publicar el Check-In del grupo | `POST /simulate/check-in` | R1 con G1 | El simulador responde `202` y R1 queda "En curso" | [ ] | |
-| 3 | Ver el registro en el log | Render → `hospitua-m2-backend` → Logs | N/A | "Check-In aplicado (reserva <R1>, habitación <id>): 3 huéspedes recibidos, 3 registrados, 0 ya registrados, 2 extranjeros y 0 omitidos." (escenarios 1 y 2) | [ ] | |
+| 1 | Crear R1 | Entrar al frontend → Reservas → Nueva reserva directa, con Sofía Prueba como titular | `Laura Méndez`; `SUITE`; entrada `hoy`, salida `hoy+1`; 1 habitación, 3 personas | La reserva queda creada | [ ] | Anotar el código y la habitación |
+| 2 | Publicar el Check-In del grupo | Panel → `hospitua.events` → Publish message, con la routing key `habitacion.checkin` | R1 con G1 | El panel confirma que el mensaje se enrutó y R1 queda "En curso" | [ ] | Guardar el cuerpo publicado para la sección 2 |
+| 3 | Ver el registro en el log | Terminal del backend local | N/A | "Check-In aplicado (reserva <R1>, habitación <id>): 3 huéspedes recibidos, 3 registrados, 0 ya registrados, 2 extranjeros y 0 omitidos." (escenarios 1 y 2) | [ ] | |
 | 4 | Buscar a un extranjero por su documento | Huéspedes alojados → Buscar | `X0000112` | En menos de 10 segundos, una fila: "Pedro Prueba", `PAS X0000112`, `Perú` con la marca "Extranjero", R1, entrada `hoy` y salida "En el hotel" (FR-011 y SC-005) | [ ] | |
 | 5 | Buscar al colombiano | Buscar | `1000000111` | Una fila: "Sofía Prueba", `CC 1000000111`, `Colombia` sin la marca "Extranjero" (escenario 2 y FR-003) | [ ] | |
 | 6 | Ver el detalle de un extranjero | Buscar `X0000112` → "Ver detalle" | N/A | Se abre el detalle con el título "Pedro Prueba": documento `PAS X0000112`, fecha de nacimiento `05/09/1988`, nacionalidad `Perú`, reserva R1, procedencia `Lima, Perú`, destino `Cartagena, Colombia`, y en "Movimientos" una "Entrada" con la fecha de `hoy`. Solo hay "Cerrar" y "Ver reserva": ningún dato se puede modificar (FR-009, FR-014 y FR-015) | [ ] | |
 | 7 | Ver los datos vacíos | "Ver detalle" de Sofía | N/A | Procedencia y destino con una raya "—" | [ ] | |
 | 8 | Ir a la reserva | "Ver reserva" en el detalle, y el código de R1 en la fila | N/A | Los dos abren el detalle de R1 (FR-014) | [ ] | |
-| 9 | Revisar que los logs no tienen datos personales | Render → `hospitua-m2-backend` → Logs, buscar | `X0000112`, `1000000111`, `1988-09-05` y `1995-04-12` | Ninguna coincidencia (NFR-002) | [ ] | |
+| 9 | Revisar que los logs no tienen datos personales | En la terminal del backend local, buscar en todo lo que escribió desde el arranque | `X0000112`, `1000000111`, `1988-09-05` y `1995-04-12` | Ninguna coincidencia (NFR-002) | [ ] | |
 
 --------------------------------------------------------------------------------
 
 ##### Section 2: Notificación repetida (User Story 1, escenario 5)
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Publicar otra vez el mismo Check-In | `POST /simulate/check-in` | R1 con G1 | El simulador responde `202`. En los logs del backend, "Check-In repetido (reserva <R1>, habitación <id>): la habitación ya está en CHECKED_IN y se confirma sin cambios." | [ ] | |
-| 2 | Revisar que no se duplicó | Huéspedes alojados → Buscar `X0000112` → "Ver detalle" | N/A | Una sola fila, y en el detalle una sola "Entrada" (escenario 5) | [ ] | |
+| 1 | Publicar otra vez el mismo mensaje | Publicar el cuerpo de la sección 1, paso 2, sin cambiar nada, también el `messageId` | El mismo cuerpo | En la terminal, "Check-In repetido (reserva <R1>, habitación <id>): el mensaje ya se procesó y se confirma sin cambios." | [ ] | |
+| 2 | Publicar el mismo Check-In con otro mensaje | El mismo cuerpo, con un `messageId` nuevo y el `sequenceNumber` siguiente | R1 con G1 | En la terminal, "Check-In repetido (reserva <R1>, habitación <id>): la habitación ya está en CHECKED_IN y se confirma sin cambios." | [ ] | |
+| 3 | Revisar que no se duplicó | Huéspedes alojados → Buscar `X0000112` → "Ver detalle" | N/A | Una sola fila, y en el detalle una sola "Entrada" (escenario 5) | [ ] | |
 
 --------------------------------------------------------------------------------
 
 ##### Section 3: Check-Out (User Story 1, escenarios 3 y 3a, y FR-017)
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Publicar el Check-Out con un dato distinto | `POST /simulate/check-out` | R1 con G1b | El simulador responde `202` y R1 queda "Completada". En los logs, "Check-Out aplicado (reserva <R1>, habitación <id>): 3 huéspedes recibidos, 3 registrados, 0 ya registrados, 2 extranjeros y 0 omitidos." | [ ] | |
+| 1 | Publicar el Check-Out con un dato distinto | Publish message, con la routing key `habitacion.checkout` y `movementType` `DEPARTURE` | R1 con G1b | R1 queda "Completada". En la terminal, "Check-Out aplicado (reserva <R1>, habitación <id>): 3 huéspedes recibidos, 3 registrados, 0 ya registrados, 2 extranjeros y 0 omitidos." | [ ] | |
 | 2 | Ver la salida en el listado | Huéspedes alojados → Buscar `X0000112` | N/A | Sigue una sola fila, ahora con la salida en `hoy` en lugar de "En el hotel" (escenario 3) | [ ] | |
 | 3 | Revisar que los datos no cambiaron | "Ver detalle" | N/A | "Movimientos" con una "Entrada" y una "Salida", las dos en `hoy`. El destino sigue en `Cartagena, Colombia`: el Check-Out identifica al huésped por su documento y no modifica sus datos (escenario 3a y FR-017) | [ ] | |
-| 4 | Repetir el Check-Out con otra fecha | `POST /simulate/check-out` con `movementDate` | R1 con G1; `movementDate` `hoy+1` | El simulador responde `202`. En los logs, "Check-Out repetido (…): la habitación ya está en CHECKED_OUT y se confirma sin cambios.", y el detalle sigue con una sola "Salida" en `hoy` | [ ] | |
+| 4 | Repetir el Check-Out con otra fecha | Otro Check-Out, con un `messageId` nuevo | R1 con G1; `movementDate` `hoy+1` | En la terminal, "Check-Out repetido (…): la habitación ya está en CHECKED_OUT y se confirma sin cambios.", y el detalle sigue con una sola "Salida" en `hoy` | [ ] | |
 
 --------------------------------------------------------------------------------
 
@@ -135,7 +138,7 @@ Check-In y el Check-Out, y que la Recepcionista los consulta:
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
 | 1 | Crear R2 | Nueva reserva directa, con Andrea Prueba como titular | `DOBLE`; entrada `hoy`, salida `hoy+2`; 1 habitación, 1 persona | La reserva queda creada | [ ] | Anotar el código y la habitación |
-| 2 | Publicar un Check-In con un huésped incompleto y otro repetido | `POST /simulate/check-in` | R2 con G2 | El simulador responde `202` y R2 queda "En curso". En los logs, "Check-In aplicado (…): 3 huéspedes recibidos, 2 registrados, 0 ya registrados, 0 extranjeros y 1 omitidos." y "Se omitió al huésped 3 de la notificación (reserva <R2>, habitación <id>) porque le falta: birthDate.", sin el nombre ni el documento de Tomás (FR-004, FR-007 y SC-004) | [ ] | |
+| 2 | Publicar un Check-In con un huésped incompleto y otro repetido | Publicar el Check-In | R2 con G2 | R2 queda "En curso". En la terminal, "Check-In aplicado (…): 3 huéspedes recibidos, 2 registrados, 0 ya registrados, 0 extranjeros y 1 omitidos." y "Se omitió al huésped 3 de la notificación (reserva <R2>, habitación <id>) porque le falta: birthDate.", sin el nombre ni el documento de Tomás (FR-004, FR-007 y SC-004) | [ ] | |
 | 3 | El repetido se registra una vez | Huéspedes alojados → Buscar `1000000114` | N/A | Una sola fila de Andrea, con R2 y "En el hotel". Llegaron más huéspedes que las personas de la reserva y se registraron todos | [ ] | |
 | 4 | El incompleto no se registra | Buscar `1000000115` | N/A | "No hay huéspedes que coincidan con los filtros." | [ ] | |
 | 5 | Otra estadía del mismo huésped | Buscar `1000000111` | N/A | Dos filas de Sofía: una de R1, con la salida en `hoy`, y otra de R2, "En el hotel". La de R1 no cambió | [ ] | |
@@ -160,7 +163,7 @@ Check-In y el Check-Out, y que la Recepcionista los consulta:
 ##### Section 6: Salida sin entrada y cierre de R2 (casos borde)
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Publicar el Check-Out con un huésped que no entró | `POST /simulate/check-out` | R2 con G3 | El simulador responde `202` y R2 queda "Completada". En los logs, "Se registró la salida del huésped 3 de la notificación (reserva <R2>, habitación <id>) sin una entrada registrada." | [ ] | |
+| 1 | Publicar el Check-Out con un huésped que no entró | Publicar el Check-Out | R2 con G3 | R2 queda "Completada". En la terminal, "Se registró la salida del huésped 3 de la notificación (reserva <R2>, habitación <id>) sin una entrada registrada." | [ ] | |
 | 2 | Ver al huésped sin entrada | Huéspedes alojados → Buscar `1000000117` | N/A | Una fila de Elena con la entrada en "—" y la salida en `hoy` | [ ] | |
 
 --------------------------------------------------------------------------------
@@ -178,12 +181,17 @@ Check-In y el Check-Out, y que la Recepcionista los consulta:
 --------------------------------------------------------------------------------
 
 ##### Section 8: Mensajes que no se pueden usar (casos borde, FR-010, FR-016 y SC-003)
+Cada mensaje rechazado va a la dead-letter `m2.habitacion.checkin.dlq`, donde se puede ver con Get messages.
+
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Crear R3 | Nueva reserva directa, con Valentina Prueba como titular | `INDIVIDUAL`; entrada `hoy`, salida `hoy+1`; 1 habitación | La reserva queda creada | [ ] | Anotar el código y la habitación |
-| 2 | Un Check-In con caracteres no válidos | `POST /simulate/check-in` | R3 con los datos de Valentina y `"firstName": "<script>alert(1)</script>"` | El simulador responde `202`. En los logs del backend, "Check-In a la dead-letter: Caracteres no válidos en los datos de los huéspedes.". R3 sigue "Activa": no se registró nada | [ ] | |
-| 3 | Un Check-In con un huésped que no es un objeto | `POST /simulate/check-in` | R3 con `"guests": ["texto"]` | El simulador responde `202`. En los logs, "Check-In a la dead-letter: Payload inválido.", y R3 sigue "Activa" | [ ] | |
-| 4 | Una reserva cancelada no tiene huéspedes alojados | Cancelar R3 → Huéspedes alojados → Buscar | `1000000116` | R3 queda "Cancelada" y la búsqueda responde "No hay huéspedes que coincidan con los filtros." (FR-016) | [ ] | |
+| 1 | Crear R3 | Nueva reserva directa, con Valentina Prueba como titular | `SENCILLA`; entrada `hoy`, salida `hoy+1`; 1 habitación | La reserva queda creada | [ ] | Anotar el código y la habitación |
+| 2 | Un Check-In con caracteres no válidos | Publicar el Check-In | R3 con los datos de Valentina y `"firstName": "<script>alert(1)</script>"` | En la terminal, "Check-In a la dead-letter: Caracteres no válidos en los datos de los huéspedes.". R3 sigue "Activa": no se registró nada | [ ] | |
+| 3 | Un Check-In con un huésped que no es un objeto | Publicar el Check-In | R3 con `"guests": ["texto"]` | En la terminal, "Check-In a la dead-letter: Payload inválido.", y R3 sigue "Activa" | [ ] | |
+| 4 | Un Check-In sin huéspedes | Publicar el Check-In | R3 con `"guests": []` | En la terminal, "Check-In a la dead-letter: Payload inválido.", y R3 sigue "Activa" | [ ] | |
+| 5 | Un Check-In sin identificador de reserva | Publicar el Check-In sin el campo `reservationRef` | R3, sin `reservationRef` | En la terminal, "Check-In a la dead-letter: El payload de notificación es inválido. Falta el identificador de la reserva o de la habitación.", sin un `500` ni reintentos | [ ] | |
+| 6 | Ver los mensajes rechazados | Panel → Queues → `m2.habitacion.checkin.dlq` → Get messages | N/A | Los cuatro mensajes de los pasos 2 a 5 | [ ] | |
+| 7 | Una reserva cancelada no tiene huéspedes alojados | Cancelar R3 → Huéspedes alojados → Buscar | `1000000116` | R3 queda "Cancelada" y la búsqueda responde "No hay huéspedes que coincidan con los filtros." (FR-016) | [ ] | |
 
 --------------------------------------------------------------------------------
 
@@ -199,7 +207,7 @@ Check-In y el Check-Out, y que la Recepcionista los consulta:
 * **EC-005** : ¿Qué pasa con caracteres no válidos? El mensaje va a la dead-letter sin registrar nada (sección
   8, paso 2).
 * **EC-006** : ¿Qué pasa con una notificación vacía o sin identificador de reserva? Va a la dead-letter, sin un
-  `500`; está en las limitaciones.
+  `500` (sección 8, pasos 4 y 5).
 * **EC-007** : ¿Qué pasa con un huésped de varias estadías? Cada estadía tiene sus movimientos: la notificación de
   una no cambia los de la otra (sección 4, paso 5).
 * **EC-008** : ¿Qué pasa con un cambio de habitación dentro de la estadía? Una sola entrada y una sola salida por
@@ -211,7 +219,7 @@ Check-In y el Check-Out, y que la Recepcionista los consulta:
 * **EC-011** : ¿Cómo aparece en la vista un huésped con salida pero sin entrada registrada? Con su fecha de
   salida y la entrada vacía (sección 6, paso 2).
 * **EC-012** : ¿Qué pasa con una reserva cancelada o en `NO_SHOW`? Sus huéspedes no aparecen en la vista
-  (sección 8, paso 4).
+  (sección 8, paso 7).
 
 --------------------------------------------------------------------------------
 

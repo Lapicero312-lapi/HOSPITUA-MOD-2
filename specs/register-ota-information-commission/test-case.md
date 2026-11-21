@@ -35,6 +35,7 @@ la concilia:
 | Registrar Confirmación y Comisión de OTA | Plan Document | [specs/register-ota-information-commission/plan.md](plan.md) |
 | Plan base | Plan Document | [specs/base/plan.md](../base/plan.md) |
 | Despliegue de la demo (Render) | README | [README.md](../../README.md) |
+| Los Módulos 1 y 3 | README | [README.md](../../README.md#los-módulos-1-y-3) |
 
 --------------------------------------------------------------------------------
 
@@ -44,6 +45,10 @@ la concilia:
 * Las reservas de Booking se crean en el hotel de prueba `10485037`, con el acceso del equipo. La demo es la
   única copia conectada a Channex, así que este caso se ejecuta solo contra ella. Las credenciales no se
   escriben en este documento.
+* En la demo, el Check-In y el Check-Out solo los publica el Módulo 1 real. La reserva de Booking que se
+  completa en la sección 3, paso 2, se coordina con él, que hace el Check-In y el Check-Out en su sistema. Si no
+  puede, los pasos 2 a 7 y 11 de la sección 3 los cubre
+  `backend/test/integration/register-ota-information-commission/reconciliation-scenarios.spec.ts`.
 * El porcentaje de la agencia se calcula una sola vez, con su primera reserva. Si en la demo Booking.com ya
   tiene porcentaje, el escenario 2 no se puede repetir a mano.
 * Booking decide la comisión que informa: no se puede provocar a mano una primera reserva sin comisión, o con
@@ -68,7 +73,8 @@ la concilia:
 * El Check-In y el Check-Out que completan una reserva los verifica TC-013-UpdateReservation.
 
 ##### Preconditions & Default Setup
-* **Initial State** : la demo desplegada, con sus servicios en *Live*. Fechas relativas: `hoy` es la fecha del
+* **Initial State** : la demo desplegada, con sus servicios en *Live* y las claves `X-Internal-Key` que exijan
+  los Módulos 1 y 3 en el panel de Render. Fechas relativas: `hoy` es la fecha del
   hotel (`America/Bogota`) el día en que se ejecuta, y `hoy+N`, N días después. En pantalla, las fechas se ven
   como `DD/MM/AAAA` y el porcentaje como `15 %` o `12,5 %`.
 * **Huésped ficticio de Booking** : el de TC-010-GenerateOtaReservation (`Prueba Booking`), con la tarjeta de
@@ -86,13 +92,12 @@ la concilia:
 * **Environment** : Staging, la demo de Render y Booking:
   * frontend: `https://hospitua-m2-frontend.onrender.com`;
   * backend: `https://hospitua-m2-backend.onrender.com/api/docs`, con sus logs en Render;
-  * simuladores: `https://hospitua-m2-simulators.onrender.com`, para el Check-In y el Check-Out
-    (`POST /simulate/check-in` y `/simulate/check-out`, con el cuerpo C1 de TC-002-CancelReservation);
   * Booking: el hotel de prueba `10485037`, conectado a la propiedad de Channex staging.
 * **Test Accounts** :
   * Recepcionista: el inicio de sesión es simulado y solo pide el nombre, por ejemplo `Laura Méndez`;
   * Booking: el acceso del equipo al hotel de prueba;
-  * Render: la cuenta de quien desplegó la demo, para reiniciar el backend y, opcionalmente, consultar la base.
+  * Render: la cuenta de quien desplegó la demo, para reiniciar el backend y, opcionalmente, consultar la base;
+  * el contacto del Módulo 1, para el Check-In y el Check-Out de la sección 3, paso 2.
 
 --------------------------------------------------------------------------------
 
@@ -125,7 +130,7 @@ la concilia:
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
 | 1 | Una reserva que no terminó | `POST /api/ota-commissions/reconciliations` con K1 | K con G2 y C2 | `200` con el resultado `REJECTED`, el motivo `RESERVATION_NOT_COMPLETED` y `commissionStatus` `CALCULATED` | [ ] | |
-| 2 | Completar una reserva de Booking | Reservar en Booking con llegada hoy y publicar el Check-In y el Check-Out de su habitación | Llegada `hoy`, salida `hoy+1` | La reserva queda "Completada" | [ ] | Anotar el código `RSV-` (L), su valor (GL) y su comisión (CL) con `GET /api/ota-commissions` en `hoy+1` |
+| 2 | Completar una reserva de Booking | Reservar en Booking con llegada hoy y pedirle al Módulo 1 que haga en su sistema el Check-In y el Check-Out de esa reserva | Llegada `hoy`, salida `hoy+1` | La reserva queda "Completada" | [ ] | Anotar el código `RSV-` (L), su valor (GL) y su comisión (CL) con `GET /api/ota-commissions` en `hoy+1` |
 | 3 | Conciliar la reserva completada | K1 | L con GL y CL | `200` con `APPLIED` y `commissionStatus` `RECONCILED`, y el resumen `applied` 1 (escenario 1) | [ ] | |
 | 4 | Repetir la conciliación | La misma llamada | La misma | `ALREADY_APPLIED`, sin cambios (FR-006) | [ ] | |
 | 5 | Marcarla pagada | K1 con `"action": "PAID"` | L con GL y CL | `APPLIED` y `commissionStatus` `PAID` | [ ] | |

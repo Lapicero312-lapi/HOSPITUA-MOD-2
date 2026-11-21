@@ -30,29 +30,31 @@ que Booking necesita para vender el hotel sin sobreventa:
 | Configurar OTA | Plan Document | [specs/configure-ota/plan.md](plan.md) |
 | Plan base | Plan Document | [specs/base/plan.md](../base/plan.md) |
 | Despliegue de la demo (Render) y primeros pasos en local | README | [README.md](../../README.md) |
-| Habitaciones y mantenimientos del Módulo 1 simulado | Datos de prueba | [simulators/src/data.js](../../simulators/src/data.js) |
+| Los Módulos 1 y 3 | README | [README.md](../../README.md#los-módulos-1-y-3) |
 
 --------------------------------------------------------------------------------
 
 #### Prerequisites & Environment
 
 ##### Test Case Limitations
-* La demo corre en el plan gratuito de Render: el backend y los simuladores se duermen tras un rato sin uso y
-  despiertan en cerca de un minuto. Mientras duermen no corren las tareas de Channex, tampoco el envío
-  completo de las 03:00.
-* La demo es la única copia del Módulo 2 conectada a Channex. La sección 5 necesita pausarla mientras dure.
-* El Módulo 1 simulado tiene 20 habitaciones fijas y solo publica avisos de Check-In y Check-Out. Los avisos
-  de mantenimiento y de inventario se publican a mano desde el panel de RabbitMQ, y para cambiar las
-  habitaciones hay que editar `simulators/src/data.js` en local (sección 5).
+* La demo corre en el plan gratuito de Render: el backend se duerme tras un rato sin uso y despierta en cerca
+  de un minuto. Mientras duerme no corren las tareas de Channex, tampoco el envío completo de las 03:00.
+* La demo es la única copia del Módulo 2 conectada a Channex. La sección 4, pasos 2 a 6, necesita pausarla
+  mientras dure.
+* Las habitaciones y los mantenimientos son del Módulo 1 real, que es de otro equipo, y él publica los avisos
+  de mantenimiento y de inventario en su RabbitMQ. Los pasos que los necesitan se coordinan con él (sección 3,
+  paso 7, y sección 5). Un aviso publicado a mano no sirve: el Módulo 2 vuelve a leer las habitaciones y los
+  mantenimientos del Módulo 1 antes de calcular.
 * No se pueden ejecutar a mano los escenarios que dependen del tiempo o de fallas de Channex. Los cubren las
   pruebas de integración de `backend/test/integration/use-cases/configure-ota/`:
   * historia 3, escenario 3 (cinco reservas en el mismo intervalo de 30 s salen en una sola solicitud):
     `availability-scenarios.spec.ts`;
   * historia 3, escenario 4 (Channex no responde o responde `429`): `availability-scenarios.spec.ts`;
   * historia 3, escenario 6 (una habitación con reserva y con mantenimiento la misma noche): el sistema no
-    deja reservar una habitación en mantenimiento, y los mantenimientos del simulador son fijos;
-    `availability-scenarios.spec.ts`;
-  * el tope de 20 tipos de habitación por propiedad (FR-008): `sync-room-types-scenarios.spec.ts`.
+    deja reservar una habitación en mantenimiento; `availability-scenarios.spec.ts`;
+  * el tope de 20 tipos de habitación por propiedad (FR-008): `sync-room-types-scenarios.spec.ts`;
+  * historia 2, escenario 3, si la propiedad no conserva tipos de una categoría sin habitaciones (sección 5,
+    paso 3): `sync-room-types-scenarios.spec.ts`.
 * Estos pasos no los arman, y los cubren otras pruebas automatizadas:
   * las fechas pasadas que no se envían y la cantidad que nunca baja de 0:
     `backend/test/unit/application/use-cases/configure-ota/publish-pending-availability.service.spec.ts`;
@@ -75,21 +77,29 @@ que Booking necesita para vender el hotel sin sobreventa:
   sección 2 y los pasos 1 a 6 de la sección 3. Este caso de prueba es su versión manual, sobre la demo.
 
 ##### Preconditions & Default Setup
-* **Initial State** : la demo desplegada, con sus servicios en *Live* y el Módulo 1 simulado con sus 20
-  habitaciones en cinco categorías. Fechas relativas: `hoy` es la fecha del hotel (`America/Bogota`) el día
-  en que se ejecuta, y `hoy+N`, N días después.
-* **Environment** : Staging. Las secciones 1 a 4 se ejecutan en la demo de Render:
+* **Initial State** : la demo desplegada, con sus servicios en *Live* y las claves `X-Internal-Key` que exijan
+  los Módulos 1 y 3 en el panel de Render. Fechas relativas: `hoy` es la fecha del hotel (`America/Bogota`) el
+  día en que se ejecuta, y `hoy+N`, N días después.
+* **Habitaciones del Módulo 1** (al 2026-11-21): 19 en cuatro categorías. `BOUTIQUE`: 205, 407, 408 y 409, de
+  2 personas, y 304, de 3. `DOBLE`: 103, 109, 202 y 302, de 2, y 203, de 3. `SENCILLA`: 102, 201 y 301, de 2, y
+  101 y 410, de 1. `SUITE`: 105, 204 y 303, de 4, y 604, de 5. Antes de ejecutar, compararlas con `GET https://gestionophospitua.tech/api/rooms?categoryRoom=…`;
+  si cambiaron, ajustar las cantidades y capacidades de las secciones 2 y 3.
+* **Mantenimiento que se le pide al Módulo 1** (sección 3, paso 7): la 303 (`SUITE`, `roomId`
+  `a0000000-0000-0000-0000-000000000303`), del `hoy+15` al `hoy+18`. Es el mismo que usa
+  TC-003-CheckRoomAvailability.
+* **Environment** : Staging. Las secciones 1, 2, 3 y 5 se ejecutan en la demo de Render:
   * frontend: `https://hospitua-m2-frontend.onrender.com`;
   * backend: `https://hospitua-m2-backend.onrender.com/api/docs`;
-  * simuladores: `https://hospitua-m2-simulators.onrender.com/api/rooms`;
-  * Channex staging (`staging.channex.io`) y el RabbitMQ de CloudAMQP de la demo.
+  * Módulo 1: `https://gestionophospitua.tech`;
+  * Channex staging (`staging.channex.io`).
 
-  La sección 4, paso 1, y la sección 5 se ejecutan en local, con los "Primeros pasos" del README.
+  La sección 4 se ejecuta en local, con los "Primeros pasos" del README: `backend/.env.example` ya apunta a los
+  Módulos 1 y 3 reales.
 * **Test Accounts** :
   * Recepcionista: el inicio de sesión es simulado y solo pide el nombre, por ejemplo `Laura Méndez`;
   * Channex staging: la cuenta del equipo. Las credenciales no se escriben en este documento;
-  * Render y CloudAMQP: la cuenta de quien desplegó la demo;
-  * RabbitMQ local: `http://localhost:15672`, con el usuario y la clave del README.
+  * Render: la cuenta de quien desplegó la demo, para reiniciar y suspender el backend y ver sus logs;
+  * el contacto del Módulo 1, para el mantenimiento y los cambios de inventario.
 
 --------------------------------------------------------------------------------
 
@@ -98,7 +108,7 @@ que Booking necesita para vender el hotel sin sobreventa:
 ##### Section 1: Configuración de Booking.com en Channex (historia 1)
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Despertar la demo | Abrir la URL del backend y la de los simuladores y esperar a que respondan | URL de la documentación de la API y de `/api/rooms` | Las dos responden en cerca de un minuto como máximo | [ ] | |
+| 1 | Despertar la demo | Abrir la URL del backend y esperar a que responda | URL de la documentación de la API | Responde en cerca de un minuto como máximo | [ ] | |
 | 2 | Entrar al frontend | Abrir el frontend, escribir el nombre y entrar | `Laura Méndez` | Se abre la pantalla de inicio de la Recepcionista | [ ] | |
 | 3 | Ver la agencia registrada | Menú → Agencias | N/A | Una sola fila, "Booking.com", con Conexión "Conectada". Comisión "Sin porcentaje" si todavía no llegó ninguna reserva de Booking; si ya llegó, el porcentaje calculado | [ ] | Anotar la comisión y la fecha de "Vinculada el" |
 | 4 | Reiniciar el backend | Render → `hospitua-m2-backend` → reiniciar el servicio y esperar a que quede en *Live* | N/A | El backend arranca sin errores; en sus logs, "Propiedad de Channex verificada" | [ ] | |
@@ -108,92 +118,56 @@ que Booking necesita para vender el hotel sin sobreventa:
 
 --------------------------------------------------------------------------------
 
-##### Section 2: Tipos de habitación desde las habitaciones vendibles (historia 2)
+##### Section 2: Tipos de habitación desde las habitaciones vendibles (historia 2, escenario 1)
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Ver las habitaciones del Módulo 1 | Menú → Habitaciones | N/A | 20 habitaciones en cinco categorías: `DOBLE` (6), `INDIVIDUAL` (4), `SUITE` (3), `SUITE_JUNIOR` (3) y `TRIPLE` (4) | [ ] | |
-| 2 | Ver los tipos de habitación en Channex | Panel de Channex staging → la propiedad del hotel → tipos de habitación | N/A | Cinco tipos, uno por categoría y con su mismo nombre, sin repetidos | [ ] | |
-| 3 | Revisar la cantidad y la capacidad de cada tipo | Abrir cada tipo en Channex | N/A | `DOBLE`: 6 habitaciones, 3 adultos. `INDIVIDUAL`: 4 y 1. `SUITE`: 3 y 5. `SUITE_JUNIOR`: 3 y 3. `TRIPLE`: 4 y 4 (escenario 1). La capacidad es la mayor de la categoría | [ ] | |
-| 4 | Revisar la relación guardada (opcional) | Render → `hospitua-m2-db` → conectarse y consultar la tabla `ota_room_type_mapping` | `SELECT category_room, count_of_rooms, occupancy, channex_room_type_id FROM ota_room_type_mapping ORDER BY category_room;` | Cinco filas con las cantidades y las capacidades del paso 3, y con el mismo id de cada tipo en Channex | [ ] | Requiere acceso a la base de la demo |
+| 1 | Ver las habitaciones del Módulo 1 | Menú → Habitaciones | N/A | 19 habitaciones en cuatro categorías: `BOUTIQUE` (5), `DOBLE` (5), `SENCILLA` (5) y `SUITE` (4) | [ ] | |
+| 2 | Ver los tipos de habitación en Channex | Panel de Channex staging → la propiedad del hotel → tipos de habitación | N/A | Un tipo por cada categoría del paso 1, con su mismo nombre, sin repetidos | [ ] | Si la propiedad se usó con los simuladores, también están `INDIVIDUAL`, `SUITE_JUNIOR` y `TRIPLE`: ver la sección 5, paso 3 |
+| 3 | Revisar la cantidad y la capacidad de cada tipo | Abrir cada tipo en Channex | N/A | `BOUTIQUE`: 5 habitaciones, 3 adultos. `DOBLE`: 5 y 3. `SENCILLA`: 5 y 2. `SUITE`: 4 y 5 (escenario 1). La capacidad es la mayor de la categoría | [ ] | |
+| 4 | Revisar la relación guardada (opcional) | Render → `hospitua-m2-db` → conectarse y consultar la tabla `ota_room_type_mapping` | `SELECT category_room, count_of_rooms, occupancy, channex_room_type_id FROM ota_room_type_mapping ORDER BY category_room;` | Una fila por cada tipo del paso 2. Las de `BOUTIQUE`, `DOBLE`, `SENCILLA` y `SUITE`, con las cantidades y las capacidades del paso 3 y con el mismo id de cada tipo en Channex | [ ] | Requiere acceso a la base de la demo |
 
 --------------------------------------------------------------------------------
 
 ##### Section 3: Disponibilidad en Channex (historia 3)
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Anotar la disponibilidad de partida | Panel de Channex staging → la propiedad → la grilla de disponibilidad → tipo `SUITE` | Noches `hoy+60`, `hoy+61` y `hoy+62` | Se anota el valor de cada noche (`n`). Sin otras reservas de `SUITE` esas noches, `n` es 3 | [ ] | Anotar los tres valores |
+| 1 | Anotar la disponibilidad de partida | Panel de Channex staging → la propiedad → la grilla de disponibilidad → tipo `SUITE` | Noches `hoy+60`, `hoy+61` y `hoy+62` | Se anota el valor de cada noche (`n`). Sin otras reservas ni mantenimientos de `SUITE` esas noches, `n` es 4 | [ ] | Anotar los tres valores |
 | 2 | Crear una reserva directa | Frontend → Reservas → Nueva reserva directa. Llenar Estadía, Habitaciones y Titular, revisar Disponibilidad y tarifa, y confirmar | Categoría `SUITE`; entrada `hoy+60`, salida `hoy+62`; 1 habitación para 1 persona; titular de prueba (`Prueba Staging`, CC `1000000000`) | La reserva queda creada, con su código `RSV-…` | [ ] | Anotar el código y la hora |
 | 3 | Ver que baja la disponibilidad | Recargar la grilla de Channex antes de que pase un minuto desde el paso 2 | Noches `hoy+60` a `hoy+62` | `hoy+60` y `hoy+61` muestran `n - 1`. `hoy+62` no cambia: es el día de salida (escenario 1 y NFR-001) | [ ] | |
 | 4 | Ver lo mismo en Booking (opcional) | Extranet de Booking del hotel `10485037` → disponibilidad de la habitación mapeada a `SUITE` | Noches `hoy+60` y `hoy+61` | Los mismos valores que en Channex | [ ] | Solo con acceso a la extranet y con `SUITE` mapeada |
 | 5 | Cancelar la reserva | Frontend → Reservas → abrir la reserva del paso 2 → Cancelar reserva → confirmar | Código del paso 2 | La reserva queda cancelada | [ ] | |
 | 6 | Ver que sube la disponibilidad | Recargar la grilla de Channex antes de que pase un minuto desde el paso 5 | Noches `hoy+60` y `hoy+61` | Vuelven a `n` (escenario 2) | [ ] | |
-| 7 | Publicar un aviso de mantenimiento del Módulo 1 | Panel de RabbitMQ de CloudAMQP → Exchanges → `hospitua.events` → Publish message, con la routing key `habitacion.mantenimiento`, la propiedad `content_type` `application/json` y el mensaje M1 | Mensaje M1: la habitación 501 (`SUITE`) del `hoy+15` al `hoy+18`, el mismo mantenimiento que tiene el simulador | El panel confirma que el mensaje se enrutó | [ ] | |
-| 8 | Ver que baja la disponibilidad solo en las fechas del mantenimiento | Recargar la grilla de Channex, tipo `SUITE`, antes de que pase un minuto desde el paso 7 | Noches `hoy+14` a `hoy+19` | De `hoy+15` a `hoy+18`, una habitación menos que el resto (2 si no hay reservas de `SUITE` esas noches). `hoy+14` y `hoy+19` no bajan (escenario 5) | [ ] | Si el envío de las 03:00 ya corrió, el mantenimiento ya se veía antes del aviso |
-
-Mensaje M1. El `messageId` y el `maintenanceId` son UUID nuevos en cada ejecución (en PowerShell,
-`[guid]::NewGuid()`), y las fechas van en `AAAA-MM-DD`:
-
-```json
-{
-  "messageId": "<UUID nuevo>",
-  "sequenceNumber": 1,
-  "maintenanceId": "<UUID nuevo>",
-  "action": "SCHEDULED",
-  "roomId": "d0e10001-0000-4000-8000-000000000501",
-  "categoryRoom": "SUITE",
-  "startDate": "<hoy+15>",
-  "endDate": "<hoy+18>"
-}
-```
+| 7 | El Módulo 1 registra un mantenimiento | Pedirle al Módulo 1 que registre en su sistema el mantenimiento de las precondiciones, y anotar la hora. Él publica el aviso `habitacion.mantenimiento` | La 303 (`SUITE`), del `hoy+15` al `hoy+18` | `GET https://gestionophospitua.tech/api/rooms/a0000000-0000-0000-0000-000000000303/maintenances` del `hoy` al `hoy+30` lo muestra en `conflicts` | [ ] | |
+| 8 | Ver que baja la disponibilidad solo en las fechas del mantenimiento | Recargar la grilla de Channex, tipo `SUITE`, antes de que pase un minuto desde el paso 7 | Noches `hoy+14` a `hoy+19` | De `hoy+15` a `hoy+18`, una habitación menos que el resto (3 si no hay reservas ni otros mantenimientos de `SUITE` esas noches). `hoy+14` y `hoy+19` no bajan (escenario 5) | [ ] | Si el Módulo 1 lo registró antes de la ejecución, o si el envío de las 03:00 ya corrió, el mantenimiento ya se veía: se revisan solo las fechas, sin el minuto |
 
 --------------------------------------------------------------------------------
 
 ##### Section 4: Errores de configuración y del Módulo 1 (historia 1, escenario 3, e historia 2, escenario 4)
+Se ejecuta en local. Los pasos 2 a 6 conectan el backend local a Channex staging, con la demo pausada para
+que no compitan. Mientras duren, no se hacen reservas en Booking: el backend local leería y confirmaría esas
+revisiones, y la demo ya no las vería.
+
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Arrancar sin la configuración de Channex | En local, con `CHANNEX_API_KEY` vacía en `backend/.env` (como lo deja el README), arrancar el backend, el frontend y los simuladores y crear una reserva directa | Una reserva de cualquier categoría a 30 días | En el log del backend, "Configuración de Channex incompleta o inválida (CHANNEX_API_KEY): las tareas de Channex quedan apagadas". El backend no llama a Channex y, con la base local vacía, Agencias no muestra ninguna agencia. La reserva se crea igual: el resto del Módulo 2 funciona (escenario 3) | [ ] | |
-| 2 | Dejar al Módulo 1 sin responder | Render → `hospitua-m2-simulators` → suspender el servicio. Después, reiniciar `hospitua-m2-backend` | N/A | En el log del backend, "No se sincronizan los tipos de habitación: el Módulo 1 no respondió (…). Se intenta en la siguiente sincronización." En Channex, los cinco tipos no cambian | [ ] | Mientras tanto la demo no puede crear reservas |
-| 3 | Volver a la normalidad | Render → reanudar `hospitua-m2-simulators` y reiniciar `hospitua-m2-backend` | N/A | El backend sincroniza sin errores. En Channex siguen los mismos cinco tipos, sin repetidos (escenario 4) | [ ] | |
+| 1 | Arrancar sin la configuración de Channex | En local, con `CHANNEX_API_KEY` vacía en `backend/.env` (como lo deja el README), arrancar el backend y el frontend y crear una reserva directa | Una reserva de cualquier categoría a 30 días | En el log del backend, "Configuración de Channex incompleta o inválida (CHANNEX_API_KEY): las tareas de Channex quedan apagadas". El backend no llama a Channex y, con la base local vacía, Agencias no muestra ninguna agencia. La reserva se crea igual: el resto del Módulo 2 funciona (escenario 3) | [ ] | |
+| 2 | Pausar la demo | Render → suspender `hospitua-m2-backend` | N/A | El servicio queda suspendido | [ ] | |
+| 3 | Arrancar en local contra Channex staging | Poner la dirección, la clave y la propiedad de Channex staging en `backend/.env` y reiniciar el backend | N/A | En el log, "Propiedad de Channex verificada". En Channex no cambian los tipos: son las mismas habitaciones del Módulo 1 que usa la demo | [ ] | |
+| 4 | Dejar al Módulo 1 sin responder | En `backend/.env`, cambiar `MODULE1_BASE_URL` a un puerto donde no hay nada y reiniciar el backend | `MODULE1_BASE_URL=http://localhost:4998` | En el log del backend, "No se sincronizan los tipos de habitación: el Módulo 1 no respondió (…). Se intenta en la siguiente sincronización." En Channex, los tipos no cambian | [ ] | |
+| 5 | Volver a la normalidad | Devolver `MODULE1_BASE_URL` a `https://gestionophospitua.tech` y reiniciar el backend | N/A | El backend sincroniza sin errores. En Channex siguen los mismos tipos, sin repetidos (escenario 4) | [ ] | |
+| 6 | Reanudar la demo | Detener el backend local, dejar `CHANNEX_API_KEY` vacía en `backend/.env` y reanudar `hospitua-m2-backend` en Render | N/A | La demo arranca, verifica la propiedad y no cambia los tipos | [ ] | |
 
 --------------------------------------------------------------------------------
 
 ##### Section 5: Cambios de inventario del Módulo 1 (historia 2, escenarios 2 y 3)
-Se ejecuta en local, con la demo pausada, porque cambia las habitaciones del Módulo 1 simulado. Al terminar,
-la propiedad de Channex queda como estaba. Mientras dure:
-* no se hacen reservas en Booking: el backend local leería y confirmaría esas revisiones, y la demo ya no las
-  vería;
-* el backend local no tiene las reservas de la demo, así que la disponibilidad que reenvía cuenta libres todas
-  las habitaciones que no están en mantenimiento. El paso 8 hace que la demo la vuelva a calcular con sus
-  reservas.
+Se ejecuta en la demo. Los pasos 1 y 2 se coordinan con el Módulo 1, que agrega una habitación de prueba en su
+sistema, publica el aviso `habitacion.inventario` y después la quita. Si el Módulo 1 no puede hacerlo, los
+cubre `inventory.consumer.spec.ts`.
 
 | Step # | Step Description | Path & Action | Test Data | Expected Results | Pass/Fail | Comments |
 | :---: | ------ | ------ | ------ | ------ | :---: | ------ |
-| 1 | Pausar la demo | Render → suspender `hospitua-m2-backend` | N/A | El servicio queda suspendido | [ ] | |
-| 2 | Arrancar en local contra Channex staging | Poner la dirección, la clave y la propiedad de Channex staging en `backend/.env` y arrancar como dice el README | N/A | En el log, "Propiedad de Channex verificada". En Channex no cambia nada: son las mismas habitaciones de la demo | [ ] | |
-| 3 | Agregar una habitación `DOBLE` | En `simulators/src/data.js` (sin subir el cambio), agregar la habitación 206 y reiniciar los simuladores | `room('d0e10001-0000-4000-8000-000000000206', '206', 'DOBLE', 2)` | `/api/rooms` del simulador local muestra 7 habitaciones `DOBLE` | [ ] | |
-| 4 | Publicar el aviso de inventario | Panel de RabbitMQ local → Exchanges → `hospitua.events` → Publish message, con la routing key `habitacion.inventario`, `content_type` `application/json` y el mensaje M2 | Mensaje M2 (`ADDED`, habitación 206, `DOBLE`) | En Channex, el tipo `DOBLE` pasa a 7 habitaciones, con la misma capacidad (3) (escenario 2). Su disponibilidad de los próximos 90 días se reenvía con las 7 habitaciones | [ ] | |
-| 5 | Dejar a `SUITE` sin habitaciones | En `simulators/src/data.js`, quitar las habitaciones 501, 502 y 503, reiniciar los simuladores y publicar el mensaje M3 | Mensaje M3 (`REMOVED`, habitación 503, `SUITE`) | En Channex, el tipo `SUITE` no se borra y sigue con 3 habitaciones. Su disponibilidad de los próximos 90 días queda en 0. En el log, "La categoría SUITE ya no tiene habitaciones vendibles: …" (escenario 3) | [ ] | |
-| 6 | Devolver las habitaciones | Descartar el cambio de `simulators/src/data.js` (`git checkout simulators/src/data.js`), reiniciar los simuladores y publicar los mensajes M4 y M5 | Mensaje M4 (`ADDED`, habitación 503, `SUITE`) y M5 (`REMOVED`, habitación 206, `DOBLE`) | En Channex, `DOBLE` vuelve a 6 habitaciones y `SUITE` a 3 | [ ] | |
-| 7 | Reanudar la demo | Detener el backend local, dejar `CHANNEX_API_KEY` vacía en `backend/.env` y reanudar `hospitua-m2-backend` en Render | N/A | La demo arranca, verifica la propiedad y no cambia los tipos | [ ] | |
-| 8 | Devolver la disponibilidad de la demo | Panel de RabbitMQ de CloudAMQP → Exchanges → `hospitua.events` → Publish message, con la routing key `habitacion.inventario`, `content_type` `application/json` y los mensajes M6 y M7 | Mensaje M6 (`UPDATED`, habitación 201, `DOBLE`, capacidad 2) y M7 (`UPDATED`, habitación 501, `SUITE`, capacidad 4), sin cambiar nada | Antes de que pase un minuto, la disponibilidad de `DOBLE` y de `SUITE` en Channex vuelve a la que calcula la demo con sus reservas; la de `SUITE` en `hoy+60` y `hoy+61`, a la de la sección 3, paso 1 | [ ] | |
-
-Mensajes M2 a M7. Cada uno lleva un `messageId` nuevo (UUID) y un `sequenceNumber` mayor que el anterior.
-Este es M2; los demás cambian `action`, `roomId`, `categoryRoom` y `maxCapacity` como dice la tabla. Los `id`
-de las habitaciones están en `simulators/src/data.js`: la 503 es `d0e10001-0000-4000-8000-000000000503`
-(`SUITE`, capacidad 5), la 501, `d0e10001-0000-4000-8000-000000000501`, y la 201,
-`3f6c1e2a-8b4d-4c7e-9a1f-2b3c4d5e6f70`. M6 y M7 van a la demo, que no conoce los `messageId` anteriores:
-pueden empezar otra vez en `sequenceNumber` 1.
-
-```json
-{
-  "messageId": "<UUID nuevo>",
-  "sequenceNumber": 1,
-  "action": "ADDED",
-  "roomId": "d0e10001-0000-4000-8000-000000000206",
-  "categoryRoom": "DOBLE",
-  "maxCapacity": 2
-}
-```
+| 1 | El Módulo 1 agrega una habitación `DOBLE` | Pedirle al Módulo 1 que agregue una habitación `DOBLE` de 2 personas y anotar la hora. Después, revisar el tipo `DOBLE` en Channex | Una habitación `DOBLE` nueva, de 2 personas | `GET https://gestionophospitua.tech/api/rooms?categoryRoom=DOBLE` la muestra. Antes de un minuto, el tipo `DOBLE` en Channex pasa a 6 habitaciones, con la misma capacidad (3), y su disponibilidad de los próximos 90 días se reenvía con las 6 (escenario 2) | [ ] | Anotar su número |
+| 2 | El Módulo 1 la quita | Pedirle al Módulo 1 que quite esa habitación. Después, revisar el tipo `DOBLE` en Channex | La habitación del paso 1 | Antes de un minuto, `DOBLE` vuelve a 5 habitaciones y su disponibilidad, a la de antes del paso 1 | [ ] | |
+| 3 | Una categoría sin habitaciones vendibles | Si la propiedad conserva tipos de cuando la demo usaba los simuladores (`INDIVIDUAL`, `SUITE_JUNIOR` o `TRIPLE`), revisarlos en Channex y buscar su categoría en los logs del backend | Uno de esos tipos | El tipo no se borra y conserva su cantidad. Su disponibilidad de los próximos 90 días está en 0. En el log, en cada sincronización, "La categoría … ya no tiene habitaciones vendibles: …" (escenario 3) | [ ] | Si la propiedad no tiene esos tipos, está en las limitaciones |
 
 --------------------------------------------------------------------------------
 
@@ -205,14 +179,12 @@ pueden empezar otra vez en `sequenceNumber` 1.
   solo en sus fechas (sección 3, pasos 7 y 8). Si el aviso llega tarde y Booking alcanza a vender la
   habitación, la reserva entra en conflicto (TC-010-GenerateOtaReservation, EC-009).
 * **EC-003** : ¿Qué pasa si el Módulo 1 agrega, da de baja o cambia una habitación? Lo avisa por cola, y el
-  tipo de habitación y su disponibilidad se actualizan sin esperar a las 03:00 (sección 5, pasos 3 a 6).
+  tipo de habitación y su disponibilidad se actualizan sin esperar a las 03:00 (sección 5, pasos 1 y 2).
 * **EC-004** : ¿Qué capacidad se usa si las habitaciones de una categoría tienen capacidades distintas? La
-  mayor: `SUITE` (4, 4 y 5) va a Channex con 5 adultos, y `DOBLE` (2 y 3) con 3 (sección 2, paso 3).
+  mayor: `SUITE` (4, 4, 4 y 5) va a Channex con 5 adultos, y `DOBLE` (2 y 3) con 3 (sección 2, paso 3).
 * **EC-005** : ¿Qué pasa si hay más reservas que habitaciones en una categoría, por un conflicto? Se envía
   `0`, nunca un número negativo; está en las limitaciones.
-* **EC-006** : ¿Qué pasa con las fechas pasadas? No se envían; está en las limitaciones. En la demo se puede
-  ver con el mantenimiento de la habitación 1001 (`DOBLE`), de ayer a mañana: después del envío de las 03:00,
-  `DOBLE` muestra una habitación menos `hoy` y `hoy+1`, y la fecha de ayer no cambia en Channex.
+* **EC-006** : ¿Qué pasa con las fechas pasadas? No se envían; está en las limitaciones.
 * **EC-007** : ¿Qué pasa si en el futuro se agrega otra agencia (por ejemplo, Airbnb)? Los tipos de
   habitación y la disponibilidad son de la propiedad, no de la agencia, así que no cambian. No se puede probar
   hoy: la propiedad solo tiene Booking.com.
