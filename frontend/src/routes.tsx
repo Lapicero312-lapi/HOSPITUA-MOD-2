@@ -6,7 +6,6 @@ import { HomePage } from './pages/HomePage.tsx';
 import { LoginPage } from './pages/LoginPage.tsx';
 import { NotFoundPage } from './pages/NotFoundPage.tsx';
 import { OtasPage } from './pages/otas/OtasPage.tsx';
-import { RatesPage } from './pages/rates/RatesPage.tsx';
 import { CancelReservationPage } from './pages/reservations/cancel/CancelReservationPage.tsx';
 import { ModifyReservationPage } from './pages/reservations/modify/ModifyReservationPage.tsx';
 import { NewDirectReservationPage } from './pages/reservations/new/NewDirectReservationPage.tsx';
@@ -38,7 +37,6 @@ export const routes: RouteObject[] = [
       { path: 'huespedes', element: <GuestStaysPage /> },
       { path: 'sire', element: <SirePage /> },
       { path: 'habitaciones', element: <RoomsPage /> },
-      { path: 'tarifas', element: <RatesPage /> },
       { path: 'agencias', element: <OtasPage /> },
       {
         path: 'reservas/:reservationRef',

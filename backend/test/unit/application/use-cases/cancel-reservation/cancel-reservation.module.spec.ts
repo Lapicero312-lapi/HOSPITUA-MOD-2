@@ -5,7 +5,6 @@ import { MAINTENANCE_CONCURRENCY } from '../../../../../src/application/shared/m
 import { MODULE1_PORT } from '../../../../../src/application/ports/out/module1.port.js';
 import { MODULE3_PORT } from '../../../../../src/application/ports/out/module3.port.js';
 import { QUOTE_CONCURRENCY } from '../../../../../src/application/use-cases/calculate-dynamic-rate/ports/in/calculate-dynamic-rate.port.js';
-import { RATE_REFERENCE } from '../../../../../src/application/use-cases/calculate-dynamic-rate/ports/in/get-reference-rates.port.js';
 import { ARI_PENDING_CHANGE_REPOSITORY } from '../../../../../src/application/ports/out/ari-pending-change.repository.js';
 import { CANCELLATION_REPOSITORY } from '../../../../../src/application/ports/out/cancellation.repository.js';
 import { CHANNEX_SETUP_STATE } from '../../../../../src/application/ports/out/channex-setup-state.js';
@@ -71,7 +70,6 @@ const GLOBAL_TOKENS = [
   MAINTENANCE_CONCURRENCY,
   MODULE3_PORT,
   QUOTE_CONCURRENCY,
-  RATE_REFERENCE,
 ];
 
 /** Lo que ponen `PersistenceModule` y `ClockModule`, que son globales: la base no se usa en esta prueba. */
