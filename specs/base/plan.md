@@ -626,14 +626,14 @@ planes:
 
 ### Despliegue de la demo (Render)
 
-Para la presentación del avance, el Módulo 2 se despliega en Render con los Módulos 1 y 3 reemplazados por
-los simuladores. Lo describe `render.yaml` en la raíz del repositorio (un *Blueprint* de Render):
+Para la presentación del avance, el Módulo 2 se despliega en Render conectado a los Módulos 1 y 3 reales; los
+simuladores quedan desplegados de respaldo. Lo describe `render.yaml` en la raíz del repositorio (un *Blueprint* de Render):
 
 | Servicio | Tipo | Qué corre |
 |---|---|---|
 | `hospitua-m2-frontend` | Static Site | `pnpm --filter frontend build` y publica `frontend/dist`. Reescribe `/api/*` al backend, como el proxy de Vite en desarrollo (sin CORS), y todo lo demás a `index.html` |
 | `hospitua-m2-backend` | Web Service (Docker, `backend/Dockerfile`) | Aplica las migraciones pendientes y arranca `node dist/main` |
-| `hospitua-m2-simulators` | Web Service (Node) | Los dos simuladores en el único puerto que da Render (`PORT`). Sus rutas no se cruzan: `/api/rooms…` del Módulo 1 y `/pricing/quotes` del Módulo 3 |
+| `hospitua-m2-simulators` | Web Service (Node) | Los dos simuladores en el único puerto que da Render (`PORT`). Sus rutas no se cruzan: `/api/rooms…` del Módulo 1 y `/pricing/quotes` del Módulo 3. De respaldo: el backend de la demo no los usa, y van sin `RABBITMQ_URL` |
 | `hospitua-m2-db` | Postgres | La base del backend |
 
 - **Variables del backend:**
