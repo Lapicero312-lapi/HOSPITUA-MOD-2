@@ -1,4 +1,5 @@
 import type { HttpService } from '@nestjs/axios';
+import { ConfigService } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { CHANNEX_SETUP_STATE } from '../../../../src/application/ports/out/channex-setup-state.js';
@@ -13,6 +14,13 @@ import { Module1ClientModule } from '../../../../src/infrastructure/out/module1/
 import { Module1HttpAdapter } from '../../../../src/infrastructure/out/module1/module1-http.adapter.js';
 import { Module3ClientModule } from '../../../../src/infrastructure/out/module3/module3-client.module.js';
 import { Module3HttpAdapter } from '../../../../src/infrastructure/out/module3/module3-http.adapter.js';
+
+/**
+ * La dirección configurada: la del `backend/.env` de quien corre la prueba, o la de desarrollo si no hay
+ * (en el CI). La prueba comprueba que el cliente usa esa variable, no un valor fijo.
+ */
+const configured = (moduleRef: TestingModule, name: string) =>
+  moduleRef.get(ConfigService).get<string>(name);
 
 /** La configuración del cliente HTTP de un adaptador. */
 const clientDefaults = (adapter: object) =>
@@ -42,7 +50,7 @@ describe('Clientes de los Módulos 1 y 3 y de Channex', () => {
 
     expect(adapter).toBeInstanceOf(Module1HttpAdapter);
     expect(clientDefaults(adapter)).toMatchObject({
-      baseURL: 'http://localhost:4001',
+      baseURL: configured(moduleRef, 'MODULE1_BASE_URL'),
       timeout: 1000,
     });
   });
@@ -63,7 +71,7 @@ describe('Clientes de los Módulos 1 y 3 y de Channex', () => {
 
     expect(adapter).toBeInstanceOf(Module3HttpAdapter);
     expect(clientDefaults(adapter)).toMatchObject({
-      baseURL: 'http://localhost:4003',
+      baseURL: configured(moduleRef, 'MODULE3_BASE_URL'),
       timeout: 3000,
     });
   });
