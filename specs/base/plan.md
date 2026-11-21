@@ -359,10 +359,11 @@ interacciones M1 ↔ M3 (liquidación, tarifa base, registrar check-out) no invo
 - La publicación de la lista del día y de sus actualizaciones respeta el orden: las actualizaciones
   esperan detrás de la lista (ver `check-view-reservation`).
 - **Lo que declara el Módulo 2 al arrancar** (todo durable; declararlo otra vez no cambia nada): sus cuatro
-  colas de entrada unidas a su routing key, sus dead-letter y las colas de reintento. **No declara el
-  exchange `hospitua.events`**: es del Módulo 1, que lo crea al arrancar (topic, durable), y el Módulo 2 no
-  tiene permiso para configurarlo. Solo comprueba que existe (`checkExchange`); si no existiera, RabbitMQ
-  rechaza la conexión y queda en el log. El Módulo 2 tampoco declara `m1.reservas.diarias.queue`: es del
+  colas de entrada unidas a su routing key, sus dead-letter y las colas de reintento. **En producción no
+  declara el exchange `hospitua.events`**: es del Módulo 1, que lo crea al arrancar (topic, durable), y el
+  Módulo 2 no tiene permiso para configurarlo en su broker. Solo comprueba que existe (`checkExchange`); si no
+  existiera, RabbitMQ cierra el canal, queda en el log y la conexión no se arma hasta reiniciar el backend. En
+  desarrollo y en las pruebas, con un broker propio y sin Módulo 1, sí lo declara. El Módulo 2 tampoco declara `m1.reservas.diarias.queue`: es del
   Módulo 1, que la declara
   con su propia dead-letter (`m1.reservas.diarias.dlq`); si el Módulo 2 la declarara sin esos argumentos,
   RabbitMQ rechazaría la declaración. El Módulo 2 solo publica al exchange `hospitua.events`, con
@@ -1329,7 +1330,7 @@ Se inserta en la misma transacción que la reserva.
 - [ ] T019 Configurar el bloqueo asesor de PostgreSQL y el planificador (`@nestjs/schedule`, `America/Bogota`) para las tareas programadas
 - [ ] T020 Configurar OpenAPI (`@nestjs/swagger`) y la verificación de dependencias entre capas en CI
 - [ ] T021 [P] Implementar `ChannexPort` con su adaptador HTTP (`user-api-key`, propiedades, feed, `ack`, reporte de no-show, tipos de habitación y disponibilidad) y el manejo de `429` (pausa de un minuto por propiedad y después espera creciente)
-- [ ] T022 No declarar `hospitua.events`: comprobar que existe (`createExchangeIfNotExists: false`), con su prueba
+- [ ] T022 En producción, no declarar `hospitua.events`: comprobar que existe (`createExchangeIfNotExists: false`), con su prueba
 
 **Checkpoint**: Base lista; los planes de caso de uso pueden implementarse.
 
